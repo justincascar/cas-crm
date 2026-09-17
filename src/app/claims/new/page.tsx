@@ -1,8 +1,10 @@
 import { IntakeForm } from "@/components/IntakeForm";
 import { PageHeader } from "@/components/ClaimTable";
+import { requireStaff } from "@/lib/auth/session";
 import { listStaff, nextReference } from "@/lib/db/queries";
 
-export default function NewClaimPage() {
+export default async function NewClaimPage() {
+  await requireStaff();
   const staff = listStaff().map((s) => ({ id: String(s.id), name: String(s.name) }));
   const previewRef = nextReference();
 

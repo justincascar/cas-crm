@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ClaimTable";
+import { requireStaff } from "@/lib/auth/session";
 import { listDocuments } from "@/lib/db/queries";
 
-export default function DocumentsPage() {
+export default async function DocumentsPage() {
+  await requireStaff();
   const docs = listDocuments();
   return (
     <div>

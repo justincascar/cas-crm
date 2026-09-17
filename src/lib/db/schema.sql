@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS staff (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   email TEXT NOT NULL UNIQUE,
+  username TEXT NOT NULL UNIQUE,
+  password_hash TEXT NOT NULL,
   role TEXT NOT NULL,
   active INTEGER NOT NULL DEFAULT 1
 );
@@ -403,7 +405,16 @@ CREATE TABLE IF NOT EXISTS audit_log (
   details TEXT
 );
 
+CREATE TABLE IF NOT EXISTS sessions (
+  id TEXT PRIMARY KEY,
+  staff_id TEXT NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
+  created_at TEXT NOT NULL,
+  expires_at TEXT NOT NULL
+);
+
 CREATE INDEX IF NOT EXISTS idx_claims_handler ON claims(handler_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_staff ON sessions(staff_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
 CREATE INDEX IF NOT EXISTS idx_claims_ref ON claims(file_reference);
 CREATE INDEX IF NOT EXISTS idx_tasks_due ON tasks(due_at, status);
 CREATE INDEX IF NOT EXISTS idx_reservations_vehicle ON reservations(fleet_vehicle_id, status);

@@ -192,6 +192,14 @@ export function migrate(db: DatabaseSync) {
       notes TEXT,
       checker_id TEXT REFERENCES staff(id)
     );
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      staff_id TEXT NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_sessions_staff ON sessions(staff_id);
+    CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
   `);
 
   for (const [table, columns] of Object.entries(TABLES)) {

@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { requireStaff } from "@/lib/auth/session";
 import {
   addNote,
   addTask,
@@ -28,6 +29,7 @@ import { vehicleLookup } from "@/lib/lookups/vehicle";
 import type { LetterTemplateKey } from "@/lib/documents/templates";
 
 export async function actionCreateClaim(formData: FormData) {
+  await requireStaff();
   const result = await createClaimFromIntake(intakeFromFormData(formData));
   revalidatePath("/");
   revalidatePath("/claims");
@@ -35,6 +37,7 @@ export async function actionCreateClaim(formData: FormData) {
 }
 
 export async function actionAddNote(formData: FormData) {
+  await requireStaff();
   const claimId = String(formData.get("claimId"));
   const body = String(formData.get("body") || "").trim();
   if (!body) return { error: "Note cannot be empty." };
@@ -44,6 +47,7 @@ export async function actionAddNote(formData: FormData) {
 }
 
 export async function actionAddTask(formData: FormData) {
+  await requireStaff();
   addTask({
     claimId: String(formData.get("claimId")),
     handlerId: String(formData.get("handlerId") || "staff-sian"),
@@ -58,6 +62,7 @@ export async function actionAddTask(formData: FormData) {
 }
 
 export async function actionCompleteTask(formData: FormData) {
+  await requireStaff();
   completeTask(String(formData.get("taskId")));
   revalidatePath("/tasks");
   revalidatePath("/");
@@ -65,6 +70,7 @@ export async function actionCompleteTask(formData: FormData) {
 }
 
 export async function actionUpdateClaim(formData: FormData) {
+  await requireStaff();
   const id = String(formData.get("claimId"));
   updateClaimPosition(id, {
     current_position: String(formData.get("current_position") || ""),
@@ -88,6 +94,7 @@ export async function actionUpdateClaim(formData: FormData) {
 }
 
 export async function actionReserveVehicle(formData: FormData) {
+  await requireStaff();
   const claimId = String(formData.get("claimId") || "");
   const returnTo = String(formData.get("returnTo") || "");
   try {
@@ -115,6 +122,7 @@ export async function actionReserveVehicle(formData: FormData) {
 }
 
 export async function actionSaveClaimScreen(formData: FormData) {
+  await requireStaff();
   const claimId = String(formData.get("claimId"));
   const screenKey = String(formData.get("screenKey"));
   saveScreenData(claimId, screenKey, valuesFromForm(formData, screenKey), String(formData.get("actorId") || "staff-sian"));
@@ -124,6 +132,7 @@ export async function actionSaveClaimScreen(formData: FormData) {
 }
 
 export async function actionLookupPostcode(postcode: string) {
+  await requireStaff();
   const result = await postcodeLookup.search(postcode);
   return {
     simulated: postcodeLookup.simulated,
@@ -134,16 +143,19 @@ export async function actionLookupPostcode(postcode: string) {
 }
 
 export async function actionLookupVehicle(registration: string) {
+  await requireStaff();
   const result = await vehicleLookup.lookup(registration);
   return { simulated: vehicleLookup.simulated, provider: vehicleLookup.name, result };
 }
 
 export async function actionLookupCompliance(registration: string) {
+  await requireStaff();
   const result = await complianceLookup.check(registration);
   return { simulated: complianceLookup.simulated, provider: complianceLookup.name, result };
 }
 
 export async function actionRecordEvent(formData: FormData) {
+  await requireStaff();
   const claimId = String(formData.get("claimId"));
   recordClaimEvent({
     claimId,
@@ -159,6 +171,7 @@ export async function actionRecordEvent(formData: FormData) {
 }
 
 export async function actionGenerateDocument(formData: FormData) {
+  await requireStaff();
   const claimId = String(formData.get("claimId"));
   const result = generateClaimDocument({
     claimId,
@@ -173,6 +186,7 @@ export async function actionGenerateDocument(formData: FormData) {
 }
 
 export async function actionSendEmail(formData: FormData) {
+  await requireStaff();
   const claimId = String(formData.get("claimId"));
   const result = await sendClaimEmail({
     claimId,
@@ -189,6 +203,7 @@ export async function actionSendEmail(formData: FormData) {
 }
 
 export async function actionLogIncomingEmail(formData: FormData) {
+  await requireStaff();
   const claimId = String(formData.get("claimId"));
   logIncomingEmail({
     claimId,
@@ -204,6 +219,7 @@ export async function actionLogIncomingEmail(formData: FormData) {
 }
 
 export async function actionSendWhatsApp(formData: FormData) {
+  await requireStaff();
   const claimId = String(formData.get("claimId"));
   const result = await sendClaimWhatsApp({
     claimId,
@@ -219,6 +235,7 @@ export async function actionSendWhatsApp(formData: FormData) {
 }
 
 export async function actionLogIncomingWhatsApp(formData: FormData) {
+  await requireStaff();
   const claimId = String(formData.get("claimId"));
   logIncomingWhatsApp({
     claimId,
@@ -233,6 +250,7 @@ export async function actionLogIncomingWhatsApp(formData: FormData) {
 }
 
 export async function actionRecordCall(formData: FormData) {
+  await requireStaff();
   const claimId = String(formData.get("claimId"));
   const actorId = String(formData.get("actorId") || "staff-sian");
   const outcome = String(formData.get("outcome") || "connected");
@@ -271,6 +289,7 @@ function poundsToPence(formData: FormData, name: string) {
 }
 
 export async function actionSaveHirePack(formData: FormData) {
+  await requireStaff();
   const claimId = String(formData.get("claimId"));
   saveHirePack(claimId, {
     title: String(formData.get("title") || ""),
@@ -332,6 +351,7 @@ export async function actionSaveHirePack(formData: FormData) {
 }
 
 export async function actionGenerateHirePack(formData: FormData) {
+  await requireStaff();
   await actionSaveHirePack(formData);
   const claimId = String(formData.get("claimId"));
   const result = generateHirePackDocument(claimId, String(formData.get("actorId") || "staff-sian"));

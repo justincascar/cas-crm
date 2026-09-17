@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ClaimTable";
 import { formatUkDateTime } from "@/lib/dates";
+import { requireStaff } from "@/lib/auth/session";
 import { listAutomations } from "@/lib/db/queries";
 
-export default function AutomationsPage() {
+export default async function AutomationsPage() {
+  await requireStaff();
   const rows = listAutomations();
   return (
     <div>

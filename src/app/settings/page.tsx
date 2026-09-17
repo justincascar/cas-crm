@@ -1,16 +1,18 @@
 import { PageHeader } from "@/components/ClaimTable";
+import { requireStaff } from "@/lib/auth/session";
 import { dbLocation, getSettings, listStaff } from "@/lib/db/queries";
 import { INDICATIVE_DEFAULTS } from "@/lib/constants";
 import { formatGbp } from "@/lib/money";
 
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  await requireStaff();
   const settings = getSettings();
   const staff = listStaff();
   return (
     <div className="max-w-3xl space-y-6">
       <PageHeader
         title="Settings"
-        subtitle="Prototype configuration. Staff sign-in is Stage 2. This screen shows what is already stored."
+        subtitle="Prototype configuration. Staff must sign in. All signed-in staff currently see every file — finer permissions are a later stage."
       />
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Environment</h2>
@@ -38,11 +40,15 @@ export default function SettingsPage() {
         </ul>
       </section>
       <section className="rounded-xl border border-line bg-card p-5">
-        <h2 className="font-serif text-xl text-navy-deep">Staff (not yet authenticated)</h2>
+        <h2 className="font-serif text-xl text-navy-deep">Staff (all signed-in staff see every file)</h2>
+        <p className="mt-1 text-sm text-slate">
+          Demonstration passwords are in docs/AUTH-NOTES.md. Passwords are stored hashed. This PC only — not a shared office login server.
+        </p>
         <ul className="mt-3 space-y-1 text-sm">
           {staff.map((s) => (
             <li key={s.id}>
               {s.name} — {s.role} — {s.email}
+              {s.username ? ` — username ${s.username}` : ""}
             </li>
           ))}
         </ul>

@@ -6,6 +6,7 @@ import { HireVehiclePanel, ReserveHirePanel } from "@/components/claim-file/Hire
 import { ScreenForm } from "@/components/claim-file/ScreenForm";
 import { PageHeader } from "@/components/ClaimTable";
 import { CLAIM_SCREENS, getClaimScreen, screensByGroup } from "@/lib/claim-screens";
+import { requireStaff } from "@/lib/auth/session";
 import { getClaim, listFleet, listReservations } from "@/lib/db/queries";
 import { seedScreenDefaults } from "@/lib/db/screens";
 
@@ -17,6 +18,7 @@ export default async function ClaimWorkScreenPage({
   searchParams: Promise<{ saved?: string; error?: string }>;
 }) {
   const { id, screen } = await params;
+  await requireStaff();
   const { saved, error } = await searchParams;
   const def = getClaimScreen(screen);
   if (!def) notFound();

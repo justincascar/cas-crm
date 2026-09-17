@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import fs from "node:fs";
 import path from "node:path";
+import { ensureStaffAuth } from "../auth/ensure";
 import { backfillChronologyIfEmpty, seedIfEmpty } from "./seed";
 import { migrate } from "./migrate";
 
@@ -24,6 +25,7 @@ function openDatabase(): DatabaseSync {
   db.exec(fs.readFileSync(schemaPath, "utf8"));
   migrate(db);
   seedIfEmpty(db);
+  ensureStaffAuth(db);
   backfillChronologyIfEmpty(db);
   return db;
 }
@@ -34,6 +36,7 @@ export function getDb(): DatabaseSync {
     g.__casDb = openDatabase();
   } else {
     migrate(g.__casDb);
+    ensureStaffAuth(g.__casDb);
     backfillChronologyIfEmpty(g.__casDb);
   }
   return g.__casDb;

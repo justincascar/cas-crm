@@ -2,9 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PrintButton } from "@/components/PrintButton";
 import { formatUkDateTime } from "@/lib/dates";
+import { requireStaff } from "@/lib/auth/session";
 import { getDocument } from "@/lib/db/chronology";
 
 export default async function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
+  await requireStaff();
   const { id } = await params;
   const doc = getDocument(id);
   if (!doc) notFound();

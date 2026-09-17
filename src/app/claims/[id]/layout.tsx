@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ScreenNav } from "@/components/claim-file/ScreenNav";
+import { requireStaff } from "@/lib/auth/session";
 import { getClaim } from "@/lib/db/queries";
 import { listScreenSummaries } from "@/lib/db/screens";
 
@@ -11,6 +12,7 @@ export default async function ClaimLayout({
   children: React.ReactNode;
   params: Promise<{ id: string }>;
 }) {
+  await requireStaff();
   const { id } = await params;
   const data = getClaim(id);
   if (!data) notFound();

@@ -20,7 +20,7 @@ Where an area is mixed, the letter is the honest overall grade, with the split e
 
 ## One-line verdict
 
-This is a **working local prototype**, not a production CRM. You can open it on this PC, create and edit fictional claims, and they are saved. There is **no staff login**, **no live email/WhatsApp/phone**, and **no live vehicle or insurance lookup**. Postcode lookup talks to real free internet services (not a licensed Royal Mail address file). Data is **not** in-memory and does **not** reset when you close the browser; it only reseeds if you delete the database file.
+This is a **working local prototype**, not a production CRM. You can open it on this PC, **sign in as demonstration staff**, create and edit fictional claims, and they are saved. There is **no live email/WhatsApp/phone**, and **no live vehicle or insurance lookup**. Postcode lookup talks to real free internet services (not a licensed Royal Mail address file). Data is **not** in-memory and does **not** reset when you close the browser; it only reseeds if you delete the database file.
 
 Do **not** put live client data in it.
 
@@ -41,15 +41,16 @@ Do **not** put live client data in it.
 
 This is **not** a shared office database. It lives on one Windows PC. Two browsers on the same PC share the same file. Another staff member on another computer cannot see it unless you later host it.
 
-### Real authentication — no
+### Real authentication — local staff login only **(b)**
 
-- There is a `staff` table with four demonstration names (Justin Roberts, Sian Evans, Tom Hughes, Megan Price) and example emails ending `@completeaccidentsolutions.example`.
-- There is **no password, no login screen, no session, no roles enforcement**.
-- Anyone who can open http://localhost:3000 on this PC can see every file.
-- Driving licence / NI fields are labelled “restricted” on screen only. They are **not** access-controlled.
-- Notes and actions default the actor to the file handler, or to Sian if none is set.
+- The same four demonstration staff (Justin, Sian, Tom, Megan) sign in with username and password.
+- Passwords are stored as scrypt hashes. Sessions use an HTTP-only cookie. See `docs/AUTH-NOTES.md`.
+- Pages and server actions refuse claim, client, fleet and financial data unless that session is valid. Direct URLs while logged out redirect to `/login`.
+- **Still this PC only.** Not a shared office server.
+- **No fine-grained permissions.** Any signed-in staff member can open every file, including licence details labelled “restricted”.
+- Notes and actions still default the actor to the file handler, or to Sian if none is set, unless the form says otherwise.
 
-**Grade: storage (a) for a single PC; authentication/permissions (d).**
+**Grade: storage (a) for a single PC; authentication (b) — login enforced, equal access, not multi-user hosting.**
 
 ---
 
@@ -225,7 +226,9 @@ Office mailbox, WhatsApp Business and telephony are **not connected**.
 
 `/automations` lists rows from the `automations` table (engineer chaser on 3 **calendar** days, labelled demonstration). Nothing is sent. There is **no scheduler** that runs while the browser is closed. A substantive-reply pause is described in copy, not implemented as a live mail-reader.
 
-### Authentication / permissions — **(d)**
+### Authentication / permissions — **(b)**
+
+Local staff login is enforced on the server. All four demo staff have equal access to all claims. Fine-grained roles, client isolation and a shared office server are **not** built. See `docs/AUTH-NOTES.md`.
 
 Settings shows prototype flags (file prefix `TEST-`, 88 days, day 80, 3-day chaser) and the staff list. No login, no client isolation, no proof that one handler cannot see another’s work. Stage 2 in the brief.
 
@@ -302,7 +305,7 @@ Allowed later; not blocking claims work; not built. No public deploy, no backups
 
 ### Git
 
-As at this inspection the folder is a git repository on branch `master` **with no commits yet**. The whole tree is untracked. There is **no commit history** to cite.
+Initial commit of the prototype as it stood: see repository `git log`. Staff login was added in a later commit.
 
 ---
 
@@ -310,7 +313,7 @@ As at this inspection the folder is a git repository on branch `master` **with n
 
 From `docs/DEPENDENCIES.md` and this inspection:
 
-1. Staff login and permissions (Stage 2).
+1. Shared office hosting and per-file / role permissions (local staff login is in `docs/AUTH-NOTES.md`).
 2. Licensed postcode key if house-level drop-downs are required (`IDEAL_POSTCODES_API_KEY`).
 3. Vehicle lookup provider (not keeper identification).
 4. Office mailbox, WhatsApp Business, telephone system.

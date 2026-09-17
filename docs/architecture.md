@@ -25,8 +25,12 @@ PostgreSQL can replace SQLite later if CAS hosts a shared office server. Lookup,
 - `src/lib/db/` — schema, seed, queries, claim screen persistence (`claim_screen_data`).
 - `src/app/` — screens. Server actions write to SQLite. Each claim file has a right-hand viewing pane of operational screens taken from the current CRM.
 
-## Security posture (Stage 1)
+## Security posture
 
-There is **no real login** yet. Anyone who can open http://localhost:3000 on this PC can see the fictional files. Stage 2 adds staff accounts, permissions, and client isolation on the server. Driving licence numbers are stored but the UI marks them restricted; that is not yet access-controlled.
+Staff must sign in. Passwords are stored hashed in SQLite. Sessions use an HTTP-only cookie. Anyone who is signed in can currently see every file — there are no per-claim permissions yet. The database still lives on this PC only.
 
-Do not put live client data into this prototype.
+Driving licence numbers are labelled restricted in the UI; that is not yet a separate access level.
+
+Do not put live client data into this prototype until backups and permission levels are agreed.
+
+Demonstration usernames and passwords: `docs/AUTH-NOTES.md`.

@@ -335,8 +335,8 @@ export function getClaim(idOrRef: string) {
 }
 
 export function listStaff() {
-  return all<{ id: string; name: string; email: string; role: string }>(
-    "SELECT id, name, email, role FROM staff WHERE active = 1 ORDER BY name",
+  return all<{ id: string; name: string; email: string; role: string; username: string | null }>(
+    "SELECT id, name, email, role, username FROM staff WHERE active = 1 ORDER BY name",
   );
 }
 

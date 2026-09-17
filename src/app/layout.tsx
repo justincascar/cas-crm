@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import { IBM_Plex_Mono, IBM_Plex_Sans, Source_Serif_4 } from "next/font/google";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { getRequestStaff } from "@/lib/auth/session";
 import "./globals.css";
 
 const sans = IBM_Plex_Sans({
@@ -28,11 +31,25 @@ export const metadata: Metadata = {
 
 export const dynamic = "force-dynamic";
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const headerStore = await headers();
+  const pathname = headerStore.get("x-cas-pathname") || "";
+  const isPublic = headerStore.get("x-cas-public") === "1" || pathname === "/login";
+  const staff = await getRequestStaff();
+  if (!isPublic && !staff) {
+    redirect("/login");
+  }
+
   return (
     <html lang="en-GB">
       <body className={`${sans.variable} ${serif.variable} ${mono.variable} antialiased`}>
-        <AppShell>{children}</AppShell>
+        {staff && !isPublic ? (
+          <AppShell staffName={staff.name} staffUsername={staff.username}>
+            {children}
+          </AppShell>
+        ) : (
+          children
+        )}
       </body>
     </html>
   );

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ClaimTable";
 import { formatUkDateTime } from "@/lib/dates";
+import { requireStaff } from "@/lib/auth/session";
 import { listCorrespondence } from "@/lib/db/queries";
 
 function channelLabel(channel: string, direction: string) {
@@ -10,7 +11,8 @@ function channelLabel(channel: string, direction: string) {
   return `${direction} ${channel}`;
 }
 
-export default function CommunicationsPage() {
+export default async function CommunicationsPage() {
+  await requireStaff();
   const rows = listCorrespondence();
   return (
     <div>

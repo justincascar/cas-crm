@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { ClaimTable, PageHeader, SearchForm } from "@/components/ClaimTable";
+import { requireStaff } from "@/lib/auth/session";
 import { listClaims, QUEUE_LABELS } from "@/lib/db/queries";
 
 export default async function ClaimsPage({
@@ -7,6 +8,7 @@ export default async function ClaimsPage({
 }: {
   searchParams: Promise<{ q?: string; queue?: string }>;
 }) {
+  await requireStaff();
   const sp = await searchParams;
   const rows = listClaims({ q: sp.q, queue: sp.queue });
   const queueLabel = sp.queue ? QUEUE_LABELS[sp.queue] : null;

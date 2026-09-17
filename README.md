@@ -6,14 +6,16 @@ This is a working prototype of the Complete Accident Solutions claims system. It
 
 1. Make sure this folder is `CAS-CRM`.
 2. Double-click `Start-CAS-CRM.bat`, **or** open a terminal in this folder and type `npm run dev`.
-3. In your browser, go to **http://localhost:3000**.
-4. Leave the terminal window open while you use it. Close that window (or press Ctrl+C) when you have finished.
+3. In your browser, go to **http://localhost:3000**. You will be asked to sign in.
+4. Use a demonstration username and password from `docs/AUTH-NOTES.md` (fictional only).
+5. Leave the terminal window open while you use it. Close that window (or press Ctrl+C) when you have finished.
 
 The first time this project was set up, Node.js was installed so the computer can run the website locally. You do not need to install anything else for ordinary use.
 
 ## What you should see
 
-- A banner: **Prototype — fictional test data**.
+- A sign-in screen. Without signing in, claim lists and file pages are not shown.
+- After sign-in, a banner: **Prototype — fictional test data**, and **Logged in as [name] — Log out**.
 - Dashboard counts. Click a count to open the matching files.
 - Twelve files numbered **TEST-0001** to **TEST-0012**.
 - Search by file number, client name, registration or insurer reference.
@@ -41,4 +43,4 @@ It is kept there on purpose, not in OneDrive, because OneDrive can lock the file
 
 ## Not connected yet
 
-Live postcode/vehicle/MID lookups, email, WhatsApp, electronic signing, CAS letter templates, and staff logins. See `docs/DEPENDENCIES.md`.
+Live vehicle/MID lookups, live email, WhatsApp, electronic signing, CAS letter templates. Staff sign-in is in place locally (see `docs/AUTH-NOTES.md`); finer permissions and a shared office server are not. See `docs/DEPENDENCIES.md`.

@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ClaimTable";
+import { requireStaff } from "@/lib/auth/session";
 import { HEAD_LABELS, type HeadOfLoss } from "@/lib/constants";
 import { listFinancials } from "@/lib/db/queries";
 import { formatGbp } from "@/lib/money";
 
-export default function FinancialsPage() {
+export default async function FinancialsPage() {
+  await requireStaff();
   const { lines, totals } = listFinancials();
   return (
     <div>

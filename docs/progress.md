@@ -21,10 +21,12 @@ Implemented:
 - Distinct claimed / offered / agreed / received totals.
 - Tests in `tests/` for the behavioural rules in the brief that can be checked without live integrations.
 
-Labelled simulated / not live: lookups, correspondence sending, document files, WhatsApp, email, e-sign, MID API.
+Labelled simulated / not live: vehicle lookups, correspondence sending, document files, WhatsApp, email, e-sign, MID API.
 
-Blocked: CAS templates, provider accounts, staff authentication (Stage 2).
+Staff sign-in (17 September 2026): username/password for the four demonstration handlers, hashed in SQLite, HTTP-only session cookie, server-side checks on pages and actions. Still this PC only; all signed-in staff see every file. Credentials: `docs/AUTH-NOTES.md`.
+
+Blocked: CAS templates, provider accounts, per-file permissions, shared hosting.
 
 ## Not yet claimed
 
-Stages 2–5 (real logins, live integrations, payment packs from CAS templates, litigation issue, backups/restore/deploy). Working dashboard is not production readiness.
+Stages 2–5 (finer permissions, live integrations, payment packs from CAS templates, litigation issue, backups/restore/deploy). Working dashboard is not production readiness.

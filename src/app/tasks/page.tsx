@@ -1,6 +1,7 @@
 import { actionCompleteTask } from "@/app/actions";
 import { PageHeader } from "@/components/ClaimTable";
 import { formatUkDateTime } from "@/lib/dates";
+import { requireStaff } from "@/lib/auth/session";
 import { listTasks } from "@/lib/db/queries";
 import Link from "next/link";
 
@@ -9,6 +10,7 @@ export default async function TasksPage({
 }: {
   searchParams: Promise<{ when?: string }>;
 }) {
+  await requireStaff();
   const { when } = await searchParams;
   const tasks = listTasks(when);
   return (

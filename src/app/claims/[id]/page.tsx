@@ -5,6 +5,7 @@ import { actionAddNote, actionAddTask, actionCompleteTask, actionUpdateClaim } f
 import { FileHistory } from "@/components/FileHistory";
 import { PageHeader } from "@/components/ClaimTable";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
+import { requireStaff } from "@/lib/auth/session";
 import { getClaim, listStaff } from "@/lib/db/queries";
 import { formatGbp } from "@/lib/money";
 import { HEAD_LABELS, type HeadOfLoss } from "@/lib/constants";
@@ -20,6 +21,7 @@ function pretty(value: string | number | null | undefined) {
 
 export default async function ClaimDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  await requireStaff();
   const data = getClaim(id);
   if (!data) notFound();
   const { claim } = data;

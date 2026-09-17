@@ -2,9 +2,11 @@ import Link from "next/link";
 import { PageHeader } from "@/components/ClaimTable";
 import { ReserveForm } from "@/components/ReserveForm";
 import { formatUkDateTime } from "@/lib/dates";
+import { requireStaff } from "@/lib/auth/session";
 import { listClaims, listFleet, listReservations } from "@/lib/db/queries";
 
-export default function HirePage() {
+export default async function HirePage() {
+  await requireStaff();
   const fleet = listFleet();
   const reservations = listReservations();
   const claims = listClaims();

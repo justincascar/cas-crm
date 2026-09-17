@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ClaimTable, PageHeader, SearchForm } from "@/components/ClaimTable";
 import { formatGbp } from "@/lib/money";
+import { requireStaff } from "@/lib/auth/session";
 import { dbLocation, getDashboard } from "@/lib/db/queries";
 
 const toneClass: Record<string, string> = {
@@ -10,7 +11,8 @@ const toneClass: Record<string, string> = {
   ok: "border-l-ok",
 };
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  await requireStaff();
   const data = getDashboard();
   const path = dbLocation();
 

@@ -9,7 +9,7 @@ This is the Complete Accident Solutions Ltd claims CRM. The owner is Justin Robe
 - Progress: `docs/progress.md`
 - Dependencies still needed from CAS: `docs/DEPENDENCIES.md`
 
-Follow the brief. Do not stop at mock-ups. Stage 1 is a working dashboard with persistent TEST claims. Later stages add real staff login, live lookups, live sending and litigation packs.
+Follow the brief. Do not stop at mock-ups. Stage 1 is a working dashboard with persistent TEST claims. Staff sign-in is required (see `docs/AUTH-NOTES.md`); all signed-in staff currently see every file. Later stages add finer permissions, live lookups, live sending and litigation packs.
 
 ## How to run
 

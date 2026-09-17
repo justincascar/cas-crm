@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { actionGenerateHirePack, actionSaveHirePack } from "@/app/actions";
 import { PageHeader } from "@/components/ClaimTable";
+import { requireStaff } from "@/lib/auth/session";
 import { getHirePack } from "@/lib/db/hire-pack";
 import { formatGbp } from "@/lib/money";
 
@@ -14,6 +15,7 @@ function pounds(pence: string | number | null | undefined) {
 
 export default async function HirePackPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  await requireStaff();
   const pack = getHirePack(id);
   if (!pack) notFound();
   const s = pack.stored;

@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ClaimTable";
 import { formatUkDate } from "@/lib/dates";
+import { requireStaff } from "@/lib/auth/session";
 import { listLitigation } from "@/lib/db/queries";
 
-export default function LitigationPage() {
+export default async function LitigationPage() {
+  await requireStaff();
   const rows = listLitigation();
   return (
     <div>

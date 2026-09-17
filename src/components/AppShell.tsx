@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { actionLogout } from "@/app/auth-actions";
 
 const NAV = [
   { href: "/", label: "Dashboard" },
@@ -16,7 +17,15 @@ const NAV = [
   { href: "/settings", label: "Settings" },
 ];
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+export function AppShell({
+  children,
+  staffName,
+  staffUsername,
+}: {
+  children: React.ReactNode;
+  staffName: string;
+  staffUsername: string;
+}) {
   const path = usePathname();
   return (
     <div className="min-h-screen lg:grid lg:grid-cols-[240px_1fr]">
@@ -50,9 +59,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
       <div className="min-w-0">
-        <div className="border-b border-copper/30 bg-[#efe4d2] px-4 py-2 text-center text-sm text-ink">
-          <strong>Prototype — fictional test data.</strong> Lookups, email and WhatsApp are simulated.
-          Do not send real correspondence from this system.
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-copper/30 bg-[#efe4d2] px-4 py-2 text-sm text-ink">
+          <p>
+            <strong>Prototype — fictional test data.</strong> Lookups, email and WhatsApp are simulated.
+            Do not send real correspondence from this system.
+          </p>
+          <div className="flex items-center gap-3">
+            <span>
+              Logged in as <strong>{staffName}</strong>
+              <span className="text-slate"> ({staffUsername})</span>
+            </span>
+            <form action={actionLogout}>
+              <button type="submit" className="rounded-md border border-navy px-3 py-1 text-xs font-semibold text-navy">
+                Log out
+              </button>
+            </form>
+          </div>
         </div>
         <main className="px-4 py-6 sm:px-8">{children}</main>
       </div>

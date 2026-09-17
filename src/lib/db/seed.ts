@@ -1,4 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
+import { DEMO_STAFF, demoPasswordFor } from "../auth/demo-staff";
+import { hashPasswordSync } from "../auth/passwords";
 import { FILE_REFERENCE_PREFIX_DEFAULT } from "../constants";
 import { isoDateFromNow, isoDaysFromNow, nowUtcIso } from "../dates";
 import { pence, vatOnNet } from "../money";
@@ -27,14 +29,19 @@ export function seed(db: DatabaseSync) {
   run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", ["chaser_interval_days", "3"]);
   run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", ["chaser_interval_unit", "calendar_days"]);
 
-  const staff = [
-    ["staff-justin", "Justin Roberts", "justin@completeaccidentsolutions.example", "md"],
-    ["staff-sian", "Sian Evans", "sian.evans@completeaccidentsolutions.example", "handler"],
-    ["staff-tom", "Tom Hughes", "tom.hughes@completeaccidentsolutions.example", "handler"],
-    ["staff-megan", "Megan Price", "megan.price@completeaccidentsolutions.example", "handler"],
-  ];
-  for (const [id, name, email, role] of staff) {
-    run(db, "INSERT INTO staff(id, name, email, role, active) VALUES (?, ?, ?, ?, 1)", [id, name, email, role]);
+  for (const person of DEMO_STAFF) {
+    run(
+      db,
+      `INSERT INTO staff(id, name, email, username, password_hash, role, active) VALUES (?, ?, ?, ?, ?, ?, 1)`,
+      [
+        person.id,
+        person.name,
+        person.email,
+        person.username,
+        hashPasswordSync(demoPasswordFor(person.username)),
+        person.role,
+      ],
+    );
   }
 
   const people: Array<Record<string, string | null>> = [
