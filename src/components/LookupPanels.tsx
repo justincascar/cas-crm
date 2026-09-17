@@ -1,0 +1,66 @@
+"use client";
+
+import { useState } from "react";
+import { actionLookupVehicle } from "@/app/actions";
+import { PostcodeAddressLookup } from "@/components/PostcodeAddressLookup";
+
+export function LookupPanels() {
+  const [postcode, setPostcode] = useState("");
+  const [address, setAddress] = useState("");
+  const [town, setTown] = useState("");
+  const [reg, setReg] = useState("");
+  const [vehicle, setVehicle] = useState<string>("");
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <div className="rounded-xl border border-dashed border-copper/50 bg-[#fbf6ec] p-4">
+        <p className="text-xs uppercase tracking-[0.12em] text-copper">Free postcode lookup</p>
+        <div className="mt-2">
+          <PostcodeAddressLookup
+            postcodeName="lookup_postcode"
+            addressName="lookup_address"
+            townName="lookup_town"
+            postcode={postcode}
+            address={address}
+            town={town}
+            onPostcode={setPostcode}
+            onAddress={setAddress}
+            onTown={setTown}
+          />
+        </div>
+        <p className="mt-2 text-xs text-slate">
+          Uses postcodes.io and OpenStreetMap. Not Royal Mail. Manual entry always remains available.
+        </p>
+      </div>
+      <div className="rounded-xl border border-dashed border-copper/50 bg-[#fbf6ec] p-4">
+        <p className="text-xs uppercase tracking-[0.12em] text-copper">Simulated registration lookup</p>
+        <div className="mt-2 flex gap-2">
+          <input
+            value={reg}
+            onChange={(e) => setReg(e.target.value.toUpperCase())}
+            placeholder="e.g. CF64 DLE"
+            className="w-full rounded-md border border-line bg-card px-3 py-2 text-sm uppercase"
+          />
+          <button
+            type="button"
+            className="rounded-md border border-line px-3 py-2 text-sm"
+            onClick={async () => {
+              const res = await actionLookupVehicle(reg);
+              if (!res.result) {
+                setVehicle("No result. Enter manually.");
+                return;
+              }
+              const v = res.result;
+              setVehicle(
+                `${v.make || "Unknown"} ${v.model || ""} ${v.fuel || ""} ${v.colour || ""} — ${v.warnings.join(" ")}`,
+              );
+            }}
+          >
+            Look up
+          </button>
+        </div>
+        {vehicle ? <p className="mt-3 text-sm">{vehicle}</p> : null}
+      </div>
+    </div>
+  );
+}

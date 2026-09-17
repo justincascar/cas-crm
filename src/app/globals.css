@@ -1,0 +1,110 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Source Serif 4", ui-serif, Georgia, serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --color-ink: #101c24;
+  --color-navy: #143044;
+  --color-navy-deep: #0c1b26;
+  --color-slate: #4a5d6b;
+  --color-paper: #f3eee4;
+  --color-card: #fffdf8;
+  --color-line: #d9d0c2;
+  --color-teal: #1c6b66;
+  --color-teal-dark: #144f4c;
+  --color-copper: #b4632c;
+  --color-overdue: #9c2f2f;
+  --color-ok: #2c6a3c;
+  --color-warn: #9a6b12;
+}
+
+html,
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+.ledger-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.9rem;
+}
+
+.ledger-table th {
+  text-align: left;
+  font-size: 0.72rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--color-slate);
+  font-weight: 600;
+  padding: 0.55rem 0.7rem;
+  border-bottom: 1px solid var(--color-line);
+}
+
+.ledger-table td {
+  padding: 0.7rem;
+  border-bottom: 1px solid var(--color-line);
+  vertical-align: top;
+}
+
+.ledger-table tr:hover td {
+  background: #f7f1e6;
+}
+
+.letter header {
+  margin-bottom: 1.5rem;
+}
+
+.letter p {
+  margin: 0.75rem 0;
+  line-height: 1.5;
+}
+
+.hire-pack section {
+  break-inside: avoid;
+  margin: 2rem 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--color-line);
+}
+
+.hire-pack table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+  font-size: 0.9rem;
+}
+
+.hire-pack td,
+.hire-pack th {
+  border: 1px solid var(--color-line);
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+}
+
+.hire-pack .missing {
+  background: #fff6e8;
+  padding: 0.75rem;
+}
+
+@media print {
+  aside,
+  .print\:hidden {
+    display: none !important;
+  }
+  main {
+    padding: 0;
+  }
+  .letter-paper {
+    border: none;
+    box-shadow: none;
+  }
+}

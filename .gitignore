@@ -1,0 +1,17 @@
+node_modules
+.next
+out
+*.log
+.env
+.env.*
+!.env.example
+.DS_Store
+coverage
+
+# SQLite lives in %LOCALAPPDATA%\CAS-CRM, not the repo. Ignore it if copied here by mistake.
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+*.db-wal
+*.db-shm
