@@ -23,25 +23,28 @@ describe("staff passwords", () => {
 });
 
 describe("seeded staff credentials", () => {
-  it("stores hashed passwords for the four demonstration staff, not plain text", () => {
+  it("stores hashed passwords for the four demonstration staff, not plain text, with Justin as administrator", () => {
     const db = new DatabaseSync(":memory:");
     db.exec("PRAGMA foreign_keys = ON;");
     db.exec(schema());
     seed(db);
-    const rows = db.prepare("SELECT username, password_hash FROM staff ORDER BY username").all() as Array<{
+    const rows = db.prepare("SELECT username, password_hash, role FROM staff ORDER BY username").all() as Array<{
       username: string;
       password_hash: string;
+      role: string;
     }>;
     assert.equal(rows.length, 4);
     assert.deepEqual(
       rows.map((r) => r.username),
       ["justin", "megan", "sian", "tom"],
     );
+    assert.equal(rows.find((r) => r.username === "justin")?.role, "administrator");
     for (const row of rows) {
       const password = demoPasswordFor(row.username);
       assert.match(row.password_hash, /^scrypt\$/);
       assert.equal(row.password_hash.includes(password), false);
       assert.equal(verifyPassword(password, row.password_hash), true);
+      if (row.username !== "justin") assert.equal(row.role, "staff");
     }
     db.close();
   });

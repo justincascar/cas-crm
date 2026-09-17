@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { actionGenerateHirePack, actionSaveHirePack } from "@/app/actions";
+import { AgeField } from "@/components/AgeField";
 import { PageHeader } from "@/components/ClaimTable";
 import { requireStaff } from "@/lib/auth/session";
 import { getHirePack } from "@/lib/db/hire-pack";
@@ -13,9 +14,16 @@ function pounds(pence: string | number | null | undefined) {
   return n ? String(n) : "";
 }
 
-export default async function HirePackPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function HirePackPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string }>;
+}) {
   const { id } = await params;
   await requireStaff();
+  const { error } = await searchParams;
   const pack = getHirePack(id);
   if (!pack) notFound();
   const s = pack.stored;
@@ -32,6 +40,10 @@ export default async function HirePackPage({ params }: { params: Promise<{ id: s
           </Link>
         }
       />
+
+      {error ? (
+        <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
+      ) : null}
 
       {pack.missing.length > 0 ? (
         <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">
@@ -57,7 +69,7 @@ export default async function HirePackPage({ params }: { params: Promise<{ id: s
             </label>
             <label className="text-sm">
               Date of birth
-              <input name="date_of_birth" type="date" className={field} defaultValue={pack.ctx.hirerDob || ""} />
+              <AgeField name="date_of_birth" kind="hirer" defaultValue={pack.ctx.hirerDob || ""} className={field} />
             </label>
             <label className="text-sm">
               Driving licence number
@@ -103,7 +115,12 @@ export default async function HirePackPage({ params }: { params: Promise<{ id: s
             </label>
             <label className="text-sm">
               Date of birth
-              <input name="additional_dob" type="date" className={field} defaultValue={String(s.additional_dob || "")} />
+              <AgeField
+                name="additional_dob"
+                kind="driver"
+                defaultValue={String(s.additional_dob || "")}
+                className={field}
+              />
             </label>
             <label className="text-sm">
               Licence number

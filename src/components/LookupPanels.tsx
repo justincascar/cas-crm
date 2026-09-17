@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { actionLookupVehicle } from "@/app/actions";
 import { PostcodeAddressLookup } from "@/components/PostcodeAddressLookup";
+import { VEHICLE_MANUAL_HINT } from "@/lib/lookups/vehicle";
 
 export function LookupPanels() {
   const [postcode, setPostcode] = useState("");
@@ -33,7 +34,7 @@ export function LookupPanels() {
         </p>
       </div>
       <div className="rounded-xl border border-dashed border-copper/50 bg-[#fbf6ec] p-4">
-        <p className="text-xs uppercase tracking-[0.12em] text-copper">Simulated registration lookup</p>
+        <p className="text-xs uppercase tracking-[0.12em] text-copper">Registration lookup (manual fallback)</p>
         <div className="mt-2 flex gap-2">
           <input
             value={reg}
@@ -45,20 +46,24 @@ export function LookupPanels() {
             type="button"
             className="rounded-md border border-line px-3 py-2 text-sm"
             onClick={async () => {
-              const res = await actionLookupVehicle(reg);
-              if (!res.result) {
-                setVehicle("No result. Enter manually.");
-                return;
+              try {
+                const res = await actionLookupVehicle(reg);
+                if (!res.result) {
+                  setVehicle(VEHICLE_MANUAL_HINT);
+                  return;
+                }
+                const v = res.result;
+                const summary = [v.make, v.model, v.fuel, v.colour].filter(Boolean).join(" ") || "No make/colour returned";
+                setVehicle(`${summary}. ${v.warnings.join(" ") || VEHICLE_MANUAL_HINT}`);
+              } catch {
+                setVehicle(VEHICLE_MANUAL_HINT);
               }
-              const v = res.result;
-              setVehicle(
-                `${v.make || "Unknown"} ${v.model || ""} ${v.fuel || ""} ${v.colour || ""} — ${v.warnings.join(" ")}`,
-              );
             }}
           >
             Look up
           </button>
         </div>
+        <p className="mt-2 text-xs text-slate">{VEHICLE_MANUAL_HINT}</p>
         {vehicle ? <p className="mt-3 text-sm">{vehicle}</p> : null}
       </div>
     </div>

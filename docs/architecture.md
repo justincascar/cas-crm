@@ -14,7 +14,8 @@ PostgreSQL can replace SQLite later if CAS hosts a shared office server. Lookup,
 ## Date and money rules
 
 - Store timestamps as ISO-8601 UTC text.
-- Display in Europe/London, including BST.
+- Display in Europe/London, including BST. Calendar “today” and “now” for validation and alerts use `Europe/London` (`londonTodayIso` / `londonNow`), not the server’s default timezone.
+- Accident dates cannot be after today’s London date.
 - Store money as integer pence. Display with `en-GB` currency formatting.
 - Never add claimed + agreed, or treat offered as received.
 
@@ -27,7 +28,7 @@ PostgreSQL can replace SQLite later if CAS hosts a shared office server. Lookup,
 
 ## Security posture
 
-Staff must sign in. Passwords are stored hashed in SQLite. Sessions use an HTTP-only cookie. Anyone who is signed in can currently see every file — there are no per-claim permissions yet. The database still lives on this PC only.
+Staff must sign in. Passwords are stored hashed in SQLite. Sessions use an HTTP-only cookie. Roles are `administrator` or `staff`. Only an administrator can manage staff logins (`/settings/staff`). Anyone who is signed in can currently see every file — there are no per-claim permissions yet. The database still lives on this PC only.
 
 Driving licence numbers are labelled restricted in the UI; that is not yet a separate access level.
 

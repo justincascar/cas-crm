@@ -36,7 +36,7 @@ Nothing below has been invented as a live connection. Prototype behaviour is lab
 
 ## Stage 2+ product work (not blocked on accounts)
 
-- Staff accounts, passwords, roles, and proof that another staff member can be authorised while a client cannot see others’ files. **Local staff sign-in now exists** (see `docs/AUTH-NOTES.md`); all signed-in staff still see every file, and it is still this PC only.
+- Staff accounts, passwords, roles, and proof that another staff member can be authorised while a client cannot see others’ files. **Local staff sign-in now exists** (see `docs/AUTH-NOTES.md`); Justin is an administrator and can manage staff logins. All signed-in staff still see every file, and it is still this PC only.
 - Client portal / mobile form with save-and-return.
 - Server-side automation runner while browsers are closed.
 - Document generation from real templates. Placeholder letters now generate from file dates; CAS wording still required.

@@ -47,10 +47,11 @@ This is **not** a shared office database. It lives on one Windows PC. Two browse
 - Passwords are stored as scrypt hashes. Sessions use an HTTP-only cookie. See `docs/AUTH-NOTES.md`.
 - Pages and server actions refuse claim, client, fleet and financial data unless that session is valid. Direct URLs while logged out redirect to `/login`.
 - **Still this PC only.** Not a shared office server.
-- **No fine-grained permissions.** Any signed-in staff member can open every file, including licence details labelled “restricted”.
+- **No fine-grained claim permissions.** Any signed-in staff member can open every file, including licence details labelled “restricted”.
+- **Administrator vs staff:** Justin Roberts is an administrator and can manage staff logins at `/settings/staff`. Sian, Tom and Megan are staff. Standard staff are refused that screen on the server.
 - Notes and actions still default the actor to the file handler, or to Sian if none is set, unless the form says otherwise.
 
-**Grade: storage (a) for a single PC; authentication (b) — login enforced, equal access, not multi-user hosting.**
+**Grade: storage (a) for a single PC; authentication (b) — login enforced, administrator can manage staff logins, still equal access to every claim, not multi-user hosting.**
 
 ---
 
@@ -137,7 +138,9 @@ Seeded files (fictional only — not live 100714 data):
 Lookups on the form:
 
 - Postcode: real free internet lookup (see Integrations). Not a full Royal Mail house list unless a paid key is added.
-- Registration / tax / MOT / insurance: **simulated** for a handful of demo plates; otherwise “enter manually”. Insurance is never invented from a scrape.
+- Registration / tax / MOT / insurance: **simulated** for a handful of demo plates, or when no DVLA key is configured. Make, colour, tax and MOT stay editable. A failed lookup does not block the form. Insurance is never invented from a scrape.
+- Accident date cannot be after today (Europe/London). Checked in the browser and when the server saves.
+- Date of birth shows a live age. Drivers under 17 cannot be saved. Client/owner/hirer under 17 needs a confirmation tick. Future and over-110-year dates are rejected.
 
 Casing rule is implemented: vehicle registration in capitals; other typed fields title-cased.
 
@@ -228,9 +231,9 @@ Office mailbox, WhatsApp Business and telephony are **not connected**.
 
 ### Authentication / permissions — **(b)**
 
-Local staff login is enforced on the server. All four demo staff have equal access to all claims. Fine-grained roles, client isolation and a shared office server are **not** built. See `docs/AUTH-NOTES.md`.
+Local staff login is enforced on the server. Justin Roberts is an administrator and can manage staff logins at `/settings/staff`. The other three demo accounts are staff and are refused that screen. All signed-in staff still have equal access to all claims. Fine-grained claim permissions, client isolation and a shared office server are **not** built. See `docs/AUTH-NOTES.md`.
 
-Settings shows prototype flags (file prefix `TEST-`, 88 days, day 80, 3-day chaser) and the staff list. No login, no client isolation, no proof that one handler cannot see another’s work. Stage 2 in the brief.
+Settings shows prototype flags (file prefix `TEST-`, 88 days, day 80, 3-day chaser) and the staff list. Stage 2 in the brief still covers per-file permissions and hosting.
 
 ### Litigation — **(b)**
 
@@ -272,7 +275,7 @@ Allowed later; not blocking claims work; not built. No public deploy, no backups
 
 ### Main routes
 
-`/`, `/claims`, `/claims/new`, `/claims/[id]`, `/claims/[id]/work/[screen]`, `/claims/[id]/hire-pack`, `/tasks`, `/hire`, `/documents`, `/documents/[id]`, `/communications`, `/financials`, `/automations`, `/litigation`, `/settings`.
+`/`, `/claims`, `/claims/new`, `/claims/[id]`, `/claims/[id]/work/[screen]`, `/claims/[id]/hire-pack`, `/tasks`, `/hire`, `/documents`, `/documents/[id]`, `/communications`, `/financials`, `/automations`, `/litigation`, `/settings`, `/settings/staff` (administrators only), `/login`.
 
 ### Database tables (schema)
 
@@ -280,7 +283,7 @@ Allowed later; not blocking claims work; not built. No public deploy, no backups
 
 ### Tests covering behavioural rules
 
-`tests/rules.test.ts`, `intake.test.ts`, `screens.test.ts`, `letters.test.ts`, `hire-pack.test.ts`, `seed.test.ts`, `text.test.ts`, `postcode.test.ts`. These check hire/reservation/agreement rules, intake mapping, letter generation and postcode mapping — **not** live mailbox or PAF.
+`tests/rules.test.ts`, `intake.test.ts`, `screens.test.ts`, `letters.test.ts`, `hire-pack.test.ts`, `seed.test.ts`, `text.test.ts`, `postcode.test.ts`, `auth.test.ts`, `dates-age.test.ts`, `staff-admin.test.ts`. These check hire/reservation/agreement rules, intake mapping, letter generation, postcode mapping, accident/DOB rules and staff roles — **not** live mailbox, DVLA or PAF.
 
 ---
 

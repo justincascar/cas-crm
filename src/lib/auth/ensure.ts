@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { ADMINISTRATOR_ROLE, STAFF_ROLE } from "./roles";
 import { DEMO_STAFF, demoPasswordFor } from "./demo-staff";
 import { hashPasswordSync } from "./passwords";
 
@@ -36,9 +37,9 @@ export function ensureStaffAuth(db: DatabaseSync) {
   }
 
   for (const person of DEMO_STAFF) {
-    const existing = get<{ id: string; username: string | null; password_hash: string | null }>(
+    const existing = get<{ id: string; username: string | null; password_hash: string | null; role: string }>(
       db,
-      "SELECT id, username, password_hash FROM staff WHERE id = ?",
+      "SELECT id, username, password_hash, role FROM staff WHERE id = ?",
       [person.id],
     );
     if (!existing) {
@@ -58,6 +59,11 @@ export function ensureStaffAuth(db: DatabaseSync) {
         hashPasswordSync(demoPasswordFor(person.username)),
         person.id,
       ]);
+    }
+    if (person.id === "staff-justin" && existing.role !== ADMINISTRATOR_ROLE && existing.role !== STAFF_ROLE) {
+      run(db, "UPDATE staff SET role = ? WHERE id = ?", [ADMINISTRATOR_ROLE, person.id]);
+    } else if (person.id !== "staff-justin" && (existing.role === "handler" || existing.role === "md")) {
+      run(db, "UPDATE staff SET role = ? WHERE id = ?", [STAFF_ROLE, person.id]);
     }
   }
 }

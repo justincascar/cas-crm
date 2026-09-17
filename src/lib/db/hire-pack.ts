@@ -1,6 +1,7 @@
 import { CAS_COMPANY, CAS_HIRE_AGREEMENT_BANNER, CAS_HIRE_TERMS_HTML } from "../documents/cas-hire-terms";
 import { HIRE_PACK_MANDATORY } from "../documents/hire-pack-fields";
 import { formatUkDate, formatUkDateTime, nowUtcIso } from "../dates";
+import { dobSaveError } from "../age";
 import { formatGbp } from "../money";
 import { all, get, newId, run } from "./connection";
 import { recordClaimEvent } from "./chronology";
@@ -127,7 +128,19 @@ export function getHirePack(claimId: string) {
   };
 }
 
+export function hirePackSaveError(input: HirePackData): string | null {
+  const confirmed = (key: string) => {
+    const value = input[key];
+    return value === "yes" || value === 1;
+  };
+  const hirerErr = dobSaveError(String(input.date_of_birth || ""), "hirer", confirmed("date_of_birth_confirmed"));
+  if (hirerErr) return hirerErr;
+  return dobSaveError(String(input.additional_dob || ""), "driver", confirmed("additional_dob_confirmed"));
+}
+
 export function saveHirePack(claimId: string, input: HirePackData) {
+  const blocked = hirePackSaveError(input);
+  if (blocked) throw new Error(blocked);
   const existing = get(`SELECT claim_id FROM hire_pack_data WHERE claim_id = ?`, [claimId]);
   const columns = Object.keys(EMPTY_PACK);
   const values = columns.map((key) => input[key] ?? EMPTY_PACK[key]);

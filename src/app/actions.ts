@@ -10,7 +10,7 @@ import {
   createReservation,
   updateClaimPosition,
 } from "@/lib/db/queries";
-import { createClaimFromIntake, intakeFromFormData } from "@/lib/db/intake";
+import { createClaimFromIntake, intakeDateErrors, intakeFromFormData } from "@/lib/db/intake";
 import { complianceLookup } from "@/lib/lookups/compliance";
 import {
   generateClaimDocument,
@@ -25,12 +25,17 @@ import { generateHirePackDocument, saveHirePack } from "@/lib/db/hire-pack";
 import { saveScreenData, valuesFromForm } from "@/lib/db/screens";
 import { isoDaysFromNow } from "@/lib/dates";
 import { postcodeLookup } from "@/lib/lookups/postcode";
-import { vehicleLookup } from "@/lib/lookups/vehicle";
+import { VEHICLE_MANUAL_HINT, vehicleLookup } from "@/lib/lookups/vehicle";
 import type { LetterTemplateKey } from "@/lib/documents/templates";
 
 export async function actionCreateClaim(formData: FormData) {
   await requireStaff();
-  const result = await createClaimFromIntake(intakeFromFormData(formData));
+  const input = intakeFromFormData(formData);
+  const blocked = intakeDateErrors(input);
+  if (blocked) {
+    redirect(`/claims/new?error=${encodeURIComponent(blocked)}`);
+  }
+  const result = await createClaimFromIntake(input);
   revalidatePath("/");
   revalidatePath("/claims");
   redirect(`/claims/${result.id}`);
@@ -125,7 +130,12 @@ export async function actionSaveClaimScreen(formData: FormData) {
   await requireStaff();
   const claimId = String(formData.get("claimId"));
   const screenKey = String(formData.get("screenKey"));
-  saveScreenData(claimId, screenKey, valuesFromForm(formData, screenKey), String(formData.get("actorId") || "staff-sian"));
+  try {
+    saveScreenData(claimId, screenKey, valuesFromForm(formData, screenKey), String(formData.get("actorId") || "staff-sian"));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not save this screen.";
+    redirect(`/claims/${claimId}/work/${screenKey}?error=${encodeURIComponent(message)}`);
+  }
   revalidatePath(`/claims/${claimId}`);
   revalidatePath(`/claims/${claimId}/work/${screenKey}`);
   redirect(`/claims/${claimId}/work/${screenKey}?saved=1`);
@@ -144,8 +154,21 @@ export async function actionLookupPostcode(postcode: string) {
 
 export async function actionLookupVehicle(registration: string) {
   await requireStaff();
-  const result = await vehicleLookup.lookup(registration);
-  return { simulated: vehicleLookup.simulated, provider: vehicleLookup.name, result };
+  try {
+    const result = await vehicleLookup.lookup(registration);
+    return { simulated: vehicleLookup.simulated, provider: vehicleLookup.name, result };
+  } catch {
+    return {
+      simulated: true,
+      provider: vehicleLookup.name,
+      result: {
+        registration: (registration || "").toUpperCase().trim(),
+        incomplete: true,
+        warnings: [VEHICLE_MANUAL_HINT],
+        source: "manual",
+      },
+    };
+  }
 }
 
 export async function actionLookupCompliance(registration: string) {
@@ -291,7 +314,8 @@ function poundsToPence(formData: FormData, name: string) {
 export async function actionSaveHirePack(formData: FormData) {
   await requireStaff();
   const claimId = String(formData.get("claimId"));
-  saveHirePack(claimId, {
+  try {
+    saveHirePack(claimId, {
     title: String(formData.get("title") || ""),
     home_tel: String(formData.get("home_tel") || ""),
     work_tel: String(formData.get("work_tel") || ""),
@@ -345,7 +369,13 @@ export async function actionSaveHirePack(formData: FormData) {
     driver_name: String(formData.get("driver_name") || ""),
     date_of_birth: String(formData.get("date_of_birth") || ""),
     licence_number: String(formData.get("licence_number") || ""),
+    date_of_birth_confirmed: formData.get("date_of_birth_confirmed") ? "yes" : "",
+    additional_dob_confirmed: formData.get("additional_dob_confirmed") ? "yes" : "",
   });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not save the hire pack.";
+    redirect(`/claims/${claimId}/hire-pack?error=${encodeURIComponent(message)}`);
+  }
   revalidatePath(`/claims/${claimId}/hire-pack`);
   revalidatePath(`/claims/${claimId}`);
 }

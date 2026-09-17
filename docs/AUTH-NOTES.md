@@ -10,6 +10,8 @@ Every claims desk page, and every server action that reads or writes claim, clie
 
 The four demonstration people are the same handler names already on the TEST files: Justin Roberts, Sian Evans, Tom Hughes, Megan Price.
 
+**Roles:** Justin Roberts (managing director) is an **administrator**. The other three are **staff**. An administrator can open **Settings → Manage staff logins** (`/settings/staff`) to create a login, disable one, reset a password, or change the role. Standard staff cannot open that page (the server refuses it, not just the menu). All signed-in people can still open every claim — this is not claim-level permission.
+
 ## Demonstration usernames and passwords
 
 These are **fictional** and only for this prototype on this PC. They are not CAS office passwords. Do not reuse them for email, banking or live systems.
@@ -37,8 +39,8 @@ Then delete the SQLite file (or clear `password_hash` on staff) so the new hashe
 ## What this stage does not do
 
 - **Still one PC only.** This is not a shared office server. Another computer cannot sign in to this database.
-- **No fine-grained permissions yet.** Any signed-in staff member can open every claim, including licence details. Handler is still a field on the file, not an access wall.
-- Email, WhatsApp and vehicle lookup remain simulated.
+- **No fine-grained claim permissions yet.** Any signed-in staff member can open every claim, including licence details. Handler is still a field on the file, not an access wall. Administrators additionally manage staff logins.
+- Email, WhatsApp and vehicle lookup remain simulated. Vehicle details can always be typed by hand.
 
 Those two limits (shared hosting / per-file permissions) are the next access-control jobs, not this one.
 

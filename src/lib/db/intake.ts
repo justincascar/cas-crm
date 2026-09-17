@@ -1,5 +1,6 @@
 import { INDICATIVE_DEFAULTS } from "../constants";
-import { nowUtcIso, occurredFromForm, londonDateIso } from "../dates";
+import { accidentDateError, nowUtcIso, occurredFromForm, londonDateIso } from "../dates";
+import { clientDobKind, counterpartDobKind, dobSaveError } from "../age";
 import { storageStartFromRecovery, recoveryChargeTotalPence } from "../domain/rules";
 import { emailGateway } from "../email/gateway";
 import { formatGbp, grossFromNet } from "../money";
@@ -21,6 +22,7 @@ export type IntakePerson = {
   skipOtherTel?: boolean;
   email?: string;
   dob?: string;
+  dobConfirmed?: boolean;
 };
 
 export type IntakeVehicle = {
@@ -134,6 +136,22 @@ export function accidentAtFromParts(date?: string, time?: string): string | unde
   if (!d) return undefined;
   const t = (time || "").trim() || "00:00";
   return occurredFromForm(`${d}T${t.length === 5 ? t : "00:00"}`);
+}
+
+export function intakeDateErrors(input: IntakeInput): string | null {
+  const accident = accidentDateError(input.accidentDate);
+  if (accident) return accident;
+  const clientErr = dobSaveError(input.client.dob, clientDobKind(input.clientRole), Boolean(input.client.dobConfirmed));
+  if (clientErr) return clientErr;
+  if (input.clientRole === "owner" || input.clientRole === "driver") {
+    const counterpartErr = dobSaveError(
+      input.counterpart?.dob,
+      counterpartDobKind(input.clientRole),
+      Boolean(input.counterpart?.dobConfirmed),
+    );
+    if (counterpartErr) return counterpartErr;
+  }
+  return null;
 }
 
 function insertPerson(person: IntakePerson, preferred: string | null) {
@@ -274,6 +292,8 @@ export async function createClaimFromIntake(input: IntakeInput) {
   if (!input.client.forename?.trim() && !input.client.surname?.trim() && clientName === "Unknown") {
     throw new Error("Client forename or surname is required.");
   }
+  const dateError = intakeDateErrors(input);
+  if (dateError) throw new Error(dateError);
 
   const id = newId("claim");
   const now = nowUtcIso();
@@ -722,6 +742,7 @@ export function personFromForm(formData: FormData, prefix: string): IntakePerson
     skipOtherTel: formFlag(formData, `${prefix}skipOtherTel`),
     email: readFormText(formData, `${prefix}email`),
     dob: String(formData.get(`${prefix}dob`) || ""),
+    dobConfirmed: formFlag(formData, `${prefix}dob_confirmed`),
   };
 }
 

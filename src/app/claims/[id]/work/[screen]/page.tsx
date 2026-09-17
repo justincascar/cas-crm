@@ -95,6 +95,7 @@ export default async function ClaimWorkScreenPage({
           def={def}
           values={values}
           saved={justSaved}
+          clientRole={String(data.claim.client_role || "")}
         />
       ) : null}
     </div>

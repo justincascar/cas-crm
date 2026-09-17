@@ -1,19 +1,30 @@
 import { PageHeader } from "@/components/ClaimTable";
+import Link from "next/link";
+import { isAdministrator } from "@/lib/auth/roles";
 import { requireStaff } from "@/lib/auth/session";
 import { dbLocation, getSettings, listStaff } from "@/lib/db/queries";
 import { INDICATIVE_DEFAULTS } from "@/lib/constants";
 import { formatGbp } from "@/lib/money";
 
-export default async function SettingsPage() {
-  await requireStaff();
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string }>;
+}) {
+  const staffUser = await requireStaff();
+  const { error } = await searchParams;
   const settings = getSettings();
   const staff = listStaff();
+  const admin = isAdministrator(staffUser.role);
   return (
     <div className="max-w-3xl space-y-6">
       <PageHeader
         title="Settings"
         subtitle="Prototype configuration. Staff must sign in. All signed-in staff currently see every file — finer permissions are a later stage."
       />
+      {error ? (
+        <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
+      ) : null}
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Environment</h2>
         <dl className="mt-3 grid gap-2 text-sm">
@@ -44,6 +55,15 @@ export default async function SettingsPage() {
         <p className="mt-1 text-sm text-slate">
           Demonstration passwords are in docs/AUTH-NOTES.md. Passwords are stored hashed. This PC only — not a shared office login server.
         </p>
+        {admin ? (
+          <p className="mt-2 text-sm">
+            <Link href="/settings/staff" className="font-semibold text-teal-dark underline">
+              Manage staff logins
+            </Link>
+          </p>
+        ) : (
+          <p className="mt-2 text-sm text-slate">Only an administrator can add, disable or reset staff logins.</p>
+        )}
         <ul className="mt-3 space-y-1 text-sm">
           {staff.map((s) => (
             <li key={s.id}>

@@ -1,5 +1,6 @@
-import { nowUtcIso, londonDateIso, occurredFromForm } from "../dates";
+import { accidentDateError, nowUtcIso, londonDateIso, occurredFromForm } from "../dates";
 import { CLAIM_SCREENS, getClaimScreen } from "../claim-screens";
+import { dobConfirmName, dobKindForField, dobSaveError, isDobFieldName } from "../age";
 import { formatTypedValue } from "../text";
 import { get, all, run } from "./connection";
 import { recordClaimEvent } from "./chronology";
@@ -50,6 +51,9 @@ export function valuesFromForm(formData: FormData, screenKey: string): ScreenVal
       } else {
         values[field.name] = formatTypedValue(field.name, String(formData.get(field.name) || ""), field.type);
       }
+      if (isDobFieldName(field.name)) {
+        values[dobConfirmName(field.name)] = formData.get(dobConfirmName(field.name)) ? "yes" : "";
+      }
     }
   }
   for (const key of ["clientPanels", "tpPanels", "crossHire", "crossHireNotes"]) {
@@ -58,7 +62,30 @@ export function valuesFromForm(formData: FormData, screenKey: string): ScreenVal
   return values;
 }
 
+export function screenSaveError(claimId: string, screenKey: string, values: ScreenValues): string | null {
+  if (screenKey === "accident") {
+    return accidentDateError(values.accidentDate);
+  }
+  const def = getClaimScreen(screenKey);
+  if (!def) return null;
+  const claim = get<{ client_role: string | null }>(`SELECT client_role FROM claims WHERE id = ?`, [claimId]);
+  for (const section of def.sections) {
+    for (const field of section.fields) {
+      if (!isDobFieldName(field.name)) continue;
+      const err = dobSaveError(
+        values[field.name],
+        dobKindForField(screenKey, field.name, claim?.client_role || undefined),
+        values[dobConfirmName(field.name)] === "yes",
+      );
+      if (err) return err;
+    }
+  }
+  return null;
+}
+
 export function saveScreenData(claimId: string, screenKey: string, values: ScreenValues, actorId: string) {
+  const blocked = screenSaveError(claimId, screenKey, values);
+  if (blocked) throw new Error(blocked);
   const now = nowUtcIso();
   run(
     `INSERT INTO claim_screen_data(claim_id, screen_key, data_json, updated_at)

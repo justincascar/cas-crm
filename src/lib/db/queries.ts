@@ -1,5 +1,5 @@
 import { FILE_REFERENCE_PREFIX_DEFAULT, HEAD_LABELS, type HeadOfLoss } from "../constants";
-import { isBeforeLondonDay, isSameLondonDay, londonDateIso, nowUtcIso } from "../dates";
+import { accidentDateError, isBeforeLondonDay, isSameLondonDay, londonDateIso, nowUtcIso } from "../dates";
 import { formatGbp, sumDistinctHeads } from "../money";
 import { all, dbPath, get, newId, run } from "./connection";
 import { canReserveVehicle, nextFileReference, parseFileReferenceNumber } from "../domain/rules";
@@ -444,6 +444,11 @@ export function createClaimFromForm(input: {
   handlerId?: string;
   registration?: string;
 }) {
+  if (input.accidentAt) {
+    const accidentDay = londonDateIso(new Date(input.accidentAt));
+    const blocked = accidentDateError(accidentDay);
+    if (blocked) throw new Error(blocked);
+  }
   const id = newId("claim");
   const personId = newId("person");
   const vehicleId = newId("veh");

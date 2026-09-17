@@ -42,6 +42,29 @@ export function getDb(): DatabaseSync {
   return g.__casDb;
 }
 
+/** Run a function against a supplied database (tests). Restores the previous connection afterwards. */
+export function withDatabase<T>(db: DatabaseSync, fn: () => T): T {
+  const g = globalThis as GlobalDb;
+  const previous = g.__casDb;
+  g.__casDb = db;
+  try {
+    return fn();
+  } finally {
+    g.__casDb = previous;
+  }
+}
+
+export async function withDatabaseAsync<T>(db: DatabaseSync, fn: () => Promise<T>): Promise<T> {
+  const g = globalThis as GlobalDb;
+  const previous = g.__casDb;
+  g.__casDb = db;
+  try {
+    return await fn();
+  } finally {
+    g.__casDb = previous;
+  }
+}
+
 export function dbPath(): string {
   return databasePath();
 }

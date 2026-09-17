@@ -2,9 +2,12 @@
 
 import { useRef, useState } from "react";
 import { actionSaveClaimScreen } from "@/app/actions";
+import { AccidentDateField } from "@/components/AccidentDateField";
+import { AgeField } from "@/components/AgeField";
 import { casingInputProps } from "@/components/CasedField";
 import { PostcodeAddressLookup } from "@/components/PostcodeAddressLookup";
 import { DamageDiagram } from "@/components/claim-file/DamageDiagram";
+import { dobKindForField, isDobFieldName } from "@/lib/age";
 import type { ClaimScreenDef, ScreenField } from "@/lib/claim-screens";
 import { displayValue } from "@/lib/screen-display";
 import type { ScreenValues } from "@/lib/db/screens";
@@ -123,12 +126,14 @@ export function ScreenForm({
   def,
   values,
   saved,
+  clientRole,
 }: {
   claimId: string;
   actorId: string;
   def: ClaimScreenDef;
   values: ScreenValues;
   saved?: boolean;
+  clientRole?: string;
 }) {
   return (
     <form action={actionSaveClaimScreen} className="space-y-6">
@@ -148,6 +153,31 @@ export function ScreenForm({
                   <div key={field.name} className="sm:col-span-2">
                     <PostcodeInput field={field} shown={displayValue(def.key, field.name, values[field.name] || "")} />
                   </div>
+                );
+              }
+              if (isDobFieldName(field.name) && (field.type === "date" || !field.type)) {
+                return (
+                  <label key={field.name} className={`block text-sm ${field.span === 2 ? "sm:col-span-2" : ""}`}>
+                    {field.label}
+                    <AgeField
+                      name={field.name}
+                      defaultValue={(values[field.name] || "").slice(0, 10)}
+                      kind={dobKindForField(def.key, field.name, clientRole)}
+                    />
+                    {field.hint ? <span className="mt-1 block text-xs text-slate">{field.hint}</span> : null}
+                  </label>
+                );
+              }
+              if (field.name === "accidentDate") {
+                return (
+                  <label key={field.name} className={`block text-sm ${field.span === 2 ? "sm:col-span-2" : ""}`}>
+                    {field.label}
+                    <AccidentDateField
+                      name={field.name}
+                      defaultValue={displayValue(def.key, field.name, values[field.name] || "")}
+                    />
+                    {field.hint ? <span className="mt-1 block text-xs text-slate">{field.hint}</span> : null}
+                  </label>
                 );
               }
               return (

@@ -19,6 +19,26 @@ export function londonDateIso(date: Date): string {
   return formatInTimeZone(date, TIMEZONE, "yyyy-MM-dd");
 }
 
+/** Today's calendar date in Europe/London (yyyy-MM-dd). */
+export function londonTodayIso(asAt = new Date()): string {
+  return londonDateIso(asAt);
+}
+
+export function isFutureLondonDate(dateYmd: string, asAt = new Date()): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) return false;
+  return dateYmd > londonTodayIso(asAt);
+}
+
+export function accidentDateError(dateYmd: string | null | undefined, asAt = new Date()): string | null {
+  const value = (dateYmd || "").trim();
+  if (!value) return null;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return "Enter the accident date as a valid calendar date.";
+  if (isFutureLondonDate(value, asAt)) {
+    return "An accident date cannot be after today. Use today's date or an earlier date.";
+  }
+  return null;
+}
+
 export function utcFromLondonDateTime(dateTimeLocal: string): string {
   // dateTimeLocal: "2026-09-15T09:30" interpreted as Europe/London
   const asUtc = fromZonedTime(dateTimeLocal, TIMEZONE);

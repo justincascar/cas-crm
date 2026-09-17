@@ -25,7 +25,14 @@ Labelled simulated / not live: vehicle lookups, correspondence sending, document
 
 Staff sign-in (17 September 2026): username/password for the four demonstration handlers, hashed in SQLite, HTTP-only session cookie, server-side checks on pages and actions. Still this PC only; all signed-in staff see every file. Credentials: `docs/AUTH-NOTES.md`.
 
-Blocked: CAS templates, provider accounts, per-file permissions, shared hosting.
+17 September 2026 — four focused fixes:
+
+- Vehicle lookup stays simulated. If there is no DVLA key, or lookup fails, staff can still type make, colour, tax and MOT. The form is not blocked.
+- Accident date cannot be after today in Europe/London. Checked in the browser and on the server.
+- Date of birth shows a live age box. Drivers under 17 cannot be saved. Client/owner/hirer under 17 shows a warning and needs a tick to confirm. Future and over-110-year dates are rejected.
+- Justin Roberts is an administrator. Sian, Tom and Megan are staff. Administrators can add, disable, reset passwords and change roles on `/settings/staff`. Standard staff cannot use that screen.
+
+Blocked: CAS templates, provider accounts, per-file permissions, shared hosting, live DVLA.
 
 ## Not yet claimed
 

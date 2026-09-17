@@ -6,10 +6,15 @@ import {
   actionLookupCompliance,
   actionLookupVehicle,
 } from "@/app/actions";
+import { AccidentDateField } from "@/components/AccidentDateField";
+import { AgeField } from "@/components/AgeField";
 import { casingInputProps } from "@/components/CasedField";
 import { PostcodeAddressLookup } from "@/components/PostcodeAddressLookup";
+import type { DobKind } from "@/lib/age";
+import { clientDobKind, counterpartDobKind } from "@/lib/age";
 import { ASK_MID_URL, GOV_MOT_URL, GOV_TAX_URL } from "@/lib/lookups/compliance";
 import { googleMapsSearchUrl } from "@/lib/lookups/maps";
+import { VEHICLE_MANUAL_HINT } from "@/lib/lookups/vehicle";
 import {
   formatVehicleRegistration,
   formatVehicleRegistrationLive,
@@ -33,7 +38,7 @@ function Section({ n, title, children }: { n: number; title: string; children: R
   );
 }
 
-function PersonFields({ prefix, skipOther }: { prefix: string; skipOther?: boolean }) {
+function PersonFields({ prefix, skipOther, kind }: { prefix: string; skipOther?: boolean; kind: DobKind }) {
   const [postcode, setPostcode] = useState("");
   const [address, setAddress] = useState("");
   const [town, setTown] = useState("");
@@ -116,7 +121,7 @@ function PersonFields({ prefix, skipOther }: { prefix: string; skipOther?: boole
           </label>
           <label className="block text-sm">
             Date of birth
-            <input name={`${prefix}dob`} type="date" className={field} />
+            <AgeField name={`${prefix}dob`} kind={kind} className={field} />
           </label>
         </>
       ) : prefix.startsWith("counterpart") ? (
@@ -127,7 +132,7 @@ function PersonFields({ prefix, skipOther }: { prefix: string; skipOther?: boole
           </label>
           <label className="block text-sm">
             Date of birth
-            <input name={`${prefix}dob`} type="date" className={field} />
+            <AgeField name={`${prefix}dob`} kind={kind} className={field} />
           </label>
         </>
       ) : null}
@@ -157,22 +162,26 @@ function VehicleFields({
   const [warnings, setWarnings] = useState<string[]>([]);
 
   async function lookupVehicle() {
-    const res = await actionLookupVehicle(reg);
-    if (!res.result) {
-      setWarnings(["No result. Enter details manually."]);
+    try {
+      const res = await actionLookupVehicle(reg);
+      const v = res.result;
+      if (!v) {
+        setWarnings([VEHICLE_MANUAL_HINT]);
+        setIncomplete(true);
+        return;
+      }
+      if (v.registration) setReg(formatVehicleRegistration(v.registration));
+      if (v.make) setMake(toStartCase(v.make));
+      if (v.model) setModel(toStartCase(v.model));
+      if (v.colour) setColour(toStartCase(v.colour));
+      if (v.fuel) setFuel(toStartCase(v.fuel));
+      if (v.transmission) setGearbox(v.transmission);
       setIncomplete(true);
-      return;
+      setWarnings(v.warnings.length ? v.warnings : [VEHICLE_MANUAL_HINT]);
+    } catch {
+      setIncomplete(true);
+      setWarnings([VEHICLE_MANUAL_HINT]);
     }
-    const v = res.result;
-    setReg(formatVehicleRegistration(v.registration));
-    setMake(toStartCase(v.make || ""));
-    setModel(toStartCase(v.model || ""));
-    setColour(toStartCase(v.colour || ""));
-    setFuel(toStartCase(v.fuel || ""));
-    if (v.transmission) setGearbox(v.transmission);
-    else setGearbox("unknown");
-    setIncomplete(true);
-    setWarnings(v.warnings);
   }
 
   async function checkCompliance() {
@@ -285,8 +294,8 @@ function VehicleFields({
         </label>
       </div>
       <p className="text-xs text-slate">
-        Simulated lookup until the live provider is connected. Transmission is never filled in unless the lookup actually
-        returned it. Confirm tax/MOT on{" "}
+        {VEHICLE_MANUAL_HINT} Transmission is never filled in unless the lookup actually returned it. Confirm tax/MOT
+        on{" "}
         <a className="text-teal-dark underline" href={GOV_TAX_URL} target="_blank" rel="noreferrer">
           GOV.UK tax
         </a>{" "}
@@ -349,7 +358,7 @@ function ThirdPartyBlock({ prefix, title }: { prefix: string; title: string }) {
   return (
     <div className="space-y-4 rounded-lg border border-line p-4">
       <h3 className="font-serif text-lg text-navy-deep">{title}</h3>
-      <PersonFields prefix={prefix} />
+      <PersonFields prefix={prefix} kind="client" />
       <VehicleFields prefix={`${prefix}veh_`} matchLabel="Details match the third-party vehicle described" includeInsuranceRecord />
       <h4 className="font-serif text-base text-navy-deep">TP insurance</h4>
       <div className="grid gap-3 sm:grid-cols-2">
@@ -431,7 +440,15 @@ function ThirdPartyBlock({ prefix, title }: { prefix: string; title: string }) {
   );
 }
 
-export function IntakeForm({ staff, nextRef }: { staff: Staff[]; nextRef: string }) {
+export function IntakeForm({
+  staff,
+  nextRef,
+  error,
+}: {
+  staff: Staff[];
+  nextRef: string;
+  error?: string;
+}) {
   const [role, setRole] = useState("owner_driver");
   const [needsRecovery, setNeedsRecovery] = useState(false);
   const [police, setPolice] = useState("no");
@@ -443,6 +460,9 @@ export function IntakeForm({ staff, nextRef }: { staff: Staff[]; nextRef: string
 
   return (
     <form action={actionCreateClaim} className="space-y-6">
+      {error ? (
+        <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
+      ) : null}
       <p className="text-sm text-slate">
         Next demonstration reference: <strong>{nextRef}</strong>. Opening this file does not start hire charges. Lookups,
         WhatsApp and email are simulated until the live accounts are connected.
@@ -457,14 +477,14 @@ export function IntakeForm({ staff, nextRef }: { staff: Staff[]; nextRef: string
             <option value="driver">Driver</option>
           </select>
         </label>
-        <PersonFields prefix="client_" skipOther />
+        <PersonFields prefix="client_" skipOther kind={clientDobKind(role)} />
         {role !== "owner_driver" ? (
           <div className="rounded-lg border border-dashed border-copper/40 bg-[#fbf6ec] p-4">
             <h3 className="font-serif text-lg text-navy-deep">
               {role === "owner" ? "Driver details" : "Owner details"}
             </h3>
             <p className="mb-3 text-xs text-slate">Taken because the client is not both owner and driver.</p>
-            <PersonFields prefix="counterpart_" skipOther />
+            <PersonFields prefix="counterpart_" skipOther kind={counterpartDobKind(role)} />
           </div>
         ) : null}
       </Section>
@@ -489,7 +509,7 @@ export function IntakeForm({ staff, nextRef }: { staff: Staff[]; nextRef: string
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-sm">
             Date
-            <input name="accidentDate" type="date" className={field} />
+            <AccidentDateField name="accidentDate" className={field} />
           </label>
           <label className="block text-sm">
             Time

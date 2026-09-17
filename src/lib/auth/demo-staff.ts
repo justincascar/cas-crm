@@ -9,28 +9,28 @@ export const DEMO_STAFF = [
     username: "justin",
     name: "Justin Roberts",
     email: "justin@completeaccidentsolutions.example",
-    role: "md",
+    role: "administrator",
   },
   {
     id: "staff-sian",
     username: "sian",
     name: "Sian Evans",
     email: "sian.evans@completeaccidentsolutions.example",
-    role: "handler",
+    role: "staff",
   },
   {
     id: "staff-tom",
     username: "tom",
     name: "Tom Hughes",
     email: "tom.hughes@completeaccidentsolutions.example",
-    role: "handler",
+    role: "staff",
   },
   {
     id: "staff-megan",
     username: "megan",
     name: "Megan Price",
     email: "megan.price@completeaccidentsolutions.example",
-    role: "handler",
+    role: "staff",
   },
 ] as const;
 
