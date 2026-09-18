@@ -1,8 +1,13 @@
 import { emailGateway } from "../email/gateway";
 import { phoneGateway } from "../phone/gateway";
 import { whatsappGateway } from "../whatsapp/gateway";
+import { ENGINEER_CHASER_INTERVAL_DAYS_DEFAULT } from "../constants";
 import { eventLabel, latestDates, type ClaimEventType } from "../domain/events";
-import { generateLetter, type LetterTemplateKey } from "../documents/templates";
+import { agreementDayNumber, hireChargesAccrualEnd } from "../domain/rules";
+import { channelForTemplate, eventTypeForTemplate, isDocumentTemplateKey, type DocumentTemplateKey } from "../documents/catalog";
+import { emptyCorrespondenceFields, namesDiffer, summariseLossesClaimed, type CorrespondenceContext } from "../documents/correspondence";
+import { generateEmail, isEmailTemplateKey } from "../documents/email-templates";
+import { generateLetter, isLetterTemplateKey, type LetterTemplateKey } from "../documents/templates";
 import { nowUtcIso, occurredFromForm } from "../dates";
 import { all, get, newId, run } from "./connection";
 
@@ -93,6 +98,16 @@ function applyEventSideEffects(claimId: string, eventType: ClaimEventType, occur
     eventType === "outgoing_email" ||
     eventType === "incoming_email" ||
     eventType === "liability_chase_sent" ||
+    eventType === "client_welcome_sent" ||
+    eventType === "hire_pack_sent" ||
+    eventType === "payment_chase_1_sent" ||
+    eventType === "payment_chase_2_sent" ||
+    eventType === "rebuttal_sent" ||
+    eventType === "total_loss_cessation_sent" ||
+    eventType === "client_total_loss_update_sent" ||
+    eventType === "client_status_update_sent" ||
+    eventType === "vehicle_ready_notice_sent" ||
+    eventType === "internal_chase_sent" ||
     eventType === "outgoing_whatsapp" ||
     eventType === "incoming_whatsapp" ||
     eventType === "outgoing_call" ||
@@ -105,9 +120,10 @@ function applyEventSideEffects(claimId: string, eventType: ClaimEventType, occur
   }
 }
 
-function letterContext(claimId: string, letterDate: string) {
+function letterContext(claimId: string, letterDate: string): CorrespondenceContext {
   const claim = get<Record<string, string | number | null>>(
-    `SELECT c.*, s.name AS handler_name, p.full_name AS client_name,
+    `SELECT c.*, s.name AS handler_name, s.id AS handler_staff_id,
+            p.full_name AS client_name, p.email AS client_email, p.telephone AS client_telephone,
             v.registration, v.make, v.model
      FROM claims c
      LEFT JOIN staff s ON s.id = c.handler_id
@@ -118,12 +134,68 @@ function letterContext(claimId: string, letterDate: string) {
   );
   if (!claim) throw new Error("File not found.");
   const tp = get<Record<string, string | null>>(
-    `SELECT insurer_name, insurer_ref FROM claim_third_parties WHERE claim_id = ? LIMIT 1`,
+    `SELECT tp.insurer_name, tp.insurer_ref, tp.insurer_email, tp.handler_email, tp.policy_number,
+            p.full_name AS insured_name, v.make AS tp_make, v.model AS tp_model, v.registration AS tp_reg
+     FROM claim_third_parties tp
+     LEFT JOIN people p ON p.id = tp.person_id
+     LEFT JOIN vehicles v ON v.id = tp.vehicle_id
+     WHERE tp.claim_id = ?
+     ORDER BY tp.sequence ASC
+     LIMIT 1`,
     [claimId],
   );
+  const driver = get<{ full_name: string | null }>(
+    `SELECT p.full_name
+     FROM claim_parties cp
+     JOIN people p ON p.id = cp.person_id
+     WHERE cp.claim_id = ? AND cp.role = 'driver'
+     ORDER BY cp.is_primary DESC
+     LIMIT 1`,
+    [claimId],
+  );
+  const hire = get<Record<string, string | number | null>>(
+    `SELECT started_at, billing_end_at, collection_at, rate_pence_per_day, credit_hire FROM hire_episodes WHERE claim_id = ? ORDER BY started_at DESC`,
+    [claimId],
+  );
+  const pack = get<Record<string, string | number | null>>(`SELECT * FROM hire_pack_data WHERE claim_id = ?`, [claimId]);
+  const recovery = get<{ location: string | null }>(`SELECT location FROM recovery_jobs WHERE claim_id = ? LIMIT 1`, [claimId]);
+  const lines = all<{ head_of_loss: string; claimed_pence: number; received_pence: number }>(
+    `SELECT head_of_loss, claimed_pence, received_pence FROM financial_lines WHERE claim_id = ?`,
+    [claimId],
+  );
+  const settings = get<{ value: string }>(`SELECT value FROM settings WHERE key = 'chaser_interval_days'`);
   const dates = latestDates(listClaimEvents(claimId));
   if (claim.accident_at) dates.accident = String(claim.accident_at);
+
+  const hireStart = hire?.started_at ? String(hire.started_at) : pack?.date_out ? String(pack.date_out) : dates.hire_started || null;
+  const hireEnd =
+    hire?.billing_end_at ? String(hire.billing_end_at) : pack?.date_in ? String(pack.date_in) : dates.hire_ended || dates.vehicle_returned || null;
+  const dailyRate = Number(pack?.daily_rate_pence || hire?.rate_pence_per_day || 0) || null;
+  const hireDays = hireStart && hireEnd ? agreementDayNumber(hireStart, hireEnd) : null;
+  const hireClaimed = lines
+    .filter((line) => line.head_of_loss === "hire" || line.head_of_loss === "credit_hire")
+    .reduce((sum, line) => sum + (line.claimed_pence || 0), 0);
+  const repairClaimed = lines
+    .filter((line) => line.head_of_loss === "repairs" || line.head_of_loss === "vehicle_damage")
+    .reduce((sum, line) => sum + (line.claimed_pence || 0), 0);
+  const received = lines.reduce((sum, line) => sum + (line.received_pence || 0), 0);
+  const claimed = lines.reduce((sum, line) => sum + (line.claimed_pence || 0), 0);
+  const outstanding = Math.max(0, claimed - received);
+  const cessation = hireChargesAccrualEnd({
+    vehicleReturnedAt: dates.vehicle_returned || null,
+    totalLossCessationAt: dates.total_loss_cessation_sent || (claim.off_hire_scheduled_on ? String(claim.off_hire_scheduled_on) : null),
+  });
+  const handlerId = String(claim.handler_id || claim.handler_staff_id || "");
+  const engineering = String(claim.engineering_status || "");
+  const repairStatus = String(claim.repair_status || "");
+  let overdueItem = "";
+  if (engineering === "instructed" || engineering === "awaiting_report") overdueItem = "Engineer's report";
+  else if (repairStatus === "in_progress" || repairStatus === "awaiting_return") overdueItem = "Repair";
+  const creditHire = Number(hire?.credit_hire) === 1;
+  const clientDriverName = String(driver?.full_name || "");
+
   return {
+    ...emptyCorrespondenceFields(),
     fileReference: String(claim.file_reference),
     clientName: String(claim.client_name || "Unknown"),
     handlerName: String(claim.handler_name || "Complete Accident Solutions"),
@@ -139,36 +211,78 @@ function letterContext(claimId: string, letterDate: string) {
     ownPolicyRef: String(claim.own_policy_ref || "Unknown"),
     dates,
     letterDate,
+    senderTitle: handlerId === "staff-justin" ? "Managing Director" : "Claims handler",
+    clientEmail: String(claim.client_email || ""),
+    tpInsuredName: String(tp?.insured_name || ""),
+    tpEmail: String(tp?.insurer_email || tp?.handler_email || ""),
+    vehicleLocation: String(recovery?.location || ""),
+    siteContactName: "",
+    siteContactPhone: "",
+    reportTurnaroundDays: String(settings?.value || ENGINEER_CHASER_INTERVAL_DAYS_DEFAULT),
+    hireStartAt: hireStart,
+    hireEndAt: hireEnd,
+    dailyRatePence: dailyRate,
+    totalHireDays: hireDays,
+    totalHireChargePence: hireClaimed || (hireDays && dailyRate ? hireDays * dailyRate : null),
+    repairCostPence: repairClaimed || null,
+    needSummary: String(pack?.need_reason || claim.circumstances || ""),
+    needEvidenceSummary: String(pack?.need_reason || ""),
+    hireCessationDate: cessation,
+    currentStageLabel: String(claim.current_position || ""),
+    stageSpecificDetail: String(claim.next_action || ""),
+    readyDate: dates.repairs_complete || null,
+    collectionLocation: String(pack?.delivery_address || recovery?.location || ""),
+    overdueItem,
+    recipientName: overdueItem === "Repair" ? "the repairer" : "",
+    originalDueDate: dates.engineer_instructed || dates.repairs_started || null,
+    outstandingBalancePence: outstanding || null,
+    settlementAmountPence: received || null,
+    finalSettlementAmountPence: received || null,
+    cessationBasis: cessation ? "the earlier of vehicle return and the recorded total-loss cessation date" : "",
+    clientDriverName: namesDiffer(clientDriverName, String(claim.client_name || "")) ? clientDriverName : "",
+    tpVehicleMake: String(tp?.tp_make || ""),
+    tpVehicleModel: String(tp?.tp_model || ""),
+    tpVehicleReg: String(tp?.tp_reg || ""),
+    tpPolicyNumber: String(tp?.policy_number || ""),
+    lossesClaimed: summariseLossesClaimed(lines, creditHire),
+    creditHire,
   };
 }
 
 export function generateClaimDocument(input: {
   claimId: string;
-  templateKey: LetterTemplateKey;
+  templateKey: DocumentTemplateKey | LetterTemplateKey;
   actorId: string;
   letterDate?: string;
   recordOnFile?: boolean;
 }) {
+  if (!isDocumentTemplateKey(input.templateKey)) {
+    throw new Error("Unknown document template.");
+  }
   const letterDate = occurredFromForm(input.letterDate);
   const ctx = letterContext(input.claimId, letterDate);
-  const letter = generateLetter(input.templateKey, ctx);
+  const generated = isEmailTemplateKey(input.templateKey)
+    ? generateEmail(input.templateKey, ctx)
+    : generateLetter(input.templateKey, ctx);
   const versionRow = get<{ v: number }>(
     `SELECT COALESCE(MAX(version), 0) AS v FROM documents WHERE claim_id = ? AND template_key = ?`,
     [input.claimId, input.templateKey],
   );
   const version = Number(versionRow?.v || 0) + 1;
   const documentId = newId("doc");
+  const kind = channelForTemplate(input.templateKey) === "email" ? "email" : "letter";
   run(
     `INSERT INTO documents(id, claim_id, title, kind, version, signed, simulated, body_html, template_key, missing_json, created_at)
-     VALUES (?, ?, ?, 'letter', ?, 0, 1, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, 0, 1, ?, ?, ?, ?)`,
     [
       documentId,
       input.claimId,
-      letter.title,
+      generated.title,
+      kind,
       version,
-      letter.html,
+      generated.html,
       input.templateKey,
-      JSON.stringify(letter.missing),
+      JSON.stringify(generated.missing),
       letterDate,
     ],
   );
@@ -176,33 +290,25 @@ export function generateClaimDocument(input: {
     claimId: input.claimId,
     eventType: "document_generated",
     occurredAt: letterDate,
-    details: `${letter.title} (version ${version})${letter.missing.length ? `. Missing: ${letter.missing.join(", ")}` : ""}`,
+    details: `${generated.title} (version ${version})${generated.missing.length ? `. Missing: ${generated.missing.join(", ")}` : ""}${generated.legalSignOffRequired ? ". Legal wording needs solicitor sign-off before live use." : ""}`,
     actorId: input.actorId,
-    channel: "letter",
+    channel: kind,
     documentId,
     source: "system",
   });
   if (input.recordOnFile !== false) {
-    const eventType =
-      input.templateKey === "initial_tp_insurer"
-        ? "initial_letter_tp_insurer"
-        : input.templateKey === "engineer_instruction"
-          ? "engineer_instructed"
-          : input.templateKey === "repair_commencement"
-            ? "repairs_started"
-            : "liability_chase_sent";
     recordClaimEvent({
       claimId: input.claimId,
-      eventType,
+      eventType: eventTypeForTemplate(input.templateKey),
       occurredAt: letterDate,
-      details: `Recorded from generated ${letter.title}.`,
+      details: `Recorded from generated ${generated.title}.`,
       actorId: input.actorId,
-      channel: "letter",
+      channel: kind,
       documentId,
       source: "staff",
     });
   }
-  return { documentId, letter };
+  return { documentId, letter: generated };
 }
 
 export function getDocument(id: string) {
@@ -222,7 +328,7 @@ export async function sendClaimEmail(input: {
   to: string;
   subject: string;
   body: string;
-  templateKey?: LetterTemplateKey;
+  templateKey?: DocumentTemplateKey;
   occurredAt?: string;
 }) {
   const when = occurredFromForm(input.occurredAt);
@@ -254,6 +360,21 @@ export async function sendClaimEmail(input: {
     correspondenceId,
     source: "staff",
   });
+  if (input.templateKey && isDocumentTemplateKey(input.templateKey)) {
+    const specific = eventTypeForTemplate(input.templateKey);
+    if (specific !== "outgoing_email" && specific !== "document_generated") {
+      recordClaimEvent({
+        claimId: input.claimId,
+        eventType: specific,
+        occurredAt: when,
+        details: `Recorded from CAS email template ${input.templateKey}.`,
+        actorId: input.actorId,
+        channel: "email",
+        correspondenceId,
+        source: "staff",
+      });
+    }
+  }
   return { ...result, correspondenceId };
 }
 
@@ -393,7 +514,9 @@ export async function recordClaimCall(input: {
   return { ...result, correspondenceId };
 }
 
-export function letterPreview(claimId: string, templateKey: LetterTemplateKey, letterDate?: string) {
+export function letterPreview(claimId: string, templateKey: DocumentTemplateKey, letterDate?: string) {
   const ctx = letterContext(claimId, occurredFromForm(letterDate));
-  return generateLetter(templateKey, ctx);
+  if (isEmailTemplateKey(templateKey)) return generateEmail(templateKey, ctx);
+  if (isLetterTemplateKey(templateKey)) return generateLetter(templateKey, ctx);
+  throw new Error("Unknown document template.");
 }

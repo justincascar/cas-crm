@@ -12,8 +12,8 @@ Implemented:
 
 - Persistent SQLite store with 12 fictional TEST claims spanning new enquiry, roadworthy reservation without charges, undriveable recovery/hire, fault courtesy, liability/engineer waits, repair auth, repairs in progress, ready for return, total-loss payment/salvage, qualifying off-hire countdown, day-80 unsigned renewal, litigation/offer review.
 - Dashboard counts that open filtered lists; search; claim create/edit; notes; tasks; fleet availability and overlap-blocked reservations.
-- File history with dated steps (initial TP insurer letter, engineer instructed, repairs started, and related events). Letters generated from those dates. Email compose/incoming logging recorded on the file; sending is simulated until the office mailbox is connected.
-- Hire Pack data collection and generation from the CAS Hire Pack.doc structure (hirer, additional driver, hire vehicle vs own vehicle, charges, mitigation, handover, cancellation notice). Signatures are not fabricated.
+- File history with dated steps (initial TP insurer letter, engineer instructed, repairs started, hire pack, rebuttals, total-loss cessation, case closed, and related events). Letters and emails are generated from those dates using CAS's supplied templates in `docs/correspondence-templates/`. Missing fields are listed, not invented. Rebuttal wording includes supplied case-law citations and is flagged for solicitor sign-off before live use. Email compose/incoming logging is recorded on the file; sending is simulated until the office mailbox is connected.
+- Hire Pack data collection and generation from the CAS Hire Pack.doc structure (hirer, additional driver, hire vehicle vs own vehicle, charges, mitigation including financial means, handover, cancellation notice). Storage & Recovery is generated as a standalone document, not as a hire-agreement page. Signatures are not fabricated. The 89-day pack wording versus 88-day CRM alerts is flagged for Justin; neither figure has been changed.
 - Staff intake form covering client (owner/driver/owner/driver split), vehicle lookup, tax/MOT/insurance recording, damage, accident (maps link, police, witnesses, speeds), recovery charges, storage starting the same day as recovery, and up to three third parties with insurer and TPI agent fields.
 - Claim file screens matching the current CRM viewing pane (client, hire, damage diagram, fleet reserve, recovery, storage, loss of use dates, financial summary). Values persist in SQLite. Opening a file or reserving a vehicle still does not start charges.
 - Duplicate Alpha screens (navigation, hire-car register, extra-charges, loss-of-use dates as a second chronology) are hidden. Communications sit on the file: simulated send/receive email and WhatsApp, recorded calls, and letter generation from file dates.
@@ -32,7 +32,23 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - Date of birth shows a live age box. Drivers under 17 cannot be saved. Client/owner/hirer under 17 shows a warning and needs a tick to confirm. Future and over-110-year dates are rejected.
 - Justin Roberts is an administrator. Sian, Tom and Megan are staff. Administrators can add, disable, reset passwords and change roles on `/settings/staff`. Standard staff cannot use that screen.
 
-Blocked: CAS templates, provider accounts, per-file permissions, shared hosting, live DVLA.
+18 September 2026 — CAS letter and email templates:
+
+- Unzipped CAS templates into `docs/correspondence-templates/`.
+- “Create a document from the dates” can produce the supplied letters and emails, filled from the file. Repair commencement and liability chaser remain as operational drafts (not in the zip).
+- Client/internal emails also fill the Communications send form as a simulated `OutgoingMessage`. Nothing is sent live.
+- Hire-pack chase rules (05 → 06 → solicitor handoff) share the existing chase pattern: closed / disputed-awaiting-CAS / solicitor files are not chased; a rebuttal resets the clock; a partial payment reduces the balance; hire charges stop at vehicle return or total-loss cessation.
+- Hire Pack terms in `cas-hire-terms.ts` were left unchanged.
+
+18 September 2026 — Hire Pack fixes and initial notification letter:
+
+- Storage & Recovery now uses “Your Own Vehicle Details” and is generated as its own document (`TEST-xxxx-SR`), including when there is no hire agreement. Solicitor-reviewed standalone wording is still to come.
+- The 89-day pack cap versus 88-day CRM alerts is shown on Settings and the Hire Pack page. Justin (or the solicitor) still needs to confirm which is correct; neither number was changed.
+- Mitigation questionnaire includes a financial-means declaration that refers to the intake statement of means and bank statements.
+- Itemised extras, group charged and additional-driver licence/DOB fields from the supplied pack are captured as optional.
+- Initial third-party notification letter follows the structure of the supplied Initial Letter ERS.doc (reference line, facts block, notice of claim, four-point request). File-specific facts from that example were not copied.
+
+Blocked: provider accounts, per-file permissions, shared hosting, live DVLA, live mailbox send.
 
 ## Not yet claimed
 

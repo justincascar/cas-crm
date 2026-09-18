@@ -1,5 +1,11 @@
 import { CAS_COMPANY, CAS_HIRE_AGREEMENT_BANNER, CAS_HIRE_TERMS_HTML } from "../documents/cas-hire-terms";
-import { HIRE_PACK_MANDATORY } from "../documents/hire-pack-fields";
+import {
+  HIRE_PACK_MANDATORY,
+  OWN_VEHICLE_DETAILS_HEADING,
+  RENTAL_PERIOD_DECISION,
+  STORAGE_RECOVERY_MANDATORY,
+  STORAGE_RECOVERY_STANDALONE_BANNER,
+} from "../documents/hire-pack-fields";
 import { formatUkDate, formatUkDateTime, nowUtcIso } from "../dates";
 import { dobSaveError } from "../age";
 import { formatGbp } from "../money";
@@ -60,6 +66,15 @@ const EMPTY_PACK: HirePackData = {
   driver_delivery_start: "",
   driver_delivery_finish: "",
   driver_name: "",
+  means_documents_requested: 0,
+  means_documents_on_file: 0,
+  cannot_fund_hire: 0,
+  no_other_credit: 0,
+  means_notes: "",
+  own_vehicle_mileage: null,
+  own_vehicle_fuel: "",
+  own_vehicle_tyres: "",
+  own_vehicle_damage: "",
 };
 
 export function getHirePack(claimId: string) {
@@ -117,12 +132,22 @@ export function getHirePack(claimId: string) {
     const value = ctx[key];
     return value === "" || value === null || value === undefined || value === 0 || value === "unknown";
   });
+  const srCtx = {
+    clientName: String(claim.client_name || ""),
+    clientVehicleRegistration: String(claim.client_reg || ""),
+  };
+  const srMissing = STORAGE_RECOVERY_MANDATORY.filter((key) => {
+    const value = srCtx[key];
+    return value === "" || value === null || value === undefined || value === "unknown";
+  });
   return {
     claim,
     hire,
     stored: merged,
     ctx,
     missing,
+    srMissing,
+    srNumber: `${claim.file_reference}-SR`,
     clientMake: String(claim.client_make || ""),
     clientModel: String(claim.client_model || ""),
   };
@@ -206,6 +231,42 @@ export function generateHirePackDocument(claimId: string, actorId: string) {
   return { documentId, missing: pack.missing };
 }
 
+export function generateStorageRecoveryDocument(claimId: string, actorId: string) {
+  const pack = getHirePack(claimId);
+  if (!pack) throw new Error("File not found.");
+  const html = renderStorageRecovery(pack);
+  const versionRow = get<{ v: number }>(
+    `SELECT COALESCE(MAX(version), 0) AS v FROM documents WHERE claim_id = ? AND template_key = 'storage_recovery'`,
+    [claimId],
+  );
+  const version = Number(versionRow?.v || 0) + 1;
+  const documentId = newId("doc");
+  run(
+    `INSERT INTO documents(id, claim_id, title, kind, version, signed, simulated, body_html, template_key, missing_json, created_at)
+     VALUES (?, ?, ?, 'agreement', ?, 0, 1, ?, 'storage_recovery', ?, ?)`,
+    [
+      documentId,
+      claimId,
+      "Storage & Recovery Agreement",
+      version,
+      html,
+      JSON.stringify(pack.srMissing),
+      nowUtcIso(),
+    ],
+  );
+  recordClaimEvent({
+    claimId,
+    eventType: "document_generated",
+    occurredAt: nowUtcIso(),
+    details: `Storage & Recovery Agreement version ${version} generated as a standalone document${pack.srMissing.length ? `. Missing: ${pack.srMissing.join(", ")}` : ""}. Solicitor-reviewed standalone wording is still to come.`,
+    actorId,
+    channel: "letter",
+    documentId,
+    source: "system",
+  });
+  return { documentId, missing: pack.srMissing };
+}
+
 function v(value: string | number | null | undefined) {
   if (value === null || value === undefined || value === "" || value === 0) return "Unknown";
   return String(value);
@@ -215,15 +276,13 @@ function money(pence: string | number | null | undefined) {
   return formatGbp(Number(pence || 0));
 }
 
-function renderHirePack(pack: NonNullable<ReturnType<typeof getHirePack>>) {
+export function renderHirePack(pack: NonNullable<ReturnType<typeof getHirePack>>) {
   const s = pack.stored;
-  const c = pack.claim;
   const hire = pack.hire;
   const agreement = pack.ctx.agreementNumber;
   const name = pack.ctx.hirerName || "Unknown";
   const address = pack.ctx.hirerAddress || "Unknown";
   const hireVehicle = `${v(hire?.hire_make)} ${v(hire?.hire_model)}`.replace("Unknown Unknown", "Unknown");
-  const clientVehicle = `${v(pack.clientMake)} ${v(pack.clientModel)}`;
   const dateOut = s.date_out ? formatUkDate(String(s.date_out)) : formatUkDate(hire?.started_at ? String(hire.started_at) : null);
   const missingBanner =
     pack.missing.length > 0
@@ -232,7 +291,7 @@ function renderHirePack(pack: NonNullable<ReturnType<typeof getHirePack>>) {
 
   return `<article class="letter hire-pack">
 ${missingBanner}
-<p><strong>${CAS_COMPANY.name}</strong> — Hire Pack generated from the file. Driver sheets are internal and must not be given to the client. Signatures are not fabricated.</p>
+<p><strong>${CAS_COMPANY.name}</strong> — Hire Pack generated from the file. Driver sheets are internal and must not be given to the client. Signatures are not fabricated. Storage &amp; Recovery is a separate document and is not included in these pages.</p>
 
 <section>
 <h2>Driver Delivery Sheet (Do Not Give to Client)</h2>
@@ -275,13 +334,20 @@ ${missingBanner}
 <p>I need a hire vehicle because: ${escape(v(s.need_reason))}</p>
 <p>${Number(s.own_vehicle_unusable) ? "☑" : "☐"} I believe my own vehicle is unroadworthy and/or unusable and I understand temporary repairs are impractical or uneconomic.</p>
 <p>${Number(s.no_other_vehicle) ? "☑" : "☐"} I do not have another suitable vehicle available to me, either being my own or through my immediate family.</p>
+<h3>Financial means</h3>
+<p>Need for a vehicle is separate from whether I could reasonably have paid for a replacement myself. Intake already asks for a statement of means and three months' bank statements. This declaration refers to that disclosure; it does not replace it.</p>
+<p>${Number(s.means_documents_requested) ? "☑" : "☐"} A statement of means and bank statements have been requested</p>
+<p>${Number(s.means_documents_on_file) ? "☑" : "☐"} A statement of means and/or bank statements are on this file</p>
+<p>${Number(s.cannot_fund_hire) ? "☑" : "☐"} I could not reasonably have funded a replacement vehicle from my own resources</p>
+<p>${Number(s.no_other_credit) ? "☑" : "☐"} I did not have access to other credit that I could reasonably have used to hire a replacement</p>
+<p>Further notes: ${escape(v(s.means_notes))}</p>
 <p>I have read and understood the above and I believe that the answers I have given are true.</p>
 <p>Name: ${escape(name)} &nbsp; Address: ${escape(address)}</p>
 <p>Signed: ______________________ &nbsp; Date: ${escape(dateOut)}</p>
 </section>
 
 <section>
-<h2>Hire Agreement — 1 of 4</h2>
+<h2>Hire Agreement — 1 of 3</h2>
 <p>${CAS_HIRE_AGREEMENT_BANNER}</p>
 <p>Agreement number: <strong>${escape(agreement)}</strong></p>
 <h3>Driver details</h3>
@@ -319,27 +385,15 @@ Date out: ${escape(dateOut)} &nbsp; Date in: ${escape(s.date_in ? formatUkDate(S
 </section>
 
 <section>
-<h2>Hire Agreement — 2 of 4</h2>
+<h2>Hire Agreement — 2 of 3</h2>
 <p>${CAS_HIRE_AGREEMENT_BANNER}</p>
 ${CAS_HIRE_TERMS_HTML}
-<p>Full remaining clauses are those in the CAS Hire Pack supplied to the CRM (hire and storage arrangements, terms of hire, repair arrangements, general provisions and miscellaneous). They are not rewritten here. Operational file alerts use a maximum of 88 days specified separately by CAS; the supplied pack defines the rental period as 89 days. That difference is recorded for review.</p>
+<p>Full remaining clauses are those in the CAS Hire Pack supplied to the CRM (hire and storage arrangements, terms of hire, repair arrangements, general provisions and miscellaneous). They are not rewritten here. Operational file alerts use a maximum of ${RENTAL_PERIOD_DECISION.alertDays} days specified separately by CAS; the supplied pack defines the rental period as ${RENTAL_PERIOD_DECISION.packDays} days. ${RENTAL_PERIOD_DECISION.note}</p>
 <p>Signed by Hirer: ______________________ &nbsp; Date of agreement: ${escape(dateOut)}</p>
 </section>
 
 <section>
-<h2>Hire Agreement — 3 of 4 — Storage &amp; Recovery</h2>
-<p>${CAS_HIRE_AGREEMENT_BANNER}</p>
-<p>Agreement number: <strong>${escape(agreement)}</strong></p>
-<p>This page is the <strong>client's own vehicle</strong>, not the hire vehicle.</p>
-<p>Name: ${escape(name)}<br/>Address: ${escape(address)}</p>
-<p>Own vehicle: ${escape(clientVehicle)} &nbsp; Reg: ${escape(v(c.client_reg))}</p>
-<p>Storage daily rate: ${money(s.storage_daily_pence)} &nbsp; Recovery: ${money(s.recovery_pence)}</p>
-<p>${CAS_COMPANY.name} will not accept responsibility for any valuables left in the vehicle at point of collection including removable car stereo and satellite navigation equipment.</p>
-<p>Signed by Hirer: ______________________</p>
-</section>
-
-<section>
-<h2>Hire Agreement — 4 of 4 — Notice of the Right to Cancel</h2>
+<h2>Hire Agreement — 3 of 3 — Notice of the Right to Cancel</h2>
 <p>${CAS_HIRE_AGREEMENT_BANNER}</p>
 <p>Date: ${escape(dateOut)}</p>
 <p>"The Cancellation of Contracts made in a Consumer's Home or Place of Work etc. Regulations 2008"</p>
@@ -360,6 +414,40 @@ Telephone: ${CAS_COMPANY.phone}</p>
 <p>Hire vehicle: ${escape(hireVehicle)} &nbsp; ${escape(v(hire?.hire_reg))}</p>
 <p>Generated ${escape(formatUkDateTime(nowUtcIso()))} from CRM file ${escape(agreement)}. Not a live Word merge of Hire Pack.doc; layout follows that pack. Signed originals must be uploaded separately.</p>
 </section>
+</article>`;
+}
+
+export function renderStorageRecovery(pack: NonNullable<ReturnType<typeof getHirePack>>) {
+  const s = pack.stored;
+  const name = pack.ctx.hirerName || "Unknown";
+  const address = pack.ctx.hirerAddress || "Unknown";
+  const clientVehicle = `${v(pack.clientMake)} ${v(pack.clientModel)}`.replace("Unknown Unknown", "Unknown");
+  const missingBanner =
+    pack.srMissing.length > 0
+      ? `<p class="missing">Missing from CRM (shown as Unknown — not invented): ${pack.srMissing.join(", ")}</p>`
+      : "";
+  const recoveredOn = pack.claim.storage_started_on
+    ? formatUkDate(String(pack.claim.storage_started_on))
+    : "Unknown";
+  return `<article class="letter hire-pack">
+${missingBanner}
+<p><strong>${CAS_COMPANY.name}</strong></p>
+<h2>Storage &amp; Recovery Agreement</h2>
+<p>${STORAGE_RECOVERY_STANDALONE_BANNER}</p>
+<p>Document number: <strong>${escape(String(pack.srNumber))}</strong> &nbsp; File: ${escape(pack.ctx.agreementNumber)}</p>
+<p>This document does not use a hire agreement number and does not require a Hire Agreement on the file.</p>
+<p>Name: ${escape(name)}<br/>Address: ${escape(address)}</p>
+<h3>${OWN_VEHICLE_DETAILS_HEADING}</h3>
+<p>This is the client's own damaged vehicle being recovered and stored — not a hire vehicle.</p>
+<p>Make: ${escape(v(pack.clientMake))} &nbsp; Model: ${escape(v(pack.clientModel))} &nbsp; Reg: ${escape(v(pack.ctx.clientVehicleRegistration))}</p>
+<p>Mileage: ${escape(v(s.own_vehicle_mileage))} &nbsp; Fuel: ${escape(v(s.own_vehicle_fuel))}</p>
+<p>Tyre depths NSF / OSF / NSR / OSR: ${escape(v(s.own_vehicle_tyres))}</p>
+<p>Damage: ${escape(v(s.own_vehicle_damage))}</p>
+<p>Recovered on: ${escape(recoveredOn)}</p>
+<p>Storage daily rate: ${money(s.storage_daily_pence || pack.claim.storage_rate_pence)} &nbsp; Recovery: ${money(s.recovery_pence)}</p>
+<p>${CAS_COMPANY.name} will not accept responsibility for any valuables left in the vehicle at point of collection including removable car stereo and satellite navigation equipment.</p>
+<p>Signed by the client: ______________________ (upload signed copy — not fabricated)</p>
+<p>Signed for and on behalf of ${CAS_COMPANY.name}: ______________________</p>
 </article>`;
 }
 

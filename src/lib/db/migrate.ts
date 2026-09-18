@@ -64,6 +64,17 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["agent_handler_tel", "TEXT"],
     ["liability_admitted", "TEXT"],
   ],
+  hire_pack_data: [
+    ["means_documents_requested", "INTEGER"],
+    ["means_documents_on_file", "INTEGER"],
+    ["cannot_fund_hire", "INTEGER"],
+    ["no_other_credit", "INTEGER"],
+    ["means_notes", "TEXT"],
+    ["own_vehicle_mileage", "INTEGER"],
+    ["own_vehicle_fuel", "TEXT"],
+    ["own_vehicle_tyres", "TEXT"],
+    ["own_vehicle_damage", "TEXT"],
+  ],
 };
 
 export function migrate(db: DatabaseSync) {
@@ -136,6 +147,15 @@ export function migrate(db: DatabaseSync) {
       driver_delivery_start TEXT,
       driver_delivery_finish TEXT,
       driver_name TEXT,
+      means_documents_requested INTEGER,
+      means_documents_on_file INTEGER,
+      cannot_fund_hire INTEGER,
+      no_other_credit INTEGER,
+      means_notes TEXT,
+      own_vehicle_mileage INTEGER,
+      own_vehicle_fuel TEXT,
+      own_vehicle_tyres TEXT,
+      own_vehicle_damage TEXT,
       updated_at TEXT
     );
     CREATE TABLE IF NOT EXISTS claim_witnesses (

@@ -2,7 +2,7 @@ import { FILE_REFERENCE_PREFIX_DEFAULT, HEAD_LABELS, type HeadOfLoss } from "../
 import { accidentDateError, isBeforeLondonDay, isSameLondonDay, londonDateIso, nowUtcIso } from "../dates";
 import { formatGbp, sumDistinctHeads } from "../money";
 import { all, dbPath, get, newId, run } from "./connection";
-import { canReserveVehicle, nextFileReference, parseFileReferenceNumber } from "../domain/rules";
+import { canReserveVehicle, chaseFileStateFromPosition, chaseStopReason, nextFileReference, parseFileReferenceNumber } from "../domain/rules";
 import { listClaimEvents, recordClaimEvent } from "./chronology";
 import { KEY_DATE_TYPES, eventLabel, latestDates } from "../domain/events";
 
@@ -403,11 +403,27 @@ export function listDocuments() {
 }
 
 export function listAutomations() {
-  return all<Record<string, string | number | null>>(`
-    SELECT a.*, c.file_reference FROM automations a
+  const rows = all<Record<string, string | number | null>>(`
+    SELECT a.*, c.file_reference, c.current_position,
+           EXISTS(SELECT 1 FROM litigation l WHERE l.claim_id = a.claim_id) AS has_litigation,
+           EXISTS(SELECT 1 FROM claim_events e WHERE e.claim_id = a.claim_id AND e.event_type = 'case_closed') AS case_closed,
+           EXISTS(SELECT 1 FROM claim_events e WHERE e.claim_id = a.claim_id AND e.event_type = 'handed_to_solicitors') AS handed_to_solicitors
+    FROM automations a
     LEFT JOIN claims c ON c.id = a.claim_id
     ORDER BY a.next_run_at
   `);
+  return rows.map((row) => {
+    const file = chaseFileStateFromPosition({
+      currentPosition: row.current_position ? String(row.current_position) : null,
+      hasLitigation: Number(row.has_litigation) > 0,
+      paused: false,
+      caseClosedEvent: Number(row.case_closed) > 0,
+      handedToSolicitorsEvent: Number(row.handed_to_solicitors) > 0,
+    });
+    const stop = chaseStopReason(file);
+    if (stop) return { ...row, status: "stopped", reason: stop };
+    return row;
+  });
 }
 
 export function listLitigation() {

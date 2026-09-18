@@ -3,7 +3,7 @@ import {
   actionRecordEvent,
 } from "@/app/actions";
 import { CLAIM_EVENT_TYPES } from "@/lib/domain/events";
-import { LETTER_TEMPLATES } from "@/lib/documents/templates";
+import { DOCUMENT_TEMPLATES } from "@/lib/documents/catalog";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import Link from "next/link";
 
@@ -43,7 +43,7 @@ export function FileHistory({
         <h2 className="font-serif text-2xl text-navy-deep">File history</h2>
         <p className="text-sm text-slate">
           Dated steps on this file — when the initial letter went, when the engineer was instructed, when repairs started, and so on.
-          Letters are built from these dates. Email is logged here; live sending is not connected yet.
+          Letters and emails are built from these dates. Email is logged here; live sending is not connected yet.
         </p>
       </div>
 
@@ -119,17 +119,17 @@ export function FileHistory({
         <form action={actionGenerateDocument} className="space-y-2 rounded-lg border border-line p-4">
           <h3 className="font-serif text-lg text-navy-deep">Create a document from the dates</h3>
           <p className="text-xs text-slate">
-            Uses accident, notification, engineer and repair dates already on this file. Missing items are listed, not invented.
-            Placeholder wording until CAS templates are supplied.
+            Uses dates and figures already on this file. Missing items are listed, not invented. Rebuttal letters include
+            supplied case-law wording and need solicitor sign-off before live use. Live sending is not connected.
           </p>
           <input type="hidden" name="claimId" value={claimId} />
           <input type="hidden" name="actorId" value={handlerId} />
           <label className="block text-sm">
             Document
             <select name="templateKey" className={field} defaultValue="initial_tp_insurer">
-              {LETTER_TEMPLATES.map((t) => (
+              {DOCUMENT_TEMPLATES.map((t) => (
                 <option key={t.key} value={t.key}>
-                  {t.title}
+                  {t.channel === "email" ? `Email: ${t.title}` : t.title}
                 </option>
               ))}
             </select>

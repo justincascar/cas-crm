@@ -180,7 +180,7 @@ Not started or only labelled:
 
 - No engineer job book, no report file ingest, no bodyshop diary.
 - Garage / MOT expansion is explicitly later work (**d**).
-- Engineer instruction letter is placeholder wording, not CAS’s real template.
+- Engineer instruction uses CAS's supplied wording; live engineer job book / report ingest is still not built.
 
 ### Financials / invoicing — **(b)**
 
@@ -196,29 +196,30 @@ Not working as real invoicing:
 
 - The Financials page is largely a **read-only** ledger of seeded (or intake-created) lines. There is no “raise invoice / record payment” desk that writes new ledger rows.
 - File screen “Financial summary” invoice boxes persist as JSON only; they do **not** feed dashboard totals.
-- No VAT return, no payment pack from CAS templates, no credit-control letters.
+- No VAT return, no payment pack from CAS templates. Credit-control chase letters (05/06) can be generated from the file; they are not sent live.
 
 ### Documents — **(b)**
 
 Working:
 
-- Generate and store HTML letters from file history dates: initial TP insurer letter, engineer instruction, repair commencement, liability chaser.
-- Hire Pack generation (above).
+- Generate and store HTML letters and emails from file history dates, using CAS's supplied templates in `docs/correspondence-templates/` (01–16). Repair commencement and liability chaser remain operational drafts (not in that zip).
+- Missing fields listed, not invented. Rebuttal templates copy supplied UK credit hire citations and are flagged for solicitor sign-off before live use.
+- Hire Pack generation (above) is a separate document; `cas-hire-terms.ts` was not changed.
 - Recovery/storage agreement placeholder from intake facts (unsigned).
 - Documents list and print view. Unsigned stays unsigned. Seeded “signed copy uploaded” rows are labelled simulated.
 
 Not working:
 
-- Not CAS’s real letter library / Word templates.
+- Not Word originals / e-sign. Generated HTML only.
 - No electronic signing.
 - No upload of signed PDFs/photos.
-- Court / pre-action packs not generated; letter before action must not be produced without specific approval (not built as a sendable pack).
+- Court / pre-action packs not generated; letter before action must not be produced without specific approval (not built as a sendable pack). Live sending is not connected.
 
 ### Email / WhatsApp / telephone — **(c)** for live send/receive; **(a)** for filing on the PC
 
 On each file (`/claims/[id]/work/comms`) and on `/communications`:
 
-- Compose “send” email / WhatsApp: stored as `simulated_sent` with a warning. **Nothing leaves the office.**
+- Compose “send” email / WhatsApp: stored as `simulated_sent` with a warning. **Nothing leaves the office.** CAS client/insurer email templates can fill to/subject/body from the file first.
 - Log incoming email / WhatsApp: saved against the file.
 - Record outgoing/incoming calls: logged only; **no live dial**. Unanswered can create a call-back task.
 - Failed validation (blank to/subject) is shown as failure, not pretended success.
@@ -227,7 +228,7 @@ Office mailbox, WhatsApp Business and telephony are **not connected**.
 
 ### Automation — **(c)** display of seeded rules; runner **(d)**
 
-`/automations` lists rows from the `automations` table (engineer chaser on 3 **calendar** days, labelled demonstration). Nothing is sent. There is **no scheduler** that runs while the browser is closed. A substantive-reply pause is described in copy, not implemented as a live mail-reader.
+`/automations` lists rows from the `automations` table (engineer chaser on 3 **calendar** days, labelled demonstration). Closed, disputed-and-awaiting-CAS, or solicitor files are shown as stopped. Hire-pack chase 05→06→solicitor handoff is encoded in `rules.ts` (rebuttal resets the clock; partial payment does not cancel). Nothing is sent. There is **no scheduler** that runs while the browser is closed. A substantive-reply pause is described in copy, not implemented as a live mail-reader.
 
 ### Authentication / permissions — **(b)**
 
@@ -283,7 +284,7 @@ Allowed later; not blocking claims work; not built. No public deploy, no backups
 
 ### Tests covering behavioural rules
 
-`tests/rules.test.ts`, `intake.test.ts`, `screens.test.ts`, `letters.test.ts`, `hire-pack.test.ts`, `seed.test.ts`, `text.test.ts`, `postcode.test.ts`, `auth.test.ts`, `dates-age.test.ts`, `staff-admin.test.ts`. These check hire/reservation/agreement rules, intake mapping, letter generation, postcode mapping, accident/DOB rules and staff roles — **not** live mailbox, DVLA or PAF.
+`tests/rules.test.ts`, `intake.test.ts`, `screens.test.ts`, `letters.test.ts`, `hire-pack.test.ts`, `seed.test.ts`, `text.test.ts`, `postcode.test.ts`, `auth.test.ts`, `dates-age.test.ts`, `staff-admin.test.ts`. These check hire/reservation/agreement/chase rules, intake mapping, CAS letter and email generation, postcode mapping, accident/DOB rules and staff roles — **not** live mailbox, DVLA or PAF.
 
 ---
 

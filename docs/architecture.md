@@ -21,7 +21,8 @@ PostgreSQL can replace SQLite later if CAS hosts a shared office server. Lookup,
 
 ## Key modules
 
-- `src/lib/domain/rules.ts` — hire, reservation, chaser and agreement rules (tested).
+- `src/lib/domain/rules.ts` — hire, reservation, chaser and agreement rules (tested). Engineer and hire-pack payment chases share the same stop/reset pattern.
+- `src/lib/documents/` — CAS letter/email wording (`cas-wording.ts`), Hire Pack terms (`cas-hire-terms.ts`, not invented).
 - `src/lib/lookups/` — postcode lookup uses free postcodes.io and OpenStreetMap; vehicle lookup remains simulated.
 - `src/lib/db/` — schema, seed, queries, claim screen persistence (`claim_screen_data`).
 - `src/app/` — screens. Server actions write to SQLite. Each claim file has a right-hand viewing pane of operational screens taken from the current CRM.

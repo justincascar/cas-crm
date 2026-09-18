@@ -31,14 +31,15 @@ export const HIRE_PACK_SECTIONS = [
     note: "Wording is the CAS pack supplied on 15/09/2026. Not invented.",
   },
   {
-    id: "storage_recovery",
-    title: "Hire agreement page 3 — storage and recovery of the client's own vehicle",
+    id: "cancellation",
+    title: "Hire agreement page 3 — notice of the right to cancel",
     audience: "client",
   },
   {
-    id: "cancellation",
-    title: "Hire agreement page 4 — notice of the right to cancel",
+    id: "storage_recovery",
+    title: "Storage & Recovery Agreement (standalone)",
     audience: "client",
+    note: "Separate from the hire agreement. Can be produced when there is recovery/storage but no hire. Solicitor-reviewed standalone wording is still to come.",
   },
   {
     id: "collection_sheet",
@@ -65,3 +66,40 @@ export const HIRE_PACK_MANDATORY = [
   "needReason",
   "clientVehicleRegistration",
 ] as const;
+
+/** On the supplied pack, captured even when not required to generate a hire agreement. */
+export const HIRE_PACK_OPTIONAL = [
+  "satNavPence",
+  "additionalDriverPence",
+  "handsFreePence",
+  "cdwPence",
+  "childSeatPence",
+  "automaticPence",
+  "insuranceDailyPence",
+  "estatePence",
+  "insurancePence",
+  "towBarPence",
+  "adminPence",
+  "roofRackPence",
+  "deliveryCollectionPence",
+  "groupCharged",
+  "additionalName",
+  "additionalDob",
+  "additionalLicence",
+  "additionalLicenceIssuedOn",
+  "additionalLicenceExpiresOn",
+] as const;
+
+export const STORAGE_RECOVERY_MANDATORY = ["clientName", "clientVehicleRegistration"] as const;
+
+export const OWN_VEHICLE_DETAILS_HEADING = "Your Own Vehicle Details";
+
+export const STORAGE_RECOVERY_STANDALONE_BANNER =
+  "This Storage & Recovery Agreement is a standalone document. It is not a page of the Hire Agreement and can be produced when there is recovery or storage but no hire. Solicitor-reviewed standalone legal wording is still to come. Facts below are taken from the file. Signatures are not fabricated.";
+
+export const RENTAL_PERIOD_DECISION = {
+  packDays: 89,
+  alertDays: 88,
+  status: "awaiting_justin",
+  note: "The supplied Hire Pack caps the Rental Period at 89 days. CRM renewal alerts use 88 days. Do not silently pick one — Justin (or the solicitor) must confirm which is correct.",
+} as const;

@@ -244,9 +244,11 @@ function recoveryAgreementHtml(input: {
     <article class="letter hire-pack">
       <header>
         <p><strong>Complete Accident Solutions Ltd</strong></p>
-        <p>Credit recovery and storage agreement — ${escapeHtml(input.fileReference)}</p>
+        <p>Storage &amp; Recovery Agreement — ${escapeHtml(input.fileReference)}-SR</p>
       </header>
-      <p class="text-sm">Placeholder wording. CAS's signed recovery and storage template is not yet loaded. This page records the facts captured on the file. It is not a signed contract and has not been executed.</p>
+      <p class="text-sm">Standalone document. It is not a page of a Hire Agreement and does not require a hire agreement on the file. Solicitor-reviewed standalone wording is still to come. This page records the facts captured on intake. It is not a signed contract and has not been executed.</p>
+      <h3>Your Own Vehicle Details</h3>
+      <p>This is the client's own damaged vehicle being recovered and stored — not a hire vehicle.</p>
       <p>Client: ${escapeHtml(input.clientName)}</p>
       <p>Recovery location: ${escapeHtml(input.location)}</p>
       <p>Recovery date: ${escapeHtml(input.recoveredOn)}</p>

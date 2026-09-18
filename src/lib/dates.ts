@@ -78,6 +78,13 @@ export function isBeforeLondonDay(iso: string, comparedTo = new Date()): boolean
   return londonDateIso(new Date(iso)) < londonDateIso(comparedTo);
 }
 
+export function formatUkTime(iso: string | null | undefined): string {
+  if (!iso) return "Unknown";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "Unknown";
+  return formatInTimeZone(d, TIMEZONE, "HH:mm");
+}
+
 export function isoDaysFromNow(days: number, hours = 9, minutes = 0): string {
   const london = londonNow();
   london.setHours(hours, minutes, 0, 0);

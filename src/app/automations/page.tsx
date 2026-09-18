@@ -11,7 +11,7 @@ export default async function AutomationsPage() {
     <div>
       <PageHeader
         title="Automations"
-        subtitle="Demonstration scheduling uses 3 calendar days. Nothing is sent live. A substantive reply would suspend the affected chase — out-of-office would not."
+        subtitle="Demonstration scheduling uses 3 calendar days. Nothing is sent live. Closed, disputed-and-awaiting-CAS, or solicitor files are not chased. A rebuttal resets the hire-pack chase clock; a partial payment reduces the balance rather than cancelling the chase. A substantive reply would suspend the affected chase — out-of-office would not."
       />
       <div className="overflow-x-auto rounded-xl border border-line bg-card">
         <table className="ledger-table">

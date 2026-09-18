@@ -14,6 +14,7 @@ import { createClaimFromIntake, intakeDateErrors, intakeFromFormData } from "@/l
 import { complianceLookup } from "@/lib/lookups/compliance";
 import {
   generateClaimDocument,
+  letterPreview,
   logIncomingEmail,
   logIncomingWhatsApp,
   recordClaimCall,
@@ -21,12 +22,12 @@ import {
   sendClaimEmail,
   sendClaimWhatsApp,
 } from "@/lib/db/chronology";
-import { generateHirePackDocument, saveHirePack } from "@/lib/db/hire-pack";
+import { generateHirePackDocument, generateStorageRecoveryDocument, saveHirePack } from "@/lib/db/hire-pack";
 import { saveScreenData, valuesFromForm } from "@/lib/db/screens";
 import { isoDaysFromNow } from "@/lib/dates";
 import { postcodeLookup } from "@/lib/lookups/postcode";
 import { VEHICLE_MANUAL_HINT, vehicleLookup } from "@/lib/lookups/vehicle";
-import type { LetterTemplateKey } from "@/lib/documents/templates";
+import { isDocumentTemplateKey } from "@/lib/documents/catalog";
 
 export async function actionCreateClaim(formData: FormData) {
   await requireStaff();
@@ -196,9 +197,13 @@ export async function actionRecordEvent(formData: FormData) {
 export async function actionGenerateDocument(formData: FormData) {
   await requireStaff();
   const claimId = String(formData.get("claimId"));
+  const templateKey = String(formData.get("templateKey") || "initial_tp_insurer");
+  if (!isDocumentTemplateKey(templateKey)) {
+    redirect(`/claims/${claimId}?error=${encodeURIComponent("Unknown document template.")}`);
+  }
   const result = generateClaimDocument({
     claimId,
-    templateKey: String(formData.get("templateKey") || "initial_tp_insurer") as LetterTemplateKey,
+    templateKey,
     actorId: String(formData.get("actorId") || "staff-sian"),
     letterDate: String(formData.get("letterDate") || "") || undefined,
     recordOnFile: formData.get("recordOnFile") === "yes",
@@ -208,15 +213,33 @@ export async function actionGenerateDocument(formData: FormData) {
   redirect(`/documents/${result.documentId}`);
 }
 
+export async function actionPreviewCorrespondence(formData: FormData) {
+  await requireStaff();
+  const templateKey = String(formData.get("templateKey") || "");
+  if (!isDocumentTemplateKey(templateKey)) {
+    return { error: "Unknown template.", to: "", subject: "", body: "", missing: [] as string[], legalSignOffRequired: false };
+  }
+  const preview = letterPreview(String(formData.get("claimId")), templateKey);
+  return {
+    to: "to" in preview ? preview.to : "",
+    subject: preview.subject,
+    body: preview.text,
+    missing: preview.missing,
+    legalSignOffRequired: preview.legalSignOffRequired,
+  };
+}
+
 export async function actionSendEmail(formData: FormData) {
   await requireStaff();
   const claimId = String(formData.get("claimId"));
+  const templateKey = String(formData.get("templateKey") || "");
   const result = await sendClaimEmail({
     claimId,
     actorId: String(formData.get("actorId") || "staff-sian"),
     to: String(formData.get("to") || "").trim(),
     subject: String(formData.get("subject") || "").trim(),
     body: String(formData.get("body") || "").trim(),
+    templateKey: isDocumentTemplateKey(templateKey) ? templateKey : undefined,
     occurredAt: String(formData.get("occurredAt") || "") || undefined,
   });
   revalidatePath(`/claims/${claimId}`);
@@ -354,6 +377,15 @@ export async function actionSaveHirePack(formData: FormData) {
     need_reason: String(formData.get("need_reason") || ""),
     own_vehicle_unusable: formData.get("own_vehicle_unusable") ? 1 : 0,
     no_other_vehicle: formData.get("no_other_vehicle") ? 1 : 0,
+    means_documents_requested: formData.get("means_documents_requested") ? 1 : 0,
+    means_documents_on_file: formData.get("means_documents_on_file") ? 1 : 0,
+    cannot_fund_hire: formData.get("cannot_fund_hire") ? 1 : 0,
+    no_other_credit: formData.get("no_other_credit") ? 1 : 0,
+    means_notes: String(formData.get("means_notes") || ""),
+    own_vehicle_mileage: Number(formData.get("own_vehicle_mileage") || 0) || null,
+    own_vehicle_fuel: String(formData.get("own_vehicle_fuel") || ""),
+    own_vehicle_tyres: String(formData.get("own_vehicle_tyres") || ""),
+    own_vehicle_damage: String(formData.get("own_vehicle_damage") || ""),
     delivery_mileage: Number(formData.get("delivery_mileage") || 0) || null,
     delivery_fuel: String(formData.get("delivery_fuel") || ""),
     delivery_tyres: String(formData.get("delivery_tyres") || ""),
@@ -385,6 +417,15 @@ export async function actionGenerateHirePack(formData: FormData) {
   await actionSaveHirePack(formData);
   const claimId = String(formData.get("claimId"));
   const result = generateHirePackDocument(claimId, String(formData.get("actorId") || "staff-sian"));
+  revalidatePath("/documents");
+  redirect(`/documents/${result.documentId}`);
+}
+
+export async function actionGenerateStorageRecovery(formData: FormData) {
+  await requireStaff();
+  await actionSaveHirePack(formData);
+  const claimId = String(formData.get("claimId"));
+  const result = generateStorageRecoveryDocument(claimId, String(formData.get("actorId") || "staff-sian"));
   revalidatePath("/documents");
   redirect(`/documents/${result.documentId}`);
 }

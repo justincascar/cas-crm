@@ -4,6 +4,8 @@ import { PrintButton } from "@/components/PrintButton";
 import { formatUkDateTime } from "@/lib/dates";
 import { requireStaff } from "@/lib/auth/session";
 import { getDocument } from "@/lib/db/chronology";
+import { specForTemplate } from "@/lib/documents/catalog";
+import { CAS_LEGAL_SIGNOFF_NOTICE, CAS_TEMPLATE_NOTICE } from "@/lib/documents/correspondence";
 
 export default async function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
   await requireStaff();
@@ -34,9 +36,10 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
           Missing from the file (shown as Unknown in the letter): {missing.join(", ")}.
         </p>
       ) : null}
-      <p className="text-xs text-slate print:hidden">
-        Placeholder CAS wording. Not a signed original. Live sending is not connected.
-      </p>
+      <p className="text-xs text-slate print:hidden">{CAS_TEMPLATE_NOTICE}</p>
+      {specForTemplate(String(doc.template_key || ""))?.legalCitations ? (
+        <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm print:hidden">{CAS_LEGAL_SIGNOFF_NOTICE}</p>
+      ) : null}
       {doc.body_html ? (
         <div className="letter-paper rounded-xl border border-line bg-card p-8" dangerouslySetInnerHTML={{ __html: String(doc.body_html) }} />
       ) : (

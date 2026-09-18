@@ -4,6 +4,8 @@ import {
   agreementNeedsRenewalPrep,
   canReserveVehicle,
   engineerReportChaserDecision,
+  hireChargesAccrualEnd,
+  hirePackChaseDecision,
   faultCourtesyCreatesCreditHire,
   nextFileReference,
   repairableHireMayEnd,
@@ -142,5 +144,125 @@ describe("financials and chasers", () => {
       outOfOffice: false,
     });
     assert.equal(longer.send, false);
+  });
+
+  it("runs hire-pack chases 05 then 06 then solicitor handoff, and resets after a rebuttal", () => {
+    const first = hirePackChaseDecision({
+      hirePackSent: true,
+      lastClockEvent: "hire_pack",
+      daysSinceLastClockEvent: 3,
+      intervalDays: 3,
+      paused: false,
+      closed: false,
+      disputedAwaitingCasResponse: false,
+      handedToSolicitors: false,
+      outstandingBalancePence: 150000,
+    });
+    assert.equal(first.send, true);
+    assert.equal(first.next, "payment_chase_1");
+
+    const second = hirePackChaseDecision({
+      hirePackSent: true,
+      lastClockEvent: "chase_1",
+      daysSinceLastClockEvent: 3,
+      intervalDays: 3,
+      paused: false,
+      closed: false,
+      disputedAwaitingCasResponse: false,
+      handedToSolicitors: false,
+      outstandingBalancePence: 150000,
+    });
+    assert.equal(second.send, true);
+    assert.equal(second.next, "payment_chase_2");
+
+    const handoff = hirePackChaseDecision({
+      hirePackSent: true,
+      lastClockEvent: "chase_2",
+      daysSinceLastClockEvent: 3,
+      intervalDays: 3,
+      paused: false,
+      closed: false,
+      disputedAwaitingCasResponse: false,
+      handedToSolicitors: false,
+      outstandingBalancePence: 150000,
+    });
+    assert.equal(handoff.send, false);
+    assert.equal(handoff.next, "solicitor_handoff");
+
+    const afterRebuttal = hirePackChaseDecision({
+      hirePackSent: true,
+      lastClockEvent: "rebuttal",
+      daysSinceLastClockEvent: 3,
+      intervalDays: 3,
+      paused: false,
+      closed: false,
+      disputedAwaitingCasResponse: false,
+      handedToSolicitors: false,
+      outstandingBalancePence: 90000,
+    });
+    assert.equal(afterRebuttal.send, true);
+    assert.equal(afterRebuttal.next, "payment_chase_1");
+  });
+
+  it("does not chase closed, disputed-awaiting-CAS or solicitor files, and keeps chasing after a partial payment", () => {
+    const closed = hirePackChaseDecision({
+      hirePackSent: true,
+      lastClockEvent: "hire_pack",
+      daysSinceLastClockEvent: 10,
+      intervalDays: 3,
+      paused: false,
+      closed: true,
+      disputedAwaitingCasResponse: false,
+      handedToSolicitors: false,
+      outstandingBalancePence: 150000,
+    });
+    assert.equal(closed.send, false);
+    const solicitors = hirePackChaseDecision({
+      hirePackSent: true,
+      lastClockEvent: "hire_pack",
+      daysSinceLastClockEvent: 10,
+      intervalDays: 3,
+      paused: false,
+      closed: false,
+      disputedAwaitingCasResponse: false,
+      handedToSolicitors: true,
+      outstandingBalancePence: 150000,
+    });
+    assert.equal(solicitors.send, false);
+    const disputed = hirePackChaseDecision({
+      hirePackSent: true,
+      lastClockEvent: "hire_pack",
+      daysSinceLastClockEvent: 10,
+      intervalDays: 3,
+      paused: false,
+      closed: false,
+      disputedAwaitingCasResponse: true,
+      handedToSolicitors: false,
+      outstandingBalancePence: 150000,
+    });
+    assert.equal(disputed.send, false);
+    const paid = hirePackChaseDecision({
+      hirePackSent: true,
+      lastClockEvent: "hire_pack",
+      daysSinceLastClockEvent: 10,
+      intervalDays: 3,
+      paused: false,
+      closed: false,
+      disputedAwaitingCasResponse: false,
+      handedToSolicitors: false,
+      outstandingBalancePence: 0,
+    });
+    assert.equal(paid.send, false);
+  });
+
+  it("stops hire charges at the earlier of vehicle return and total-loss cessation", () => {
+    assert.equal(
+      hireChargesAccrualEnd({
+        vehicleReturnedAt: "2026-09-20T09:00:00.000Z",
+        totalLossCessationAt: "2026-09-18T09:00:00.000Z",
+      }),
+      "2026-09-18T09:00:00.000Z",
+    );
+    assert.equal(hireChargesAccrualEnd({ vehicleReturnedAt: null, totalLossCessationAt: null }), null);
   });
 });

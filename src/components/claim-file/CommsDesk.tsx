@@ -6,11 +6,13 @@ import {
   actionGenerateDocument,
   actionLogIncomingEmail,
   actionLogIncomingWhatsApp,
+  actionPreviewCorrespondence,
   actionRecordCall,
   actionSendEmail,
   actionSendWhatsApp,
 } from "@/app/actions";
-import { LETTER_TEMPLATES } from "@/lib/documents/templates";
+import { DOCUMENT_TEMPLATES } from "@/lib/documents/catalog";
+import { EMAIL_TEMPLATES } from "@/lib/documents/email-templates";
 import { formatUkDateTime } from "@/lib/dates";
 import Link from "next/link";
 
@@ -44,10 +46,15 @@ export function CommsDesk({
   documents: DocumentRow[];
 }) {
   const router = useRouter();
+  const defaultSubject = `Our ref: ${defaults.fileReference}  Your policy: ${defaults.policyRef || "…"}`;
   const [emailMsg, setEmailMsg] = useState<string | null>(null);
+  const [emailTo, setEmailTo] = useState(defaults.tpEmail);
+  const [emailSubject, setEmailSubject] = useState(defaultSubject);
+  const [emailBody, setEmailBody] = useState("Dear Sir / Madam\n\n");
+  const [emailTemplate, setEmailTemplate] = useState<string>(EMAIL_TEMPLATES[0].key);
+  const [fillMsg, setFillMsg] = useState<string | null>(null);
   const [waMsg, setWaMsg] = useState<string | null>(null);
   const [callMsg, setCallMsg] = useState<string | null>(null);
-  const subject = `Our ref: ${defaults.fileReference}  Your policy: ${defaults.policyRef || "…"}`;
 
   return (
     <div className="space-y-6">
@@ -87,11 +94,62 @@ export function CommsDesk({
         }}
       >
         <h2 className="font-serif text-xl text-navy-deep md:col-span-2">Send email</h2>
+        <p className="text-sm text-slate md:col-span-2">
+          Pick a CAS email template to fill from this file, then record the simulated send. Nothing leaves this computer.
+        </p>
         <input type="hidden" name="claimId" value={claimId} />
         <input type="hidden" name="actorId" value={handlerId} />
+        <input type="hidden" name="templateKey" value={emailTemplate} />
+        <label className="text-sm md:col-span-2">
+          CAS email template
+          <select
+            className={field}
+            value={emailTemplate}
+            onChange={(event) => setEmailTemplate(event.target.value)}
+          >
+            {EMAIL_TEMPLATES.map((t) => (
+              <option key={t.key} value={t.key}>
+                {t.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          className="rounded-md border border-line bg-white px-3 py-2 text-sm md:col-span-2"
+          type="button"
+          onClick={async () => {
+            const form = new FormData();
+            form.set("claimId", claimId);
+            form.set("templateKey", emailTemplate);
+            const preview = await actionPreviewCorrespondence(form);
+            if ("error" in preview && preview.error) {
+              setFillMsg(preview.error);
+              return;
+            }
+            if (preview.to) setEmailTo(preview.to);
+            setEmailSubject(preview.subject);
+            setEmailBody(preview.body);
+            const parts = [];
+            if (preview.missing.length) parts.push(`Missing from the file: ${preview.missing.join(", ")}.`);
+            if (preview.legalSignOffRequired) {
+              parts.push("Legal wording needs solicitor sign-off before it is used live.");
+            }
+            setFillMsg(parts.join(" ") || "Filled from this file.");
+          }}
+        >
+          Fill from this file
+        </button>
+        {fillMsg ? <p className="text-sm text-slate md:col-span-2">{fillMsg}</p> : null}
         <label className="text-sm">
           To
-          <input name="to" required defaultValue={defaults.tpEmail} placeholder="insurer@example.com" className={field} />
+          <input
+            name="to"
+            required
+            value={emailTo}
+            onChange={(event) => setEmailTo(event.target.value)}
+            placeholder="insurer@example.com"
+            className={field}
+          />
         </label>
         <label className="text-sm">
           Date of sending
@@ -99,11 +157,24 @@ export function CommsDesk({
         </label>
         <label className="text-sm md:col-span-2">
           Subject
-          <input name="subject" required defaultValue={subject} className={field} />
+          <input
+            name="subject"
+            required
+            value={emailSubject}
+            onChange={(event) => setEmailSubject(event.target.value)}
+            className={field}
+          />
         </label>
         <label className="text-sm md:col-span-2">
           Body
-          <textarea name="body" required rows={5} className={field} defaultValue={"Dear Sir / Madam\n\n"} />
+          <textarea
+            name="body"
+            required
+            rows={8}
+            className={field}
+            value={emailBody}
+            onChange={(event) => setEmailBody(event.target.value)}
+          />
         </label>
         <button className="rounded-md bg-navy px-4 py-2 text-sm text-white" type="submit">
           Record outgoing email
@@ -259,16 +330,17 @@ export function CommsDesk({
       <form action={actionGenerateDocument} className="grid gap-3 rounded-xl border-2 border-teal bg-[#e8f4f2] p-5 md:grid-cols-2">
         <h2 className="font-serif text-xl text-navy-deep md:col-span-2">Generate a document</h2>
         <p className="text-sm text-slate md:col-span-2">
-          Letters are built from dates already on this file. Missing items are listed, not invented. Hire Pack is a separate pack.
+          Letters and emails are built from dates already on this file. Missing items are listed, not invented. Rebuttal wording
+          needs solicitor sign-off before live use. Hire Pack is a separate pack.
         </p>
         <input type="hidden" name="claimId" value={claimId} />
         <input type="hidden" name="actorId" value={handlerId} />
         <label className="text-sm">
           Document
           <select name="templateKey" className={field} defaultValue="initial_tp_insurer">
-            {LETTER_TEMPLATES.map((t) => (
+            {DOCUMENT_TEMPLATES.map((t) => (
               <option key={t.key} value={t.key}>
-                {t.title}
+                {t.channel === "email" ? `Email: ${t.title}` : t.title}
               </option>
             ))}
           </select>

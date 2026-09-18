@@ -25,6 +25,15 @@ export default async function SettingsPage({
       {error ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
       ) : null}
+      <section className="rounded-xl border border-warn/40 bg-[#fff6e8] p-5">
+        <h2 className="font-serif text-xl text-navy-deep">Hire agreement length — decision needed</h2>
+        <p className="mt-2 text-sm">
+          The supplied Hire Pack caps the Rental Period at <strong>89 days</strong>. CRM renewal alerts use{" "}
+          <strong>{settings.agreement_max_days} days</strong> (currently the 88-day demonstration setting). Neither
+          number has been changed. Confirm with the solicitor which figure is correct before the wording or the alerts
+          are aligned.
+        </p>
+      </section>
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Environment</h2>
         <dl className="mt-3 grid gap-2 text-sm">
