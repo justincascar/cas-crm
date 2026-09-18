@@ -1,6 +1,7 @@
 import { emailGateway } from "../email/gateway";
 import { phoneGateway } from "../phone/gateway";
 import { whatsappGateway } from "../whatsapp/gateway";
+import { scenePhotosWhatsAppBody, scenePhotosWhatsAppSubject } from "../whatsapp/scene-photos";
 import { ENGINEER_CHASER_INTERVAL_DAYS_DEFAULT } from "../constants";
 import { eventLabel, latestDates, type ClaimEventType } from "../domain/events";
 import { agreementDayNumber, hireChargesAccrualEnd } from "../domain/rules";
@@ -412,17 +413,19 @@ export async function sendClaimWhatsApp(input: {
   to: string;
   body: string;
   occurredAt?: string;
+  subject?: string;
 }) {
   const when = occurredFromForm(input.occurredAt);
   const result = await whatsappGateway.send({ to: input.to, body: input.body });
   const correspondenceId = newId("corr");
+  const subject = input.subject || `WhatsApp to ${input.to}`;
   run(
     `INSERT INTO correspondence(id, claim_id, direction, channel, subject, preview, body, to_address, from_address, unread, sent_status, created_at)
      VALUES (?, ?, 'outgoing', 'whatsapp', ?, ?, ?, ?, 'CAS WhatsApp (prototype)', 0, ?, ?)`,
     [
       correspondenceId,
       input.claimId,
-      `WhatsApp to ${input.to}`,
+      subject,
       input.body.slice(0, 180),
       input.body,
       input.to,
@@ -441,6 +444,35 @@ export async function sendClaimWhatsApp(input: {
     source: "staff",
   });
   return { ...result, correspondenceId };
+}
+
+export async function requestScenePhotosWhatsApp(claimId: string, actorId: string) {
+  const claim = get<{
+    file_reference: string;
+    mobile_tel: string | null;
+    registration: string | null;
+  }>(
+    `SELECT c.file_reference, p.mobile_tel, v.registration
+     FROM claims c
+     LEFT JOIN people p ON p.id = c.client_person_id
+     LEFT JOIN vehicles v ON v.id = c.client_vehicle_id
+     WHERE c.id = ?`,
+    [claimId],
+  );
+  if (!claim) throw new Error("That file was not found.");
+  const mobile = (claim.mobile_tel || "").trim();
+  if (!mobile) {
+    throw new Error("Enter a mobile number on Client details before asking for photographs by WhatsApp.");
+  }
+  const result = await sendClaimWhatsApp({
+    claimId,
+    actorId,
+    to: mobile,
+    body: scenePhotosWhatsAppBody(claim.file_reference, claim.registration),
+    subject: scenePhotosWhatsAppSubject(claim.file_reference),
+  });
+  run(`UPDATE claims SET photos_whatsapp_status = ? WHERE id = ?`, [result.ok ? result.status : "failed", claimId]);
+  return result;
 }
 
 export function logIncomingWhatsApp(input: {

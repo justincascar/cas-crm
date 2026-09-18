@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ScreenNav } from "@/components/claim-file/ScreenNav";
+import { ClaimWorkflowStatusSummary } from "@/components/ClaimWorkflowStatus";
 import { requireStaff } from "@/lib/auth/session";
 import { getClaim } from "@/lib/db/queries";
 import { listScreenSummaries } from "@/lib/db/screens";
@@ -26,6 +27,10 @@ export default async function ClaimLayout({
           <p className="text-sm text-slate">
             {String(data.claim.client_name || "Unknown client")} · {String(data.claim.current_position)}
           </p>
+          <ClaimWorkflowStatusSummary
+            liabilityStatus={String(data.claim.claim_type || "")}
+            roadworthiness={String(data.claim.roadworthiness || "")}
+          />
         </div>
         <div className="flex flex-wrap gap-3 text-sm">
           <Link href={`/claims/${data.claim.id}`} className="text-teal-dark underline">

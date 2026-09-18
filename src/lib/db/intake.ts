@@ -1,5 +1,6 @@
 import { INDICATIVE_DEFAULTS } from "../constants";
 import { accidentDateError, nowUtcIso, occurredFromForm, londonDateIso } from "../dates";
+import { mobileNumberError } from "../phone-number";
 import { clientDobKind, counterpartDobKind, dobSaveError } from "../age";
 import { storageStartFromRecovery, recoveryChargeTotalPence } from "../domain/rules";
 import { emailGateway } from "../email/gateway";
@@ -8,7 +9,15 @@ import { whatsappGateway } from "../whatsapp/gateway";
 import { readFormText } from "../text";
 import { nextReference } from "./queries";
 import { newId, run } from "./connection";
-import { recordClaimEvent } from "./chronology";
+import { recordClaimEvent, requestScenePhotosWhatsApp } from "./chronology";
+import {
+  liabilityStatusLabel,
+  normalizeLiabilityStatus,
+  normalizeRoadworthiness,
+  roadworthinessLabel,
+} from "../domain/claim-status";
+import { getDb } from "./connection";
+import { rememberAgentOn, rememberInsurerOn } from "./insurers";
 
 export type IntakePerson = {
   title?: string;
@@ -89,6 +98,8 @@ export type IntakeInput = {
   policeDetails?: string;
   witnesses?: string;
   witness?: { name?: string; telephone?: string; postcode?: string; addressLine1?: string; town?: string };
+  photosAtScene?: string;
+  requestScenePhotosWhatsapp?: boolean;
   weather?: string;
   journeyPurpose?: string;
   clientSpeed?: string;
@@ -150,6 +161,12 @@ export function intakeDateErrors(input: IntakeInput): string | null {
       Boolean(input.counterpart?.dobConfirmed),
     );
     if (counterpartErr) return counterpartErr;
+  }
+  const mobileErr = mobileNumberError(input.client.mobile);
+  if (mobileErr) return mobileErr;
+  if (input.counterpart?.mobile) {
+    const counterpartMobileErr = mobileNumberError(input.counterpart.mobile);
+    if (counterpartMobileErr) return counterpartMobileErr;
   }
   return null;
 }
@@ -331,9 +348,9 @@ export async function createClaimFromIntake(input: IntakeInput) {
       recovery_status, storage_status, salvage_status, total_loss, payment_qualifies_off_hire,
       repairs_complete, repaired_vehicle_returned, client_form_status, later_declared_total_loss, replacement_need_review,
       client_role, damage_description, police_attended, police_ref, police_details, weather_conditions,
-      journey_purpose, client_speed, tp_speed, needs_recovery, photos_whatsapp_status, other_contact_skipped,
+      journey_purpose, client_speed, tp_speed, needs_recovery, photos_at_scene, photos_whatsapp_status, other_contact_skipped,
       storage_started_on, storage_rate_pence
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'unknown', 'pending', ?, ?, ?, ?, ?, ?, ?, 0, 1, 'not_applicable', 'not_instructed', 'none', ?, ?, 'none', 0, 0, 0, 0, 'staff_complete', 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'unknown', 'pending', ?, ?, ?, ?, ?, ?, ?, 0, 1, 'not_applicable', 'not_instructed', 'none', ?, ?, 'none', 0, 0, 0, 0, 'staff_complete', 0, 0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       ref,
@@ -342,8 +359,8 @@ export async function createClaimFromIntake(input: IntakeInput) {
       accidentAt || null,
       blank(input.location),
       blank(input.circumstances),
-      input.claimType || "unknown",
-      input.roadworthiness || "awaiting_assessment",
+      normalizeLiabilityStatus(input.claimType),
+      normalizeRoadworthiness(input.roadworthiness),
       "New enquiry — intake captured",
       input.handlerId || "staff-sian",
       input.needsRecovery ? "Arrange or confirm recovery and replacement transport" : "Review new file",
@@ -362,7 +379,8 @@ export async function createClaimFromIntake(input: IntakeInput) {
       optional(input.clientSpeed),
       optional(input.tpSpeed),
       input.needsRecovery ? 1 : 0,
-      input.requestPhotosWhatsapp ? "requested_simulated" : null,
+      optional(input.photosAtScene),
+      input.requestPhotosWhatsapp || input.requestScenePhotosWhatsapp ? "requested_simulated" : null,
       input.client.skipOtherTel ? 1 : 0,
       storageStarted,
       input.needsRecovery ? storageRate : null,
@@ -493,6 +511,23 @@ export async function createClaimFromIntake(input: IntakeInput) {
         optional(tp.liabilityAdmitted),
       ],
     );
+    rememberInsurerOn(getDb(), {
+      name: tp.insurerName || "",
+      address: tp.insurerAddress || "",
+      postcode: tp.insurerPostcode || "",
+      telephone: tp.insurerTel || "",
+      email: tp.insurerEmail || "",
+    });
+    rememberAgentOn(getDb(), {
+      name: tp.agentName || "",
+      address: tp.agentAddress || "",
+      postcode: tp.agentPostcode || "",
+      telephone: tp.agentTel || "",
+      email: tp.agentEmail || "",
+      handlerName: tp.agentHandlerName || "",
+      handlerEmail: tp.agentHandlerEmail || "",
+      handlerTel: tp.agentHandlerTel || "",
+    });
     if (tp.midInsurer || tp.insurerName) {
       run(
         `INSERT INTO mid_lookups(id, claim_id, registration, accident_on, lookup_on, insurer, checker_id, evidence, source)
@@ -628,6 +663,28 @@ export async function createClaimFromIntake(input: IntakeInput) {
     channel: "system",
     source: "system",
   });
+  const liability = normalizeLiabilityStatus(input.claimType);
+  if (liability) {
+    recordClaimEvent({
+      claimId: id,
+      eventType: "liability_status_changed",
+      occurredAt: now,
+      details: `Set to ${liabilityStatusLabel(liability)}.`,
+      actorId: input.handlerId,
+      source: "staff",
+    });
+  }
+  const roadworthiness = normalizeRoadworthiness(input.roadworthiness);
+  if (roadworthiness) {
+    recordClaimEvent({
+      claimId: id,
+      eventType: "roadworthiness_changed",
+      occurredAt: now,
+      details: `Set to ${roadworthinessLabel(roadworthiness)}.`,
+      actorId: input.handlerId,
+      source: "staff",
+    });
+  }
   if (accidentAt) {
     recordClaimEvent({
       claimId: id,
@@ -665,6 +722,20 @@ export async function createClaimFromIntake(input: IntakeInput) {
       `Please send photographs of the damage on ${blank(input.vehicle.registration)} for file ${ref}. Complete Accident Solutions.`,
       "Request damage photographs",
     );
+  }
+  if (input.photosAtScene === "yes" && input.requestScenePhotosWhatsapp) {
+    if (input.client.mobile) {
+      await requestScenePhotosWhatsApp(id, input.handlerId);
+    } else {
+      recordClaimEvent({
+        claimId: id,
+        eventType: "other",
+        occurredAt: now,
+        details: "Photographs were taken at the scene, but no mobile number was recorded so WhatsApp was not requested.",
+        actorId: input.handlerId,
+        source: "staff",
+      });
+    }
   }
 
   if (input.needsRecovery && input.recovery?.notifyDriverWhatsapp) {
@@ -826,6 +897,8 @@ export function intakeFromFormData(formData: FormData): IntakeInput {
       addressLine1: readFormText(formData, "witness_address"),
       town: readFormText(formData, "witness_town"),
     },
+    photosAtScene: String(formData.get("photosAtScene") || "no"),
+    requestScenePhotosWhatsapp: formFlag(formData, "requestScenePhotosWhatsapp"),
     weather: readFormText(formData, "weather"),
     journeyPurpose: readFormText(formData, "journeyPurpose"),
     clientSpeed: String(formData.get("clientSpeed") || ""),
@@ -853,7 +926,7 @@ export function intakeFromFormData(formData: FormData): IntakeInput {
       thirdPartyFromForm(formData, "tp2_", includeTp2),
       thirdPartyFromForm(formData, "tp3_", includeTp3),
     ],
-    claimType: String(formData.get("claimType") || "unknown"),
-    roadworthiness: String(formData.get("roadworthiness") || "awaiting_assessment"),
+    claimType: normalizeLiabilityStatus(String(formData.get("claimType") || "")),
+    roadworthiness: normalizeRoadworthiness(String(formData.get("roadworthiness") || "")),
   };
 }

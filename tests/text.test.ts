@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { formatTypedValue, formatVehicleRegistration, toStartCase } from "../src/lib/text.ts";
+import { clipMobileNumber, mobileNumberError } from "../src/lib/phone-number.ts";
 
 describe("field casing", () => {
   it("stores vehicle registration in capitals only", () => {
@@ -24,5 +25,20 @@ describe("field casing", () => {
   it("keeps postcodes in capitals and emails in lower case", () => {
     assert.equal(formatTypedValue("client_postcode", "cf24 2da"), "CF24 2DA");
     assert.equal(formatTypedValue("client_email", "Aled.Morgan@Example.COM"), "aled.morgan@example.com");
+  });
+});
+
+describe("mobile numbers", () => {
+  it("keeps at most 11 digits and ignores spaces or punctuation", () => {
+    assert.equal(clipMobileNumber("07700 900123"), "07700900123");
+    assert.equal(clipMobileNumber("07700-900123-9"), "07700900123");
+    assert.equal(mobileNumberError("07700900123"), null);
+    assert.equal(mobileNumberError(""), null);
+    assert.match(mobileNumberError("077009001234") || "", /at most 11 digits/);
+  });
+
+  it("warns when a mobile number is shorter than 11 digits", () => {
+    assert.match(mobileNumberError("07700") || "", /too short/);
+    assert.match(mobileNumberError("0770090012") || "", /too short/);
   });
 });

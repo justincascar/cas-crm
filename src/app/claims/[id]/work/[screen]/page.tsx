@@ -7,7 +7,7 @@ import { ScreenForm } from "@/components/claim-file/ScreenForm";
 import { PageHeader } from "@/components/ClaimTable";
 import { CLAIM_SCREENS, getClaimScreen, screensByGroup } from "@/lib/claim-screens";
 import { requireStaff } from "@/lib/auth/session";
-import { getClaim, listFleet, listReservations } from "@/lib/db/queries";
+import { getClaim, listFleet, listKnownAgents, listKnownInsurers, listReservations } from "@/lib/db/queries";
 import { seedScreenDefaults } from "@/lib/db/screens";
 
 export default async function ClaimWorkScreenPage({
@@ -15,11 +15,11 @@ export default async function ClaimWorkScreenPage({
   searchParams,
 }: {
   params: Promise<{ id: string; screen: string }>;
-  searchParams: Promise<{ saved?: string; error?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; whatsapp?: string }>;
 }) {
   const { id, screen } = await params;
   await requireStaff();
-  const { saved, error } = await searchParams;
+  const { saved, error, whatsapp } = await searchParams;
   const def = getClaimScreen(screen);
   if (!def) notFound();
   const data = getClaim(id);
@@ -33,6 +33,11 @@ export default async function ClaimWorkScreenPage({
       <PageHeader title={def.label} subtitle={def.hint} />
       {error ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
+      ) : null}
+      {whatsapp === "1" ? (
+        <p className="rounded-md border border-ok/40 bg-[#eef6ef] px-4 py-3 text-sm text-ok">
+          WhatsApp request recorded on this file. It was not sent to a live number.
+        </p>
       ) : null}
 
       {screen === "comms" ? (
@@ -96,6 +101,8 @@ export default async function ClaimWorkScreenPage({
           values={values}
           saved={justSaved}
           clientRole={String(data.claim.client_role || "")}
+          insurers={listKnownInsurers()}
+          agents={listKnownAgents()}
         />
       ) : null}
     </div>

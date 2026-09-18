@@ -69,4 +69,28 @@ describe("claim file screens", () => {
     assert.equal(values.clientMake, "Volkswagen");
     assert.equal(values.clientColour, "White");
   });
+
+  it("records whether photographs were taken at the scene", () => {
+    const form = new FormData();
+    form.set("photosAtScene", "yes");
+    form.set("location", "newport road, cardiff");
+    const values = valuesFromForm(form, "accident");
+    assert.equal(values.photosAtScene, "yes");
+    assert.equal(values.location, "Newport Road, Cardiff");
+    assert.ok(getClaimScreen("accident")?.sections[0]?.fields.some((field) => field.name === "photosAtScene"));
+  });
+
+  it("captures liability status and roadworthiness on general details without assuming an answer", () => {
+    const general = getClaimScreen("general");
+    const names = general?.sections[0]?.fields.map((field) => field.name) || [];
+    assert.ok(names.includes("typeOfClaim"));
+    assert.ok(names.includes("roadworthiness"));
+    const liability = general?.sections[0]?.fields.find((field) => field.name === "typeOfClaim");
+    const roadworthiness = general?.sections[0]?.fields.find((field) => field.name === "roadworthiness");
+    assert.equal(liability?.label, "Liability status");
+    assert.ok(liability?.options?.some((option) => option.value === "" && option.label === "Not yet decided"));
+    assert.ok(liability?.options?.some((option) => option.value === "disputed"));
+    assert.ok(roadworthiness?.options?.some((option) => option.value === "" && option.label === "Not yet decided"));
+    assert.equal(roadworthiness?.options?.some((option) => option.value === "awaiting_assessment"), false);
+  });
 });

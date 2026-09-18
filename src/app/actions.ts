@@ -9,6 +9,7 @@ import {
   completeTask,
   createReservation,
   updateClaimPosition,
+  updateClaimWorkflowStatus,
 } from "@/lib/db/queries";
 import { createClaimFromIntake, intakeDateErrors, intakeFromFormData } from "@/lib/db/intake";
 import { complianceLookup } from "@/lib/lookups/compliance";
@@ -20,6 +21,7 @@ import {
   recordClaimCall,
   recordClaimEvent,
   sendClaimEmail,
+  requestScenePhotosWhatsApp,
   sendClaimWhatsApp,
 } from "@/lib/db/chronology";
 import { generateHirePackDocument, generateStorageRecoveryDocument, saveHirePack } from "@/lib/db/hire-pack";
@@ -76,16 +78,14 @@ export async function actionCompleteTask(formData: FormData) {
 }
 
 export async function actionUpdateClaim(formData: FormData) {
-  await requireStaff();
+  const staff = await requireStaff();
   const id = String(formData.get("claimId"));
   updateClaimPosition(id, {
     current_position: String(formData.get("current_position") || ""),
     circumstances: String(formData.get("circumstances") || ""),
     accident_location: String(formData.get("accident_location") || ""),
-    claim_type: String(formData.get("claim_type") || ""),
     cas_liability_assessment: String(formData.get("cas_liability_assessment") || ""),
     insurer_liability_position: String(formData.get("insurer_liability_position") || ""),
-    roadworthiness: String(formData.get("roadworthiness") || ""),
     roadworthiness_reasons: String(formData.get("roadworthiness_reasons") || ""),
     next_action: String(formData.get("next_action") || ""),
     next_action_due: String(formData.get("next_action_due") || ""),
@@ -93,8 +93,24 @@ export async function actionUpdateClaim(formData: FormData) {
     own_insurer_name: String(formData.get("own_insurer_name") || ""),
     own_policy_ref: String(formData.get("own_policy_ref") || ""),
     own_claim_ref: String(formData.get("own_claim_ref") || ""),
-  });
+  }, staff.id);
   revalidatePath(`/claims/${id}`);
+  revalidatePath("/");
+  return { ok: true };
+}
+
+export async function actionUpdateClaimStatus(formData: FormData) {
+  const staff = await requireStaff();
+  const id = String(formData.get("claimId"));
+  const field = String(formData.get("field") || "");
+  if (field === "liability") {
+    updateClaimWorkflowStatus(id, { liabilityStatus: String(formData.get("liabilityStatus") || "") }, staff.id);
+  } else if (field === "roadworthiness") {
+    updateClaimWorkflowStatus(id, { roadworthiness: String(formData.get("roadworthiness") || "") }, staff.id);
+  }
+  revalidatePath(`/claims/${id}`);
+  revalidatePath(`/claims/${id}/work/general`);
+  revalidatePath(`/claims/${id}`, "layout");
   revalidatePath("/");
   return { ok: true };
 }
@@ -140,6 +156,29 @@ export async function actionSaveClaimScreen(formData: FormData) {
   revalidatePath(`/claims/${claimId}`);
   revalidatePath(`/claims/${claimId}/work/${screenKey}`);
   redirect(`/claims/${claimId}/work/${screenKey}?saved=1`);
+}
+
+export async function actionRequestScenePhotosWhatsApp(formData: FormData) {
+  await requireStaff();
+  const claimId = String(formData.get("claimId"));
+  const screenKey = String(formData.get("screenKey") || "accident");
+  const actorId = String(formData.get("actorId") || "staff-sian");
+  const values = valuesFromForm(formData, screenKey);
+  try {
+    saveScreenData(claimId, screenKey, values, actorId);
+    if (values.photosAtScene !== "yes") {
+      throw new Error("Record that photographs were taken at the scene before asking for them by WhatsApp.");
+    }
+    await requestScenePhotosWhatsApp(claimId, actorId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not request the scene photographs.";
+    redirect(`/claims/${claimId}/work/${screenKey}?error=${encodeURIComponent(message)}`);
+  }
+  revalidatePath(`/claims/${claimId}`);
+  revalidatePath(`/claims/${claimId}/work/${screenKey}`);
+  revalidatePath(`/claims/${claimId}/work/comms`);
+  revalidatePath("/communications");
+  redirect(`/claims/${claimId}/work/${screenKey}?saved=1&whatsapp=1`);
 }
 
 export async function actionLookupPostcode(postcode: string) {

@@ -108,6 +108,41 @@ describe("intake save rules", () => {
     });
     assert.equal(err, null);
   });
+
+  it("blocks a mobile number longer than 11 digits on intake", () => {
+    const err = intakeDateErrors({
+      handlerId: "staff-sian",
+      clientRole: "owner_driver",
+      client: { forename: "Aled", surname: "Morgan", mobile: "077009001234" },
+      vehicle: {},
+      thirdParties: [],
+      accidentDate: "2026-09-01",
+    });
+    assert.match(err || "", /at most 11 digits/);
+  });
+
+  it("rejects a 12-digit mobile on the client screen", () => {
+    const db = seeded();
+    withDatabase(db, () => {
+      assert.throws(
+        () => saveScreenData("c1", "client", { telMobile: "077009001234" }, "staff-sian"),
+        /at most 11 digits/,
+      );
+    });
+    db.close();
+  });
+
+  it("rejects a mobile number shorter than 11 digits on intake", () => {
+    const err = intakeDateErrors({
+      handlerId: "staff-sian",
+      clientRole: "owner_driver",
+      client: { forename: "Aled", surname: "Morgan", mobile: "07700" },
+      vehicle: {},
+      thirdParties: [],
+      accidentDate: "2026-09-01",
+    });
+    assert.match(err || "", /too short/);
+  });
 });
 
 describe("vehicle lookup manual fallback", () => {

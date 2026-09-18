@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { ensureStaffAuth } from "../auth/ensure";
 import { backfillChronologyIfEmpty, seedIfEmpty } from "./seed";
+import { ensureKnownInsurers } from "./insurers";
 import { migrate } from "./migrate";
 
 type GlobalDb = typeof globalThis & { __casDb?: DatabaseSync };
@@ -25,6 +26,7 @@ function openDatabase(): DatabaseSync {
   db.exec(fs.readFileSync(schemaPath, "utf8"));
   migrate(db);
   seedIfEmpty(db);
+  ensureKnownInsurers(db);
   ensureStaffAuth(db);
   backfillChronologyIfEmpty(db);
   return db;
@@ -36,6 +38,7 @@ export function getDb(): DatabaseSync {
     g.__casDb = openDatabase();
   } else {
     migrate(g.__casDb);
+    ensureKnownInsurers(g.__casDb);
     ensureStaffAuth(g.__casDb);
     backfillChronologyIfEmpty(g.__casDb);
   }

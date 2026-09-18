@@ -35,6 +35,8 @@ export const CLAIM_EVENT_TYPES = [
   { key: "handed_to_solicitors", label: "Handed to solicitors" },
   { key: "case_closed", label: "Case closed" },
   { key: "document_generated", label: "Document generated" },
+  { key: "liability_status_changed", label: "Liability status changed" },
+  { key: "roadworthiness_changed", label: "Roadworthiness changed" },
   { key: "other", label: "Other" },
 ] as const;
 

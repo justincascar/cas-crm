@@ -1,11 +1,15 @@
 import { accidentDateError, nowUtcIso, londonDateIso, occurredFromForm } from "../dates";
 import { CLAIM_SCREENS, getClaimScreen } from "../claim-screens";
 import { dobConfirmName, dobKindForField, dobSaveError, isDobFieldName } from "../age";
+import { isMobileFieldName, mobileNumberError } from "../phone-number";
 import { formatTypedValue } from "../text";
-import { get, all, run } from "./connection";
+import { get, all, getDb, run } from "./connection";
 import { recordClaimEvent } from "./chronology";
 import { poundsToPence } from "./intake";
+import { rememberAgentOn, rememberInsurerOn } from "./insurers";
 import { displayValue } from "../screen-display";
+import { updateClaimWorkflowStatus } from "./queries";
+import { normalizeLiabilityStatus, normalizeRoadworthiness } from "../domain/claim-status";
 
 export type ScreenValues = Record<string, string>;
 export { displayValue };
@@ -71,6 +75,10 @@ export function screenSaveError(claimId: string, screenKey: string, values: Scre
   const claim = get<{ client_role: string | null }>(`SELECT client_role FROM claims WHERE id = ?`, [claimId]);
   for (const section of def.sections) {
     for (const field of section.fields) {
+      if (isMobileFieldName(field.name)) {
+        const mobileErr = mobileNumberError(values[field.name]);
+        if (mobileErr) return mobileErr;
+      }
       if (!isDobFieldName(field.name)) continue;
       const err = dobSaveError(
         values[field.name],
@@ -104,6 +112,17 @@ function applySideEffects(claimId: string, screenKey: string, values: ScreenValu
     client_vehicle_id: string | null;
   }>(`SELECT id, client_person_id, client_vehicle_id FROM claims WHERE id = ?`, [claimId]);
   if (!claim) return;
+
+  if (screenKey === "general") {
+    updateClaimWorkflowStatus(
+      claimId,
+      {
+        liabilityStatus: values.typeOfClaim,
+        roadworthiness: values.roadworthiness,
+      },
+      actorId,
+    );
+  }
 
   if (screenKey === "client" && claim.client_person_id) {
     const fullName = [values.title, values.forename, values.surname].filter(Boolean).join(" ") || "Unknown";
@@ -166,7 +185,7 @@ function applySideEffects(claimId: string, screenKey: string, values: ScreenValu
     run(
       `UPDATE claims SET accident_at = COALESCE(?, accident_at), accident_location = COALESCE(NULLIF(?, ''), accident_location),
         circumstances = COALESCE(NULLIF(?, ''), circumstances), weather_conditions = ?, journey_purpose = ?,
-        client_speed = ?, tp_speed = ?
+        client_speed = ?, tp_speed = ?, photos_at_scene = ?
        WHERE id = ?`,
       [
         accidentAt,
@@ -176,6 +195,7 @@ function applySideEffects(claimId: string, screenKey: string, values: ScreenValu
         values.purpose || null,
         values.clientSpeed || null,
         values.tpSpeed || null,
+        values.photosAtScene || null,
         claimId,
       ],
     );
@@ -285,7 +305,8 @@ function updateThirdParty(claimId: string, sequence: number, values: ScreenValue
   run(
     `UPDATE claim_third_parties SET insurer_name = ?, insurer_address = ?, insurer_postcode = ?, insurer_tel = ?,
       insurer_email = ?, insurer_ref = ?, policy_number = ?, liability_admitted = ?, agent_name = ?,
-      agent_address = ?, agent_postcode = ?, agent_tel = ?, agent_email = ?, agent_ref = ?
+      agent_address = ?, agent_postcode = ?, agent_tel = ?, agent_email = ?, agent_ref = ?,
+      agent_handler_name = ?, agent_handler_email = ?, agent_handler_tel = ?
      WHERE id = ?`,
     [
       values.insurerName || null,
@@ -302,9 +323,29 @@ function updateThirdParty(claimId: string, sequence: number, values: ScreenValue
       values.agentTel || null,
       values.agentEmail || null,
       values.agentReference || null,
+      values.agentHandlerName || null,
+      values.agentHandlerEmail || null,
+      values.agentHandlerTel || null,
       tp.id,
     ],
   );
+  rememberInsurerOn(getDb(), {
+    name: values.insurerName || "",
+    address: values.insurerAddress || "",
+    postcode: values.insurerPostcode || "",
+    telephone: values.insurerTel || "",
+    email: values.insurerEmail || "",
+  });
+  rememberAgentOn(getDb(), {
+    name: values.agentName || "",
+    address: values.agentAddress || "",
+    postcode: values.agentPostcode || "",
+    telephone: values.agentTel || "",
+    email: values.agentEmail || "",
+    handlerName: values.agentHandlerName || "",
+    handlerEmail: values.agentHandlerEmail || "",
+    handlerTel: values.agentHandlerTel || "",
+  });
   if (tp.vehicle_id) {
     run(
       `UPDATE vehicles SET registration = COALESCE(NULLIF(?, ''), registration), make = COALESCE(NULLIF(?, ''), make),
@@ -336,7 +377,8 @@ export function seedScreenDefaults(claimId: string, screenKey: string): ScreenVa
 
   if (screenKey === "general") {
     fill("caseStatus", claim.current_position);
-    fill("typeOfClaim", claim.claim_type);
+    defaults.typeOfClaim = normalizeLiabilityStatus(defaults.typeOfClaim || String(claim.claim_type || ""));
+    defaults.roadworthiness = normalizeRoadworthiness(defaults.roadworthiness || String(claim.roadworthiness || ""));
   }
   if (screenKey === "client") {
     fill("title", claim.title);
@@ -404,6 +446,7 @@ export function seedScreenDefaults(claimId: string, screenKey: string): ScreenVa
     fill("purpose", claim.journey_purpose);
     fill("clientSpeed", claim.client_speed);
     fill("tpSpeed", claim.tp_speed);
+    fill("photosAtScene", claim.photos_at_scene);
   }
   if (screenKey === "insurer") {
     fill("companyName", claim.own_insurer_name);
@@ -462,6 +505,9 @@ export function seedScreenDefaults(claimId: string, screenKey: string): ScreenVa
       fill("agentPostcode", tp.agent_postcode);
       fill("agentTel", tp.agent_tel);
       fill("agentEmail", tp.agent_email);
+      fill("agentHandlerName", tp.agent_handler_name);
+      fill("agentHandlerEmail", tp.agent_handler_email);
+      fill("agentHandlerTel", tp.agent_handler_tel);
       fill("agentReference", tp.agent_ref);
     }
   }

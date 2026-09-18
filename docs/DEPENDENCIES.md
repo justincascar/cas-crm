@@ -8,7 +8,7 @@ Nothing below has been invented as a live connection. Prototype behaviour is lab
 - Vehicle registration lookup provider. Must not be treated as keeper identification. Incomplete results must not infer transmission.
 - MID / insurance checking: CAS currently uses an authorised **manual** lookup. Record results in the CRM. Assess a permitted integration only after the actual service and CAS access are identified. Do not scrape protected services.
 - Email provider used by CAS for insurer correspondence (Outlook / Microsoft 365 is assumed unless told otherwise). Compose, file history and incoming logging work now; **live send/receive is not connected**.
-- WhatsApp Business Platform: account, number, permissions, templates, costs. Intake can queue simulated photo requests, recovery-driver messages, client “on the way” messages, and the recovery/storage agreement. Staff can also send/file WhatsApp on the claim file. Live sending is not connected.
+- WhatsApp Business Platform: account, number, permissions, templates, costs. Intake can queue simulated photo requests (including scene photographs from accident details), recovery-driver messages, client “on the way” messages, and the recovery/storage agreement. Staff can also send/file WhatsApp on the claim file and ask for scene photographs from Accident details. Live sending is not connected.
 - Office telephone system (make/receive). Calls can be recorded on the file with an outcome; unanswered calls can create a call-back task. Live dialling is not connected.
 - Credit recovery and storage agreement template (CAS wording). Prototype generates an unsigned placeholder from captured facts only.
 - Electronic signing provider. Until connected, use upload-signed-copy.

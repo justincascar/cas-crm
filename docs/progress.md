@@ -14,7 +14,7 @@ Implemented:
 - Dashboard counts that open filtered lists; search; claim create/edit; notes; tasks; fleet availability and overlap-blocked reservations.
 - File history with dated steps (initial TP insurer letter, engineer instructed, repairs started, hire pack, rebuttals, total-loss cessation, case closed, and related events). Letters and emails are generated from those dates using CAS's supplied templates in `docs/correspondence-templates/`. Missing fields are listed, not invented. Rebuttal wording includes supplied case-law citations and is flagged for solicitor sign-off before live use. Email compose/incoming logging is recorded on the file; sending is simulated until the office mailbox is connected.
 - Hire Pack data collection and generation from the CAS Hire Pack.doc structure (hirer, additional driver, hire vehicle vs own vehicle, charges, mitigation including financial means, handover, cancellation notice). Storage & Recovery is generated as a standalone document, not as a hire-agreement page. Signatures are not fabricated. The 89-day pack wording versus 88-day CRM alerts is flagged for Justin; neither figure has been changed.
-- Staff intake form covering client (owner/driver/owner/driver split), vehicle lookup, tax/MOT/insurance recording, damage, accident (maps link, police, witnesses, speeds), recovery charges, storage starting the same day as recovery, and up to three third parties with insurer and TPI agent fields.
+- Staff intake form covering client (owner/driver/owner/driver split), vehicle lookup, tax/MOT/insurance recording, damage, accident (maps link, police, witnesses, speeds, photographs taken at the scene with a simulated WhatsApp send-in), recovery charges, storage starting the same day as recovery, and up to three third parties with insurer autocomplete (generic telephone/email/address only) and TPI agent fields.
 - Claim file screens matching the current CRM viewing pane (client, hire, damage diagram, fleet reserve, recovery, storage, loss of use dates, financial summary). Values persist in SQLite. Opening a file or reserving a vehicle still does not start charges.
 - Duplicate Alpha screens (navigation, hire-car register, extra-charges, loss-of-use dates as a second chronology) are hidden. Communications sit on the file: simulated send/receive email and WhatsApp, recorded calls, and letter generation from file dates.
 - Simulated postcode and registration lookups, clearly labelled.
@@ -47,6 +47,31 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - Mitigation questionnaire includes a financial-means declaration that refers to the intake statement of means and bank statements.
 - Itemised extras, group charged and additional-driver licence/DOB fields from the supplied pack are captured as optional.
 - Initial third-party notification letter follows the structure of the supplied Initial Letter ERS.doc (reference line, facts block, notice of claim, four-point request). File-specific facts from that example were not copied.
+
+18 September 2026 — Accident scene photographs:
+
+- Accident details (intake section 4 and the file screen) asks whether photographs were taken at the scene.
+- If yes, staff can ask the client to send them in via WhatsApp. That is simulated and is not sent to a live number. Incoming photographs are filed under Email / WhatsApp / Calls. Photo file upload is still not in this prototype.
+
+18 September 2026 — Third-party insurer autocomplete:
+
+- TP insurance remembers generic insurer details (name, address, telephone, email) once they have been used.
+- Typing the name offers those insurers and fills the shared contact details. Policy number and claim reference are not filled, because they differ on every file.
+- Demonstration contacts (Admiral, Aviva, Zurich, Hastings, Ageas) use fictional `.example.test` addresses, not live switchboard numbers.
+
+18 September 2026 — Third-party agent autocomplete:
+
+- TPI agent remembers generic details (name, address, telephone, email and handler) once they have been used.
+- Typing the agent name offers those firms and fills the shared contact details. The agent reference is not filled, because it differs on every file.
+- Demonstration contacts (Keoghs, DAC Beachcroft, Horwich Farrelly) use fictional `.example.test` addresses, not live switchboard numbers.
+
+18 September 2026 — Liability status and roadworthiness:
+
+- Inspected first: the file already had `claim_type` (unknown / fault / non-fault) and `roadworthiness` (awaiting assessment / roadworthy / unroadworthy / needs review), plus separate CAS/insurer liability views. Those were not the two workflow facts. There was no Disputed / unclear choice. Intake silently defaulted to unknown and awaiting assessment. Saving Claim facts overwrote the values with no dated history.
+- Staff can now set Liability status (Fault, Non-fault, Disputed / unclear, or Not yet decided) and Roadworthiness (Roadworthy, Unroadworthy, or Not yet decided) on the claim overview and on General details. The two answers are independent.
+- Neither field defaults to Fault or Roadworthy. Unset is shown as Not yet decided. Changes are recorded in file history with who changed them and when.
+- Hire-start and reservation rules were not changed. Opening a file still does not start charges.
+- Seeded TEST files were not rewritten. TEST-0001 still stores `unknown` / `awaiting_assessment`, which now display as Not yet decided. TEST-0005 remains stored as non-fault (its circumstances mention a disputed junction, but that value was not silently changed).
 
 Blocked: provider accounts, per-file permissions, shared hosting, live DVLA, live mailbox send.
 

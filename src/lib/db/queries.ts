@@ -1,10 +1,16 @@
 import { FILE_REFERENCE_PREFIX_DEFAULT, HEAD_LABELS, type HeadOfLoss } from "../constants";
 import { accidentDateError, isBeforeLondonDay, isSameLondonDay, londonDateIso, nowUtcIso } from "../dates";
 import { formatGbp, sumDistinctHeads } from "../money";
-import { all, dbPath, get, newId, run } from "./connection";
+import { all, dbPath, get, getDb, newId, run } from "./connection";
 import { canReserveVehicle, chaseFileStateFromPosition, chaseStopReason, nextFileReference, parseFileReferenceNumber } from "../domain/rules";
 import { listClaimEvents, recordClaimEvent } from "./chronology";
+import { listKnownAgentsOn, listKnownInsurersOn } from "./insurers";
 import { KEY_DATE_TYPES, eventLabel, latestDates } from "../domain/events";
+import {
+  normalizeLiabilityStatus,
+  normalizeRoadworthiness,
+  statusChangeDetails,
+} from "../domain/claim-status";
 
 export type ClaimListRow = {
   id: string;
@@ -491,7 +497,9 @@ export function createClaimFromForm(input: {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'unknown', 'pending', ?, ?, ?, 'Review new file and complete missing facts', ?, ?, ?, 1, 1, 'not_applicable', 'not_instructed', 'none', 'none', 'none', 'none', 0, 0, 0, 0, 'in_progress', 0, 0)`,
     [
       id, ref, now, now, input.accidentAt || null, input.location || "Unknown",
-      input.circumstances || "Unknown", input.claimType, input.roadworthiness,
+      input.circumstances || "Unknown",
+      normalizeLiabilityStatus(input.claimType),
+      normalizeRoadworthiness(input.roadworthiness),
       "New enquiry — awaiting completion", input.handlerId || null, now, personId, vehicleId,
     ],
   );
@@ -549,12 +557,65 @@ export function completeTask(id: string) {
   run(`UPDATE tasks SET status = 'done' WHERE id = ?`, [id]);
 }
 
-export function updateClaimPosition(id: string, fields: Record<string, string>) {
+export function updateClaimWorkflowStatus(
+  claimId: string,
+  patch: { liabilityStatus?: string; roadworthiness?: string },
+  actorId: string,
+) {
+  const current = get<{ claim_type: string | null; roadworthiness: string | null }>(
+    `SELECT claim_type, roadworthiness FROM claims WHERE id = ?`,
+    [claimId],
+  );
+  if (!current) throw new Error("File not found.");
+  const sets: string[] = ["updated_at = ?"];
+  const params: unknown[] = [nowUtcIso()];
+  const events: Array<{ eventType: "liability_status_changed" | "roadworthiness_changed"; details: string }> = [];
+
+  if ("liabilityStatus" in patch) {
+    const previous = normalizeLiabilityStatus(current.claim_type);
+    const next = normalizeLiabilityStatus(patch.liabilityStatus);
+    sets.push("claim_type = ?");
+    params.push(next);
+    const details = statusChangeDetails("Liability status", previous, next);
+    if (details) events.push({ eventType: "liability_status_changed", details });
+  }
+  if ("roadworthiness" in patch) {
+    const previous = normalizeRoadworthiness(current.roadworthiness);
+    const next = normalizeRoadworthiness(patch.roadworthiness);
+    sets.push("roadworthiness = ?");
+    params.push(next);
+    const details = statusChangeDetails("Roadworthiness", previous, next);
+    if (details) events.push({ eventType: "roadworthiness_changed", details });
+  }
+
+  if (sets.length === 1) return;
+  params.push(claimId);
+  run(`UPDATE claims SET ${sets.join(", ")} WHERE id = ?`, params);
+  for (const event of events) {
+    recordClaimEvent({
+      claimId,
+      eventType: event.eventType,
+      occurredAt: nowUtcIso(),
+      details: event.details,
+      actorId,
+      source: "staff",
+    });
+  }
+}
+
+export function updateClaimPosition(id: string, fields: Record<string, string>, actorId?: string) {
   const allowed = [
-    "current_position", "circumstances", "accident_location", "claim_type", "cas_liability_assessment",
-    "insurer_liability_position", "roadworthiness", "roadworthiness_reasons", "next_action", "next_action_due",
+    "current_position", "circumstances", "accident_location", "cas_liability_assessment",
+    "insurer_liability_position", "roadworthiness_reasons", "next_action", "next_action_due",
     "handler_id", "own_insurer_name", "own_policy_ref", "own_claim_ref",
   ];
+  const statusPatch: { liabilityStatus?: string; roadworthiness?: string } = {};
+  if ("claim_type" in fields || "liabilityStatus" in fields) {
+    statusPatch.liabilityStatus = fields.liabilityStatus ?? fields.claim_type;
+  }
+  if ("roadworthiness" in fields) {
+    statusPatch.roadworthiness = fields.roadworthiness;
+  }
   const sets: string[] = ["updated_at = ?"];
   const params: unknown[] = [nowUtcIso()];
   for (const [k, v] of Object.entries(fields)) {
@@ -563,8 +624,13 @@ export function updateClaimPosition(id: string, fields: Record<string, string>) 
       params.push(v);
     }
   }
-  params.push(id);
-  run(`UPDATE claims SET ${sets.join(", ")} WHERE id = ?`, params);
+  if (sets.length > 1) {
+    params.push(id);
+    run(`UPDATE claims SET ${sets.join(", ")} WHERE id = ?`, params);
+  }
+  if (actorId && ("liabilityStatus" in statusPatch || "roadworthiness" in statusPatch)) {
+    updateClaimWorkflowStatus(id, statusPatch, actorId);
+  }
 }
 
 export function createReservation(input: {
@@ -598,6 +664,14 @@ export function createReservation(input: {
 
 export function dbLocation() {
   return dbPath();
+}
+
+export function listKnownInsurers() {
+  return listKnownInsurersOn(getDb());
+}
+
+export function listKnownAgents() {
+  return listKnownAgentsOn(getDb());
 }
 
 export function moneyByHeadLabel(head: string) {

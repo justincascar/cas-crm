@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { actionGenerateHirePack, actionGenerateStorageRecovery, actionSaveHirePack } from "@/app/actions";
 import { AgeField } from "@/components/AgeField";
+import { MobileField } from "@/components/MobileField";
 import { PageHeader } from "@/components/ClaimTable";
 import { requireStaff } from "@/lib/auth/session";
 import { getHirePack } from "@/lib/db/hire-pack";
@@ -114,7 +115,7 @@ export default async function HirePackPage({
             </label>
             <label className="text-sm">
               Mobile
-              <input name="mobile_tel" className={field} defaultValue={String(s.mobile_tel || "")} />
+              <MobileField name="mobile_tel" defaultValue={String(s.mobile_tel || "")} className={field} />
             </label>
           </div>
         </fieldset>

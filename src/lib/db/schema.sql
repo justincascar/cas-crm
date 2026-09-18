@@ -123,6 +123,7 @@ CREATE TABLE IF NOT EXISTS claims (
   tp_speed TEXT,
   needs_recovery INTEGER NOT NULL DEFAULT 0,
   photos_whatsapp_status TEXT,
+  photos_at_scene TEXT,
   other_contact_skipped INTEGER NOT NULL DEFAULT 0,
   storage_started_on TEXT,
   storage_rate_pence INTEGER
@@ -393,6 +394,31 @@ CREATE TABLE IF NOT EXISTS claim_screen_data (
   data_json TEXT NOT NULL,
   updated_at TEXT NOT NULL,
   PRIMARY KEY (claim_id, screen_key)
+);
+
+CREATE TABLE IF NOT EXISTS known_insurers (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  name_key TEXT NOT NULL UNIQUE,
+  address TEXT,
+  postcode TEXT,
+  telephone TEXT,
+  email TEXT,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS known_agents (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  name_key TEXT NOT NULL UNIQUE,
+  address TEXT,
+  postcode TEXT,
+  telephone TEXT,
+  email TEXT,
+  handler_name TEXT,
+  handler_email TEXT,
+  handler_tel TEXT,
+  updated_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS audit_log (

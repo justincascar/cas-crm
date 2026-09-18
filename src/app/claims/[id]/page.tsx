@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { actionAddNote, actionAddTask, actionCompleteTask, actionUpdateClaim } from "@/app/actions";
 import { FileHistory } from "@/components/FileHistory";
+import { ClaimWorkflowStatus } from "@/components/ClaimWorkflowStatus";
 import { PageHeader } from "@/components/ClaimTable";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import { requireStaff } from "@/lib/auth/session";
@@ -11,6 +12,7 @@ import { formatGbp } from "@/lib/money";
 import { HEAD_LABELS, type HeadOfLoss } from "@/lib/constants";
 import { formatVehicleRegistration } from "@/lib/text";
 import { googleMapsSearchUrl } from "@/lib/lookups/maps";
+import { liabilityStatusLabel, roadworthinessLabel } from "@/lib/domain/claim-status";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
@@ -31,7 +33,7 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
     <div className="space-y-6">
       <PageHeader
         title={`${claim.file_reference}`}
-        subtitle={`${claim.client_name || "Unknown client"} · ${pretty(claim.claim_type)} · ${claim.handler_name || "Unassigned"}`}
+        subtitle={`${claim.client_name || "Unknown client"} · ${liabilityStatusLabel(String(claim.claim_type))} · ${roadworthinessLabel(String(claim.roadworthiness))} · ${claim.handler_name || "Unassigned"}`}
         actions={
           <div className="flex flex-wrap items-center gap-3 text-sm">
             <Link href={`/claims/${claim.id}/work/comms`} className="rounded-md bg-navy px-4 py-2.5 font-semibold text-white">
@@ -48,6 +50,12 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
             </Link>
           </div>
         }
+      />
+
+      <ClaimWorkflowStatus
+        claimId={String(claim.id)}
+        liabilityStatus={String(claim.claim_type || "")}
+        roadworthiness={String(claim.roadworthiness || "")}
       />
 
       <div className="grid gap-3 md:grid-cols-3">
@@ -82,7 +90,8 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Fact label="Current position" value={String(claim.current_position)} />
-        <Fact label="Roadworthiness" value={pretty(claim.roadworthiness)} />
+        <Fact label="Liability status" value={liabilityStatusLabel(String(claim.claim_type))} />
+        <Fact label="Roadworthiness" value={roadworthinessLabel(String(claim.roadworthiness))} />
         <Fact label="CAS liability view" value={pretty(claim.cas_liability_assessment)} />
         <Fact label="Insurer position" value={pretty(claim.insurer_liability_position)} />
         <Fact label="Client role" value={pretty(claim.client_role)} />
@@ -152,15 +161,7 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
               <input name="next_action" className={field} defaultValue={String(claim.next_action || "")} />
             </label>
           </div>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <label className="block text-sm">
-              Claim type
-              <select name="claim_type" className={field} defaultValue={String(claim.claim_type)}>
-                <option value="unknown">Unknown</option>
-                <option value="non_fault">Non-fault</option>
-                <option value="fault">Fault</option>
-              </select>
-            </label>
+          <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm">
               CAS assessment
               <select name="cas_liability_assessment" className={field} defaultValue={String(claim.cas_liability_assessment || "unknown")}>
@@ -181,15 +182,6 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
             </label>
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm">
-              Roadworthiness
-              <select name="roadworthiness" className={field} defaultValue={String(claim.roadworthiness || "")}>
-                <option value="awaiting_assessment">Awaiting assessment</option>
-                <option value="roadworthy">Roadworthy</option>
-                <option value="unroadworthy">Unroadworthy / undriveable</option>
-                <option value="needs_review">Needs review</option>
-              </select>
-            </label>
             <label className="block text-sm">
               Handler
               <select name="handler_id" className={field} defaultValue={String(claim.handler_id || "")}>

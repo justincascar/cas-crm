@@ -50,7 +50,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
     key: "general",
     label: "General details",
     group: "case",
-    hint: "File identity, accident headline and who is involved.",
+    hint: "File identity, accident headline and who is involved. Liability status and roadworthiness are staff choices — neither defaults to Fault or Roadworthy.",
     sections: [
       {
         fields: [
@@ -68,11 +68,17 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
           ]},
           { name: "liabilityAdmitted", label: "Liability admitted", type: "select", options: yesNo },
           { name: "vatRegistered", label: "VAT registered", type: "checkbox" },
-          { name: "typeOfClaim", label: "Type of claim", type: "select", options: [
-            { value: "unknown", label: "Unknown" },
+          { name: "typeOfClaim", label: "Liability status", type: "select", options: [
+            { value: "", label: "Not yet decided" },
             { value: "non_fault", label: "Non-fault" },
             { value: "fault", label: "Fault" },
-          ]},
+            { value: "disputed", label: "Disputed / unclear" },
+          ], hint: "Staff working view of this file. Independent of roadworthiness. Disputed / unclear is a valid answer." },
+          { name: "roadworthiness", label: "Roadworthiness", type: "select", options: [
+            { value: "", label: "Not yet decided" },
+            { value: "roadworthy", label: "Roadworthy" },
+            { value: "unroadworthy", label: "Unroadworthy" },
+          ], hint: "Staff working view of the client's vehicle. Independent of liability status. Do not guess." },
           { name: "ourPolicy", label: "Our policy / source" },
           { name: "oldCaseReference", label: "Old case reference" },
           { name: "linkedCase", label: "Linked case" },
@@ -233,6 +239,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
     key: "accident",
     label: "Accident details",
     group: "case",
+    hint: "Ask whether photographs were taken at the scene. If they were, the client can be asked to send them in via WhatsApp. Live WhatsApp is not connected yet.",
     sections: [
       {
         fields: [
@@ -241,6 +248,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
           { name: "weather", label: "Weather conditions" },
           { name: "location", label: "Location", span: 2 },
           { name: "details", label: "Details", type: "textarea", span: 2 },
+          { name: "photosAtScene", label: "Were any photographs taken at the scene?", type: "select", options: yesNo, span: 2 },
           { name: "injured", label: "Injured?" },
           { name: "injuries", label: "Injuries", type: "textarea", span: 2 },
           { name: "witnessesPolice", label: "Witnesses / police", type: "textarea", span: 2 },
@@ -279,6 +287,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
     key: "tp1",
     label: "Third party 1",
     group: "case",
+    hint: "Start typing the insurer or TPI agent name. Shared telephone, email and address fill from names already used. Policy numbers, claim references and agent references are not filled in.",
     sections: [
       {
         title: "TP personal details",
@@ -326,6 +335,9 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
           { name: "agentPostcode", label: "Postcode" },
           { name: "agentTel", label: "Tel main" },
           { name: "agentEmail", label: "Email" },
+          { name: "agentHandlerName", label: "Handler name" },
+          { name: "agentHandlerEmail", label: "Handler email" },
+          { name: "agentHandlerTel", label: "Handler telephone" },
           { name: "agentReference", label: "Reference" },
         ],
       },

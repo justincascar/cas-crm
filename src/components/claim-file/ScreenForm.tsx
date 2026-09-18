@@ -3,15 +3,22 @@
 import { useRef, useState } from "react";
 import { actionSaveClaimScreen } from "@/app/actions";
 import { AccidentDateField } from "@/components/AccidentDateField";
+import { AccidentScenePhotosFields } from "@/components/AccidentScenePhotosFields";
 import { AgeField } from "@/components/AgeField";
 import { casingInputProps } from "@/components/CasedField";
+import { MobileField } from "@/components/MobileField";
 import { PostcodeAddressLookup } from "@/components/PostcodeAddressLookup";
+import { InsurerNameField } from "@/components/InsurerNameField";
+import { TpInsuranceFields } from "@/components/TpInsuranceFields";
+import { TpAgentFields } from "@/components/TpAgentFields";
 import { DamageDiagram } from "@/components/claim-file/DamageDiagram";
 import { dobKindForField, isDobFieldName } from "@/lib/age";
 import type { ClaimScreenDef, ScreenField } from "@/lib/claim-screens";
 import { displayValue } from "@/lib/screen-display";
 import type { ScreenValues } from "@/lib/db/screens";
+import type { KnownInsurer } from "@/lib/insurers";
 import { kindForField } from "@/lib/text";
+import { isMobileFieldName } from "@/lib/phone-number";
 
 const control = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
@@ -120,6 +127,26 @@ function FieldInput({
   );
 }
 
+function Tp2InsurerName({
+  defaultValue,
+  insurers,
+}: {
+  defaultValue: string;
+  insurers: KnownInsurer[];
+}) {
+  const [name, setName] = useState(defaultValue);
+  return (
+    <InsurerNameField
+      inputName="insurerName"
+      value={name}
+      onChange={setName}
+      onPick={(insurer) => setName(insurer.name)}
+      insurers={insurers}
+      className={control}
+    />
+  );
+}
+
 export function ScreenForm({
   claimId,
   actorId,
@@ -127,6 +154,8 @@ export function ScreenForm({
   values,
   saved,
   clientRole,
+  insurers = [],
+  agents = [],
 }: {
   claimId: string;
   actorId: string;
@@ -134,6 +163,8 @@ export function ScreenForm({
   values: ScreenValues;
   saved?: boolean;
   clientRole?: string;
+  insurers?: KnownInsurer[];
+  agents?: KnownInsurer[];
 }) {
   return (
     <form action={actionSaveClaimScreen} className="space-y-6">
@@ -146,8 +177,22 @@ export function ScreenForm({
       {def.sections.map((section, index) => (
         <fieldset key={section.title || index} className="space-y-3 rounded-xl border border-line bg-card p-5">
           {section.title ? <legend className="font-serif text-xl text-navy-deep">{section.title}</legend> : null}
+          {section.title === "TP insurance" ? (
+            <TpInsuranceFields values={values} insurers={insurers} />
+          ) : section.title === "TP insurer agent" ? (
+            <TpAgentFields values={values} agents={agents} />
+          ) : (
           <div className="grid gap-3 sm:grid-cols-2">
             {section.fields.map((field) => {
+              if (field.name === "insurerName") {
+                return (
+                  <label key={field.name} className={`block text-sm ${field.span === 2 ? "sm:col-span-2" : ""}`}>
+                    {field.label}
+                    <Tp2InsurerName defaultValue={displayValue(def.key, field.name, values[field.name] || "")} insurers={insurers} />
+                    {field.hint ? <span className="mt-1 block text-xs text-slate">{field.hint}</span> : null}
+                  </label>
+                );
+              }
               if (kindForField(field.name, field.type) === "postcode") {
                 return (
                   <div key={field.name} className="sm:col-span-2">
@@ -180,6 +225,24 @@ export function ScreenForm({
                   </label>
                 );
               }
+              if (field.name === "photosAtScene") {
+                return (
+                  <AccidentScenePhotosFields
+                    key={field.name}
+                    claimId={claimId}
+                    defaultValue={values.photosAtScene || ""}
+                  />
+                );
+              }
+              if (isMobileFieldName(field.name)) {
+                return (
+                  <label key={field.name} className={`block text-sm ${field.span === 2 ? "sm:col-span-2" : ""}`}>
+                    {field.label}
+                    <MobileField name={field.name} defaultValue={displayValue(def.key, field.name, values[field.name] || "")} />
+                    {field.hint ? <span className="mt-1 block text-xs text-slate">{field.hint}</span> : null}
+                  </label>
+                );
+              }
               return (
                 <label key={field.name} className={`block text-sm ${field.span === 2 ? "sm:col-span-2" : ""}`}>
                   {field.label}
@@ -189,6 +252,7 @@ export function ScreenForm({
               );
             })}
           </div>
+          )}
         </fieldset>
       ))}
 

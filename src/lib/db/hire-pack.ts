@@ -8,6 +8,7 @@ import {
 } from "../documents/hire-pack-fields";
 import { formatUkDate, formatUkDateTime, nowUtcIso } from "../dates";
 import { dobSaveError } from "../age";
+import { mobileNumberError } from "../phone-number";
 import { formatGbp } from "../money";
 import { all, get, newId, run } from "./connection";
 import { recordClaimEvent } from "./chronology";
@@ -160,6 +161,8 @@ export function hirePackSaveError(input: HirePackData): string | null {
   };
   const hirerErr = dobSaveError(String(input.date_of_birth || ""), "hirer", confirmed("date_of_birth_confirmed"));
   if (hirerErr) return hirerErr;
+  const mobileErr = mobileNumberError(String(input.mobile_tel || ""));
+  if (mobileErr) return mobileErr;
   return dobSaveError(String(input.additional_dob || ""), "driver", confirmed("additional_dob_confirmed"));
 }
 

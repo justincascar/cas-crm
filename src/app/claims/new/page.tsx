@@ -1,7 +1,7 @@
 import { IntakeForm } from "@/components/IntakeForm";
 import { PageHeader } from "@/components/ClaimTable";
 import { requireStaff } from "@/lib/auth/session";
-import { listStaff, nextReference } from "@/lib/db/queries";
+import { listStaff, listKnownInsurers, listKnownAgents, nextReference } from "@/lib/db/queries";
 
 export default async function NewClaimPage({
   searchParams,
@@ -19,7 +19,13 @@ export default async function NewClaimPage({
         title="New claim"
         subtitle="Capture client, vehicle, accident, recovery and third-party details. The next demonstration reference is shown on the form."
       />
-      <IntakeForm staff={staff} nextRef={previewRef} error={error} />
+      <IntakeForm
+        staff={staff}
+        nextRef={previewRef}
+        error={error}
+        insurers={listKnownInsurers()}
+        agents={listKnownAgents()}
+      />
     </div>
   );
 }

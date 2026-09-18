@@ -5,6 +5,7 @@ import { SimulatedComplianceLookup } from "../src/lib/lookups/compliance.ts";
 import { googleMapsSearchUrl } from "../src/lib/lookups/maps.ts";
 import { SimulatedVehicleLookup } from "../src/lib/lookups/vehicle.ts";
 import { SimulatedWhatsAppGateway } from "../src/lib/whatsapp/gateway.ts";
+import { scenePhotosWhatsAppBody } from "../src/lib/whatsapp/scene-photos.ts";
 
 describe("intake capture", () => {
   it("builds a client name from title, forename and surname and allows a blank title", () => {
@@ -52,6 +53,17 @@ describe("intake capture", () => {
     assert.equal(intake.vehicle.make, "Volkswagen");
     assert.equal(intake.vehicle.colour, "White");
   });
+
+  it("reads whether photographs were taken at the scene and the WhatsApp send-in request", () => {
+    const form = new FormData();
+    form.set("client_forename", "Ceri");
+    form.set("client_surname", "Walsh");
+    form.set("photosAtScene", "yes");
+    form.set("requestScenePhotosWhatsapp", "yes");
+    const intake = intakeFromFormData(form);
+    assert.equal(intake.photosAtScene, "yes");
+    assert.equal(intake.requestScenePhotosWhatsapp, true);
+  });
 });
 
 describe("simulated lookups and WhatsApp", () => {
@@ -74,6 +86,14 @@ describe("simulated lookups and WhatsApp", () => {
       assert.equal(result.status, "simulated_sent");
       assert.match(result.warning, /not sent/i);
     }
+  });
+
+  it("asks the client to send scene photographs in via WhatsApp without inventing a live send", () => {
+    const body = scenePhotosWhatsAppBody("TEST-0003", "SA12 CWA");
+    assert.match(body, /photographs taken at the scene/i);
+    assert.match(body, /TEST-0003/);
+    assert.match(body, /SA12 CWA/);
+    assert.match(body, /WhatsApp/);
   });
 
   it("opens a Google Maps search for the accident location", () => {

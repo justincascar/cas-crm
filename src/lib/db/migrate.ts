@@ -39,6 +39,7 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["tp_speed", "TEXT"],
     ["needs_recovery", "INTEGER NOT NULL DEFAULT 0"],
     ["photos_whatsapp_status", "TEXT"],
+    ["photos_at_scene", "TEXT"],
     ["other_contact_skipped", "INTEGER NOT NULL DEFAULT 0"],
     ["storage_started_on", "TEXT"],
     ["storage_rate_pence", "INTEGER"],

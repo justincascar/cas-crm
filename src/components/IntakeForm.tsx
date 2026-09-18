@@ -9,8 +9,11 @@ import {
 import { AccidentDateField } from "@/components/AccidentDateField";
 import { AgeField } from "@/components/AgeField";
 import { casingInputProps } from "@/components/CasedField";
+import { MobileField } from "@/components/MobileField";
 import { PostcodeAddressLookup } from "@/components/PostcodeAddressLookup";
+import { InsurerNameField } from "@/components/InsurerNameField";
 import type { DobKind } from "@/lib/age";
+import { mergeInsurerDetails, type KnownInsurer } from "@/lib/insurers";
 import { clientDobKind, counterpartDobKind } from "@/lib/age";
 import { ASK_MID_URL, GOV_MOT_URL, GOV_TAX_URL } from "@/lib/lookups/compliance";
 import { googleMapsSearchUrl } from "@/lib/lookups/maps";
@@ -87,7 +90,7 @@ function PersonFields({ prefix, skipOther, kind }: { prefix: string; skipOther?:
       {prefix === "client_" || prefix.startsWith("counterpart") ? (
         <label className="block text-sm">
           Mobile
-          <input name={`${prefix}mobile`} {...casingInputProps(`${prefix}mobile`, "text", field)} />
+          <MobileField name={`${prefix}mobile`} className={field} />
         </label>
       ) : (
         <label className="block text-sm">
@@ -334,46 +337,165 @@ function VehicleFields({
   );
 }
 
-function CompanyAddressFields({ prefix, kind }: { prefix: string; kind: "insurer" | "agent" }) {
-  const [postcode, setPostcode] = useState("");
-  const [address, setAddress] = useState("");
-  const [town, setTown] = useState("");
+function CompanyAddressFields({
+  prefix,
+  kind,
+  postcode,
+  address,
+  town,
+  onPostcode,
+  onAddress,
+  onTown,
+}: {
+  prefix: string;
+  kind: "insurer" | "agent";
+  postcode?: string;
+  address?: string;
+  town?: string;
+  onPostcode?: (value: string) => void;
+  onAddress?: (value: string) => void;
+  onTown?: (value: string) => void;
+}) {
+  const [internalPostcode, setInternalPostcode] = useState("");
+  const [internalAddress, setInternalAddress] = useState("");
+  const [internalTown, setInternalTown] = useState("");
   return (
     <PostcodeAddressLookup
       postcodeName={`${prefix}${kind}Postcode`}
       addressName={`${prefix}${kind}Address`}
       townName={`${prefix}${kind}Town`}
       showTownField={false}
-      postcode={postcode}
-      address={address}
-      town={town}
-      onPostcode={setPostcode}
-      onAddress={setAddress}
-      onTown={setTown}
+      postcode={postcode ?? internalPostcode}
+      address={address ?? internalAddress}
+      town={town ?? internalTown}
+      onPostcode={onPostcode ?? setInternalPostcode}
+      onAddress={onAddress ?? setInternalAddress}
+      onTown={onTown ?? setInternalTown}
     />
   );
 }
 
-function ThirdPartyBlock({ prefix, title }: { prefix: string; title: string }) {
+function ThirdPartyBlock({
+  prefix,
+  title,
+  insurers,
+  agents,
+}: {
+  prefix: string;
+  title: string;
+  insurers: KnownInsurer[];
+  agents: KnownInsurer[];
+}) {
+  const [insurerName, setInsurerName] = useState("");
+  const [insurerPostcode, setInsurerPostcode] = useState("");
+  const [insurerAddress, setInsurerAddress] = useState("");
+  const [insurerTown, setInsurerTown] = useState("");
+  const [insurerTel, setInsurerTel] = useState("");
+  const [insurerEmail, setInsurerEmail] = useState("");
+  const [agentName, setAgentName] = useState("");
+  const [agentPostcode, setAgentPostcode] = useState("");
+  const [agentAddress, setAgentAddress] = useState("");
+  const [agentTown, setAgentTown] = useState("");
+  const [agentTel, setAgentTel] = useState("");
+  const [agentEmail, setAgentEmail] = useState("");
+  const [agentHandlerName, setAgentHandlerName] = useState("");
+  const [agentHandlerEmail, setAgentHandlerEmail] = useState("");
+  const [agentHandlerTel, setAgentHandlerTel] = useState("");
+
+  function applyInsurer(picked: KnownInsurer, mode: "replace" | "empty-only") {
+    const next = mergeInsurerDetails(
+      {
+        name: insurerName,
+        address: insurerAddress,
+        postcode: insurerPostcode,
+        telephone: insurerTel,
+        email: insurerEmail,
+      },
+      picked,
+      mode,
+    );
+    setInsurerName(next.name);
+    setInsurerAddress(next.address);
+    setInsurerPostcode(next.postcode);
+    setInsurerTel(next.telephone);
+    setInsurerEmail(next.email);
+  }
+
+  function applyAgent(picked: KnownInsurer, mode: "replace" | "empty-only") {
+    const next = mergeInsurerDetails(
+      {
+        name: agentName,
+        address: agentAddress,
+        postcode: agentPostcode,
+        telephone: agentTel,
+        email: agentEmail,
+        handlerName: agentHandlerName,
+        handlerEmail: agentHandlerEmail,
+        handlerTel: agentHandlerTel,
+      },
+      picked,
+      mode,
+    );
+    setAgentName(next.name);
+    setAgentAddress(next.address);
+    setAgentPostcode(next.postcode);
+    setAgentTel(next.telephone);
+    setAgentEmail(next.email);
+    setAgentHandlerName(next.handlerName || "");
+    setAgentHandlerEmail(next.handlerEmail || "");
+    setAgentHandlerTel(next.handlerTel || "");
+  }
+
   return (
     <div className="space-y-4 rounded-lg border border-line p-4">
       <h3 className="font-serif text-lg text-navy-deep">{title}</h3>
       <PersonFields prefix={prefix} kind="client" />
       <VehicleFields prefix={`${prefix}veh_`} matchLabel="Details match the third-party vehicle described" includeInsuranceRecord />
       <h4 className="font-serif text-base text-navy-deep">TP insurance</h4>
+      <p className="text-xs text-slate">
+        Start typing the insurer name. Saved telephone, email and address fill in. Policy number and claim reference stay
+        blank because they are different on every file.
+      </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-sm">
           Name
-          <input name={`${prefix}insurerName`} {...casingInputProps(`${prefix}insurerName`, "text", field)} />
+          <InsurerNameField
+            inputName={`${prefix}insurerName`}
+            value={insurerName}
+            onChange={setInsurerName}
+            onPick={applyInsurer}
+            insurers={insurers}
+            className={field}
+          />
         </label>
-        <CompanyAddressFields prefix={prefix} kind="insurer" />
+        <CompanyAddressFields
+          prefix={prefix}
+          kind="insurer"
+          postcode={insurerPostcode}
+          address={insurerAddress}
+          town={insurerTown}
+          onPostcode={setInsurerPostcode}
+          onAddress={setInsurerAddress}
+          onTown={setInsurerTown}
+        />
         <label className="block text-sm">
           Telephone
-          <input name={`${prefix}insurerTel`} {...casingInputProps(`${prefix}insurerTel`, "text", field)} />
+          <input
+            name={`${prefix}insurerTel`}
+            value={insurerTel}
+            onChange={(e) => setInsurerTel(e.target.value)}
+            className={field}
+          />
         </label>
         <label className="block text-sm">
           Email
-          <input name={`${prefix}insurerEmail`} type="email" {...casingInputProps(`${prefix}insurerEmail`, "email", field)} />
+          <input
+            name={`${prefix}insurerEmail`}
+            type="email"
+            value={insurerEmail}
+            onChange={(e) => setInsurerEmail(e.target.value)}
+            className={field}
+          />
         </label>
         <label className="block text-sm">
           Policy number
@@ -397,19 +519,50 @@ function ThirdPartyBlock({ prefix, title }: { prefix: string; title: string }) {
         </label>
       </div>
       <h4 className="font-serif text-base text-navy-deep">TPI agent</h4>
+      <p className="text-xs text-slate">
+        Start typing the agent name. Saved telephone, email, address and handler details fill in. The reference stays
+        blank because it is different on every file.
+      </p>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-sm">
           Name
-          <input name={`${prefix}agentName`} {...casingInputProps(`${prefix}agentName`, "text", field)} />
+          <InsurerNameField
+            inputName={`${prefix}agentName`}
+            value={agentName}
+            onChange={setAgentName}
+            onPick={applyAgent}
+            insurers={agents}
+            className={field}
+          />
         </label>
-        <CompanyAddressFields prefix={prefix} kind="agent" />
+        <CompanyAddressFields
+          prefix={prefix}
+          kind="agent"
+          postcode={agentPostcode}
+          address={agentAddress}
+          town={agentTown}
+          onPostcode={setAgentPostcode}
+          onAddress={setAgentAddress}
+          onTown={setAgentTown}
+        />
         <label className="block text-sm">
           Telephone
-          <input name={`${prefix}agentTel`} {...casingInputProps(`${prefix}agentTel`, "text", field)} />
+          <input
+            name={`${prefix}agentTel`}
+            value={agentTel}
+            onChange={(e) => setAgentTel(e.target.value)}
+            className={field}
+          />
         </label>
         <label className="block text-sm">
           Email
-          <input name={`${prefix}agentEmail`} type="email" {...casingInputProps(`${prefix}agentEmail`, "email", field)} />
+          <input
+            name={`${prefix}agentEmail`}
+            type="email"
+            value={agentEmail}
+            onChange={(e) => setAgentEmail(e.target.value)}
+            className={field}
+          />
         </label>
         <label className="block text-sm">
           Reference
@@ -417,15 +570,31 @@ function ThirdPartyBlock({ prefix, title }: { prefix: string; title: string }) {
         </label>
         <label className="block text-sm">
           Handler name
-          <input name={`${prefix}agentHandlerName`} {...casingInputProps(`${prefix}agentHandlerName`, "text", field)} />
+          <input
+            name={`${prefix}agentHandlerName`}
+            value={agentHandlerName}
+            onChange={(e) => setAgentHandlerName(e.target.value)}
+            className={field}
+          />
         </label>
         <label className="block text-sm">
           Handler email
-          <input name={`${prefix}agentHandlerEmail`} type="email" {...casingInputProps(`${prefix}agentHandlerEmail`, "email", field)} />
+          <input
+            name={`${prefix}agentHandlerEmail`}
+            type="email"
+            value={agentHandlerEmail}
+            onChange={(e) => setAgentHandlerEmail(e.target.value)}
+            className={field}
+          />
         </label>
         <label className="block text-sm">
           Handler telephone
-          <input name={`${prefix}agentHandlerTel`} {...casingInputProps(`${prefix}agentHandlerTel`, "text", field)} />
+          <input
+            name={`${prefix}agentHandlerTel`}
+            value={agentHandlerTel}
+            onChange={(e) => setAgentHandlerTel(e.target.value)}
+            className={field}
+          />
         </label>
       </div>
       <label className="block text-sm max-w-xs">
@@ -444,15 +613,20 @@ export function IntakeForm({
   staff,
   nextRef,
   error,
+  insurers,
+  agents,
 }: {
   staff: Staff[];
   nextRef: string;
   error?: string;
+  insurers: KnownInsurer[];
+  agents: KnownInsurer[];
 }) {
   const [role, setRole] = useState("owner_driver");
   const [needsRecovery, setNeedsRecovery] = useState(false);
   const [police, setPolice] = useState("no");
   const [witnesses, setWitnesses] = useState("no");
+  const [photosAtScene, setPhotosAtScene] = useState("no");
   const [tp2, setTp2] = useState(false);
   const [tp3, setTp3] = useState(false);
   const [location, setLocation] = useState("");
@@ -537,6 +711,30 @@ export function IntakeForm({
           Accident details
           <textarea name="circumstances" rows={4} {...casingInputProps("circumstances", "textarea", field)} />
         </label>
+        <label className="block text-sm max-w-xs">
+          Were any photographs taken at the scene
+          <select
+            name="photosAtScene"
+            className={field}
+            value={photosAtScene}
+            onChange={(e) => setPhotosAtScene(e.target.value)}
+          >
+            <option value="no">No</option>
+            <option value="yes">Yes</option>
+          </select>
+        </label>
+        {photosAtScene === "yes" ? (
+          <div className="space-y-2 rounded-md border border-dashed border-line bg-paper p-3">
+            <label className="flex items-center gap-2 text-sm">
+              <input name="requestScenePhotosWhatsapp" type="checkbox" value="yes" />
+              Ask the client to send them in via WhatsApp (simulated — not sent to a live number)
+            </label>
+            <p className="text-xs text-slate">
+              Incoming photographs can be filed on the file under Email / WhatsApp / Calls after it is created. Photo
+              files cannot be uploaded in this prototype.
+            </p>
+          </div>
+        ) : null}
         <label className="block text-sm max-w-xs">
           Did the police attend
           <select name="policeAttended" className={field} value={police} onChange={(e) => setPolice(e.target.value)}>
@@ -699,7 +897,7 @@ export function IntakeForm({
       )}
 
       <Section n={6} title="Third-party details">
-        <ThirdPartyBlock prefix="tp1_" title="Third party 1" />
+        <ThirdPartyBlock prefix="tp1_" title="Third party 1" insurers={insurers} agents={agents} />
       </Section>
 
       <Section n={7} title="Third party 2">
@@ -707,7 +905,7 @@ export function IntakeForm({
           <input name="includeTp2" type="checkbox" value="yes" checked={tp2} onChange={(e) => setTp2(e.target.checked)} />
           Another vehicle was involved
         </label>
-        {tp2 ? <ThirdPartyBlock prefix="tp2_" title="Third party 2" /> : null}
+        {tp2 ? <ThirdPartyBlock prefix="tp2_" title="Third party 2" insurers={insurers} agents={agents} /> : null}
       </Section>
 
       <Section n={8} title="Third party 3">
@@ -715,27 +913,27 @@ export function IntakeForm({
           <input name="includeTp3" type="checkbox" value="yes" checked={tp3} onChange={(e) => setTp3(e.target.checked)} />
           A further vehicle was involved
         </label>
-        {tp3 ? <ThirdPartyBlock prefix="tp3_" title="Third party 3" /> : null}
+        {tp3 ? <ThirdPartyBlock prefix="tp3_" title="Third party 3" insurers={insurers} agents={agents} /> : null}
       </Section>
 
       <section className="space-y-3 rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">File setup</h2>
         <div className="grid gap-3 sm:grid-cols-3">
           <label className="block text-sm">
-            Claim type
-            <select name="claimType" className={field} defaultValue="unknown">
-              <option value="unknown">Unknown</option>
+            Liability status
+            <select name="claimType" className={field} defaultValue="">
+              <option value="">Not yet decided</option>
               <option value="non_fault">Non-fault</option>
               <option value="fault">Fault</option>
+              <option value="disputed">Disputed / unclear</option>
             </select>
           </label>
           <label className="block text-sm">
             Roadworthiness
-            <select name="roadworthiness" className={field} defaultValue="awaiting_assessment">
-              <option value="awaiting_assessment">Awaiting assessment</option>
+            <select name="roadworthiness" className={field} defaultValue="">
+              <option value="">Not yet decided</option>
               <option value="roadworthy">Roadworthy</option>
-              <option value="unroadworthy">Unroadworthy / undriveable</option>
-              <option value="needs_review">Needs review</option>
+              <option value="unroadworthy">Unroadworthy</option>
             </select>
           </label>
           <label className="block text-sm">
@@ -749,7 +947,11 @@ export function IntakeForm({
             </select>
           </label>
         </div>
-        <p className="text-xs text-slate">AI does not certify roadworthiness. Unknown information is stored as unknown.</p>
+        <p className="text-xs text-slate">
+          Leave liability status and roadworthiness as not yet decided if you do not yet know. Do not guess Fault or
+          Roadworthy. Disputed / unclear is a valid liability status. The two answers are independent. AI does not certify
+          roadworthiness.
+        </p>
         <button className="rounded-md bg-teal px-5 py-3 text-sm font-semibold text-white" type="submit">
           Create claim
         </button>
