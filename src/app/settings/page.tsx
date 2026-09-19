@@ -3,7 +3,7 @@ import Link from "next/link";
 import { isAdministrator } from "@/lib/auth/roles";
 import { requireStaff } from "@/lib/auth/session";
 import { dbLocation, getSettings, listStaff } from "@/lib/db/queries";
-import { INDICATIVE_DEFAULTS } from "@/lib/constants";
+import { CAS_CLAIMS_MAILBOX, INDICATIVE_DEFAULTS } from "@/lib/constants";
 import { formatGbp } from "@/lib/money";
 
 export default async function SettingsPage({
@@ -42,6 +42,7 @@ export default async function SettingsPage({
           <Row label="Agreement maximum days" value={settings.agreement_max_days} />
           <Row label="Renewal alert day" value={settings.agreement_renewal_alert_day} />
           <Row label="Chaser interval" value={`${settings.chaser_interval_days} ${settings.chaser_interval_unit} (demonstration setting)`} />
+          <Row label="Claims mailbox" value={`${CAS_CLAIMS_MAILBOX} (decided; live send not connected)`} />
           <Row label="Database file" value={dbLocation()} />
         </dl>
       </section>
@@ -58,6 +59,17 @@ export default async function SettingsPage({
           </li>
           <li>Delivery/collection {formatGbp(INDICATIVE_DEFAULTS.delivery_collection_net_pence)} + VAT</li>
         </ul>
+      </section>
+      <section className="rounded-xl border border-line bg-card p-5">
+        <h2 className="font-serif text-xl text-navy-deep">Engineers</h2>
+        <p className="mt-1 text-sm text-slate">
+          Instruction letters use this saved list (name, address, email). Instruct Engineer prepares a mailto email — it is not auto-sent.
+        </p>
+        <p className="mt-2 text-sm">
+          <Link href="/settings/engineers" className="font-semibold text-teal-dark underline">
+            Manage engineers
+          </Link>
+        </p>
       </section>
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Staff (all signed-in staff see every file)</h2>

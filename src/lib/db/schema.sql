@@ -61,6 +61,16 @@ CREATE TABLE IF NOT EXISTS vehicles (
   details_match_client INTEGER
 );
 
+CREATE TABLE IF NOT EXISTS engineers (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  address TEXT NOT NULL,
+  email TEXT NOT NULL,
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS fleet_vehicles (
   id TEXT PRIMARY KEY,
   vehicle_id TEXT NOT NULL REFERENCES vehicles(id),
@@ -86,6 +96,7 @@ CREATE TABLE IF NOT EXISTS claims (
   roadworthiness_reasons TEXT,
   current_position TEXT NOT NULL,
   handler_id TEXT REFERENCES staff(id),
+  engineer_id TEXT REFERENCES engineers(id),
   last_correspondence_at TEXT,
   next_action TEXT,
   next_action_due TEXT,
@@ -273,6 +284,7 @@ CREATE TABLE IF NOT EXISTS correspondence (
   from_address TEXT,
   unread INTEGER NOT NULL DEFAULT 0,
   sent_status TEXT,
+  template_key TEXT,
   created_at TEXT NOT NULL
 );
 

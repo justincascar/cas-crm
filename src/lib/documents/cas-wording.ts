@@ -52,7 +52,7 @@ Yours faithfully
     audience: "engineer",
     eventType: "engineer_instructed",
     legalCitations: false,
-    required: ["vehicle_reg", "accident_date", "engineer_name", "vehicle_location"],
+    required: ["vehicle_reg", "accident_date", "engineer_name", "engineer_address", "vehicle_location"],
     subject: "Engineer instruction — {{claim_ref}} — {{vehicle_reg}}",
     body: `Dear {{engineer_name}},
 

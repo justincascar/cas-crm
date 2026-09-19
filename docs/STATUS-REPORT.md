@@ -220,11 +220,13 @@ Not working:
 On each file (`/claims/[id]/work/comms`) and on `/communications`:
 
 - Compose “send” email / WhatsApp: stored as `simulated_sent` with a warning. **Nothing leaves the office.** CAS client/insurer email templates can fill to/subject/body from the file first.
+- **Instruct Engineer:** generates the letter and opens a pre-filled `mailto` email to the saved engineer, for the handler to send from their own email client. **Prepared, not auto-sent.** After sending, staff mark it as sent; that logs date and handler on the file history. This is not live mailbox send from `claims@cascar.co.uk`.
+- Log incoming email / WhatsApp: saved against the file.
 - Log incoming email / WhatsApp: saved against the file.
 - Record outgoing/incoming calls: logged only; **no live dial**. Unanswered can create a call-back task.
 - Failed validation (blank to/subject) is shown as failure, not pretended success.
 
-Office mailbox, WhatsApp Business and telephony are **not connected**.
+Office mailbox (`claims@cascar.co.uk` decided), WhatsApp Business and telephony are **not connected**. Engineer instruction uses the handler's own email client.
 
 ### Automation — **(c)** display of seeded rules; runner **(d)**
 
@@ -256,11 +258,8 @@ Allowed later; not blocking claims work; not built. No public deploy, no backups
 | Tax / MOT | **Stubbed** + GOV.UK links | Same demo plates; otherwise “confirm on GOV.UK”. |
 | MID / insurance | **Absent as a live lookup** | Staff can **record** an authorised AskMID result. One seeded manual record on TEST-0002. Do not scrape AskMID. |
 | Google Maps | **Link only** | Builds a maps search URL from the accident location. No Maps API key. |
-| Email | **Stubbed** | `SimulatedEmailGateway` |
-| WhatsApp | **Stubbed** | `SimulatedWhatsAppGateway` |
-| Telephone | **Stubbed** | `SimulatedPhoneGateway` |
-| E-signing | **Absent** | |
-| Microsoft 365 / IMAP | **Absent** | |
+| Email | **Stubbed** / **mailto for engineer instruction** | `SimulatedEmailGateway` for compose-on-file. Instruct Engineer is prepared mailto, not auto-sent. |
+| Microsoft 365 / IMAP | **Absent** | Mailbox **claims@cascar.co.uk** decided; not connected. |
 | Hosting / backups | **Absent** | Local prototype only |
 
 `.env` is gitignored. There is no committed secrets file.
@@ -276,7 +275,7 @@ Allowed later; not blocking claims work; not built. No public deploy, no backups
 
 ### Main routes
 
-`/`, `/claims`, `/claims/new`, `/claims/[id]`, `/claims/[id]/work/[screen]`, `/claims/[id]/hire-pack`, `/tasks`, `/hire`, `/documents`, `/documents/[id]`, `/communications`, `/financials`, `/automations`, `/litigation`, `/settings`, `/settings/staff` (administrators only), `/login`.
+`/`, `/claims`, `/claims/new`, `/claims/[id]`, `/claims/[id]/work/[screen]`, `/claims/[id]/hire-pack`, `/tasks`, `/hire`, `/documents`, `/documents/[id]`, `/communications`, `/financials`, `/automations`, `/litigation`, `/settings`, `/settings/engineers`, `/settings/staff` (administrators only), `/login`.
 
 ### Database tables (schema)
 

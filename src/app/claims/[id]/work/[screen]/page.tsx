@@ -8,6 +8,7 @@ import { PageHeader } from "@/components/ClaimTable";
 import { CLAIM_SCREENS, getClaimScreen, screensByGroup } from "@/lib/claim-screens";
 import { requireStaff } from "@/lib/auth/session";
 import { getClaim, listFleet, listKnownAgents, listKnownInsurers, listReservations } from "@/lib/db/queries";
+import { findPreparedEngineerInstruction, listActiveEngineers } from "@/lib/db/engineers";
 import { seedScreenDefaults } from "@/lib/db/screens";
 
 export default async function ClaimWorkScreenPage({
@@ -27,6 +28,16 @@ export default async function ClaimWorkScreenPage({
   const values = seedScreenDefaults(String(data.claim.id), screen);
   const actorId = String(data.claim.handler_id || "staff-sian");
   const justSaved = saved === "1";
+  const preparedRow = findPreparedEngineerInstruction(String(data.claim.id));
+  const preparedEngineerInstruction = preparedRow
+    ? {
+        id: String(preparedRow.id),
+        subject: preparedRow.subject,
+        to_address: preparedRow.to_address,
+        body: preparedRow.body,
+        created_at: String(preparedRow.created_at),
+      }
+    : null;
 
   return (
     <div className="space-y-4">
@@ -57,6 +68,9 @@ export default async function ClaimWorkScreenPage({
           correspondence={data.correspondence.map((row) => ({ ...row }))}
           documents={data.documents.map((row) => ({ ...row }))}
           liabilityStatus={String(data.claim.claim_type || "")}
+          engineers={listActiveEngineers()}
+          selectedEngineerId={String(data.claim.engineer_id || "")}
+          preparedEngineerInstruction={preparedEngineerInstruction}
         />
       ) : null}
 

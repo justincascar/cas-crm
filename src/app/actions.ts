@@ -16,9 +16,11 @@ import { createClaimFromIntake, intakeFieldErrors, intakeFromFormData } from "@/
 import { complianceLookup } from "@/lib/lookups/compliance";
 import {
   generateClaimDocument,
+  instructEngineer,
   letterPreview,
   logIncomingEmail,
   logIncomingWhatsApp,
+  markEngineerInstructionSent,
   recordClaimCall,
   recordClaimEvent,
   sendClaimEmail,
@@ -32,6 +34,7 @@ import { postcodeLookup } from "@/lib/lookups/postcode";
 import { VEHICLE_MANUAL_HINT, vehicleLookup } from "@/lib/lookups/vehicle";
 import { isDocumentTemplateKey } from "@/lib/documents/catalog";
 import { errorQuery, FieldValidationError } from "@/lib/form-validation";
+import { setClaimEngineer } from "@/lib/db/engineers";
 
 export async function actionCreateClaim(formData: FormData) {
   await requireStaff();
@@ -289,7 +292,12 @@ export async function actionPreviewCorrespondence(formData: FormData) {
   if (!isDocumentTemplateKey(templateKey)) {
     return { error: "Unknown template.", to: "", subject: "", body: "", html: "", missing: [] as string[], legalSignOffRequired: false };
   }
-  const preview = letterPreview(String(formData.get("claimId")), templateKey);
+  const preview = letterPreview(
+    String(formData.get("claimId")),
+    templateKey,
+    String(formData.get("letterDate") || "") || undefined,
+    String(formData.get("engineerId") || "") || undefined,
+  );
   return {
     to: "to" in preview ? preview.to : "",
     subject: preview.subject,
@@ -298,6 +306,62 @@ export async function actionPreviewCorrespondence(formData: FormData) {
     missing: preview.missing,
     legalSignOffRequired: preview.legalSignOffRequired,
   };
+}
+
+export async function actionSetClaimEngineer(formData: FormData) {
+  await requireStaff();
+  const claimId = String(formData.get("claimId"));
+  const engineerId = String(formData.get("engineerId") || "").trim();
+  try {
+    setClaimEngineer(claimId, engineerId || null);
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not save the engineer." };
+  }
+  revalidatePath(`/claims/${claimId}`);
+  revalidatePath(`/claims/${claimId}/work/comms`);
+  return { ok: true as const };
+}
+
+export async function actionInstructEngineer(formData: FormData) {
+  const staff = await requireStaff();
+  const claimId = String(formData.get("claimId"));
+  const engineerId = String(formData.get("engineerId") || "").trim();
+  if (!engineerId) return { error: "Pick an engineer from the list first." };
+  try {
+    const result = instructEngineer({
+      claimId,
+      engineerId,
+      actorId: staff.id,
+      letterDate: String(formData.get("letterDate") || "") || undefined,
+    });
+    revalidatePath(`/claims/${claimId}`);
+    revalidatePath(`/claims/${claimId}/work/comms`);
+    revalidatePath("/communications");
+    revalidatePath("/documents");
+    return { error: undefined, ...result };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not prepare the engineer instruction." };
+  }
+}
+
+export async function actionMarkEngineerInstructionSent(formData: FormData) {
+  const staff = await requireStaff();
+  const claimId = String(formData.get("claimId"));
+  try {
+    const result = markEngineerInstructionSent({
+      claimId,
+      correspondenceId: String(formData.get("correspondenceId") || ""),
+      actorId: staff.id,
+      occurredAt: String(formData.get("occurredAt") || "") || undefined,
+    });
+    revalidatePath(`/claims/${claimId}`);
+    revalidatePath(`/claims/${claimId}/work/comms`);
+    revalidatePath(`/claims/${claimId}/work/history`);
+    revalidatePath("/communications");
+    return { ok: true as const, error: undefined, ...result };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not mark the instruction as sent." };
+  }
 }
 
 export async function actionSendEmail(formData: FormData) {

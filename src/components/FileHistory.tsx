@@ -45,7 +45,7 @@ export function FileHistory({
         <h2 className="font-serif text-2xl text-navy-deep">File history</h2>
         <p className="text-sm text-slate">
           Dated steps on this file — when the initial letter went, when the engineer was instructed, when repairs started, and so on.
-          Letters and emails are built from these dates. Email is logged here; live sending is not connected yet.
+          Letters and emails are built from these dates. Email is logged here. Instruct Engineer is prepared, not auto-sent; live sending from claims@cascar.co.uk is not connected yet.
         </p>
       </div>
 

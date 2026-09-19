@@ -49,3 +49,6 @@ export const AGREEMENT_RENEWAL_ALERT_DAY_DEFAULT = 80;
 export const TOTAL_LOSS_HIRE_DAYS_AFTER_QUALIFYING_PAYMENT = 7;
 export const ENGINEER_CHASER_INTERVAL_DAYS_DEFAULT = 3;
 export const FILE_REFERENCE_PREFIX_DEFAULT = "TEST-";
+
+/** Confirmed Microsoft 365 claims mailbox. Live send/receive is not connected. */
+export const CAS_CLAIMS_MAILBOX = "claims@cascar.co.uk";

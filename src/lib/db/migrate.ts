@@ -5,6 +5,7 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["body", "TEXT"],
     ["to_address", "TEXT"],
     ["from_address", "TEXT"],
+    ["template_key", "TEXT"],
   ],
   documents: [
     ["body_html", "TEXT"],
@@ -47,6 +48,7 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["own_insurer_postcode", "TEXT"],
     ["audatex_network_code", "TEXT"],
     ["audatex_work_provider_code", "TEXT"],
+    ["engineer_id", "TEXT"],
   ],
   claim_third_parties: [
     ["sequence", "INTEGER NOT NULL DEFAULT 1"],

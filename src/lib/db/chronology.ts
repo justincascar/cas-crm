@@ -2,17 +2,26 @@ import { emailGateway } from "../email/gateway";
 import { phoneGateway } from "../phone/gateway";
 import { whatsappGateway } from "../whatsapp/gateway";
 import { scenePhotosWhatsAppBody, scenePhotosWhatsAppSubject } from "../whatsapp/scene-photos";
-import { ENGINEER_CHASER_INTERVAL_DAYS_DEFAULT } from "../constants";
+import { CAS_CLAIMS_MAILBOX, ENGINEER_CHASER_INTERVAL_DAYS_DEFAULT } from "../constants";
 import { eventLabel, latestDates, type ClaimEventType } from "../domain/events";
 import { agreementDayNumber, hireChargesAccrualEnd } from "../domain/rules";
 import { channelForTemplate, eventTypeForTemplate, isDocumentTemplateKey, type DocumentTemplateKey } from "../documents/catalog";
-import { emptyCorrespondenceFields, namesDiffer, summariseLossesClaimed, type CorrespondenceContext } from "../documents/correspondence";
+import {
+  CAS_TEMPLATE_NOTICE,
+  OPERATIONAL_DRAFT_NOTICE,
+  emptyCorrespondenceFields,
+  namesDiffer,
+  summariseLossesClaimed,
+  type CorrespondenceContext,
+} from "../documents/correspondence";
 import { generateEmail, isEmailTemplateKey } from "../documents/email-templates";
 import { generateLetter, isLetterTemplateKey, type LetterTemplateKey } from "../documents/templates";
 import { nowUtcIso, occurredFromForm } from "../dates";
 import { blankInsurerField } from "../insurers";
 import { all, get, getDb, newId, run } from "./connection";
+import { ENGINEER_INSTRUCTION_MARKED_SENT, ENGINEER_INSTRUCTION_PREPARED, getEngineer, setClaimEngineer } from "./engineers";
 import { findKnownInsurerOn } from "./insurers";
+import { buildMailtoHref } from "../email/mailto";
 
 export type ClaimEventRow = {
   id: string;
@@ -124,7 +133,7 @@ function applyEventSideEffects(claimId: string, eventType: ClaimEventType, occur
   }
 }
 
-function letterContext(claimId: string, letterDate: string): CorrespondenceContext {
+function letterContext(claimId: string, letterDate: string, engineerId?: string): CorrespondenceContext {
   const claim = get<Record<string, string | number | null>>(
     `SELECT c.*, s.name AS handler_name, s.id AS handler_staff_id,
             p.full_name AS client_name, p.email AS client_email, p.telephone AS client_telephone,
@@ -191,6 +200,8 @@ function letterContext(claimId: string, letterDate: string): CorrespondenceConte
     totalLossCessationAt: dates.total_loss_cessation_sent || (claim.off_hire_scheduled_on ? String(claim.off_hire_scheduled_on) : null),
   });
   const handlerId = String(claim.handler_id || claim.handler_staff_id || "");
+  const selectedEngineerId = (engineerId || String(claim.engineer_id || "")).trim();
+  const engineer = selectedEngineerId ? getEngineer(selectedEngineerId) : undefined;
   const engineering = String(claim.engineering_status || "");
   const repairStatus = String(claim.repair_status || "");
   let overdueItem = "";
@@ -240,6 +251,9 @@ function letterContext(claimId: string, letterDate: string): CorrespondenceConte
     tpEmail: String(tp?.insurer_email || tp?.handler_email || ""),
     tpHandlerName: blankInsurerField(String(tp?.handler_name || "")),
     tpInsurerAddress: tpAddress,
+    engineerName: engineer?.name || "",
+    engineerAddress: engineer?.address || "",
+    engineerEmail: engineer?.email || "",
     vehicleLocation: String(recovery?.location || ""),
     siteContactName: "",
     siteContactPhone: "",
@@ -571,9 +585,128 @@ export async function recordClaimCall(input: {
   return { ...result, correspondenceId };
 }
 
-export function letterPreview(claimId: string, templateKey: DocumentTemplateKey, letterDate?: string) {
-  const ctx = letterContext(claimId, occurredFromForm(letterDate));
+export function letterPreview(
+  claimId: string,
+  templateKey: DocumentTemplateKey,
+  letterDate?: string,
+  engineerId?: string,
+) {
+  const ctx = letterContext(claimId, occurredFromForm(letterDate), engineerId);
   if (isEmailTemplateKey(templateKey)) return generateEmail(templateKey, ctx);
   if (isLetterTemplateKey(templateKey)) return generateLetter(templateKey, ctx);
   throw new Error("Unknown document template.");
+}
+
+function letterTextForMailto(text: string): string {
+  return text
+    .replaceAll(CAS_TEMPLATE_NOTICE, "")
+    .replaceAll(OPERATIONAL_DRAFT_NOTICE, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+export function instructEngineer(input: {
+  claimId: string;
+  engineerId: string;
+  actorId: string;
+  letterDate?: string;
+}) {
+  setClaimEngineer(input.claimId, input.engineerId);
+  const engineer = getEngineer(input.engineerId);
+  if (!engineer) throw new Error("Pick an engineer from the saved list.");
+  if (!engineer.email.trim()) {
+    throw new Error("This engineer has no email address. Add one under Settings → Engineers.");
+  }
+  const generated = generateClaimDocument({
+    claimId: input.claimId,
+    templateKey: "engineer_instruction",
+    actorId: input.actorId,
+    letterDate: input.letterDate,
+    recordOnFile: false,
+  });
+  const when = occurredFromForm(input.letterDate);
+  const mailtoBody = letterTextForMailto(generated.letter.text);
+  const mailto = buildMailtoHref(engineer.email, generated.letter.subject, mailtoBody);
+  const correspondenceId = newId("corr");
+  run(
+    `INSERT INTO correspondence(id, claim_id, direction, channel, subject, preview, body, to_address, from_address, unread, sent_status, template_key, created_at)
+     VALUES (?, ?, 'outgoing', 'email', ?, ?, ?, ?, ?, 0, ?, 'engineer_instruction', ?)`,
+    [
+      correspondenceId,
+      input.claimId,
+      generated.letter.subject,
+      mailtoBody.slice(0, 180),
+      mailtoBody,
+      engineer.email,
+      CAS_CLAIMS_MAILBOX,
+      ENGINEER_INSTRUCTION_PREPARED,
+      when,
+    ],
+  );
+  run(`UPDATE claim_events SET correspondence_id = ? WHERE document_id = ? AND event_type = 'document_generated'`, [
+    correspondenceId,
+    generated.documentId,
+  ]);
+  return {
+    documentId: generated.documentId,
+    correspondenceId,
+    mailto,
+    to: engineer.email,
+    subject: generated.letter.subject,
+    body: mailtoBody,
+    engineerName: engineer.name,
+    letter: generated.letter,
+  };
+}
+
+export function markEngineerInstructionSent(input: {
+  claimId: string;
+  correspondenceId: string;
+  actorId: string;
+  occurredAt?: string;
+}) {
+  const row = get<{
+    id: string;
+    claim_id: string;
+    subject: string | null;
+    to_address: string | null;
+    sent_status: string | null;
+    body: string | null;
+  }>(`SELECT id, claim_id, subject, to_address, sent_status, body FROM correspondence WHERE id = ?`, [
+    input.correspondenceId,
+  ]);
+  if (!row || row.claim_id !== input.claimId) throw new Error("Prepared engineer instruction not found on this file.");
+  if (row.sent_status === ENGINEER_INSTRUCTION_MARKED_SENT) {
+    throw new Error("This engineer instruction is already marked as sent.");
+  }
+  if (row.sent_status !== ENGINEER_INSTRUCTION_PREPARED) {
+    throw new Error("This item is not a prepared engineer instruction waiting to be marked as sent.");
+  }
+  const when = occurredFromForm(input.occurredAt);
+  const handler = get<{ name: string }>(`SELECT name FROM staff WHERE id = ?`, [input.actorId]);
+  const handlerName = handler?.name || "Unknown handler";
+  run(`UPDATE correspondence SET sent_status = ? WHERE id = ?`, [ENGINEER_INSTRUCTION_MARKED_SENT, input.correspondenceId]);
+  const subject = String(row.subject || "Engineer instruction");
+  const to = String(row.to_address || "");
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "outgoing_email",
+    occurredAt: when,
+    details: `${subject} prepared for ${to}. Marked as sent by ${handlerName} after opening their own email client. Not auto-sent — live sending from ${CAS_CLAIMS_MAILBOX} is not connected.`,
+    actorId: input.actorId,
+    channel: "email",
+    correspondenceId: input.correspondenceId,
+    source: "staff",
+  });
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "engineer_instructed",
+    occurredAt: when,
+    details: `Engineer instructed (${subject}). Marked as sent by ${handlerName}. Prepared, not auto-sent from ${CAS_CLAIMS_MAILBOX}.`,
+    actorId: input.actorId,
+    channel: "email",
+    correspondenceId: input.correspondenceId,
+    source: "staff",
+  });
+  return { handlerName, occurredAt: when };
 }

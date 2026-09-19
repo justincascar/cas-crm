@@ -11,6 +11,7 @@ import {
   actionSendWhatsApp,
 } from "@/app/actions";
 import { DocumentGenerateForm } from "@/components/DocumentGenerateForm";
+import { InstructEngineerPanel } from "@/components/InstructEngineerPanel";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { EMAIL_TEMPLATES } from "@/lib/documents/email-templates";
 import { formatUkDateTime } from "@/lib/dates";
@@ -39,6 +40,9 @@ export function CommsDesk({
   correspondence,
   documents,
   liabilityStatus,
+  engineers,
+  selectedEngineerId,
+  preparedEngineerInstruction,
 }: {
   claimId: string;
   handlerId: string;
@@ -46,6 +50,15 @@ export function CommsDesk({
   correspondence: CorrespondenceRow[];
   documents: DocumentRow[];
   liabilityStatus: string;
+  engineers: Array<{ id: string; name: string; address: string; email: string; active: number }>;
+  selectedEngineerId: string;
+  preparedEngineerInstruction: {
+    id: string;
+    subject: string | null;
+    to_address: string | null;
+    body: string | null;
+    created_at: string;
+  } | null;
 }) {
   const router = useRouter();
   const defaultSubject = `Our ref: ${defaults.fileReference}  Your policy: ${defaults.policyRef || "…"}`;
@@ -61,8 +74,15 @@ export function CommsDesk({
   return (
     <div className="space-y-6">
       <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">
-        Email, WhatsApp and calls are recorded on this file. They do not leave this computer until CAS's mailbox, WhatsApp Business account and telephone system are connected. A click is not proof of delivery.
+        Email, WhatsApp and calls are recorded on this file. They do not leave this computer until CAS's mailbox, WhatsApp Business account and telephone system are connected. A click is not proof of delivery. Instruct Engineer prepares a letter and a mailto email for you to send yourself — it is not auto-sent from claims@cascar.co.uk.
       </p>
+
+      <InstructEngineerPanel
+        claimId={claimId}
+        engineers={engineers}
+        selectedEngineerId={selectedEngineerId}
+        prepared={preparedEngineerInstruction}
+      />
 
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">On this file</h2>

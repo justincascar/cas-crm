@@ -1,4 +1,5 @@
 import { formatUkDate } from "../dates";
+import { CAS_CLAIMS_MAILBOX } from "../constants";
 import { CAS_COMPANY } from "./cas-hire-terms";
 import type { ChronologyDateMap } from "../domain/events";
 import type { ClaimEventType } from "../domain/events";
@@ -49,6 +50,8 @@ export type CorrespondenceContext = LetterContext & {
   tpInsuredName: string;
   tpEmail: string;
   engineerName: string;
+  engineerAddress: string;
+  engineerEmail: string;
   vehicleLocation: string;
   siteContactName: string;
   siteContactPhone: string;
@@ -122,6 +125,7 @@ const VAR_LABELS: Record<string, string> = {
   tp_claim_ref: "Third-party insurer reference",
   tp_insured_name: "Third-party insured name",
   engineer_name: "Engineer name",
+  engineer_address: "Engineer address",
   vehicle_location: "Vehicle location",
   site_contact_name: "Site contact name",
   site_contact_phone: "Site contact telephone",
@@ -272,12 +276,29 @@ export function bodyToHtml(text: string): string {
     .join("\n");
 }
 
-export function wrapLetter(ctx: LetterContext, subject: string, body: string, letterDate: string) {
+export function wrapLetter(
+  ctx: LetterContext,
+  subject: string,
+  body: string,
+  letterDate: string,
+  addressee?: { name?: string; address?: string },
+) {
+  const addresseeName = (addressee?.name || "").trim();
+  const addresseeAddress = (addressee?.address || "").trim();
+  const addresseeHtml =
+    addresseeName && addresseeName !== "Unknown"
+      ? `<p>${escapeHtml(addresseeName)}${
+          addresseeAddress && addresseeAddress !== "Unknown"
+            ? `<br/>${escapeHtml(addresseeAddress).replaceAll("\n", "<br/>")}`
+            : ""
+        }</p>`
+      : "";
   return `<article class="letter">
 <header>
 <p><strong>${escapeHtml(CAS_COMPANY.name)}</strong></p>
 <p>${escapeHtml(CAS_COMPANY.address)}</p>
 <p>${letterDate}</p>
+${addresseeHtml}
 <p>${escapeHtml(subject)}</p>
 </header>
 ${body}
@@ -321,7 +342,7 @@ export function correspondenceVars(ctx: CorrespondenceContext): Record<string, s
     sender_name: textOrUnknown(ctx.handlerName) === "Unknown" ? CAS_COMPANY.name : ctx.handlerName,
     sender_title: textOrUnknown(ctx.senderTitle),
     company_address: CAS_COMPANY.address,
-    company_email: CAS_COMPANY.email,
+    company_email: CAS_CLAIMS_MAILBOX,
     company_phone: CAS_COMPANY.phone,
     claim_ref: ctx.fileReference,
     client_name: textOrUnknown(ctx.clientName),
@@ -333,6 +354,7 @@ export function correspondenceVars(ctx: CorrespondenceContext): Record<string, s
     tp_claim_ref: textOrUnknown(ctx.tpPolicyOrClaimRef),
     tp_insured_name: textOrUnknown(ctx.tpInsuredName),
     engineer_name: textOrUnknown(ctx.engineerName),
+    engineer_address: textOrUnknown(ctx.engineerAddress),
     vehicle_location: textOrUnknown(ctx.vehicleLocation),
     site_contact_name: textOrUnknown(ctx.siteContactName),
     site_contact_phone: textOrUnknown(ctx.siteContactPhone),
@@ -413,13 +435,24 @@ export function generateFromSpec(spec: CorrespondenceSpec, ctx: CorrespondenceCo
   const body = fillPlaceholders(spec.body, vars);
   const letterDate = formatUkDate(ctx.letterDate);
   const notice = noticesFor(spec);
-  const html = wrapLetter(ctx, subject, `${bodyToHtml(body)}\n${notice.html}`, letterDate);
+  const addressee =
+    spec.audience === "engineer"
+      ? {
+          name: textOrUnknown(ctx.engineerName) === "Unknown" ? "" : ctx.engineerName,
+          address: textOrUnknown(ctx.engineerAddress) === "Unknown" ? "" : ctx.engineerAddress,
+        }
+      : undefined;
+  const addressBlock =
+    addressee?.name
+      ? `${addressee.name}${addressee.address ? `\n${addressee.address}` : ""}\n\n`
+      : "";
+  const html = wrapLetter(ctx, subject, `${bodyToHtml(body)}\n${notice.html}`, letterDate, addressee);
   return {
     templateKey: spec.key,
     title: spec.title,
     subject,
     html,
-    text: `${body}${notice.text}`,
+    text: `${addressBlock}${body}${notice.text}`,
     missing,
     legalSignOffRequired: spec.legalCitations,
   };
@@ -428,7 +461,7 @@ export function generateFromSpec(spec: CorrespondenceSpec, ctx: CorrespondenceCo
 export function recipientFor(audience: CorrespondenceAudience, ctx: CorrespondenceContext): string {
   if (audience === "client") return textOrUnknown(ctx.clientEmail) === "Unknown" ? "" : ctx.clientEmail;
   if (audience === "insurer") return textOrUnknown(ctx.tpEmail) === "Unknown" ? "" : ctx.tpEmail;
-  if (audience === "engineer") return "";
+  if (audience === "engineer") return textOrUnknown(ctx.engineerEmail) === "Unknown" ? "" : ctx.engineerEmail;
   return CAS_COMPANY.email;
 }
 
@@ -439,6 +472,8 @@ export function emptyCorrespondenceFields(): Omit<CorrespondenceContext, keyof L
     tpInsuredName: "",
     tpEmail: "",
     engineerName: "",
+    engineerAddress: "",
+    engineerEmail: "",
     vehicleLocation: "",
     siteContactName: "",
     siteContactPhone: "",

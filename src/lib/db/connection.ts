@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { ensureStaffAuth } from "../auth/ensure";
 import { backfillChronologyIfEmpty, seedIfEmpty } from "./seed";
+import { ensureEngineers } from "./engineers";
 import { ensureKnownInsurers } from "./insurers";
 import { migrate } from "./migrate";
 
@@ -27,6 +28,7 @@ function openDatabase(): DatabaseSync {
   migrate(db);
   seedIfEmpty(db);
   ensureKnownInsurers(db);
+  ensureEngineers(db);
   ensureStaffAuth(db);
   backfillChronologyIfEmpty(db);
   return db;
@@ -39,6 +41,7 @@ export function getDb(): DatabaseSync {
   } else {
     migrate(g.__casDb);
     ensureKnownInsurers(g.__casDb);
+    ensureEngineers(g.__casDb);
     ensureStaffAuth(g.__casDb);
     backfillChronologyIfEmpty(g.__casDb);
   }

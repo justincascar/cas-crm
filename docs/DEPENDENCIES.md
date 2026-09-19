@@ -7,7 +7,7 @@ Nothing below has been invented as a live connection. Prototype behaviour is lab
 - Postcode lookup: free **postcodes.io** / OpenStreetMap is in use until CAS adds a licensed Royal Mail PAF key. To switch the drop-down to the full house list, create an [Ideal Postcodes](https://ideal-postcodes.co.uk/) trial (50 lookups, no card) and put the key in `IDEAL_POSTCODES_API_KEY`. Do not invent a key. Manual address entry remains available.
 - Vehicle registration lookup provider. Must not be treated as keeper identification. Incomplete results must not infer transmission.
 - MID / insurance checking: CAS currently uses an authorised **manual** lookup. Record results in the CRM. Assess a permitted integration only after the actual service and CAS access are identified. Do not scrape protected services.
-- Email provider used by CAS for insurer correspondence (Outlook / Microsoft 365 is assumed unless told otherwise). Compose, file history and incoming logging work now; **live send/receive is not connected**.
+- Email: Microsoft 365 mailbox **claims@cascar.co.uk** has been decided. Compose, file history and incoming logging work now. Engineer instructions are **prepared, not auto-sent** (mailto in the handler's own email client, then mark as sent on the file). **Live send/receive from that mailbox is not connected.**
 - WhatsApp Business Platform: account, number, permissions, templates, costs. Intake can queue simulated photo requests (including scene photographs from accident details), recovery-driver messages, client “on the way” messages, and the recovery/storage agreement. Staff can also send/file WhatsApp on the claim file and ask for scene photographs from Accident details. Live sending is not connected.
 - Office telephone system (make/receive). Calls can be recorded on the file with an outcome; unanswered calls can create a call-back task. Live dialling is not connected.
 - Credit recovery and storage agreement template (CAS wording). Prototype generates an unsigned placeholder from captured facts only.
@@ -22,7 +22,7 @@ Nothing below has been invented as a live connection. Prototype behaviour is lab
 - The supplied pack's rental period is **89 days**; CRM operational alerts remain **88 days** as specified separately. Credit period in the pack is **51 weeks**. Review before live enforcement.
 - Payment pack, loss-of-use chronology and bill layouts.
 - Handover / return forms (mileage, fuel, condition, keys).
-- Engineer instruction template.
+- Engineer instruction template is now filled from the saved engineers list and prepared as a mailto for the handler to send. Genuine automatic sending still waits on connecting `claims@cascar.co.uk`.
 - Pre-action / litigation templates. Do not issue proceedings without approval.
 
 ## Policy confirmations
@@ -39,7 +39,7 @@ Nothing below has been invented as a live connection. Prototype behaviour is lab
 - Staff accounts, passwords, roles, and proof that another staff member can be authorised while a client cannot see others’ files. **Local staff sign-in now exists** (see `docs/AUTH-NOTES.md`); Justin is an administrator and can manage staff logins. All signed-in staff still see every file, and it is still this PC only.
 - Client portal / mobile form with save-and-return.
 - Server-side automation runner while browsers are closed.
-- Document generation from CAS letter/email templates (`docs/correspondence-templates/`). The fault own-insurer letter and non-fault TPI initial letter are now real templates in the CRM. Other letters remain supplied wording or operational drafts. Solicitor sign-off is still required before live use, and the office mailbox is still not connected.
+- Document generation from CAS letter/email templates (`docs/correspondence-templates/`). The fault own-insurer letter, non-fault TPI initial letter, and engineer instruction (from the saved engineers list) are now real templates in the CRM. Engineer instruction is prepared for the handler to send; it is not auto-sent. Other letters remain supplied wording or operational drafts. Solicitor sign-off is still required before live use, and live mailbox send from claims@cascar.co.uk is still not connected.
 - Backup, restore and export tests.
 
-Staff forms now highlight the invalid field and jump to it on submit. Live mailbox, DVLA and WhatsApp sending are still not connected.
+Staff forms now highlight the invalid field and jump to it on submit. Engineer instructions are prepared for the handler to send from their own email client; live mailbox send from claims@cascar.co.uk, DVLA and WhatsApp sending are still not connected.
