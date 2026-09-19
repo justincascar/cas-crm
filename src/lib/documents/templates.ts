@@ -1,13 +1,15 @@
-import { formatUkDate, formatUkTime } from "../dates";
+import { formatUkDate } from "../dates";
 import { CAS_LETTER_SPECS } from "./cas-wording";
+import {
+  generateFaultOwnInsurerLetter,
+  generateNonFaultTpInsurerLetter,
+} from "./notification-letters";
 import {
   CAS_TEMPLATE_NOTICE,
   OPERATIONAL_DRAFT_NOTICE,
   emptyCorrespondenceFields,
   escapeHtml,
   generateFromSpec,
-  handlerInitials,
-  namesDiffer,
   wrapLetter,
   type CorrespondenceContext,
   type GeneratedLetter,
@@ -18,8 +20,14 @@ export type { GeneratedLetter, LetterContext, CorrespondenceContext };
 
 export const LETTER_TEMPLATES = [
   {
+    key: "fault_own_insurer",
+    title: "Fault claim letter (client's own insurer)",
+    eventType: "initial_letter_own_insurer" as const,
+    channel: "letter" as const,
+  },
+  {
     key: "initial_tp_insurer",
-    title: "Notification of claim (third-party insurer)",
+    title: "Non-fault initial letter (third-party insurer)",
     eventType: "initial_letter_tp_insurer" as const,
     channel: "letter" as const,
   },
@@ -99,8 +107,12 @@ function asCorrespondence(ctx: LetterContext | CorrespondenceContext): Correspon
     tpVehicleModel: "",
     tpVehicleReg: "",
     tpPolicyNumber: "",
+    tpHandlerName: "",
+    tpInsurerAddress: "",
+    ownInsurerAddress: "",
     lossesClaimed: "",
     creditHire: false,
+    courtesyAllocated: false,
     ...ctx,
   };
 }
@@ -118,102 +130,6 @@ function operationalClose(ctx: LetterContext) {
   return `<p>Yours faithfully</p><p>${escapeHtml(ctx.handlerName)}<br/>Complete Accident Solutions Ltd</p>
 <p class="text-xs">${escapeHtml(OPERATIONAL_DRAFT_NOTICE)}</p>
 <p class="text-xs">${escapeHtml(CAS_TEMPLATE_NOTICE)}</p>`;
-}
-
-function generateInitialTpInsurer(ctx: LetterContext | CorrespondenceContext): GeneratedLetter {
-  const full = asCorrespondence(ctx);
-  const missing: string[] = [];
-  if (!full.clientName || full.clientName === "Unknown") missing.push("Client name");
-  if (!full.accidentAt) missing.push("Accident date");
-  if (!full.tpInsurer || full.tpInsurer === "Unknown") missing.push("Third-party insurer");
-  if (!full.registration || full.registration === "Unknown") missing.push("Client registration");
-  if (!full.tpPolicyNumber || full.tpPolicyNumber === "Unknown") missing.push("Third-party policy number");
-  const letterDate = formatUkDate(full.letterDate);
-  const initials = handlerInitials(full.handlerName);
-  const ourRef = `${full.fileReference}/${initials}/${full.handlerName}`;
-  const ownVehicle = [full.make, full.model, full.registration].filter(Boolean).join(" ").trim() || "Unknown";
-  const theirVehicle = [full.tpVehicleMake, full.tpVehicleModel, full.tpVehicleReg].filter(Boolean).join(" ").trim() || "Unknown";
-  const accidentWhen = full.accidentAt
-    ? `${formatUkDate(full.accidentAt)} at ${formatUkTime(full.accidentAt)}`
-    : "Unknown";
-  const accidentWhere = full.accidentLocation && full.accidentLocation !== "Unknown" ? full.accidentLocation : "Unknown";
-  const showDriver = namesDiffer(full.clientDriverName || "", full.clientName);
-  const losses = (full.lossesClaimed || "").trim() || "uninsured losses";
-  const subject = `Uninsured losses — ${full.fileReference}`;
-  const facts = [
-    `Policy Number: ${full.tpPolicyNumber || "Unknown"}`,
-    `Our Client: ${full.clientName}`,
-    ...(showDriver ? [`Client's driver: ${full.clientDriverName}`] : []),
-    `Our Insured's Vehicle: ${ownVehicle}`,
-    `Their Insured's Vehicle: ${theirVehicle}`,
-    `Date, time and location of Accident: ${accidentWhen} at ${accidentWhere}`,
-  ];
-  const text = [
-    `Our Reference: ${ourRef}`,
-    "",
-    ...facts,
-    "",
-    "Dear Sir / Madam",
-    "",
-    `We act on behalf of ${full.clientName} in respect of uninsured losses arising from the above road traffic accident.`,
-    "",
-    "Accordingly, we place you on notice of our client's claim.",
-    "",
-    `Our client's claim includes ${losses}. Supporting documentation follows by covering email.`,
-    "",
-    "We should be grateful if you would please:",
-    "",
-    "1. Provide your claim reference",
-    "2. Confirm that you are the correct insurer / handler",
-    "3. Confirm that indemnity is in place",
-    "4. Confirm your position on liability",
-    "",
-    "All future correspondence regarding this matter should be directed to ourselves.",
-    "",
-    "Yours faithfully",
-    "",
-    full.handlerName,
-    full.senderTitle,
-    "Complete Accident Solutions Ltd",
-  ].join("\n");
-  const driverRow = showDriver
-    ? `<p>Client's driver: ${escapeHtml(full.clientDriverName || "")}</p>\n`
-    : "";
-  const html = wrapLetter(
-    full,
-    subject,
-    `<p>Our Reference: <strong>${escapeHtml(ourRef)}</strong></p>
-<p>Policy Number: ${escapeHtml(full.tpPolicyNumber || "Unknown")}</p>
-<p>Our Client: ${escapeHtml(full.clientName)}</p>
-${driverRow}<p>Our Insured's Vehicle: ${escapeHtml(ownVehicle)}</p>
-<p>Their Insured's Vehicle: ${escapeHtml(theirVehicle)}</p>
-<p>Date, time and location of Accident: ${escapeHtml(accidentWhen)} at ${escapeHtml(accidentWhere)}</p>
-<p>Dear Sir / Madam</p>
-<p>We act on behalf of ${escapeHtml(full.clientName)} in respect of uninsured losses arising from the above road traffic accident.</p>
-<p>Accordingly, we place you on notice of our client's claim.</p>
-<p>Our client's claim includes ${escapeHtml(losses)}. Supporting documentation follows by covering email.</p>
-<p>We should be grateful if you would please:</p>
-<ol>
-<li>Provide your claim reference</li>
-<li>Confirm that you are the correct insurer / handler</li>
-<li>Confirm that indemnity is in place</li>
-<li>Confirm your position on liability</li>
-</ol>
-<p>All future correspondence regarding this matter should be directed to ourselves.</p>
-<p>Yours faithfully</p>
-<p>${escapeHtml(full.handlerName)}<br/>${escapeHtml(full.senderTitle)}<br/>Complete Accident Solutions Ltd</p>
-<p class="text-xs">${escapeHtml(CAS_TEMPLATE_NOTICE)}</p>`,
-    letterDate,
-  );
-  return {
-    templateKey: "initial_tp_insurer",
-    title: "Notification of claim (third-party insurer)",
-    subject,
-    html,
-    text: `${text}\n\n${CAS_TEMPLATE_NOTICE}`,
-    missing,
-    legalSignOffRequired: false,
-  };
 }
 
 function generateRepairCommencement(ctx: LetterContext): GeneratedLetter {
@@ -300,7 +216,8 @@ ${operationalClose(ctx)}`,
 }
 
 export function generateLetter(templateKey: LetterTemplateKey, ctx: LetterContext | CorrespondenceContext): GeneratedLetter {
-  if (templateKey === "initial_tp_insurer") return generateInitialTpInsurer(ctx);
+  if (templateKey === "fault_own_insurer") return generateFaultOwnInsurerLetter(ctx);
+  if (templateKey === "initial_tp_insurer") return generateNonFaultTpInsurerLetter(ctx);
   if (templateKey === "repair_commencement") return generateRepairCommencement(ctx);
   if (templateKey === "liability_chaser") return generateLiabilityChaser(ctx);
   const spec = CAS_LETTER_SPECS.find((item) => item.key === templateKey);

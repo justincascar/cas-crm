@@ -183,6 +183,30 @@ export function listKnownInsurersOn(db: DatabaseSync): KnownInsurer[] {
   }));
 }
 
+export function findKnownInsurerOn(db: DatabaseSync, name: string): KnownInsurer | null {
+  const key = insurerNameKey(name);
+  if (!key) return null;
+  const row = db
+    .prepare(`SELECT name, address, postcode, telephone, email FROM known_insurers WHERE name_key = ?`)
+    .get(key) as
+    | {
+        name: string;
+        address: string | null;
+        postcode: string | null;
+        telephone: string | null;
+        email: string | null;
+      }
+    | undefined;
+  if (!row) return null;
+  return {
+    name: row.name,
+    address: row.address || "",
+    postcode: row.postcode || "",
+    telephone: row.telephone || "",
+    email: row.email || "",
+  };
+}
+
 function ensureKnownAgents(db: DatabaseSync) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS known_agents (

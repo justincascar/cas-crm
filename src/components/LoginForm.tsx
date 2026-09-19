@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { actionLogin } from "@/app/auth-actions";
+import { ValidatedForm } from "@/components/ValidatedForm";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
@@ -20,7 +21,7 @@ export function LoginForm({ nextPath }: { nextPath: string }) {
   }
 
   return (
-    <form action={onSubmit} className="space-y-4">
+    <ValidatedForm action={onSubmit} className="space-y-4">
       <input type="hidden" name="next" value={nextPath} />
       <label className="block text-sm">
         Username
@@ -40,6 +41,6 @@ export function LoginForm({ nextPath }: { nextPath: string }) {
       >
         {pending ? "Signing in…" : "Sign in"}
       </button>
-    </form>
+    </ValidatedForm>
   );
 }

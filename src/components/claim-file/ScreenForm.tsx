@@ -12,6 +12,7 @@ import { InsurerNameField } from "@/components/InsurerNameField";
 import { TpInsuranceFields } from "@/components/TpInsuranceFields";
 import { TpAgentFields } from "@/components/TpAgentFields";
 import { DamageDiagram } from "@/components/claim-file/DamageDiagram";
+import { ValidatedForm } from "@/components/ValidatedForm";
 import { dobKindForField, isDobFieldName } from "@/lib/age";
 import type { ClaimScreenDef, ScreenField } from "@/lib/claim-screens";
 import { displayValue } from "@/lib/screen-display";
@@ -156,6 +157,8 @@ export function ScreenForm({
   clientRole,
   insurers = [],
   agents = [],
+  error,
+  errorField,
 }: {
   claimId: string;
   actorId: string;
@@ -165,9 +168,16 @@ export function ScreenForm({
   clientRole?: string;
   insurers?: KnownInsurer[];
   agents?: KnownInsurer[];
+  error?: string;
+  errorField?: string;
 }) {
   return (
-    <form action={actionSaveClaimScreen} className="space-y-6">
+    <ValidatedForm
+      action={actionSaveClaimScreen}
+      className="space-y-6"
+      initialError={error}
+      initialErrorField={errorField}
+    >
       <input type="hidden" name="claimId" value={claimId} />
       <input type="hidden" name="screenKey" value={def.key} />
       <input type="hidden" name="actorId" value={actorId} />
@@ -247,6 +257,16 @@ export function ScreenForm({
                 <label key={field.name} className={`block text-sm ${field.span === 2 ? "sm:col-span-2" : ""}`}>
                   {field.label}
                   <FieldInput screenKey={def.key} field={field} values={values} />
+                  {field.name === "audatexNetworkCode" && values.audatexNetworkCodeSuggestedFrom ? (
+                    <span className="mt-1 block rounded-md border border-warn/40 bg-[#fff6e8] px-2 py-1 text-xs text-navy">
+                      Suggested from {values.audatexNetworkCodeSuggestedFrom}. Not yet confirmed on this file.
+                    </span>
+                  ) : null}
+                  {field.name === "audatexWorkProviderCode" && values.audatexWorkProviderCodeSuggestedFrom ? (
+                    <span className="mt-1 block rounded-md border border-warn/40 bg-[#fff6e8] px-2 py-1 text-xs text-navy">
+                      Suggested from {values.audatexWorkProviderCodeSuggestedFrom}. Not yet confirmed on this file.
+                    </span>
+                  ) : null}
                   {field.hint ? <span className="mt-1 block text-xs text-slate">{field.hint}</span> : null}
                 </label>
               );
@@ -262,6 +282,6 @@ export function ScreenForm({
         </button>
         {saved ? <p className="text-sm text-ok">Saved.</p> : null}
       </div>
-    </form>
+    </ValidatedForm>
   );
 }

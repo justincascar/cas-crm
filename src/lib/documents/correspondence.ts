@@ -35,8 +35,12 @@ export type LetterContext = {
   tpVehicleModel?: string;
   tpVehicleReg?: string;
   tpPolicyNumber?: string;
+  tpHandlerName?: string;
+  tpInsurerAddress?: string;
+  ownInsurerAddress?: string;
   lossesClaimed?: string;
   creditHire?: boolean;
+  courtesyAllocated?: boolean;
 };
 
 export type CorrespondenceContext = LetterContext & {
@@ -179,6 +183,26 @@ export function namesDiffer(a: string, b: string): boolean {
   const norm = (value: string) => value.trim().toLowerCase().replace(/\s+/g, " ");
   if (!norm(a) || norm(a) === "unknown") return false;
   return norm(a) !== norm(b);
+}
+
+export const NOT_YET_ON_FILE = "[not yet on file]";
+
+export function isBlankClaimValue(value: string | null | undefined): boolean {
+  const trimmed = (value || "").trim();
+  return !trimmed || trimmed.toLowerCase() === "unknown";
+}
+
+export function claimValueOrGap(value: string | null | undefined, label: string, missing: string[]): string {
+  if (isBlankClaimValue(value)) {
+    if (!missing.includes(label)) missing.push(label);
+    return NOT_YET_ON_FILE;
+  }
+  return String(value).trim();
+}
+
+export function markGapHtml(value: string): string {
+  if (value === NOT_YET_ON_FILE) return `<span class="missing-field">${escapeHtml(value)}</span>`;
+  return escapeHtml(value).replaceAll("\n", "<br/>\n");
 }
 
 export function joinEnglishList(parts: string[]): string {

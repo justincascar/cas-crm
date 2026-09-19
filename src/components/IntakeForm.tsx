@@ -12,6 +12,7 @@ import { casingInputProps } from "@/components/CasedField";
 import { MobileField } from "@/components/MobileField";
 import { PostcodeAddressLookup } from "@/components/PostcodeAddressLookup";
 import { InsurerNameField } from "@/components/InsurerNameField";
+import { ValidatedForm } from "@/components/ValidatedForm";
 import type { DobKind } from "@/lib/age";
 import { mergeInsurerDetails, type KnownInsurer } from "@/lib/insurers";
 import { clientDobKind, counterpartDobKind } from "@/lib/age";
@@ -613,12 +614,14 @@ export function IntakeForm({
   staff,
   nextRef,
   error,
+  errorField,
   insurers,
   agents,
 }: {
   staff: Staff[];
   nextRef: string;
   error?: string;
+  errorField?: string;
   insurers: KnownInsurer[];
   agents: KnownInsurer[];
 }) {
@@ -633,7 +636,7 @@ export function IntakeForm({
   const maps = useMemo(() => googleMapsSearchUrl(location), [location]);
 
   return (
-    <form action={actionCreateClaim} className="space-y-6">
+    <ValidatedForm action={actionCreateClaim} className="space-y-6" initialError={error} initialErrorField={errorField}>
       {error ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
       ) : null}
@@ -956,6 +959,6 @@ export function IntakeForm({
           Create claim
         </button>
       </section>
-    </form>
+    </ValidatedForm>
   );
 }

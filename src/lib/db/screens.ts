@@ -1,4 +1,5 @@
 import { accidentDateError, nowUtcIso, londonDateIso, occurredFromForm } from "../dates";
+import { FieldValidationError } from "../form-validation";
 import { CLAIM_SCREENS, getClaimScreen } from "../claim-screens";
 import { dobConfirmName, dobKindForField, dobSaveError, isDobFieldName } from "../age";
 import { isMobileFieldName, mobileNumberError } from "../phone-number";
@@ -8,7 +9,7 @@ import { recordClaimEvent } from "./chronology";
 import { poundsToPence } from "./intake";
 import { rememberAgentOn, rememberInsurerOn } from "./insurers";
 import { displayValue } from "../screen-display";
-import { updateClaimWorkflowStatus } from "./queries";
+import { updateClaimAudatexCodes, updateClaimWorkflowStatus, suggestAudatexCodesForClaim } from "./queries";
 import { normalizeLiabilityStatus, normalizeRoadworthiness } from "../domain/claim-status";
 
 export type ScreenValues = Record<string, string>;
@@ -66,9 +67,14 @@ export function valuesFromForm(formData: FormData, screenKey: string): ScreenVal
   return values;
 }
 
-export function screenSaveError(claimId: string, screenKey: string, values: ScreenValues): string | null {
+export function screenSaveFieldError(
+  claimId: string,
+  screenKey: string,
+  values: ScreenValues,
+): { field: string; message: string } | null {
   if (screenKey === "accident") {
-    return accidentDateError(values.accidentDate);
+    const accident = accidentDateError(values.accidentDate);
+    return accident ? { field: "accidentDate", message: accident } : null;
   }
   const def = getClaimScreen(screenKey);
   if (!def) return null;
@@ -77,7 +83,7 @@ export function screenSaveError(claimId: string, screenKey: string, values: Scre
     for (const field of section.fields) {
       if (isMobileFieldName(field.name)) {
         const mobileErr = mobileNumberError(values[field.name]);
-        if (mobileErr) return mobileErr;
+        if (mobileErr) return { field: field.name, message: mobileErr };
       }
       if (!isDobFieldName(field.name)) continue;
       const err = dobSaveError(
@@ -85,15 +91,19 @@ export function screenSaveError(claimId: string, screenKey: string, values: Scre
         dobKindForField(screenKey, field.name, claim?.client_role || undefined),
         values[dobConfirmName(field.name)] === "yes",
       );
-      if (err) return err;
+      if (err) return { field: field.name, message: err };
     }
   }
   return null;
 }
 
+export function screenSaveError(claimId: string, screenKey: string, values: ScreenValues): string | null {
+  return screenSaveFieldError(claimId, screenKey, values)?.message ?? null;
+}
+
 export function saveScreenData(claimId: string, screenKey: string, values: ScreenValues, actorId: string) {
-  const blocked = screenSaveError(claimId, screenKey, values);
-  if (blocked) throw new Error(blocked);
+  const blocked = screenSaveFieldError(claimId, screenKey, values);
+  if (blocked) throw new FieldValidationError(blocked.field, blocked.message);
   const now = nowUtcIso();
   run(
     `INSERT INTO claim_screen_data(claim_id, screen_key, data_json, updated_at)
@@ -203,9 +213,28 @@ function applySideEffects(claimId: string, screenKey: string, values: ScreenValu
 
   if (screenKey === "insurer") {
     run(
-      `UPDATE claims SET own_insurer_name = ?, own_policy_ref = ?, own_claim_ref = ? WHERE id = ?`,
-      [values.companyName || null, values.policyNumber || null, values.claimReference || null, claimId],
+      `UPDATE claims SET own_insurer_name = ?, own_policy_ref = ?, own_claim_ref = ?,
+        own_insurer_address = ?, own_insurer_postcode = ?
+       WHERE id = ?`,
+      [
+        values.companyName || null,
+        values.policyNumber || null,
+        values.claimReference || null,
+        values.address || null,
+        values.postcode || null,
+        claimId,
+      ],
     );
+    if (actorId) {
+      updateClaimAudatexCodes(
+        claimId,
+        {
+          audatexNetworkCode: values.audatexNetworkCode,
+          audatexWorkProviderCode: values.audatexWorkProviderCode,
+        },
+        actorId,
+      );
+    }
   }
 
   if (screenKey === "storage") {
@@ -452,6 +481,25 @@ export function seedScreenDefaults(claimId: string, screenKey: string): ScreenVa
     fill("companyName", claim.own_insurer_name);
     fill("policyNumber", claim.own_policy_ref);
     fill("claimReference", claim.own_claim_ref);
+    fill("address", claim.own_insurer_address);
+    fill("postcode", claim.own_insurer_postcode);
+    fill("audatexNetworkCode", claim.audatex_network_code);
+    fill("audatexWorkProviderCode", claim.audatex_work_provider_code);
+    const audatexSuggestion = suggestAudatexCodesForClaim(claimId);
+    if (!String(claim.audatex_network_code || "").trim() && audatexSuggestion.network) {
+      fill("audatexNetworkCode", audatexSuggestion.network.value);
+      fill(
+        "audatexNetworkCodeSuggestedFrom",
+        `${audatexSuggestion.network.insurerName} · ${audatexSuggestion.network.sourceFileReference}`,
+      );
+    }
+    if (!String(claim.audatex_work_provider_code || "").trim() && audatexSuggestion.workProvider) {
+      fill("audatexWorkProviderCode", audatexSuggestion.workProvider.value);
+      fill(
+        "audatexWorkProviderCodeSuggestedFrom",
+        `${audatexSuggestion.workProvider.insurerName} · ${audatexSuggestion.workProvider.sourceFileReference}`,
+      );
+    }
   }
   if (screenKey === "storage") {
     fill("startDate", claim.storage_started_on);

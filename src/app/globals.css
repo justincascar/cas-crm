@@ -33,6 +33,21 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+.field-invalid {
+  border-color: var(--color-overdue) !important;
+  outline: 2px solid var(--color-overdue);
+  outline-offset: 1px;
+  scroll-margin-top: 6rem;
+}
+
+.field-error {
+  margin-top: 0.25rem;
+  display: block;
+  font-size: 0.75rem;
+  line-height: 1.35;
+  color: var(--color-overdue);
+}
+
 .ledger-table {
   width: 100%;
   border-collapse: collapse;
@@ -67,6 +82,12 @@ body {
 .letter p {
   margin: 0.75rem 0;
   line-height: 1.5;
+}
+
+.letter .missing-field {
+  background: #fff6e8;
+  font-weight: 600;
+  padding: 0 0.15rem;
 }
 
 .hire-pack section {

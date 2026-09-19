@@ -10,7 +10,9 @@ import { emptyCorrespondenceFields, namesDiffer, summariseLossesClaimed, type Co
 import { generateEmail, isEmailTemplateKey } from "../documents/email-templates";
 import { generateLetter, isLetterTemplateKey, type LetterTemplateKey } from "../documents/templates";
 import { nowUtcIso, occurredFromForm } from "../dates";
-import { all, get, newId, run } from "./connection";
+import { blankInsurerField } from "../insurers";
+import { all, get, getDb, newId, run } from "./connection";
+import { findKnownInsurerOn } from "./insurers";
 
 export type ClaimEventRow = {
   id: string;
@@ -96,6 +98,7 @@ function applyEventSideEffects(claimId: string, eventType: ClaimEventType, occur
   }
   if (
     eventType === "initial_letter_tp_insurer" ||
+    eventType === "initial_letter_own_insurer" ||
     eventType === "outgoing_email" ||
     eventType === "incoming_email" ||
     eventType === "liability_chase_sent" ||
@@ -136,6 +139,7 @@ function letterContext(claimId: string, letterDate: string): CorrespondenceConte
   if (!claim) throw new Error("File not found.");
   const tp = get<Record<string, string | null>>(
     `SELECT tp.insurer_name, tp.insurer_ref, tp.insurer_email, tp.handler_email, tp.policy_number,
+            tp.handler_name, tp.insurer_address, tp.insurer_postcode,
             p.full_name AS insured_name, v.make AS tp_make, v.model AS tp_model, v.registration AS tp_reg
      FROM claim_third_parties tp
      LEFT JOIN people p ON p.id = tp.person_id
@@ -194,6 +198,23 @@ function letterContext(claimId: string, letterDate: string): CorrespondenceConte
   else if (repairStatus === "in_progress" || repairStatus === "awaiting_return") overdueItem = "Repair";
   const creditHire = Number(hire?.credit_hire) === 1;
   const clientDriverName = String(driver?.full_name || "");
+  const courtesyReservation = get<{ id: string }>(
+    `SELECT id FROM reservations
+     WHERE claim_id = ? AND lower(kind) = 'courtesy'
+       AND lower(status) NOT IN ('ended', 'cancelled', 'released', 'completed')
+     LIMIT 1`,
+    [claimId],
+  );
+  const storedOwnAddress = [blankInsurerField(String(claim.own_insurer_address || "")), blankInsurerField(String(claim.own_insurer_postcode || ""))]
+    .filter(Boolean)
+    .join(", ");
+  const knownOwn = storedOwnAddress ? null : findKnownInsurerOn(getDb(), String(claim.own_insurer_name || ""));
+  const knownOwnAddress = knownOwn
+    ? [blankInsurerField(knownOwn.address), blankInsurerField(knownOwn.postcode)].filter(Boolean).join(", ")
+    : "";
+  const tpAddress = [blankInsurerField(String(tp?.insurer_address || "")), blankInsurerField(String(tp?.insurer_postcode || ""))]
+    .filter(Boolean)
+    .join(", ");
 
   return {
     ...emptyCorrespondenceFields(),
@@ -210,12 +231,15 @@ function letterContext(claimId: string, letterDate: string): CorrespondenceConte
     tpPolicyOrClaimRef: String(tp?.insurer_ref || "Unknown"),
     ownInsurer: String(claim.own_insurer_name || "Unknown"),
     ownPolicyRef: String(claim.own_policy_ref || "Unknown"),
+    ownInsurerAddress: storedOwnAddress || knownOwnAddress,
     dates,
     letterDate,
     senderTitle: handlerId === "staff-justin" ? "Managing Director" : "Claims handler",
     clientEmail: String(claim.client_email || ""),
     tpInsuredName: String(tp?.insured_name || ""),
     tpEmail: String(tp?.insurer_email || tp?.handler_email || ""),
+    tpHandlerName: blankInsurerField(String(tp?.handler_name || "")),
+    tpInsurerAddress: tpAddress,
     vehicleLocation: String(recovery?.location || ""),
     siteContactName: "",
     siteContactPhone: "",
@@ -247,6 +271,7 @@ function letterContext(claimId: string, letterDate: string): CorrespondenceConte
     tpPolicyNumber: String(tp?.policy_number || ""),
     lossesClaimed: summariseLossesClaimed(lines, creditHire),
     creditHire,
+    courtesyAllocated: Boolean(courtesyReservation),
   };
 }
 
@@ -291,7 +316,7 @@ export function generateClaimDocument(input: {
     claimId: input.claimId,
     eventType: "document_generated",
     occurredAt: letterDate,
-    details: `${generated.title} (version ${version})${generated.missing.length ? `. Missing: ${generated.missing.join(", ")}` : ""}${generated.legalSignOffRequired ? ". Legal wording needs solicitor sign-off before live use." : ""}`,
+    details: `${generated.title} (version ${version}) generated — not sent${generated.missing.length ? `. Missing: ${generated.missing.join(", ")}` : ""}${generated.legalSignOffRequired ? ". Legal wording needs solicitor sign-off before live use." : ""}`,
     actorId: input.actorId,
     channel: kind,
     documentId,

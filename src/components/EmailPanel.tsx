@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import { actionSendEmail } from "@/app/actions";
+import { ValidatedForm } from "@/components/ValidatedForm";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
 export function EmailPanel({ claimId, handlerId }: { claimId: string; handlerId: string }) {
   const [message, setMessage] = useState<string | null>(null);
   return (
-    <form
+    <ValidatedForm
       className="grid gap-2 rounded-lg border border-dashed border-copper/40 bg-[#fbf6ec] p-4 md:grid-cols-2"
       action={async (formData) => {
         const result = await actionSendEmail(formData);
@@ -43,6 +44,6 @@ export function EmailPanel({ claimId, handlerId }: { claimId: string; handlerId:
         Record outgoing email
       </button>
       {message ? <p className="text-sm text-copper md:col-span-2">{message}</p> : null}
-    </form>
+    </ValidatedForm>
   );
 }

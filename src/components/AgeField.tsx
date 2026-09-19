@@ -24,6 +24,7 @@ export function AgeField({
   const confirmField = confirmName || `${name}_confirmed`;
   const check = inspectDob(value, kind, today);
   const age = !("empty" in check) && check.age !== null ? check.age : value ? ageInYearsOn(value, today) : null;
+  const blocking = !("empty" in check) && !check.ok && check.blocking;
 
   return (
     <div>
@@ -32,15 +33,19 @@ export function AgeField({
         type="date"
         value={value}
         max={today}
+        data-dob-kind={kind}
         onChange={(e) => setValue(e.target.value)}
-        className={className}
+        className={blocking ? `${className} field-invalid` : className}
+        aria-invalid={blocking ? true : undefined}
       />
       <p className="mt-1 text-sm">
         Age: <strong>{age === null || Number.isNaN(age) ? "—" : age}</strong>
         <span className="text-xs text-slate"> (from today, UK time — confirm with the person)</span>
       </p>
       {"empty" in check || check.ok ? null : check.blocking ? (
-        <p className="mt-1 text-sm text-overdue">{check.message}</p>
+        <p className="field-error" data-field-error={name}>
+          {check.message}
+        </p>
       ) : (
         <div className="mt-2 rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2 text-sm">
           {check.message}

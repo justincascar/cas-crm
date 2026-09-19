@@ -54,3 +54,14 @@ export function statusChangeDetails(label: string, fromRaw: string | null | unde
   if (from === "Not yet decided") return `Set to ${to}.`;
   return `Changed from ${from} to ${to}.`;
 }
+
+const UNSET_TEXT = "not yet recorded";
+
+export function freeTextChangeDetails(fromRaw: string | null | undefined, toRaw: string | null | undefined): string {
+  const from = (fromRaw || "").trim() || UNSET_TEXT;
+  const to = (toRaw || "").trim() || UNSET_TEXT;
+  if (from === to) return "";
+  if (from === UNSET_TEXT) return `Set to ${to}.`;
+  if (to === UNSET_TEXT) return `Cleared (was ${from}).`;
+  return `Changed from ${from} to ${to}.`;
+}

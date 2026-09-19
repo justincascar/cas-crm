@@ -7,10 +7,16 @@ import { listClaimEvents, recordClaimEvent } from "./chronology";
 import { listKnownAgentsOn, listKnownInsurersOn } from "./insurers";
 import { KEY_DATE_TYPES, eventLabel, latestDates } from "../domain/events";
 import {
+  freeTextChangeDetails,
   normalizeLiabilityStatus,
   normalizeRoadworthiness,
   statusChangeDetails,
 } from "../domain/claim-status";
+import {
+  audatexInsurerNameForClaim,
+  exactInsurerName,
+  type AudatexCodeSuggestion,
+} from "../domain/audatex";
 
 export type ClaimListRow = {
   id: string;
@@ -608,6 +614,7 @@ export function updateClaimPosition(id: string, fields: Record<string, string>, 
     "current_position", "circumstances", "accident_location", "cas_liability_assessment",
     "insurer_liability_position", "roadworthiness_reasons", "next_action", "next_action_due",
     "handler_id", "own_insurer_name", "own_policy_ref", "own_claim_ref",
+    "own_insurer_address", "own_insurer_postcode",
   ];
   const statusPatch: { liabilityStatus?: string; roadworthiness?: string } = {};
   if ("claim_type" in fields || "liabilityStatus" in fields) {
@@ -631,6 +638,139 @@ export function updateClaimPosition(id: string, fields: Record<string, string>, 
   if (actorId && ("liabilityStatus" in statusPatch || "roadworthiness" in statusPatch)) {
     updateClaimWorkflowStatus(id, statusPatch, actorId);
   }
+}
+
+export function updateClaimAudatexCodes(
+  claimId: string,
+  patch: { audatexNetworkCode?: string; audatexWorkProviderCode?: string },
+  actorId: string,
+) {
+  const current = get<{ audatex_network_code: string | null; audatex_work_provider_code: string | null }>(
+    `SELECT audatex_network_code, audatex_work_provider_code FROM claims WHERE id = ?`,
+    [claimId],
+  );
+  if (!current) throw new Error("File not found.");
+  const sets: string[] = ["updated_at = ?"];
+  const params: unknown[] = [nowUtcIso()];
+  const events: Array<{
+    eventType: "audatex_network_code_changed" | "audatex_work_provider_code_changed";
+    details: string;
+  }> = [];
+
+  if ("audatexNetworkCode" in patch) {
+    const previous = (current.audatex_network_code || "").trim();
+    const next = (patch.audatexNetworkCode || "").trim();
+    sets.push("audatex_network_code = ?");
+    params.push(next);
+    const details = freeTextChangeDetails(previous, next);
+    if (details) events.push({ eventType: "audatex_network_code_changed", details });
+  }
+  if ("audatexWorkProviderCode" in patch) {
+    const previous = (current.audatex_work_provider_code || "").trim();
+    const next = (patch.audatexWorkProviderCode || "").trim();
+    sets.push("audatex_work_provider_code = ?");
+    params.push(next);
+    const details = freeTextChangeDetails(previous, next);
+    if (details) events.push({ eventType: "audatex_work_provider_code_changed", details });
+  }
+
+  if (sets.length === 1) return;
+  params.push(claimId);
+  run(`UPDATE claims SET ${sets.join(", ")} WHERE id = ?`, params);
+  for (const event of events) {
+    recordClaimEvent({
+      claimId,
+      eventType: event.eventType,
+      occurredAt: nowUtcIso(),
+      details: event.details,
+      actorId,
+      source: "staff",
+    });
+  }
+}
+
+function latestAudatexCodeForInsurer(params: {
+  insurerName: string;
+  excludeClaimId: string;
+  column: "audatex_network_code" | "audatex_work_provider_code";
+  eventType: "audatex_network_code_changed" | "audatex_work_provider_code_changed";
+}): AudatexCodeSuggestion | null {
+  const insurerName = exactInsurerName(params.insurerName);
+  if (!insurerName) return null;
+  const row = get<{
+    id: string;
+    file_reference: string;
+    code: string;
+  }>(
+    `SELECT c.id, c.file_reference, TRIM(c.${params.column}) AS code
+     FROM claims c
+     WHERE c.id != ?
+       AND TRIM(IFNULL(c.${params.column}, '')) != ''
+       AND (
+         (c.claim_type = 'fault' AND TRIM(IFNULL(c.own_insurer_name, '')) = ?)
+         OR (
+           c.claim_type = 'non_fault'
+           AND (
+             SELECT TRIM(IFNULL(tp.insurer_name, ''))
+             FROM claim_third_parties tp
+             WHERE tp.claim_id = c.id
+             ORDER BY tp.sequence, tp.id
+             LIMIT 1
+           ) = ?
+         )
+       )
+     ORDER BY COALESCE(
+       (SELECT MAX(e.occurred_at) FROM claim_events e
+        WHERE e.claim_id = c.id AND e.event_type = ?),
+       c.updated_at
+     ) DESC, c.updated_at DESC, c.id DESC
+     LIMIT 1`,
+    [params.excludeClaimId, insurerName, insurerName, params.eventType],
+  );
+  const code = (row?.code || "").trim();
+  if (!row || !code) return null;
+  return {
+    value: code,
+    insurerName,
+    sourceClaimId: String(row.id),
+    sourceFileReference: String(row.file_reference),
+  };
+}
+
+export function suggestAudatexCodesForClaim(claimId: string): {
+  insurerName: string;
+  network: AudatexCodeSuggestion | null;
+  workProvider: AudatexCodeSuggestion | null;
+} {
+  const claim = get<{
+    claim_type: string | null;
+    own_insurer_name: string | null;
+  }>(`SELECT claim_type, own_insurer_name FROM claims WHERE id = ?`, [claimId]);
+  const tp = get<{ insurer_name: string | null }>(
+    `SELECT insurer_name FROM claim_third_parties WHERE claim_id = ? ORDER BY sequence, id LIMIT 1`,
+    [claimId],
+  );
+  const insurerName = audatexInsurerNameForClaim({
+    liabilityStatus: claim?.claim_type,
+    ownInsurerName: claim?.own_insurer_name,
+    tpInsurerName: tp?.insurer_name,
+  });
+  if (!insurerName) return { insurerName: "", network: null, workProvider: null };
+  return {
+    insurerName,
+    network: latestAudatexCodeForInsurer({
+      insurerName,
+      excludeClaimId: claimId,
+      column: "audatex_network_code",
+      eventType: "audatex_network_code_changed",
+    }),
+    workProvider: latestAudatexCodeForInsurer({
+      insurerName,
+      excludeClaimId: claimId,
+      column: "audatex_work_provider_code",
+      eventType: "audatex_work_provider_code_changed",
+    }),
+  };
 }
 
 export function createReservation(input: {

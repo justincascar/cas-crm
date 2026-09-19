@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { clipMobileNumber, MOBILE_REQUIRED_DIGITS, mobileNumberError } from "@/lib/phone-number";
+import { clipMobileNumber, mobileDigits, MOBILE_REQUIRED_DIGITS, mobileNumberError } from "@/lib/phone-number";
 
 const fieldClass = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
@@ -23,13 +23,17 @@ export function MobileField({
         type="tel"
         inputMode="numeric"
         autoComplete="tel"
-        maxLength={MOBILE_REQUIRED_DIGITS}
         value={value}
-        className={className}
-        onChange={(event) => setValue(clipMobileNumber(event.currentTarget.value))}
+        className={error ? `${className} field-invalid` : className}
+        aria-invalid={error ? true : undefined}
+        onChange={(event) => setValue(mobileDigits(event.currentTarget.value))}
       />
       <span className="mt-1 block text-xs text-slate">{MOBILE_REQUIRED_DIGITS} digits</span>
-      {error ? <span className="mt-1 block text-xs text-overdue">{error}</span> : null}
+      {error ? (
+        <span className="field-error" data-field-error={name}>
+          {error}
+        </span>
+      ) : null}
     </>
   );
 }

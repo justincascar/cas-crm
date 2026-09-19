@@ -43,6 +43,10 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["other_contact_skipped", "INTEGER NOT NULL DEFAULT 0"],
     ["storage_started_on", "TEXT"],
     ["storage_rate_pence", "INTEGER"],
+    ["own_insurer_address", "TEXT"],
+    ["own_insurer_postcode", "TEXT"],
+    ["audatex_network_code", "TEXT"],
+    ["audatex_work_provider_code", "TEXT"],
   ],
   claim_third_parties: [
     ["sequence", "INTEGER NOT NULL DEFAULT 1"],

@@ -149,26 +149,31 @@ export function accidentAtFromParts(date?: string, time?: string): string | unde
   return occurredFromForm(`${d}T${t.length === 5 ? t : "00:00"}`);
 }
 
-export function intakeDateErrors(input: IntakeInput): string | null {
-  const accident = accidentDateError(input.accidentDate);
-  if (accident) return accident;
+export function intakeFieldErrors(input: IntakeInput): { field: string; message: string }[] {
+  const errors: { field: string; message: string }[] = [];
+  const clientMobile = mobileNumberError(input.client.mobile);
+  if (clientMobile) errors.push({ field: "client_mobile", message: clientMobile });
   const clientErr = dobSaveError(input.client.dob, clientDobKind(input.clientRole), Boolean(input.client.dobConfirmed));
-  if (clientErr) return clientErr;
+  if (clientErr) errors.push({ field: "client_dob", message: clientErr });
   if (input.clientRole === "owner" || input.clientRole === "driver") {
+    if (input.counterpart?.mobile) {
+      const counterpartMobileErr = mobileNumberError(input.counterpart.mobile);
+      if (counterpartMobileErr) errors.push({ field: "counterpart_mobile", message: counterpartMobileErr });
+    }
     const counterpartErr = dobSaveError(
       input.counterpart?.dob,
       counterpartDobKind(input.clientRole),
       Boolean(input.counterpart?.dobConfirmed),
     );
-    if (counterpartErr) return counterpartErr;
+    if (counterpartErr) errors.push({ field: "counterpart_dob", message: counterpartErr });
   }
-  const mobileErr = mobileNumberError(input.client.mobile);
-  if (mobileErr) return mobileErr;
-  if (input.counterpart?.mobile) {
-    const counterpartMobileErr = mobileNumberError(input.counterpart.mobile);
-    if (counterpartMobileErr) return counterpartMobileErr;
-  }
-  return null;
+  const accident = accidentDateError(input.accidentDate);
+  if (accident) errors.push({ field: "accidentDate", message: accident });
+  return errors;
+}
+
+export function intakeDateErrors(input: IntakeInput): string | null {
+  return intakeFieldErrors(input)[0]?.message ?? null;
 }
 
 function insertPerson(person: IntakePerson, preferred: string | null) {

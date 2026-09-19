@@ -8,10 +8,11 @@ import {
   addTask,
   completeTask,
   createReservation,
+  updateClaimAudatexCodes,
   updateClaimPosition,
   updateClaimWorkflowStatus,
 } from "@/lib/db/queries";
-import { createClaimFromIntake, intakeDateErrors, intakeFromFormData } from "@/lib/db/intake";
+import { createClaimFromIntake, intakeFieldErrors, intakeFromFormData } from "@/lib/db/intake";
 import { complianceLookup } from "@/lib/lookups/compliance";
 import {
   generateClaimDocument,
@@ -30,15 +31,26 @@ import { isoDaysFromNow } from "@/lib/dates";
 import { postcodeLookup } from "@/lib/lookups/postcode";
 import { VEHICLE_MANUAL_HINT, vehicleLookup } from "@/lib/lookups/vehicle";
 import { isDocumentTemplateKey } from "@/lib/documents/catalog";
+import { errorQuery, FieldValidationError } from "@/lib/form-validation";
 
 export async function actionCreateClaim(formData: FormData) {
   await requireStaff();
   const input = intakeFromFormData(formData);
-  const blocked = intakeDateErrors(input);
+  const blocked = intakeFieldErrors(input)[0];
   if (blocked) {
-    redirect(`/claims/new?error=${encodeURIComponent(blocked)}`);
+    redirect(`/claims/new${errorQuery(blocked.message, blocked.field)}`);
   }
-  const result = await createClaimFromIntake(input);
+  let result: { id: string };
+  try {
+    result = await createClaimFromIntake(input);
+  } catch (error) {
+    if (error instanceof FieldValidationError) {
+      redirect(`/claims/new${errorQuery(error.message, error.field)}`);
+    }
+    const message = error instanceof Error ? error.message : "Could not create the claim.";
+    const field = /forename or surname/i.test(message) ? "client_forename" : undefined;
+    redirect(`/claims/new${errorQuery(message, field)}`);
+  }
   revalidatePath("/");
   revalidatePath("/claims");
   redirect(`/claims/${result.id}`);
@@ -93,6 +105,8 @@ export async function actionUpdateClaim(formData: FormData) {
     own_insurer_name: String(formData.get("own_insurer_name") || ""),
     own_policy_ref: String(formData.get("own_policy_ref") || ""),
     own_claim_ref: String(formData.get("own_claim_ref") || ""),
+    own_insurer_address: String(formData.get("own_insurer_address") || ""),
+    own_insurer_postcode: String(formData.get("own_insurer_postcode") || ""),
   }, staff.id);
   revalidatePath(`/claims/${id}`);
   revalidatePath("/");
@@ -110,6 +124,22 @@ export async function actionUpdateClaimStatus(formData: FormData) {
   }
   revalidatePath(`/claims/${id}`);
   revalidatePath(`/claims/${id}/work/general`);
+  revalidatePath(`/claims/${id}`, "layout");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+export async function actionUpdateAudatexCodes(formData: FormData) {
+  const staff = await requireStaff();
+  const id = String(formData.get("claimId"));
+  const field = String(formData.get("field") || "");
+  if (field === "network") {
+    updateClaimAudatexCodes(id, { audatexNetworkCode: String(formData.get("audatexNetworkCode") || "") }, staff.id);
+  } else if (field === "provider") {
+    updateClaimAudatexCodes(id, { audatexWorkProviderCode: String(formData.get("audatexWorkProviderCode") || "") }, staff.id);
+  }
+  revalidatePath(`/claims/${id}`);
+  revalidatePath(`/claims/${id}/work/insurer`);
   revalidatePath(`/claims/${id}`, "layout");
   revalidatePath("/");
   return { ok: true };
@@ -138,7 +168,7 @@ export async function actionReserveVehicle(formData: FormData) {
     return { ok: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Reservation failed.";
-    if (returnTo) redirect(`${returnTo}?error=${encodeURIComponent(message)}`);
+    if (returnTo) redirect(`${returnTo}${errorQuery(message)}`);
     return { error: message };
   }
 }
@@ -151,7 +181,8 @@ export async function actionSaveClaimScreen(formData: FormData) {
     saveScreenData(claimId, screenKey, valuesFromForm(formData, screenKey), String(formData.get("actorId") || "staff-sian"));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not save this screen.";
-    redirect(`/claims/${claimId}/work/${screenKey}?error=${encodeURIComponent(message)}`);
+    const field = error instanceof FieldValidationError ? error.field : undefined;
+    redirect(`/claims/${claimId}/work/${screenKey}${errorQuery(message, field)}`);
   }
   revalidatePath(`/claims/${claimId}`);
   revalidatePath(`/claims/${claimId}/work/${screenKey}`);
@@ -172,7 +203,7 @@ export async function actionRequestScenePhotosWhatsApp(formData: FormData) {
     await requestScenePhotosWhatsApp(claimId, actorId);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not request the scene photographs.";
-    redirect(`/claims/${claimId}/work/${screenKey}?error=${encodeURIComponent(message)}`);
+    redirect(`/claims/${claimId}/work/${screenKey}${errorQuery(message)}`);
   }
   revalidatePath(`/claims/${claimId}`);
   revalidatePath(`/claims/${claimId}/work/${screenKey}`);
@@ -236,9 +267,9 @@ export async function actionRecordEvent(formData: FormData) {
 export async function actionGenerateDocument(formData: FormData) {
   await requireStaff();
   const claimId = String(formData.get("claimId"));
-  const templateKey = String(formData.get("templateKey") || "initial_tp_insurer");
+  const templateKey = String(formData.get("templateKey") || "");
   if (!isDocumentTemplateKey(templateKey)) {
-    redirect(`/claims/${claimId}?error=${encodeURIComponent("Unknown document template.")}`);
+    redirect(`/claims/${claimId}${errorQuery("Unknown document template.")}`);
   }
   const result = generateClaimDocument({
     claimId,
@@ -256,13 +287,14 @@ export async function actionPreviewCorrespondence(formData: FormData) {
   await requireStaff();
   const templateKey = String(formData.get("templateKey") || "");
   if (!isDocumentTemplateKey(templateKey)) {
-    return { error: "Unknown template.", to: "", subject: "", body: "", missing: [] as string[], legalSignOffRequired: false };
+    return { error: "Unknown template.", to: "", subject: "", body: "", html: "", missing: [] as string[], legalSignOffRequired: false };
   }
   const preview = letterPreview(String(formData.get("claimId")), templateKey);
   return {
     to: "to" in preview ? preview.to : "",
     subject: preview.subject,
     body: preview.text,
+    html: preview.html,
     missing: preview.missing,
     legalSignOffRequired: preview.legalSignOffRequired,
   };
@@ -445,7 +477,8 @@ export async function actionSaveHirePack(formData: FormData) {
   });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not save the hire pack.";
-    redirect(`/claims/${claimId}/hire-pack?error=${encodeURIComponent(message)}`);
+    const field = error instanceof FieldValidationError ? error.field : undefined;
+    redirect(`/claims/${claimId}/hire-pack${errorQuery(message, field)}`);
   }
   revalidatePath(`/claims/${claimId}/hire-pack`);
   revalidatePath(`/claims/${claimId}`);

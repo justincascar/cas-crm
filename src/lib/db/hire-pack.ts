@@ -8,6 +8,7 @@ import {
 } from "../documents/hire-pack-fields";
 import { formatUkDate, formatUkDateTime, nowUtcIso } from "../dates";
 import { dobSaveError } from "../age";
+import { FieldValidationError } from "../form-validation";
 import { mobileNumberError } from "../phone-number";
 import { formatGbp } from "../money";
 import { all, get, newId, run } from "./connection";
@@ -154,21 +155,31 @@ export function getHirePack(claimId: string) {
   };
 }
 
-export function hirePackSaveError(input: HirePackData): string | null {
+export function hirePackSaveFieldError(input: HirePackData): { field: string; message: string } | null {
   const confirmed = (key: string) => {
     const value = input[key];
     return value === "yes" || value === 1;
   };
   const hirerErr = dobSaveError(String(input.date_of_birth || ""), "hirer", confirmed("date_of_birth_confirmed"));
-  if (hirerErr) return hirerErr;
+  if (hirerErr) return { field: "date_of_birth", message: hirerErr };
   const mobileErr = mobileNumberError(String(input.mobile_tel || ""));
-  if (mobileErr) return mobileErr;
-  return dobSaveError(String(input.additional_dob || ""), "driver", confirmed("additional_dob_confirmed"));
+  if (mobileErr) return { field: "mobile_tel", message: mobileErr };
+  const additionalErr = dobSaveError(
+    String(input.additional_dob || ""),
+    "driver",
+    confirmed("additional_dob_confirmed"),
+  );
+  if (additionalErr) return { field: "additional_dob", message: additionalErr };
+  return null;
+}
+
+export function hirePackSaveError(input: HirePackData): string | null {
+  return hirePackSaveFieldError(input)?.message ?? null;
 }
 
 export function saveHirePack(claimId: string, input: HirePackData) {
-  const blocked = hirePackSaveError(input);
-  if (blocked) throw new Error(blocked);
+  const blocked = hirePackSaveFieldError(input);
+  if (blocked) throw new FieldValidationError(blocked.field, blocked.message);
   const existing = get(`SELECT claim_id FROM hire_pack_data WHERE claim_id = ?`, [claimId]);
   const columns = Object.keys(EMPTY_PACK);
   const values = columns.map((key) => input[key] ?? EMPTY_PACK[key]);

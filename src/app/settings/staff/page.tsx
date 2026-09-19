@@ -6,6 +6,7 @@ import {
   actionSetStaffRole,
 } from "@/app/staff-actions";
 import { PageHeader } from "@/components/ClaimTable";
+import { ValidatedForm } from "@/components/ValidatedForm";
 import { requireAdministrator } from "@/lib/auth/session";
 import { ADMINISTRATOR_ROLE, STAFF_ROLE } from "@/lib/auth/roles";
 import { listAllStaff } from "@/lib/db/staff-admin";
@@ -42,7 +43,7 @@ export default async function StaffAdminPage({
 
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Add a staff login</h2>
-        <form action={actionCreateStaff} className="mt-4 grid gap-3 sm:grid-cols-2">
+        <ValidatedForm action={actionCreateStaff} className="mt-4 grid gap-3 sm:grid-cols-2">
           <label className="text-sm">
             Name
             <input name="name" required className={field} />
@@ -71,7 +72,7 @@ export default async function StaffAdminPage({
               Create login
             </button>
           </div>
-        </form>
+        </ValidatedForm>
       </section>
 
       <section className="space-y-3">
@@ -98,7 +99,7 @@ export default async function StaffAdminPage({
                   Save role
                 </button>
               </form>
-              <form action={actionResetStaffPassword} className="space-y-2">
+              <ValidatedForm action={actionResetStaffPassword} className="space-y-2">
                 <input type="hidden" name="staffId" value={person.id} />
                 <label className="block text-sm">
                   Reset password
@@ -107,7 +108,7 @@ export default async function StaffAdminPage({
                 <button type="submit" className="rounded-md border border-line px-3 py-2 text-sm">
                   Reset and sign them out
                 </button>
-              </form>
+              </ValidatedForm>
               <form action={actionSetStaffActive} className="space-y-2">
                 <input type="hidden" name="staffId" value={person.id} />
                 <input type="hidden" name="active" value={person.active ? "0" : "1"} />

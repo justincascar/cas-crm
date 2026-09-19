@@ -73,6 +73,27 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - Hire-start and reservation rules were not changed. Opening a file still does not start charges.
 - Seeded TEST files were not rewritten. TEST-0001 still stores `unknown` / `awaiting_assessment`, which now display as Not yet decided. TEST-0005 remains stored as non-fault (its circumstances mention a disputed junction, but that value was not silently changed).
 
+19 September 2026 — Fault and non-fault notification letters, and Audatex codes:
+
+- Inspected the existing document generator first (Hire Pack HTML branding, `wrapLetter`, preview, generate-and-file). The two new letters reuse that system. They are not a separate document store.
+- **Now real (staff-previewable, filed as generated, not sent):**
+  - Fault claim letter to the client's own insurer, offered when Liability status is Fault.
+  - Non-fault initial letter to the TPI, offered when Liability status is Non-fault. This replaces the earlier placeholder TPI notification wording.
+- Courtesy-vehicle sentences appear only when a courtesy vehicle is actually allocated on Hire/Fleet. Credit hire is not treated as courtesy.
+- On Disputed / unclear (or Not yet decided), neither letter is auto-suggested. Staff pick manually.
+- Missing facts are marked `[not yet on file]` in the preview and listed above the letter. They are not left blank and are not invented.
+- Audatex network code and work provider code are free text on the claim (overview and Client insurer screen). They stay blank until staff enter them after the insurer has confirmed. Changes are recorded in file history. They are not filled from the insurer name.
+- If another file already has codes for the **same insurer name** (exact match as typed: own insurer on Fault, third-party insurer on Non-fault), those last-saved values are pre-filled as a suggestion. They are marked as suggested and are not confirmed on this file until staff save. A saved correction on this file becomes the next suggestion for that insurer. A brand-new insurer name still starts blank. Matching is exact after trim — “Aviva” will not pick up “Aviva Insurance”.
+- Generating a letter files it on the claim as generated. It does not claim to have been sent. Live mailbox send is still not connected.
+- **Still placeholder / operational draft:** Hire Pack (layout vs Word original outstanding), Storage & Recovery standalone wording, engineer instruction, repair commencement, liability chaser, hire-pack cover, rebuttals (solicitor sign-off still required), payment chases, total-loss and client emails, and any letter before action.
+
+19 September 2026 — Field-level validation:
+
+- Invalid fields are marked on the field itself (red outline) with a short message underneath. This is not only a banner at the top of the page.
+- On submit, every invalid field is highlighted. The page scrolls to the first one in reading order and puts the cursor in it, including fields further down a long form.
+- Required-and-empty uses the same pattern as a wrong format (for example a mobile that is not 11 digits). The red highlight clears as soon as that field becomes valid.
+- The same behaviour is used on the new claim form, client/file screens, Hire Pack, fleet reservations, login, communications, notes/tasks, and staff password forms.
+
 Blocked: provider accounts, per-file permissions, shared hosting, live DVLA, live mailbox send.
 
 ## Not yet claimed

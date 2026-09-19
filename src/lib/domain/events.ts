@@ -3,6 +3,7 @@ export const CLAIM_EVENT_TYPES = [
   { key: "accident", label: "Accident" },
   { key: "client_welcome_sent", label: "Client welcome sent" },
   { key: "initial_letter_tp_insurer", label: "Initial letter to third-party insurer" },
+  { key: "initial_letter_own_insurer", label: "Initial letter to client's own insurer" },
   { key: "liability_chase_sent", label: "Liability chase sent" },
   { key: "engineer_instructed", label: "Engineer instructed" },
   { key: "engineer_report_received", label: "Engineer report received" },
@@ -37,6 +38,8 @@ export const CLAIM_EVENT_TYPES = [
   { key: "document_generated", label: "Document generated" },
   { key: "liability_status_changed", label: "Liability status changed" },
   { key: "roadworthiness_changed", label: "Roadworthiness changed" },
+  { key: "audatex_network_code_changed", label: "Audatex network code changed" },
+  { key: "audatex_work_provider_code_changed", label: "Audatex work provider code changed" },
   { key: "other", label: "Other" },
 ] as const;
 

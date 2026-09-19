@@ -24,10 +24,15 @@ export function AccidentDateField({
         value={value}
         max={today}
         onChange={(e) => setValue(e.target.value)}
-        className={className}
+        className={error ? `${className} field-invalid` : className}
+        aria-invalid={error ? true : undefined}
       />
       <p className="mt-1 text-xs text-slate">Cannot be after today (UK time).</p>
-      {error ? <p className="mt-1 text-sm text-overdue">{error}</p> : null}
+      {error ? (
+        <p className="field-error" data-field-error={name}>
+          {error}
+        </p>
+      ) : null}
     </div>
   );
 }

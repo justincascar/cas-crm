@@ -33,7 +33,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
       </div>
       {missing.length > 0 ? (
         <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm print:hidden">
-          Missing from the file (shown as Unknown in the letter): {missing.join(", ")}.
+          Missing from the file (shown in the letter as [not yet on file] or Unknown, not left blank): {missing.join(", ")}.
         </p>
       ) : null}
       <p className="text-xs text-slate print:hidden">{CAS_TEMPLATE_NOTICE}</p>

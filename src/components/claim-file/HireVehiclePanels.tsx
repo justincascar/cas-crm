@@ -1,4 +1,5 @@
 import { actionReserveVehicle, actionSaveClaimScreen } from "@/app/actions";
+import { ValidatedForm } from "@/components/ValidatedForm";
 import type { ScreenValues } from "@/lib/db/screens";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
@@ -11,12 +12,16 @@ export function HireVehiclePanel({
   fleet,
   values,
   saved,
+  error,
+  errorField,
 }: {
   claimId: string;
   actorId: string;
   fleet: FleetRow[];
   values: ScreenValues;
   saved?: boolean;
+  error?: string;
+  errorField?: string;
 }) {
   const available = fleet.filter((v) => String(v.status) === "available");
   return (
@@ -48,7 +53,12 @@ export function HireVehiclePanel({
         </table>
       </section>
 
-      <form action={actionReserveVehicle} className="space-y-3 rounded-xl border border-line bg-card p-5">
+      <ValidatedForm
+        action={actionReserveVehicle}
+        className="space-y-3 rounded-xl border border-line bg-card p-5"
+        initialError={error}
+        initialErrorField={errorField}
+      >
         <h2 className="font-serif text-xl text-navy-deep">Hire fleet vehicle</h2>
         <p className="text-sm text-slate">
           Allocating or reserving a vehicle does not start hire charges. Overlaps, including staff bookings, are blocked.
@@ -87,9 +97,9 @@ export function HireVehiclePanel({
         <button className="rounded-md bg-navy px-4 py-2 text-sm text-white" type="submit">
           Reserve for this file
         </button>
-      </form>
+      </ValidatedForm>
 
-      <form action={actionSaveClaimScreen} className="space-y-3 rounded-xl border border-line bg-card p-5">
+      <ValidatedForm action={actionSaveClaimScreen} className="space-y-3 rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Cross hire</h2>
         <p className="text-sm text-slate">Record a vehicle hired from another supplier. This does not invent a live booking.</p>
         <input type="hidden" name="claimId" value={claimId} />
@@ -107,7 +117,7 @@ export function HireVehiclePanel({
           Save cross-hire note
         </button>
         {saved ? <p className="text-sm text-ok">Saved.</p> : null}
-      </form>
+      </ValidatedForm>
     </div>
   );
 }
@@ -117,16 +127,25 @@ export function ReserveHirePanel({
   actorId,
   fleet,
   reservations,
+  error,
+  errorField,
 }: {
   claimId: string;
   actorId: string;
   fleet: FleetRow[];
   reservations: FleetRow[];
+  error?: string;
+  errorField?: string;
 }) {
   const onHire = fleet.filter((v) => String(v.status) === "on_hire" || String(v.status) === "reserved");
   return (
     <div className="space-y-6">
-      <form action={actionReserveVehicle} className="space-y-3 rounded-xl border border-line bg-card p-5">
+      <ValidatedForm
+        action={actionReserveVehicle}
+        className="space-y-3 rounded-xl border border-line bg-card p-5"
+        initialError={error}
+        initialErrorField={errorField}
+      >
         <h2 className="font-serif text-xl text-navy-deep">Reserve a vehicle currently on hire</h2>
         <p className="text-sm text-slate">
           This books a future hold after the current use. It does not start charges on this file, and overlapping dates are blocked.
@@ -158,7 +177,7 @@ export function ReserveHirePanel({
         <button className="rounded-md bg-navy px-4 py-2 text-sm text-white" type="submit">
           Reserve this vehicle
         </button>
-      </form>
+      </ValidatedForm>
 
       <section className="overflow-x-auto rounded-xl border border-line bg-card">
         <table className="ledger-table">

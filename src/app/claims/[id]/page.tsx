@@ -3,11 +3,13 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { actionAddNote, actionAddTask, actionCompleteTask, actionUpdateClaim } from "@/app/actions";
 import { FileHistory } from "@/components/FileHistory";
+import { ClaimAudatexFields } from "@/components/ClaimAudatexFields";
 import { ClaimWorkflowStatus } from "@/components/ClaimWorkflowStatus";
 import { PageHeader } from "@/components/ClaimTable";
+import { ValidatedForm } from "@/components/ValidatedForm";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import { requireStaff } from "@/lib/auth/session";
-import { getClaim, listStaff } from "@/lib/db/queries";
+import { getClaim, listStaff, suggestAudatexCodesForClaim } from "@/lib/db/queries";
 import { formatGbp } from "@/lib/money";
 import { HEAD_LABELS, type HeadOfLoss } from "@/lib/constants";
 import { formatVehicleRegistration } from "@/lib/text";
@@ -28,6 +30,7 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
   if (!data) notFound();
   const { claim } = data;
   const staff = listStaff();
+  const audatexSuggestion = suggestAudatexCodesForClaim(String(claim.id));
 
   return (
     <div className="space-y-6">
@@ -56,6 +59,15 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
         claimId={String(claim.id)}
         liabilityStatus={String(claim.claim_type || "")}
         roadworthiness={String(claim.roadworthiness || "")}
+      />
+
+      <ClaimAudatexFields
+        claimId={String(claim.id)}
+        insurerName={audatexSuggestion.insurerName}
+        networkCode={String(claim.audatex_network_code || "")}
+        workProviderCode={String(claim.audatex_work_provider_code || "")}
+        suggestedNetwork={audatexSuggestion.network}
+        suggestedWorkProvider={audatexSuggestion.workProvider}
       />
 
       <div className="grid gap-3 md:grid-cols-3">
@@ -136,6 +148,7 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
         keyDates={data.keyDates}
         correspondence={data.correspondence}
         documents={data.documents}
+        liabilityStatus={String(claim.claim_type || "")}
       />
 
       <section className="grid gap-6 xl:grid-cols-3">
@@ -209,6 +222,16 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
             <label className="block text-sm">
               Insurer claim ref
               <input name="own_claim_ref" className={field} defaultValue={String(claim.own_claim_ref || "")} />
+            </label>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm">
+              Own insurer address
+              <textarea name="own_insurer_address" rows={2} className={field} defaultValue={String(claim.own_insurer_address || "")} />
+            </label>
+            <label className="block text-sm">
+              Own insurer postcode
+              <input name="own_insurer_postcode" className={field} defaultValue={String(claim.own_insurer_postcode || "")} />
             </label>
           </div>
           <label className="block text-sm">
@@ -386,14 +409,14 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
       <section className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-xl border border-line bg-card p-5">
           <h2 className="font-serif text-xl text-navy-deep">Notes</h2>
-          <form action={actionAddNote} className="mt-3 space-y-2">
+          <ValidatedForm action={actionAddNote} className="mt-3 space-y-2">
             <input type="hidden" name="claimId" value={String(claim.id)} />
             <input type="hidden" name="authorId" value={String(claim.handler_id || "staff-sian")} />
             <textarea name="body" required rows={3} className={field} placeholder="Add a file note" />
             <button className="rounded-md bg-navy px-3 py-2 text-sm text-white" type="submit">
               Add note
             </button>
-          </form>
+          </ValidatedForm>
           <ul className="mt-4 space-y-3">
             {data.notes.map((n) => (
               <li key={n.id} className="border-t border-line pt-3 text-sm">
@@ -407,7 +430,7 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
         </div>
         <div className="rounded-xl border border-line bg-card p-5">
           <h2 className="font-serif text-xl text-navy-deep">Tasks</h2>
-          <form action={actionAddTask} className="mt-3 grid gap-2">
+          <ValidatedForm action={actionAddTask} className="mt-3 grid gap-2">
             <input type="hidden" name="claimId" value={String(claim.id)} />
             <input name="title" required placeholder="Task title" className={field} />
             <div className="grid grid-cols-2 gap-2">
@@ -424,7 +447,7 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
             <button className="rounded-md bg-navy px-3 py-2 text-sm text-white" type="submit">
               Add task
             </button>
-          </form>
+          </ValidatedForm>
           <ul className="mt-4 space-y-2">
             {data.tasks.map((t) => (
               <li key={String(t.id)} className="flex items-start justify-between gap-3 text-sm">

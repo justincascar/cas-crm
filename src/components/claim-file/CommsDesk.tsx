@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  actionGenerateDocument,
   actionLogIncomingEmail,
   actionLogIncomingWhatsApp,
   actionPreviewCorrespondence,
@@ -11,7 +10,8 @@ import {
   actionSendEmail,
   actionSendWhatsApp,
 } from "@/app/actions";
-import { DOCUMENT_TEMPLATES } from "@/lib/documents/catalog";
+import { DocumentGenerateForm } from "@/components/DocumentGenerateForm";
+import { ValidatedForm } from "@/components/ValidatedForm";
 import { EMAIL_TEMPLATES } from "@/lib/documents/email-templates";
 import { formatUkDateTime } from "@/lib/dates";
 import Link from "next/link";
@@ -38,12 +38,14 @@ export function CommsDesk({
   defaults,
   correspondence,
   documents,
+  liabilityStatus,
 }: {
   claimId: string;
   handlerId: string;
   defaults: CommsContactDefaults;
   correspondence: CorrespondenceRow[];
   documents: DocumentRow[];
+  liabilityStatus: string;
 }) {
   const router = useRouter();
   const defaultSubject = `Our ref: ${defaults.fileReference}  Your policy: ${defaults.policyRef || "…"}`;
@@ -85,7 +87,7 @@ export function CommsDesk({
         )}
       </section>
 
-      <form
+      <ValidatedForm
         className="grid gap-3 rounded-xl border border-line bg-card p-5 md:grid-cols-2"
         action={async (formData) => {
           const result = await actionSendEmail(formData);
@@ -180,9 +182,9 @@ export function CommsDesk({
           Record outgoing email
         </button>
         {emailMsg ? <p className="text-sm text-copper md:col-span-2">{emailMsg}</p> : null}
-      </form>
+      </ValidatedForm>
 
-      <form action={actionLogIncomingEmail} className="grid gap-3 rounded-xl border border-dashed border-line bg-paper p-5 md:grid-cols-2">
+      <ValidatedForm action={actionLogIncomingEmail} className="grid gap-3 rounded-xl border border-dashed border-line bg-paper p-5 md:grid-cols-2">
         <h2 className="font-serif text-xl text-navy-deep md:col-span-2">File an incoming email</h2>
         <input type="hidden" name="claimId" value={claimId} />
         <input type="hidden" name="actorId" value={handlerId} />
@@ -205,9 +207,9 @@ export function CommsDesk({
         <button className="rounded-md border border-line bg-white px-4 py-2 text-sm md:col-span-2" type="submit">
           File incoming email
         </button>
-      </form>
+      </ValidatedForm>
 
-      <form
+      <ValidatedForm
         className="grid gap-3 rounded-xl border border-line bg-card p-5 md:grid-cols-2"
         action={async (formData) => {
           const result = await actionSendWhatsApp(formData);
@@ -240,9 +242,9 @@ export function CommsDesk({
           Record outgoing WhatsApp
         </button>
         {waMsg ? <p className="text-sm text-copper md:col-span-2">{waMsg}</p> : null}
-      </form>
+      </ValidatedForm>
 
-      <form action={actionLogIncomingWhatsApp} className="grid gap-3 rounded-xl border border-dashed border-line bg-paper p-5 md:grid-cols-2">
+      <ValidatedForm action={actionLogIncomingWhatsApp} className="grid gap-3 rounded-xl border border-dashed border-line bg-paper p-5 md:grid-cols-2">
         <h2 className="font-serif text-xl text-navy-deep md:col-span-2">File an incoming WhatsApp</h2>
         <input type="hidden" name="claimId" value={claimId} />
         <input type="hidden" name="actorId" value={handlerId} />
@@ -261,9 +263,9 @@ export function CommsDesk({
         <button className="rounded-md border border-line bg-white px-4 py-2 text-sm md:col-span-2" type="submit">
           File incoming WhatsApp
         </button>
-      </form>
+      </ValidatedForm>
 
-      <form
+      <ValidatedForm
         className="grid gap-3 rounded-xl border border-line bg-card p-5 md:grid-cols-2"
         action={async (formData) => {
           const result = await actionRecordCall(formData);
@@ -325,41 +327,14 @@ export function CommsDesk({
           Record call
         </button>
         {callMsg ? <p className="text-sm text-copper md:col-span-2">{callMsg}</p> : null}
-      </form>
+      </ValidatedForm>
 
-      <form action={actionGenerateDocument} className="grid gap-3 rounded-xl border-2 border-teal bg-[#e8f4f2] p-5 md:grid-cols-2">
-        <h2 className="font-serif text-xl text-navy-deep md:col-span-2">Generate a document</h2>
-        <p className="text-sm text-slate md:col-span-2">
-          Letters and emails are built from dates already on this file. Missing items are listed, not invented. Rebuttal wording
-          needs solicitor sign-off before live use. Hire Pack is a separate pack.
-        </p>
-        <input type="hidden" name="claimId" value={claimId} />
-        <input type="hidden" name="actorId" value={handlerId} />
-        <label className="text-sm">
-          Document
-          <select name="templateKey" className={field} defaultValue="initial_tp_insurer">
-            {DOCUMENT_TEMPLATES.map((t) => (
-              <option key={t.key} value={t.key}>
-                {t.channel === "email" ? `Email: ${t.title}` : t.title}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="text-sm">
-          Letter date
-          <input name="letterDate" type="date" className={field} />
-        </label>
-        <label className="flex items-center gap-2 text-sm md:col-span-2">
-          <input name="recordOnFile" type="checkbox" value="yes" defaultChecked />
-          Also record this date on the file history
-        </label>
-        <button className="rounded-md bg-teal px-4 py-2 text-sm font-semibold text-white" type="submit">
-          Generate and open
-        </button>
-        <Link href={`/claims/${claimId}/hire-pack`} className="self-center text-sm font-semibold text-teal-dark underline">
-          Open Hire Pack
-        </Link>
-      </form>
+      <DocumentGenerateForm
+        claimId={claimId}
+        handlerId={handlerId}
+        liabilityStatus={liabilityStatus}
+        variant="comms"
+      />
 
       {documents.length > 0 ? (
         <section className="rounded-xl border border-line bg-card p-5">

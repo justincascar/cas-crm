@@ -6,10 +6,10 @@ import { listStaff, listKnownInsurers, listKnownAgents, nextReference } from "@/
 export default async function NewClaimPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; field?: string }>;
 }) {
   await requireStaff();
-  const { error } = await searchParams;
+  const { error, field } = await searchParams;
   const staff = listStaff().map((s) => ({ id: String(s.id), name: String(s.name) }));
   const previewRef = nextReference();
 
@@ -23,6 +23,7 @@ export default async function NewClaimPage({
         staff={staff}
         nextRef={previewRef}
         error={error}
+        errorField={field}
         insurers={listKnownInsurers()}
         agents={listKnownAgents()}
       />

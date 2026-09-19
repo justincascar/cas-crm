@@ -5,11 +5,12 @@ import type { CorrespondenceSpec } from "./correspondence";
 export const CAS_LETTER_SPECS: CorrespondenceSpec[] = [
   {
     key: "initial_tp_insurer",
-    title: "Notification of claim (third-party insurer)",
+    title: "Non-fault initial letter (third-party insurer)",
     channel: "letter",
     audience: "insurer",
     eventType: "initial_letter_tp_insurer",
     legalCitations: false,
+    required: ["client_name", "accident_date", "tp_insurer_name", "vehicle_reg"],
     // Structure follows the supplied Initial Letter ERS.doc. File-specific facts from that example are not copied.
     required: ["client_name", "accident_date", "tp_insurer_name", "vehicle_reg"],
     subject: "Uninsured losses — {{claim_ref}}",

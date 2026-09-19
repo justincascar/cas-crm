@@ -4,6 +4,7 @@ import { actionGenerateHirePack, actionGenerateStorageRecovery, actionSaveHirePa
 import { AgeField } from "@/components/AgeField";
 import { MobileField } from "@/components/MobileField";
 import { PageHeader } from "@/components/ClaimTable";
+import { ValidatedForm } from "@/components/ValidatedForm";
 import { requireStaff } from "@/lib/auth/session";
 import { getHirePack } from "@/lib/db/hire-pack";
 import { HIRE_PACK_OPTIONAL, RENTAL_PERIOD_DECISION } from "@/lib/documents/hire-pack-fields";
@@ -21,11 +22,11 @@ export default async function HirePackPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; field?: string }>;
 }) {
   const { id } = await params;
   await requireStaff();
-  const { error } = await searchParams;
+  const { error, field } = await searchParams;
   const pack = getHirePack(id);
   if (!pack) notFound();
   const s = pack.stored;
@@ -71,7 +72,12 @@ export default async function HirePackPage({
         </p>
       )}
 
-      <form className="space-y-6" action={actionSaveHirePack}>
+      <ValidatedForm
+        className="space-y-6"
+        action={actionSaveHirePack}
+        initialError={error}
+        initialErrorField={field}
+      >
         <input type="hidden" name="claimId" value={id} />
         <input type="hidden" name="actorId" value={actorId} />
 
@@ -365,7 +371,7 @@ export default async function HirePackPage({
             Generate Storage &amp; Recovery
           </button>
         </div>
-      </form>
+      </ValidatedForm>
     </div>
   );
 }

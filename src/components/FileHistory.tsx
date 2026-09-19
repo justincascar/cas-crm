@@ -1,9 +1,9 @@
 import {
-  actionGenerateDocument,
   actionRecordEvent,
 } from "@/app/actions";
+import { DocumentGenerateForm } from "@/components/DocumentGenerateForm";
+import { ValidatedForm } from "@/components/ValidatedForm";
 import { CLAIM_EVENT_TYPES } from "@/lib/domain/events";
-import { DOCUMENT_TEMPLATES } from "@/lib/documents/catalog";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import Link from "next/link";
 
@@ -29,6 +29,7 @@ export function FileHistory({
   keyDates,
   correspondence,
   documents,
+  liabilityStatus,
 }: {
   claimId: string;
   handlerId: string;
@@ -36,6 +37,7 @@ export function FileHistory({
   keyDates: KeyDate[];
   correspondence: Array<Record<string, string | number | null>>;
   documents: Array<Record<string, string | number | null>>;
+  liabilityStatus: string;
 }) {
   return (
     <section className="space-y-4 rounded-xl border border-line bg-card p-5">
@@ -79,7 +81,7 @@ export function FileHistory({
       </ol>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <form action={actionRecordEvent} className="space-y-2 rounded-lg border border-line p-4">
+        <ValidatedForm action={actionRecordEvent} className="space-y-2 rounded-lg border border-line p-4">
           <h3 className="font-serif text-lg text-navy-deep">Record a dated step</h3>
           <input type="hidden" name="claimId" value={claimId} />
           <input type="hidden" name="actorId" value={handlerId} />
@@ -114,38 +116,14 @@ export function FileHistory({
           <button className="rounded-md bg-navy px-3 py-2 text-sm text-white" type="submit">
             Save on file history
           </button>
-        </form>
+        </ValidatedForm>
 
-        <form action={actionGenerateDocument} className="space-y-2 rounded-lg border border-line p-4">
-          <h3 className="font-serif text-lg text-navy-deep">Create a document from the dates</h3>
-          <p className="text-xs text-slate">
-            Uses dates and figures already on this file. Missing items are listed, not invented. Rebuttal letters include
-            supplied case-law wording and need solicitor sign-off before live use. Live sending is not connected.
-          </p>
-          <input type="hidden" name="claimId" value={claimId} />
-          <input type="hidden" name="actorId" value={handlerId} />
-          <label className="block text-sm">
-            Document
-            <select name="templateKey" className={field} defaultValue="initial_tp_insurer">
-              {DOCUMENT_TEMPLATES.map((t) => (
-                <option key={t.key} value={t.key}>
-                  {t.channel === "email" ? `Email: ${t.title}` : t.title}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-sm">
-            Letter date
-            <input name="letterDate" type="date" className={field} />
-          </label>
-          <label className="flex items-center gap-2 text-sm">
-            <input name="recordOnFile" type="checkbox" value="yes" defaultChecked />
-            Also record this date on the file history
-          </label>
-          <button className="rounded-md bg-teal px-3 py-2 text-sm text-white" type="submit">
-            Generate and open
-          </button>
-        </form>
+        <DocumentGenerateForm
+          claimId={claimId}
+          handlerId={handlerId}
+          liabilityStatus={liabilityStatus}
+          variant="history"
+        />
 
         <div className="space-y-2 rounded-lg border-2 border-navy bg-[#e8eef4] p-4">
           <h3 className="font-serif text-lg text-navy-deep">Email, WhatsApp and calls</h3>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { actionReserveVehicle } from "@/app/actions";
+import { ValidatedForm } from "@/components/ValidatedForm";
 
 export function ReserveForm({
   vehicles,
@@ -12,7 +13,7 @@ export function ReserveForm({
 }) {
   const [message, setMessage] = useState<string | null>(null);
   return (
-    <form
+    <ValidatedForm
       className="grid gap-3 rounded-xl border border-line bg-card p-5 md:grid-cols-2"
       action={async (formData) => {
         const result = await actionReserveVehicle(formData);
@@ -67,6 +68,6 @@ export function ReserveForm({
       <p className="text-xs text-slate md:col-span-2">
         Overlapping allocations, including staff bookings, are blocked. A reservation does not start hire charges.
       </p>
-    </form>
+    </ValidatedForm>
   );
 }

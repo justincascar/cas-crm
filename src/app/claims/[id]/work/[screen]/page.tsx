@@ -15,11 +15,11 @@ export default async function ClaimWorkScreenPage({
   searchParams,
 }: {
   params: Promise<{ id: string; screen: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; whatsapp?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; field?: string; whatsapp?: string }>;
 }) {
   const { id, screen } = await params;
   await requireStaff();
-  const { saved, error, whatsapp } = await searchParams;
+  const { saved, error, field, whatsapp } = await searchParams;
   const def = getClaimScreen(screen);
   if (!def) notFound();
   const data = getClaim(id);
@@ -56,6 +56,7 @@ export default async function ClaimWorkScreenPage({
           }}
           correspondence={data.correspondence.map((row) => ({ ...row }))}
           documents={data.documents.map((row) => ({ ...row }))}
+          liabilityStatus={String(data.claim.claim_type || "")}
         />
       ) : null}
 
@@ -71,6 +72,7 @@ export default async function ClaimWorkScreenPage({
           keyDates={data.keyDates}
           correspondence={data.correspondence}
           documents={data.documents}
+          liabilityStatus={String(data.claim.claim_type || "")}
         />
       ) : null}
 
@@ -81,6 +83,8 @@ export default async function ClaimWorkScreenPage({
           fleet={listFleet()}
           values={values}
           saved={justSaved}
+          error={error}
+          errorField={field}
         />
       ) : null}
 
@@ -90,6 +94,8 @@ export default async function ClaimWorkScreenPage({
           actorId={actorId}
           fleet={listFleet()}
           reservations={listReservations()}
+          error={error}
+          errorField={field}
         />
       ) : null}
 
@@ -103,6 +109,8 @@ export default async function ClaimWorkScreenPage({
           clientRole={String(data.claim.client_role || "")}
           insurers={listKnownInsurers()}
           agents={listKnownAgents()}
+          error={error}
+          errorField={field}
         />
       ) : null}
     </div>
