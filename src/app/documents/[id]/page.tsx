@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PrintButton } from "@/components/PrintButton";
+import { StoredFilePreview } from "@/components/StoredFilePreview";
 import { formatUkDateTime } from "@/lib/dates";
 import { requireStaff } from "@/lib/auth/session";
 import { getDocument } from "@/lib/db/chronology";
@@ -16,6 +17,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
   const storedPath = doc.stored_relpath ? String(doc.stored_relpath) : "";
   const claimId = doc.claim_id ? String(doc.claim_id) : "";
   const fleetId = doc.fleet_vehicle_id ? String(doc.fleet_vehicle_id) : "";
+  const storedFilename = String(doc.original_filename || "document.pdf");
 
   return (
     <div className="mx-auto max-w-3xl space-y-4">
@@ -41,8 +43,8 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
             </Link>
           ) : null}
           {storedPath ? (
-            <a className="text-sm text-teal-dark underline" href={`/documents/${id}/file`} target="_blank" rel="noreferrer">
-              Open stored file
+            <a className="text-sm text-teal-dark underline" href={`/documents/${id}/file`} download={storedFilename}>
+              Download original
             </a>
           ) : (
             <PrintButton />
@@ -61,11 +63,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
         <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm print:hidden">{CAS_LEGAL_SIGNOFF_NOTICE}</p>
       ) : null}
       {storedPath ? (
-        <iframe
-          title={String(doc.title)}
-          src={`/documents/${id}/file`}
-          className="h-[80vh] w-full rounded-xl border border-line bg-card"
-        />
+        <StoredFilePreview documentId={id} title={String(doc.title)} />
       ) : doc.body_html ? (
         <div className="letter-paper rounded-xl border border-line bg-card p-8" dangerouslySetInnerHTML={{ __html: String(doc.body_html) }} />
       ) : (

@@ -62,16 +62,11 @@ export default async function FleetVehiclePage({
           <ul className="mt-3 space-y-2 text-sm">
             {documents.map((doc) => (
               <li key={doc.id}>
-                <a className="text-teal-dark underline" href={`/documents/${doc.id}/file`} target="_blank" rel="noreferrer">
+                <Link className="text-teal-dark underline" href={`/documents/${doc.id}`}>
                   View {doc.document_type || "file"}: {doc.original_filename || doc.title}
-                </a>
+                </Link>
                 <span className="ml-2 text-slate">
                   ({doc.byte_size ? `${doc.byte_size} bytes` : "file"} · {formatUkDateTime(doc.created_at)})
-                </span>
-                <span className="ml-2">
-                  <Link className="text-teal-dark underline" href={`/documents/${doc.id}`}>
-                    Document record
-                  </Link>
                 </span>
               </li>
             ))}

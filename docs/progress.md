@@ -125,6 +125,10 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - YT18 VJL is an Audi Q7. The supplied folder was labelled A4, and the import stored model `S4 S LINE TDI QUATTRO AUTO` (a misread of D.3 `Q7 S LINE TDI QUATTRO AUTO` on the actual V5C). The record and stored filename now read Q7. Staff edits of make/model after import are not overwritten.
 - All 45 stored V5Cs were compared to the vehicle records. No other confirmed make/model mismatch, and no V5C filed under the wrong registration. SF16 AWC remains unreadable in this prototype (JPEG2000 page).
 
+21 September 2026 — Stored PDF viewer:
+
+- Opening a stored V5C no longer embeds the raw PDF in the page (Chrome's plugin froze the CRM). Pages are drawn as images; the original can be downloaded. The rest of the screen stays usable if a page cannot be drawn.
+
 Blocked: provider accounts, per-file permissions, shared hosting, live DVLA, live mailbox send.
 
 ## Not yet claimed
