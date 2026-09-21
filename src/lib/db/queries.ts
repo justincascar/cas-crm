@@ -1,8 +1,8 @@
 import { FILE_REFERENCE_PREFIX_DEFAULT, HEAD_LABELS, type HeadOfLoss } from "../constants";
-import { listDueChases } from "./chase";
+import { listDueChases, type ChaseView } from "./chase";
 import { accidentDateError, isBeforeLondonDay, isSameLondonDay, londonDateIso, nowUtcIso } from "../dates";
 import { formatGbp, sumDistinctHeads } from "../money";
-import { all, dbPath, get, getDb, newId, run } from "./connection";
+import { all, dbPath, get, getDb, newId, resetSqlStatementCount, run, sqlStatementCount } from "./connection";
 import { canReserveVehicle, chaseFileStateFromPosition, chaseStopReason, nextFileReference, parseFileReferenceNumber } from "../domain/rules";
 import { listClaimEvents, recordClaimEvent } from "./chronology";
 import { listKnownAgentsOn, listKnownInsurersOn } from "./insurers";
@@ -68,7 +68,7 @@ export const QUEUE_LABELS: Record<string, string> = {
   litigation: "Litigation deadlines",
 };
 
-export function listClaims(opts: { q?: string; queue?: string } = {}): ClaimListRow[] {
+export function listClaims(opts: { q?: string; queue?: string; dueChases?: ChaseView[] } = {}): ClaimListRow[] {
   const params: unknown[] = [];
   const where: string[] = [];
   if (opts.q) {
@@ -87,13 +87,23 @@ export function listClaims(opts: { q?: string; queue?: string } = {}): ClaimList
     }
   }
   const sql = CLAIM_LIST_SQL + (where.length ? ` WHERE ${where.join(" AND ")}` : "") + " ORDER BY c.file_reference";
-  return overlayDueChaseNextAction(all<ClaimListRow>(sql, params));
+  return overlayDueChaseNextAction(all<ClaimListRow>(sql, params), opts.dueChases);
 }
 
-function overlayDueChaseNextAction(rows: ClaimListRow[]): ClaimListRow[] {
+/** Card counts only — no chase overlay. Overlay is for next-action labels, not for how many files sit in a queue. */
+export function countClaims(queue?: string): number {
+  const extra = queue ? queueWhere(queue) : { sql: "", params: [] };
+  const sql = extra.sql
+    ? `SELECT COUNT(*) AS c FROM claims c WHERE ${extra.sql}`
+    : `SELECT COUNT(*) AS c FROM claims`;
+  const row = get<{ c: number }>(sql, extra.params);
+  return Number(row?.c || 0);
+}
+
+function overlayDueChaseNextAction(rows: ClaimListRow[], dueChases?: ChaseView[]): ClaimListRow[] {
   if (rows.length === 0) return rows;
   const dueByClaim = new Map<string, { labels: string[]; dueAt: string | null }>();
-  for (const chase of listDueChases()) {
+  for (const chase of dueChases ?? listDueChases()) {
     const current = dueByClaim.get(chase.claimId);
     const label = chase.label || chase.dueLabel;
     if (!current) {
@@ -152,7 +162,10 @@ function queueWhere(queue: string): { sql: string; params: unknown[] } {
 }
 
 export function getDashboard() {
-  const claims = listClaims();
+  resetSqlStatementCount();
+  const started = Date.now();
+  const chasesDue = listDueChases();
+  const claims = listClaims({ dueChases: chasesDue });
   const tasks = all<{
     id: string;
     title: string;
@@ -203,7 +216,6 @@ export function getDashboard() {
   }
   const totals = sumDistinctHeads(lines);
 
-  const chasesDue = listDueChases();
   const chasesDueByKind = {
     liability_response: chasesDue.filter((row) => row.kind === "liability_response"),
     engineer_report: chasesDue.filter((row) => row.kind === "engineer_report"),
@@ -211,25 +223,31 @@ export function getDashboard() {
   };
 
   const cards = [
-    { key: "new_enquiries", label: "New enquiries / incomplete forms", count: listClaims({ queue: "new_enquiries" }).length, tone: "warn" },
+    { key: "new_enquiries", label: "New enquiries / incomplete forms", count: countClaims("new_enquiries"), tone: "warn" },
     { key: "tasks_today", label: "Tasks due today", count: today.length, tone: "info", href: "/tasks?when=today" },
     { key: "tasks_overdue", label: "Overdue tasks", count: overdue.length, tone: "bad", href: "/tasks?when=overdue" },
-    { key: "active_hire", label: "Active hire", count: listClaims({ queue: "active_hire" }).length, tone: "info" },
-    { key: "storage", label: "Vehicles in storage", count: listClaims({ queue: "storage" }).length, tone: "info" },
+    { key: "active_hire", label: "Active hire", count: countClaims("active_hire"), tone: "info" },
+    { key: "storage", label: "Vehicles in storage", count: countClaims("storage"), tone: "info" },
     { key: "fleet_available", label: "Fleet available", count: Number(fleetMap.available || 0), tone: "ok", href: "/hire" },
-    { key: "liability", label: "Awaited liability responses", count: listClaims({ queue: "liability" }).length, tone: "warn" },
-    { key: "engineer", label: "Awaited engineer reports", count: listClaims({ queue: "engineer" }).length, tone: "warn" },
-    { key: "repair_auth", label: "Repair authorisations awaited", count: listClaims({ queue: "repair_auth" }).length, tone: "warn" },
-    { key: "repairs_progress", label: "Repairs in progress", count: listClaims({ queue: "repairs_progress" }).length, tone: "info" },
-    { key: "ready_return", label: "Ready for customer return", count: listClaims({ queue: "ready_return" }).length, tone: "ok" },
-    { key: "tl_payment", label: "Total-loss payments awaited", count: listClaims({ queue: "tl_payment" }).length, tone: "warn" },
-    { key: "off_hire", label: "Off-hire dates approaching", count: listClaims({ queue: "off_hire" }).length, tone: "warn" },
-    { key: "salvage", label: "Salvage awaiting collection", count: listClaims({ queue: "salvage" }).length, tone: "info" },
-    { key: "renewals", label: "Agreement renewals (day 80 / unsigned)", count: listClaims({ queue: "renewals" }).length, tone: "bad" },
-    { key: "unread", label: "Unread correspondence", count: listClaims({ queue: "unread" }).length, tone: "info" },
-    { key: "offers", label: "Offers awaiting review", count: listClaims({ queue: "offers" }).length, tone: "warn" },
-    { key: "litigation", label: "Litigation deadlines", count: listClaims({ queue: "litigation" }).length, tone: "bad" },
+    { key: "liability", label: "Awaited liability responses", count: countClaims("liability"), tone: "warn" },
+    { key: "engineer", label: "Awaited engineer reports", count: countClaims("engineer"), tone: "warn" },
+    { key: "repair_auth", label: "Repair authorisations awaited", count: countClaims("repair_auth"), tone: "warn" },
+    { key: "repairs_progress", label: "Repairs in progress", count: countClaims("repairs_progress"), tone: "info" },
+    { key: "ready_return", label: "Ready for customer return", count: countClaims("ready_return"), tone: "ok" },
+    { key: "tl_payment", label: "Total-loss payments awaited", count: countClaims("tl_payment"), tone: "warn" },
+    { key: "off_hire", label: "Off-hire dates approaching", count: countClaims("off_hire"), tone: "warn" },
+    { key: "salvage", label: "Salvage awaiting collection", count: countClaims("salvage"), tone: "info" },
+    { key: "renewals", label: "Agreement renewals (day 80 / unsigned)", count: countClaims("renewals"), tone: "bad" },
+    { key: "unread", label: "Unread correspondence", count: countClaims("unread"), tone: "info" },
+    { key: "offers", label: "Offers awaiting review", count: countClaims("offers"), tone: "warn" },
+    { key: "litigation", label: "Litigation deadlines", count: countClaims("litigation"), tone: "bad" },
   ];
+
+  const elapsedMs = Date.now() - started;
+  const sqlStatements = sqlStatementCount();
+  console.info(
+    `[dashboard] ${elapsedMs}ms · ${claims.length} claims · ${chasesDue.length} due chases · ${sqlStatements} SQL statements`,
+  );
 
   return {
     cards,
@@ -244,6 +262,8 @@ export function getDashboard() {
     chasesDue,
     chasesDueByKind,
     engineerChasesDue: chasesDueByKind.engineer_report,
+    dashboardLoadMs: elapsedMs,
+    dashboardSqlStatements: sqlStatements,
   };
 }
 

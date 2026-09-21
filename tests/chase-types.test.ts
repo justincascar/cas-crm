@@ -29,7 +29,7 @@ import {
   recordClaimEvent,
 } from "../src/lib/db/chronology.ts";
 import { ensureEngineers } from "../src/lib/db/engineers.ts";
-import { listClaims } from "../src/lib/db/queries.ts";
+import { getDashboard, listClaims } from "../src/lib/db/queries.ts";
 import { seed } from "../src/lib/db/seed.ts";
 import {
   chaseClockDecision,
@@ -255,6 +255,25 @@ describe("per-claim interval override and multiple chases", () => {
       });
       assert.equal(chaseForClaim("repair_authorisation", "c5")?.due, true);
       assert.equal(listChasesForClaim("c5").length, 3);
+    });
+    db.close();
+  });
+});
+
+describe("dashboard chase overlay is batched", () => {
+  it("loads all TEST claims without a query per claim per chase type", () => {
+    const db = seeded();
+    withDatabase(db, () => {
+      const dashboard = getDashboard();
+      assert.ok(dashboard.claims.length >= 12, `expected 12 TEST claims, got ${dashboard.claims.length}`);
+      const five = dashboard.claims.find((row) => row.file_reference === "TEST-0005");
+      assert.match(String(five?.next_action), /Engineer report chase due/);
+      assert.match(String(five?.next_action), /Liability response chase due/);
+      assert.ok(
+        dashboard.dashboardSqlStatements < 50,
+        `expected fewer than 50 SQL statements, got ${dashboard.dashboardSqlStatements}`,
+      );
+      assert.ok(dashboard.dashboardLoadMs < 500, `dashboard took ${dashboard.dashboardLoadMs}ms`);
     });
     db.close();
   });

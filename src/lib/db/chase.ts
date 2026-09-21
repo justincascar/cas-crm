@@ -109,16 +109,6 @@ export function latestIsoForEvent(claimId: string, eventType: string): string | 
   return row?.occurred_at ? String(row.occurred_at) : null;
 }
 
-function latestMarkedSentAt(claimId: string, templateKey: string): string | null {
-  const correspondence = get<{ created_at: string }>(
-    `SELECT created_at FROM correspondence
-     WHERE claim_id = ? AND template_key = ? AND sent_status = 'handler_marked_sent'
-     ORDER BY created_at DESC LIMIT 1`,
-    [claimId, templateKey],
-  );
-  return correspondence?.created_at ? String(correspondence.created_at) : null;
-}
-
 export function chaseRow(claimId: string, kind: ChaseKind): ChaseRow | undefined {
   const def = chaseDefinition(kind);
   return get<ChaseRow>(
@@ -128,80 +118,180 @@ export function chaseRow(claimId: string, kind: ChaseKind): ChaseRow | undefined
   );
 }
 
-function startedAtForKind(claimId: string, kind: ChaseKind): string | null {
+function chaseEventTypes(): string[] {
+  const types = new Set<string>();
+  for (const kind of CHASE_KINDS) {
+    const def = CHASE_KIND_DEFINITIONS[kind];
+    for (const eventType of def.startEventTypes) types.add(eventType);
+    types.add(def.chaseSentEventType);
+    for (const eventType of def.extraChaseSentEventTypes) types.add(eventType);
+    for (const eventType of def.outcomeReceivedEventTypes) types.add(eventType);
+    types.add(def.outcomeClearedEventType);
+  }
+  return [...types];
+}
+
+function chaseTemplateKeys(): string[] {
+  const keys = new Set<string>();
+  for (const kind of CHASE_KINDS) {
+    const def = CHASE_KIND_DEFINITIONS[kind];
+    for (const templateKey of def.startTemplateKeys) keys.add(templateKey);
+    keys.add(def.templateKey);
+  }
+  return [...keys];
+}
+
+function factKey(claimId: string, name: string) {
+  return `${claimId}\t${name}`;
+}
+
+type ChaseFacts = {
+  latestEvent: Map<string, string>;
+  latestMarkedSent: Map<string, string>;
+  intervals: Record<ChaseKind, number>;
+  contacts: Map<string, { engineerName: string; engineerEmail: string; insurerName: string; insurerEmail: string }>;
+};
+
+function placeholders(count: number) {
+  return Array.from({ length: count }, () => "?").join(", ");
+}
+
+/** Load every chase clock fact for the given files in a handful of queries, not one per claim/type. */
+function loadChaseIntervals(): Record<ChaseKind, number> {
+  const keys = CHASE_KINDS.map((kind) => chaseDefinition(kind).settingKey);
+  const rows = all<{ key: string; value: string }>(
+    `SELECT key, value FROM settings WHERE key IN (${placeholders(keys.length)})`,
+    keys,
+  );
+  const byKey = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+  const intervals = {} as Record<ChaseKind, number>;
+  for (const kind of CHASE_KINDS) {
+    const def = chaseDefinition(kind);
+    intervals[kind] = parseChaseIntervalDays(byKey[def.settingKey], def.defaultIntervalDays);
+  }
+  return intervals;
+}
+
+function loadChaseFacts(claimIds: string[]): ChaseFacts {
+  const empty: ChaseFacts = {
+    latestEvent: new Map(),
+    latestMarkedSent: new Map(),
+    intervals: loadChaseIntervals(),
+    contacts: new Map(),
+  };
+  if (claimIds.length === 0) return empty;
+
+  const eventTypes = chaseEventTypes();
+  const events = all<{ claim_id: string; event_type: string; occurred_at: string }>(
+    `SELECT claim_id, event_type, occurred_at FROM claim_events
+     WHERE claim_id IN (${placeholders(claimIds.length)}) AND event_type IN (${placeholders(eventTypes.length)})
+     ORDER BY occurred_at DESC, recorded_at DESC`,
+    [...claimIds, ...eventTypes],
+  );
+  for (const row of events) {
+    const key = factKey(row.claim_id, row.event_type);
+    if (!empty.latestEvent.has(key)) empty.latestEvent.set(key, String(row.occurred_at));
+  }
+
+  const templateKeys = chaseTemplateKeys();
+  const sent = all<{ claim_id: string; template_key: string; created_at: string }>(
+    `SELECT claim_id, template_key, created_at FROM correspondence
+     WHERE claim_id IN (${placeholders(claimIds.length)})
+       AND sent_status = 'handler_marked_sent'
+       AND template_key IN (${placeholders(templateKeys.length)})
+     ORDER BY created_at DESC`,
+    [...claimIds, ...templateKeys],
+  );
+  for (const row of sent) {
+    const key = factKey(row.claim_id, row.template_key);
+    if (!empty.latestMarkedSent.has(key)) empty.latestMarkedSent.set(key, String(row.created_at));
+  }
+
+  const contacts = all<{
+    claim_id: string;
+    engineer_name: string | null;
+    engineer_email: string | null;
+    insurer_name: string | null;
+    insurer_email: string | null;
+    handler_name: string | null;
+    handler_email: string | null;
+  }>(
+    `SELECT c.id AS claim_id, e.name AS engineer_name, e.email AS engineer_email,
+            tp.insurer_name, tp.insurer_email, tp.handler_name, tp.handler_email
+     FROM claims c
+     LEFT JOIN engineers e ON e.id = c.engineer_id
+     LEFT JOIN claim_third_parties tp ON tp.claim_id = c.id AND tp.id = (
+       SELECT id FROM claim_third_parties WHERE claim_id = c.id ORDER BY sequence ASC LIMIT 1
+     )
+     WHERE c.id IN (${placeholders(claimIds.length)})`,
+    claimIds,
+  );
+  for (const row of contacts) {
+    empty.contacts.set(row.claim_id, {
+      engineerName: String(row.engineer_name || "").trim(),
+      engineerEmail: String(row.engineer_email || "").trim(),
+      insurerName: String(row.handler_name || row.insurer_name || "").trim(),
+      insurerEmail: String(row.insurer_email || row.handler_email || "").trim(),
+    });
+  }
+  return empty;
+}
+
+function latestFact(map: Map<string, string>, claimId: string, name: string): string | null {
+  return map.get(factKey(claimId, name)) || null;
+}
+
+function startedAtFromFacts(facts: ChaseFacts, claimId: string, kind: ChaseKind): string | null {
   const def = chaseDefinition(kind);
-  const fromEvents = laterIsoAll(def.startEventTypes.map((eventType) => latestIsoForEvent(claimId, eventType)));
-  const fromTemplates = laterIsoAll(def.startTemplateKeys.map((templateKey) => latestMarkedSentAt(claimId, templateKey)));
+  const fromEvents = laterIsoAll(def.startEventTypes.map((eventType) => latestFact(facts.latestEvent, claimId, eventType)));
+  const fromTemplates = laterIsoAll(def.startTemplateKeys.map((templateKey) => latestFact(facts.latestMarkedSent, claimId, templateKey)));
   return laterIso(fromEvents, fromTemplates);
 }
 
-function lastChaseSentAtForKind(claimId: string, kind: ChaseKind): string | null {
+function lastChaseSentFromFacts(facts: ChaseFacts, claimId: string, kind: ChaseKind): string | null {
   const def = chaseDefinition(kind);
   const sentEvents = [def.chaseSentEventType, ...def.extraChaseSentEventTypes];
-  return laterIso(latestMarkedSentAt(claimId, def.templateKey), laterIsoAll(sentEvents.map((eventType) => latestIsoForEvent(claimId, eventType))));
-}
-
-function outcomeAtForKind(claimId: string, kind: ChaseKind): string | null {
-  const def = chaseDefinition(kind);
-  return laterIsoAll(def.outcomeReceivedEventTypes.map((eventType) => latestIsoForEvent(claimId, eventType)));
-}
-
-function engineerContact(claimId: string): { name: string; email: string } {
-  const row = get<{ name: string | null; email: string | null }>(
-    `SELECT e.name, e.email FROM claims c LEFT JOIN engineers e ON e.id = c.engineer_id WHERE c.id = ?`,
-    [claimId],
+  return laterIso(
+    latestFact(facts.latestMarkedSent, claimId, def.templateKey),
+    laterIsoAll(sentEvents.map((eventType) => latestFact(facts.latestEvent, claimId, eventType))),
   );
-  const name = String(row?.name || "").trim();
-  const email = String(row?.email || "").trim();
-  if (name && email) return { name, email };
-  return { name: SEEDED_ENGINEER.name, email: SEEDED_ENGINEER.email };
 }
 
-function insurerContact(claimId: string): { name: string; email: string } {
-  const tp = get<{ insurer_name: string | null; insurer_email: string | null; handler_name: string | null; handler_email: string | null }>(
-    `SELECT insurer_name, insurer_email, handler_name, handler_email
-     FROM claim_third_parties WHERE claim_id = ? ORDER BY sequence ASC LIMIT 1`,
-    [claimId],
-  );
-  const email = String(tp?.insurer_email || tp?.handler_email || "").trim();
-  const name = String(tp?.handler_name || tp?.insurer_name || "").trim();
-  return { name, email };
-}
-
-function contactForKind(claimId: string, kind: ChaseKind): {
+function contactFromFacts(facts: ChaseFacts, claimId: string, kind: ChaseKind): {
   name: string;
   email: string;
   missing: boolean;
   missingMessage: string | null;
 } {
   const def = chaseDefinition(kind);
+  const row = facts.contacts.get(claimId);
   if (def.recipient === "engineer") {
-    const engineer = engineerContact(claimId);
-    const missing = !engineer.email;
+    const name = row?.engineerName || SEEDED_ENGINEER.name;
+    const email = row?.engineerEmail || SEEDED_ENGINEER.email;
+    const missing = !email;
     return {
-      name: engineer.name,
-      email: engineer.email,
+      name,
+      email,
       missing,
       missingMessage: missing ? "This engineer has no email address. Add one under Settings → Engineers." : null,
     };
   }
-  const insurer = insurerContact(claimId);
-  const missing = !insurer.email;
+  const name = row?.insurerName || "Insurer";
+  const email = row?.insurerEmail || "";
+  const missing = !email;
   return {
-    name: insurer.name || "Insurer",
-    email: insurer.email,
+    name,
+    email,
     missing,
     missingMessage: missing ? NO_INSURER_CONTACT_MESSAGE : null,
   };
 }
 
-export function chaseForClaim(kind: ChaseKind, claimId: string, asAt: string = nowUtcIso()): ChaseView | null {
-  const row = chaseRow(claimId, kind);
-  if (!row) return null;
+function evaluateChase(kind: ChaseKind, claimId: string, row: ChaseRow, facts: ChaseFacts, asAt: string): ChaseView {
   const def = chaseDefinition(kind);
-  const startedAt = startedAtForKind(claimId, kind);
+  const startedAt = startedAtFromFacts(facts, claimId, kind);
   const handlerState = handlerStateFromRow(row);
-  const globalDays = getChaseIntervalDays(kind);
+  const globalDays = facts.intervals[kind];
   const frozenIntervalDays = parseChaseIntervalDays(row.interval_days, globalDays);
   const overrideDays = parseChaseIntervalDays(row.interval_override_days, 0) >= 1 ? parseChaseIntervalDays(row.interval_override_days) : null;
   const effective = effectiveChaseIntervalDays({
@@ -212,9 +302,9 @@ export function chaseForClaim(kind: ChaseKind, claimId: string, asAt: string = n
   });
   const decision = chaseClockDecision({
     startedAt,
-    lastChaseSentAt: lastChaseSentAtForKind(claimId, kind),
-    outcomeAt: outcomeAtForKind(claimId, kind),
-    outcomeClearedAt: latestIsoForEvent(claimId, def.outcomeClearedEventType),
+    lastChaseSentAt: lastChaseSentFromFacts(facts, claimId, kind),
+    outcomeAt: laterIsoAll(def.outcomeReceivedEventTypes.map((eventType) => latestFact(facts.latestEvent, claimId, eventType))),
+    outcomeClearedAt: latestFact(facts.latestEvent, claimId, def.outcomeClearedEventType),
     handlerState,
     intervalDays: effective.days,
     asAt,
@@ -222,7 +312,7 @@ export function chaseForClaim(kind: ChaseKind, claimId: string, asAt: string = n
     notStartedReason: def.notStartedReason,
     outcomeOnFileReason: def.outcomeOnFileReason,
   });
-  const contact = contactForKind(claimId, kind);
+  const contact = contactFromFacts(facts, claimId, kind);
   return {
     kind,
     claimId,
@@ -242,26 +332,49 @@ export function chaseForClaim(kind: ChaseKind, claimId: string, asAt: string = n
   };
 }
 
-export function listChasesForClaim(claimId: string, asAt: string = nowUtcIso()): ChaseView[] {
-  return CHASE_KIND_ORDER.map((kind) => chaseForClaim(kind, claimId, asAt)).filter((row): row is ChaseView => Boolean(row));
+export function chaseForClaim(kind: ChaseKind, claimId: string, asAt: string = nowUtcIso()): ChaseView | null {
+  const row = chaseRow(claimId, kind);
+  if (!row) return null;
+  return evaluateChase(kind, claimId, row, loadChaseFacts([claimId]), asAt);
 }
 
+export function listChasesForClaim(claimId: string, asAt: string = nowUtcIso()): ChaseView[] {
+  const facts = loadChaseFacts([claimId]);
+  const rows = all<ChaseRow & { rule_key: string }>(
+    `SELECT id, status, paused, interval_days, reason, interval_override_days, interval_override_reason, rule_key
+     FROM automations WHERE claim_id = ? AND rule_key IN (${placeholders(CHASE_KINDS.length)})`,
+    [claimId, ...CHASE_KINDS.map((kind) => chaseDefinition(kind).ruleKey)],
+  );
+  const byKind = new Map(rows.map((row) => [chaseKindForRuleKey(row.rule_key), row]));
+  return CHASE_KIND_ORDER.map((kind) => {
+    const row = byKind.get(kind);
+    if (!row) return null;
+    return evaluateChase(kind, claimId, row, facts, asAt);
+  }).filter((row): row is ChaseView => Boolean(row));
+}
+
+type ListedChaseRow = ChaseRow & {
+  claim_id: string;
+  rule_key: string;
+  file_reference: string;
+  client_name: string | null;
+  handler_name: string | null;
+};
+
 export function listDueChases(asAt: string = nowUtcIso()): ChaseView[] {
-  const rows = all<{
-    claim_id: string;
-    rule_key: string;
-    file_reference: string;
-    client_name: string | null;
-    handler_name: string | null;
-  }>(
-    `SELECT a.claim_id, a.rule_key, c.file_reference, p.full_name AS client_name, s.name AS handler_name
+  const rows = all<ListedChaseRow>(
+    `SELECT a.id, a.claim_id, a.rule_key, a.status, a.paused, a.interval_days, a.reason,
+            a.interval_override_days, a.interval_override_reason,
+            c.file_reference, p.full_name AS client_name, s.name AS handler_name
      FROM automations a
      JOIN claims c ON c.id = a.claim_id
      LEFT JOIN people p ON p.id = c.client_person_id
      LEFT JOIN staff s ON s.id = c.handler_id
-     WHERE a.rule_key IN (${CHASE_KINDS.map(() => "?").join(", ")})`,
+     WHERE a.rule_key IN (${placeholders(CHASE_KINDS.length)})`,
     CHASE_KINDS.map((kind) => chaseDefinition(kind).ruleKey),
   );
+  const claimIds = [...new Set(rows.map((row) => row.claim_id))];
+  const facts = loadChaseFacts(claimIds);
   const due: ChaseView[] = [];
   const seen = new Set<string>();
   for (const row of rows) {
@@ -270,8 +383,8 @@ export function listDueChases(asAt: string = nowUtcIso()): ChaseView[] {
     const key = `${row.claim_id}:${kind}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    const view = chaseForClaim(kind, row.claim_id, asAt);
-    if (!view?.due) continue;
+    const view = evaluateChase(kind, row.claim_id, row, facts, asAt);
+    if (!view.due) continue;
     due.push({
       ...view,
       fileReference: row.file_reference,
@@ -390,9 +503,10 @@ export function cancelChase(kind: ChaseKind, claimId: string) {
 }
 
 function chaseClockAt(claimId: string, kind: ChaseKind): string | null {
-  const started = startedAtForKind(claimId, kind);
+  const facts = loadChaseFacts([claimId]);
+  const started = startedAtFromFacts(facts, claimId, kind);
   if (!started) return null;
-  const chased = lastChaseSentAtForKind(claimId, kind);
+  const chased = lastChaseSentFromFacts(facts, claimId, kind);
   if (chased && chased >= started) return chased;
   return started;
 }

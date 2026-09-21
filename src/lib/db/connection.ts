@@ -11,6 +11,8 @@ import { migrate } from "./migrate";
 
 type GlobalDb = typeof globalThis & { __casDb?: DatabaseSync };
 
+const preparedDatabases = new WeakSet<DatabaseSync>();
+
 function databasePath(): string {
   if (process.env.DATABASE_PATH) return process.env.DATABASE_PATH;
   const root = process.env.LOCALAPPDATA || process.env.HOME || process.cwd();
@@ -36,7 +38,21 @@ function openDatabase(): DatabaseSync {
   ensureDemoChases(db);
   ensureStaffAuth(db);
   backfillChronologyIfEmpty(db);
+  preparedDatabases.add(db);
   return db;
+}
+
+function prepareExistingDatabase(db: DatabaseSync) {
+  if (preparedDatabases.has(db)) return;
+  migrate(db);
+  ensureKnownInsurers(db);
+  ensureEngineers(db);
+  ensureDefaultVehicleLocationSetting(db);
+  ensureChaseSettings(db);
+  ensureDemoChases(db);
+  ensureStaffAuth(db);
+  backfillChronologyIfEmpty(db);
+  preparedDatabases.add(db);
 }
 
 export function getDb(): DatabaseSync {
@@ -44,14 +60,7 @@ export function getDb(): DatabaseSync {
   if (!g.__casDb) {
     g.__casDb = openDatabase();
   } else {
-    migrate(g.__casDb);
-    ensureKnownInsurers(g.__casDb);
-    ensureEngineers(g.__casDb);
-    ensureDefaultVehicleLocationSetting(g.__casDb);
-    ensureChaseSettings(g.__casDb);
-    ensureDemoChases(g.__casDb);
-    ensureStaffAuth(g.__casDb);
-    backfillChronologyIfEmpty(g.__casDb);
+    prepareExistingDatabase(g.__casDb);
   }
   return g.__casDb;
 }
@@ -89,14 +98,27 @@ export function newId(prefix = "id"): string {
 
 export type SqlRow = Record<string, string | number | null>;
 
+let sqlCount = 0;
+
+export function resetSqlStatementCount() {
+  sqlCount = 0;
+}
+
+export function sqlStatementCount(): number {
+  return sqlCount;
+}
+
 export function all<T extends SqlRow>(sql: string, params: unknown[] = []): T[] {
+  sqlCount += 1;
   return getDb().prepare(sql).all(...params) as T[];
 }
 
 export function get<T extends SqlRow>(sql: string, params: unknown[] = []): T | undefined {
+  sqlCount += 1;
   return getDb().prepare(sql).get(...params) as T | undefined;
 }
 
 export function run(sql: string, params: unknown[] = []): void {
+  sqlCount += 1;
   getDb().prepare(sql).run(...params);
 }

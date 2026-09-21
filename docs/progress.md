@@ -109,6 +109,7 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - Liability chase starts when a liability enquiry is recorded as sent. It clears only when staff log an insurer decision (accepted / rejected / partial) or pause/cancel. Disputed / unclear and not yet decided are not treated as a decision.
 - Repair authorisation chase starts when staff log that a repair estimate or payment request has been sent. It clears when staff log authorisation or payment received.
 - Prepared chaser emails to insurers use the email stored on Third party 1. If none is recorded, the screen says “No insurer contact on file” rather than guessing. TEST files currently have insurer names only — no correspondence email. The client's own insurer record still has no email field.
+- Dashboard load was slow because each card count re-ran the chase overlay, and each chase ran a separate query per file per type. Chase clocks now load in a handful of batch queries; card counts use COUNT without overlay. Schema setup runs once per database connection rather than on every SQL statement. The dashboard logs elapsed milliseconds and SQL statement count.
 
 Blocked: provider accounts, per-file permissions, shared hosting, live DVLA, live mailbox send.
 
