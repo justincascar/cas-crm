@@ -6,6 +6,7 @@ import { isMobileFieldName, mobileNumberError } from "../phone-number";
 import { formatTypedValue } from "../text";
 import { get, all, getDb, run } from "./connection";
 import { recordClaimEvent } from "./chronology";
+import { normaliseGtaGroup } from "../documents/gta";
 import { poundsToPence } from "./intake";
 import { rememberAgentOn, rememberInsurerOn } from "./insurers";
 import { displayValue } from "../screen-display";
@@ -163,12 +164,13 @@ function applySideEffects(claimId: string, screenKey: string, values: ScreenValu
 
   if (screenKey === "vehicle" && claim.client_vehicle_id) {
     run(
-      `UPDATE vehicles SET make = ?, model = ?, registration = ?, colour = ? WHERE id = ?`,
+      `UPDATE vehicles SET make = ?, model = ?, registration = ?, colour = ?, gta_group = ? WHERE id = ?`,
       [
         values.clientMake || "Unknown",
         values.clientModel || "Unknown",
         values.clientReg || "Unknown",
         values.clientColour || "Unknown",
+        values.clientGtaGroup ? normaliseGtaGroup(values.clientGtaGroup) : null,
         claim.client_vehicle_id,
       ],
     );
@@ -389,7 +391,7 @@ export function seedScreenDefaults(claimId: string, screenKey: string): ScreenVa
   const claim = get<Record<string, string | number | null>>(
     `SELECT c.*, p.title, p.forename, p.surname, p.full_name, p.address_line1, p.town, p.postcode, p.telephone,
             p.email, p.date_of_birth, p.licence_number, p.mobile_tel, p.home_tel, p.licence_issued_on, p.licence_expires_on,
-            v.registration, v.make, v.model, v.colour, v.transmission, v.fuel
+            v.registration, v.make, v.model, v.colour, v.transmission, v.fuel, v.gta_group
      FROM claims c
      LEFT JOIN people p ON p.id = c.client_person_id
      LEFT JOIN vehicles v ON v.id = c.client_vehicle_id
@@ -447,6 +449,7 @@ export function seedScreenDefaults(claimId: string, screenKey: string): ScreenVa
     fill("clientMake", claim.make);
     fill("clientModel", claim.model);
     fill("clientColour", claim.colour);
+    fill("clientGtaGroup", claim.gta_group);
     const tp = all<Record<string, string | number | null>>(
       `SELECT v.registration, v.make, v.model, v.colour
        FROM claim_third_parties tp LEFT JOIN vehicles v ON v.id = tp.vehicle_id

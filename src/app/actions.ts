@@ -27,7 +27,9 @@ import {
   requestScenePhotosWhatsApp,
   sendClaimWhatsApp,
 } from "@/lib/db/chronology";
-import { generateHirePackDocument, generateStorageRecoveryDocument, saveHirePack } from "@/lib/db/hire-pack";
+import { generateHirePackDocument, generateStorageRecoveryDocument, getHirePack, saveHirePack } from "@/lib/db/hire-pack";
+import { generateHireAgreementDocument, getGtaMarkupPercent, prepareHireRating } from "@/lib/db/hire-agreement";
+import { normaliseGtaGroup, standardDailyRatePence } from "@/lib/documents/gta";
 import { saveScreenData, valuesFromForm } from "@/lib/db/screens";
 import { isoDaysFromNow } from "@/lib/dates";
 import { postcodeLookup } from "@/lib/lookups/postcode";
@@ -474,6 +476,14 @@ export async function actionSaveHirePack(formData: FormData) {
   await requireStaff();
   const claimId = String(formData.get("claimId"));
   try {
+    const rating = prepareHireRating({
+      claimId,
+      clientGroupRaw: String(formData.get("client_gta_group") || ""),
+      groupChargedRaw: String(formData.get("group_charged") || ""),
+      dailyRateRaw: String(formData.get("daily_rate") || ""),
+      overrideReason: String(formData.get("group_override_reason") || ""),
+      actorId: String(formData.get("actorId") || ""),
+    });
     saveHirePack(claimId, {
     title: String(formData.get("title") || ""),
     home_tel: String(formData.get("home_tel") || ""),
@@ -490,10 +500,12 @@ export async function actionSaveHirePack(formData: FormData) {
     delivery_address: String(formData.get("delivery_address") || ""),
     hire_fuel: String(formData.get("hire_fuel") || ""),
     vehicle_group: String(formData.get("vehicle_group") || ""),
-    group_charged: String(formData.get("group_charged") || ""),
+    group_charged: rating.groupCharged,
     date_out: String(formData.get("date_out") || ""),
     date_in: String(formData.get("date_in") || ""),
-    daily_rate_pence: poundsToPence(formData, "daily_rate"),
+    daily_rate_pence: rating.dailyRatePence,
+    daily_rate_manual: rating.dailyRateManual,
+    group_override_reason: String(formData.get("group_override_reason") || ""),
     sat_nav_pence: poundsToPence(formData, "sat_nav"),
     additional_driver_pence: poundsToPence(formData, "additional_driver"),
     hands_free_pence: poundsToPence(formData, "hands_free"),
@@ -547,6 +559,29 @@ export async function actionSaveHirePack(formData: FormData) {
   }
   revalidatePath(`/claims/${claimId}/hire-pack`);
   revalidatePath(`/claims/${claimId}`);
+}
+
+export async function actionGenerateHireAgreement(formData: FormData) {
+  await requireStaff();
+  await actionSaveHirePack(formData);
+  const claimId = String(formData.get("claimId"));
+  const pack = getHirePack(claimId);
+  if (!pack) throw new Error("File not found.");
+  const markup = getGtaMarkupPercent();
+  const group = normaliseGtaGroup(String(pack.stored.group_charged || "")) || normaliseGtaGroup(String(pack.claim.client_gta_group || ""));
+  const manual = Number(pack.stored.daily_rate_manual) === 1;
+  const daily = manual ? Number(pack.stored.daily_rate_pence) : standardDailyRatePence(group, markup);
+  const result = (() => {
+    try {
+      return generateHireAgreementDocument(claimId, String(formData.get("actorId") || ""), daily);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Could not generate the agreement.";
+      redirect(`/claims/${claimId}/hire-pack${errorQuery(message)}`);
+    }
+  })();
+  revalidatePath("/documents");
+  revalidatePath(`/claims/${claimId}`);
+  redirect(`/documents/${result.documentId}`);
 }
 
 export async function actionGenerateHirePack(formData: FormData) {

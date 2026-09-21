@@ -57,7 +57,17 @@ export async function actionSaveAgreementLimits(formData: FormData) {
     setChaseIntervalDays("hire_agreement_renewal", String(formData.get("agreementRenewalAlertDay") || ""));
     setAgreementMaxDays(String(formData.get("agreementMaxDays") || ""));
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not save the agreement day limits.";
+  revalidateSettings();
+  redirect("/settings?saved=1");
+}
+
+export async function actionSaveGtaMarkup(formData: FormData) {
+  await requireStaff();
+  try {
+    const { setGtaMarkupPercent } = await import("@/lib/db/hire-agreement");
+    setGtaMarkupPercent(String(formData.get("gtaMarkupPercent") || ""));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not save the GTA markup.";
     redirect(`/settings?error=${encodeURIComponent(message)}`);
   }
   revalidateSettings();

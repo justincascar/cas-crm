@@ -130,6 +130,12 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - SF16 AWC's registration is taken from the supplied filename (`SF16 AWC`), not from the unreadable scan. Make is PEUGEOT. The model is marked unconfirmed, for a paper V5C or DVLA check. A blank registration on a future import uses the filename plate in the same way.
 - Where a V5C shows fuel as HEAVY OIL, the fleet record stores Diesel. Other fuel words are left as read. A make or model a staff member has already typed is not overwritten.
 
+21 September 2026 — Hire Agreement (4 pages) and GTA rating:
+
+- Generating a Hire Agreement files the pages from the supplied Hire Pack.doc that apply to that file. The terms and the cancellation notice are always included, because they cover hire and storage together. The hire vehicle page is included only when a hire vehicle is allocated. The Storage & Recovery page is included only when storage or recovery has been arranged through CAS. A page that does not apply is left out. The claim states which parts are included and why. The agreement number is a TEST-HA sequence, not a continuation of real agreement 100773.
+- GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
+- The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
+
 21 September 2026 — Stored PDF viewer:
 
 - Opening a stored V5C no longer embeds the raw PDF in the page (Chrome's plugin froze the CRM). Pages are drawn as images; the original can be downloaded. The rest of the screen stays usable if a page cannot be drawn.

@@ -5,6 +5,7 @@ import { DEFAULT_VEHICLE_LOCATION } from "../constants";
 import { nowUtcIso } from "../dates";
 import { isVehicleClass, type VehicleClass } from "../fleet/classes";
 import { renameStoredFile, safeFilename, storedFileExists, storeFileCopy } from "../storage/files";
+import { normaliseGtaGroup } from "../documents/gta";
 import { formatVehicleRegistration } from "../text";
 import { get, getDb, newId, run } from "./connection";
 import {
@@ -44,6 +45,7 @@ export type FleetVehicleInput = {
   location: string;
   notes: string;
   isReal?: boolean;
+  gtaGroup?: string;
 };
 
 export type FleetReservationWarning = {
@@ -523,7 +525,16 @@ function normalizeInput(input: FleetVehicleInput): FleetVehicleInput {
     location: blank(input.location) || DEFAULT_VEHICLE_LOCATION,
     notes: blank(input.notes) || "",
     isReal: input.isReal !== false,
+    gtaGroup: optionalGtaGroup(input.gtaGroup),
   };
+}
+
+function optionalGtaGroup(value: string | null | undefined): string {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  const code = normaliseGtaGroup(text);
+  if (!code) throw new Error("Choose a GTA group from the list, or leave it not classified.");
+  return code;
 }
 
 export function createFleetVehicle(input: FleetVehicleInput): string {
@@ -536,8 +547,8 @@ export function createFleetVehicle(input: FleetVehicleInput): string {
   run(
     `INSERT INTO vehicles(
       id, usage, registration, make, model, transmission, fuel, body_type, seats, colour,
-      lookup_source, lookup_incomplete, provenance, engine_cc, first_registered_on, vehicle_class, v5c_missing_json
-    ) VALUES (?, 'fleet', ?, ?, ?, ?, ?, NULL, ?, ?, 'staff', 0, 'staff', ?, ?, ?, NULL)`,
+      lookup_source, lookup_incomplete, provenance, engine_cc, first_registered_on, vehicle_class, v5c_missing_json, gta_group
+    ) VALUES (?, 'fleet', ?, ?, ?, ?, ?, NULL, ?, ?, 'staff', 0, 'staff', ?, ?, ?, NULL, ?)`,
     [
       vehicleId,
       data.registration,
@@ -550,6 +561,7 @@ export function createFleetVehicle(input: FleetVehicleInput): string {
       data.engineCc,
       blank(data.firstRegisteredOn),
       data.vehicleClass,
+      blank(data.gtaGroup),
     ],
   );
   run(
@@ -571,7 +583,7 @@ export function updateFleetVehicle(id: string, input: FleetVehicleInput) {
   run(
     `UPDATE vehicles SET
       registration = ?, make = ?, model = ?, transmission = ?, fuel = ?, seats = ?, colour = ?,
-      engine_cc = ?, first_registered_on = ?, vehicle_class = ?
+      engine_cc = ?, first_registered_on = ?, vehicle_class = ?, gta_group = ?
      WHERE id = ?`,
     [
       blank(data.registration),
@@ -582,8 +594,9 @@ export function updateFleetVehicle(id: string, input: FleetVehicleInput) {
       data.seats,
       blank(data.colour),
       data.engineCc,
-      blank(data.firstRegisteredOn),
+      data.firstRegisteredOn ? blank(data.firstRegisteredOn) : null,
       data.vehicleClass,
+      blank(data.gtaGroup),
       existing.vehicle_id,
     ],
   );
@@ -615,7 +628,7 @@ export function removeFleetVehicle(
 export function getFleetVehicle(id: string) {
   return get<Record<string, string | number | null>>(
     `SELECT fv.*, v.registration, v.make, v.model, v.transmission, v.seats, v.body_type, v.fuel,
-            v.colour, v.engine_cc, v.first_registered_on, v.vehicle_class, v.v5c_missing_json
+            v.colour, v.engine_cc, v.first_registered_on, v.vehicle_class, v.v5c_missing_json, v.gta_group
      FROM fleet_vehicles fv
      JOIN vehicles v ON v.id = fv.vehicle_id
      WHERE fv.id = ?`,

@@ -1,12 +1,14 @@
 import { PageHeader } from "@/components/ClaimTable";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import Link from "next/link";
-import { actionSaveAgreementLimits, actionSaveChaseIntervals, actionSaveDefaultVehicleLocation } from "@/app/settings-actions";
+import { actionSaveAgreementLimits, actionSaveChaseIntervals, actionSaveDefaultVehicleLocation, actionSaveGtaMarkup } from "@/app/settings-actions";
 import { isAdministrator } from "@/lib/auth/roles";
 import { requireStaff } from "@/lib/auth/session";
 import { dbLocation, getSettings, listStaff } from "@/lib/db/queries";
 import { getDefaultVehicleLocation } from "@/lib/db/vehicle-location";
 import { getAgreementApproachingDay, getAgreementMaxDays, getChaseIntervalDays } from "@/lib/db/chase";
+import { getGtaMarkupPercent } from "@/lib/db/hire-agreement";
+import { GTA_RATE_PERIOD_LABEL } from "@/lib/documents/gta";
 import { CAS_CLAIMS_MAILBOX, INDICATIVE_DEFAULTS } from "@/lib/constants";
 import { formatGbp } from "@/lib/money";
 
@@ -27,6 +29,7 @@ export default async function SettingsPage({
   const agreementRenewalAlertDay = getChaseIntervalDays("hire_agreement_renewal");
   const agreementRenewalApproachingDay = getAgreementApproachingDay();
   const agreementMaxDays = getAgreementMaxDays();
+  const gtaMarkupPercent = getGtaMarkupPercent();
   return (
     <div className="max-w-3xl space-y-6">
       <PageHeader
@@ -101,6 +104,32 @@ export default async function SettingsPage({
           <Row label="Claims mailbox" value={`${CAS_CLAIMS_MAILBOX} (decided; live send not connected)`} />
           <Row label="Database file" value={dbLocation()} />
         </dl>
+      </section>
+      <section className="rounded-xl border border-line bg-card p-5">
+        <h2 className="font-serif text-xl text-navy-deep">GTA daily rate</h2>
+        <p className="mt-1 text-sm text-slate">
+          The daily rate on a hire agreement is the GTA ceiling for the client&apos;s own vehicle group, plus this markup.
+          The ceilings are the supplied table for hires from {GTA_RATE_PERIOD_LABEL}. The July 2025 – June 2026 workbook is not used. The
+          vehicle CAS supplies is recorded separately and is not used for the rate.
+        </p>
+        <ValidatedForm action={actionSaveGtaMarkup} className="mt-4 flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            CAS markup (%)
+            <input
+              name="gtaMarkupPercent"
+              type="number"
+              min={0}
+              max={500}
+              step="0.1"
+              required
+              className="mt-1 w-32 rounded-md border border-line bg-white px-3 py-2 text-sm"
+              defaultValue={gtaMarkupPercent}
+            />
+          </label>
+          <button className="rounded-md bg-navy px-4 py-2 text-sm text-white" type="submit">
+            Save markup
+          </button>
+        </ValidatedForm>
       </section>
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Indicative charge defaults</h2>

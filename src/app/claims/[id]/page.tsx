@@ -16,9 +16,9 @@ import { listHireAgreements } from "@/lib/db/chronology";
 import { formatGbp } from "@/lib/money";
 import { HEAD_LABELS, type HeadOfLoss } from "@/lib/constants";
 import { formatVehicleRegistration } from "@/lib/text";
-import { formAction } from "@/lib/form-action";
 import { googleMapsSearchUrl } from "@/lib/lookups/maps";
 import { liabilityStatusLabel, roadworthinessLabel } from "@/lib/domain/claim-status";
+import { describeHireAgreementParts } from "@/lib/documents/hire-agreement-parts";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
@@ -185,7 +185,7 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
       />
 
       <section className="grid gap-6 xl:grid-cols-3">
-        <form action={formAction(actionUpdateClaim)} className="space-y-3 rounded-xl border border-line bg-card p-5 xl:col-span-2">
+        <form action={actionUpdateClaim} className="space-y-3 rounded-xl border border-line bg-card p-5 xl:col-span-2">
           <input type="hidden" name="claimId" value={String(claim.id)} />
           <h2 className="font-serif text-xl text-navy-deep">Claim facts</h2>
           <p className="text-xs text-slate">Staff-reviewed fields. Client-entered material stays in notes and the form status until reviewed.</p>
@@ -365,6 +365,7 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
       <section className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-xl border border-line bg-card p-5">
           <h2 className="font-serif text-xl text-navy-deep">Hire, recovery and storage</h2>
+          <AgreementParts claim={claim} hire={data.hire} recoveryJobs={data.recoveryJobs} reservations={data.reservations} />
           <ul className="mt-3 space-y-1 text-sm">
             <li>Hire status: {pretty(claim.hire_status)}</li>
             <li>Recovery: {pretty(claim.recovery_status)}</li>
@@ -491,7 +492,7 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
                   </div>
                 </div>
                 {t.status === "open" ? (
-                  <form action={formAction(actionCompleteTask)}>
+                  <form action={actionCompleteTask}>
                     <input type="hidden" name="taskId" value={String(t.id)} />
                     <button className="text-xs text-teal-dark underline" type="submit">
                       Done
@@ -548,6 +549,46 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
           ))}
         </Box>
       </section>
+    </div>
+  );
+}
+
+function AgreementParts({
+  claim,
+  hire,
+  recoveryJobs,
+  reservations,
+}: {
+  claim: Record<string, string | number | null>;
+  hire: Array<Record<string, string | number | null>>;
+  recoveryJobs: Array<Record<string, string | number | null>>;
+  reservations: Array<Record<string, string | number | null>>;
+}) {
+  const hireRow = hire[0];
+  const recovered = recoveryJobs.find((job) => String(job.recovered_at || "").trim());
+  const parts = describeHireAgreementParts({
+    hireAllocated: hire.length > 0,
+    hireDescription: hireRow
+      ? [hireRow.make, hireRow.model, hireRow.registration ? formatVehicleRegistration(String(hireRow.registration)) : ""]
+          .map((part) => String(part || "").trim())
+          .filter(Boolean)
+          .join(" ")
+      : "",
+    recoveryStatus: claim.recovery_status ? String(claim.recovery_status) : null,
+    storageStatus: claim.storage_status ? String(claim.storage_status) : null,
+    storageStartedOn: claim.storage_started_on ? String(claim.storage_started_on) : null,
+    recoveryRecoveredAt: recovered?.recovered_at ? String(recovered.recovered_at) : null,
+    hasReservation: reservations.some((row) => ["reserved", "active"].includes(String(row.status || "").toLowerCase())),
+  });
+  return (
+    <div className="mt-3 rounded-md border border-line bg-white px-3 py-3 text-sm">
+      <p className="font-medium text-navy-deep">Hire Agreement pages</p>
+      <ul className="mt-2 space-y-1">
+        <li>{parts.hire.reason}</li>
+        <li>{parts.storageRecovery.reason}</li>
+        <li>{parts.termsAndCancel.reason}</li>
+      </ul>
+      <p className="mt-2 text-slate">The next agreement from this file will be {parts.pageCount} pages.</p>
     </div>
   );
 }

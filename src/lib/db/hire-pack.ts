@@ -7,6 +7,7 @@ import {
   STORAGE_RECOVERY_STANDALONE_BANNER,
 } from "../documents/hire-pack-fields";
 import { formatUkDate, formatUkDateTime, nowUtcIso } from "../dates";
+import { describeHireAgreementParts } from "../documents/hire-agreement-parts";
 import { dobSaveError } from "../age";
 import { FieldValidationError } from "../form-validation";
 import { mobileNumberError } from "../phone-number";
@@ -73,6 +74,8 @@ const EMPTY_PACK: HirePackData = {
   cannot_fund_hire: 0,
   no_other_credit: 0,
   means_notes: "",
+  group_override_reason: "",
+  daily_rate_manual: 0,
   own_vehicle_mileage: null,
   own_vehicle_fuel: "",
   own_vehicle_tyres: "",
@@ -82,7 +85,8 @@ const EMPTY_PACK: HirePackData = {
 export function getHirePack(claimId: string) {
   const claim = get<Record<string, string | number | null>>(
     `SELECT c.*, s.name AS handler_name, p.full_name AS client_name, p.date_of_birth, p.address_line1, p.town, p.postcode,
-            p.telephone, p.email, p.licence_number, v.registration AS client_reg, v.make AS client_make, v.model AS client_model
+            p.telephone, p.email, p.licence_number, v.registration AS client_reg, v.make AS client_make, v.model AS client_model,
+            v.gta_group AS client_gta_group, c.hire_agreement_number
      FROM claims c
      LEFT JOIN staff s ON s.id = c.handler_id
      LEFT JOIN people p ON p.id = c.client_person_id
@@ -92,7 +96,8 @@ export function getHirePack(claimId: string) {
   );
   if (!claim) return null;
   const hire = get<Record<string, string | number | null>>(
-    `SELECT he.*, v.registration AS hire_reg, v.make AS hire_make, v.model AS hire_model, v.transmission AS hire_transmission, v.fuel AS hire_fuel
+    `SELECT he.*, v.registration AS hire_reg, v.make AS hire_make, v.model AS hire_model, v.transmission AS hire_transmission, v.fuel AS hire_fuel,
+            v.gta_group AS supplied_gta_group
      FROM hire_episodes he
      LEFT JOIN fleet_vehicles fv ON fv.id = he.fleet_vehicle_id
      LEFT JOIN vehicles v ON v.id = fv.vehicle_id
@@ -100,7 +105,29 @@ export function getHirePack(claimId: string) {
      ORDER BY he.started_at DESC`,
     [claimId],
   );
-  const stored = get<HirePackData>(`SELECT * FROM hire_pack_data WHERE claim_id = ?`, [claimId]) || {};
+  const savedRow = get<HirePackData>(`SELECT * FROM hire_pack_data WHERE claim_id = ?`, [claimId]);
+  const recoveryJob = get<{ recovered_at: string | null }>(
+    `SELECT recovered_at FROM recovery_jobs WHERE claim_id = ? AND recovered_at IS NOT NULL AND trim(recovered_at) != '' ORDER BY recovered_at DESC LIMIT 1`,
+    [claimId],
+  );
+  const reservation = get<{ id: string }>(
+    `SELECT id FROM reservations WHERE claim_id = ? AND lower(status) IN ('reserved', 'active') LIMIT 1`,
+    [claimId],
+  );
+  const hireDescription = [hire?.hire_make, hire?.hire_model, hire?.hire_reg]
+    .map((part) => String(part || "").trim())
+    .filter(Boolean)
+    .join(" ");
+  const parts = describeHireAgreementParts({
+    hireAllocated: Boolean(hire),
+    hireDescription,
+    recoveryStatus: claim.recovery_status ? String(claim.recovery_status) : null,
+    storageStatus: claim.storage_status ? String(claim.storage_status) : null,
+    storageStartedOn: claim.storage_started_on ? String(claim.storage_started_on) : null,
+    recoveryRecoveredAt: recoveryJob?.recovered_at ? String(recoveryJob.recovered_at) : null,
+    hasReservation: Boolean(reservation),
+  });
+  const stored = savedRow || {};
   const address = [claim.address_line1, claim.town, claim.postcode].filter(Boolean).join(", ");
   const merged: HirePackData = {
     ...EMPTY_PACK,
@@ -152,6 +179,8 @@ export function getHirePack(claimId: string) {
     srNumber: `${claim.file_reference}-SR`,
     clientMake: String(claim.client_make || ""),
     clientModel: String(claim.client_model || ""),
+    packSaved: Boolean(savedRow),
+    parts,
   };
 }
 

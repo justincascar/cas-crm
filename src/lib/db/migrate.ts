@@ -26,6 +26,7 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["first_registered_on", "TEXT"],
     ["vehicle_class", "TEXT"],
     ["v5c_missing_json", "TEXT"],
+    ["gta_group", "TEXT"],
   ],
   fleet_vehicles: [
     ["is_real", "INTEGER NOT NULL DEFAULT 0"],
@@ -67,6 +68,7 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["audatex_network_code", "TEXT"],
     ["audatex_work_provider_code", "TEXT"],
     ["engineer_id", "TEXT"],
+    ["hire_agreement_number", "TEXT"],
   ],
   claim_third_parties: [
     ["sequence", "INTEGER NOT NULL DEFAULT 1"],
@@ -103,6 +105,8 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["own_vehicle_fuel", "TEXT"],
     ["own_vehicle_tyres", "TEXT"],
     ["own_vehicle_damage", "TEXT"],
+    ["group_override_reason", "TEXT"],
+    ["daily_rate_manual", "INTEGER"],
   ],
 };
 
@@ -342,5 +346,11 @@ export function migrate(db: DatabaseSync) {
     CREATE INDEX IF NOT EXISTS idx_documents_fleet ON documents(fleet_vehicle_id);
     CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(document_type);
     CREATE INDEX IF NOT EXISTS idx_fleet_real ON fleet_vehicles(is_real, removed_at);
+    INSERT INTO settings(key, value)
+      SELECT 'gta_markup_percent', '30'
+      WHERE NOT EXISTS (SELECT 1 FROM settings WHERE key = 'gta_markup_percent');
+    INSERT INTO settings(key, value)
+      SELECT 'next_hire_agreement_number', '1'
+      WHERE NOT EXISTS (SELECT 1 FROM settings WHERE key = 'next_hire_agreement_number');
   `);
 }

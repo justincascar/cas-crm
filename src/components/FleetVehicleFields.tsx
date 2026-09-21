@@ -1,4 +1,5 @@
 import { VEHICLE_CLASSES, VEHICLE_CLASS_LABELS } from "@/lib/fleet/classes";
+import { GTA_GROUPS, GTA_NOT_CLASSIFIED } from "@/lib/documents/gta";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
@@ -15,6 +16,7 @@ export type FleetVehicleFormValues = {
   seats?: string | number | null;
   location?: string | null;
   notes?: string | null;
+  gta_group?: string | null;
 };
 
 export function FleetVehicleFields({
@@ -69,6 +71,17 @@ export function FleetVehicleFields({
       <label className="text-sm">
         Date of first registration
         <input name="firstRegisteredOn" type="date" className={field} defaultValue={String(values?.first_registered_on || "")} />
+      </label>
+      <label className="text-sm">
+        GTA group
+        <select name="gtaGroup" className={field} defaultValue={String(values?.gta_group || "")}>
+          <option value="">{GTA_NOT_CLASSIFIED}</option>
+          {GTA_GROUPS.map((group) => (
+            <option key={group} value={group}>
+              {group}
+            </option>
+          ))}
+        </select>
       </label>
       <label className="text-sm">
         Gearbox

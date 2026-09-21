@@ -1,4 +1,5 @@
 import { DEFAULT_VEHICLE_LOCATION } from "./constants";
+import { GTA_GROUPS, GTA_NOT_CLASSIFIED } from "./documents/gta";
 
 export type FieldType = "text" | "textarea" | "date" | "time" | "gbp" | "number" | "checkbox" | "select";
 
@@ -207,6 +208,13 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
           { name: "clientModel", label: "Model" },
           { name: "clientReg", label: "Registration" },
           { name: "clientColour", label: "Colour" },
+          {
+            name: "clientGtaGroup",
+            label: "GTA group",
+            type: "select",
+            options: [{ value: "", label: GTA_NOT_CLASSIFIED }, ...GTA_GROUPS.map((group) => ({ value: group, label: group }))],
+            hint: "Staff set this from the client's own vehicle. It is blank until classified. The hire rate uses this group, not the vehicle CAS supplies.",
+          },
           {
             name: "clientLocation1",
             label: "Vehicle location line 1",

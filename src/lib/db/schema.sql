@@ -62,7 +62,8 @@ CREATE TABLE IF NOT EXISTS vehicles (
   tax_status TEXT,
   mot_status TEXT,
   insurance_recorded TEXT,
-  details_match_client INTEGER
+  details_match_client INTEGER,
+  gta_group TEXT
 );
 
 CREATE TABLE IF NOT EXISTS engineers (
@@ -110,6 +111,7 @@ CREATE TABLE IF NOT EXISTS claims (
   next_action_due TEXT,
   client_person_id TEXT REFERENCES people(id),
   client_vehicle_id TEXT REFERENCES vehicles(id),
+  hire_agreement_number TEXT,
   own_insurer_name TEXT,
   own_policy_ref TEXT,
   own_claim_ref TEXT,

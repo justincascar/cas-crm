@@ -32,6 +32,7 @@ function fieldsFromForm(formData: FormData) {
     seats: seatsRaw ? Number(seatsRaw) : null,
     location: String(formData.get("location") || ""),
     notes: String(formData.get("notes") || ""),
+    gtaGroup: String(formData.get("gtaGroup") || ""),
   };
 }
 

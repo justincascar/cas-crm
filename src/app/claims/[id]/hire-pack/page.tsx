@@ -1,14 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { actionGenerateHirePack, actionGenerateStorageRecovery, actionSaveHirePack } from "@/app/actions";
+import { actionGenerateHireAgreement, actionGenerateHirePack, actionGenerateStorageRecovery, actionSaveHirePack } from "@/app/actions";
+import { getGtaMarkupPercent } from "@/lib/db/hire-agreement";
+import { GTA_GROUPS, GTA_NOT_CLASSIFIED, GTA_RATE_PERIOD_LABEL, gtaGroupLabel, groupChargedAboveClient, normaliseGtaGroup, standardDailyRatePence } from "@/lib/documents/gta";
 import { AgeField } from "@/components/AgeField";
 import { MobileField } from "@/components/MobileField";
 import { PageHeader } from "@/components/ClaimTable";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { requireStaff } from "@/lib/auth/session";
 import { getHirePack } from "@/lib/db/hire-pack";
-import { HIRE_PACK_OPTIONAL, RENTAL_PERIOD_DECISION } from "@/lib/documents/hire-pack-fields";
-import { formatGbp } from "@/lib/money";
+import { RENTAL_PERIOD_DECISION } from "@/lib/documents/hire-pack-fields";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
@@ -25,18 +26,28 @@ export default async function HirePackPage({
   searchParams: Promise<{ error?: string; field?: string }>;
 }) {
   const { id } = await params;
-  await requireStaff();
+  const staffUser = await requireStaff();
   const { error, field } = await searchParams;
   const pack = getHirePack(id);
   if (!pack) notFound();
   const s = pack.stored;
-  const actorId = String(pack.claim.handler_id || "staff-sian");
+  const actorId = staffUser.id;
+  const markup = getGtaMarkupPercent();
+  const clientGroup = normaliseGtaGroup(String(pack.claim.client_gta_group || ""));
+  const suppliedGroup = normaliseGtaGroup(String(pack.hire?.supplied_gta_group || ""));
+  const charged = normaliseGtaGroup(String(s.group_charged || "")) || clientGroup;
+  const calculated = standardDailyRatePence(charged, markup);
+  const manual = Number(s.daily_rate_manual) === 1 && Number(s.daily_rate_pence || 0) > 0;
+  const dailyValue = manual ? (Number(s.daily_rate_pence) / 100).toFixed(2) : calculated != null ? (calculated / 100).toFixed(2) : "";
+  const suppliedHigher = !groupChargedAboveClient(charged, clientGroup) && groupChargedAboveClient(suppliedGroup, clientGroup);
+  const chargedHigher = groupChargedAboveClient(charged, clientGroup);
+  const parts = pack.parts;
 
   return (
     <div className="max-w-4xl space-y-6">
       <PageHeader
         title={`Hire Pack — ${pack.ctx.agreementNumber}`}
-        subtitle="Hire agreement from CAS's Hire Pack.doc. Storage & Recovery is a separate document and does not need a hire agreement. Missing items are listed, not invented. Driver sheets stay internal."
+        subtitle="Hire Agreement from CAS's Hire Pack.doc. Only the pages that apply to this file are generated. The daily rate follows the client's own vehicle GTA group. Missing items are listed, not invented. Signatures are not added."
         actions={
           <Link href={`/claims/${id}`} className="text-sm text-teal-dark underline">
             Back to file
@@ -48,13 +59,25 @@ export default async function HirePackPage({
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
       ) : null}
 
-      {pack.missing.length > 0 ? (
+      <section className="rounded-xl border border-line bg-card p-5 text-sm">
+        <h2 className="font-serif text-xl text-navy-deep">What this agreement will include</h2>
+        <ul className="mt-3 space-y-2">
+          <li>{parts.hire.reason}</li>
+          <li>{parts.storageRecovery.reason}</li>
+          <li>{parts.termsAndCancel.reason}</li>
+        </ul>
+        <p className="mt-3 text-slate">
+          Generating now produces {parts.pageCount} pages. The hire vehicle page and the Storage &amp; Recovery page are left out when they do not apply. They are not printed as blank pages.
+        </p>
+      </section>
+
+      {parts.hire.included && pack.missing.length > 0 ? (
         <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">
           Still needed before this matches a complete hire pack: {pack.missing.join(", ")}.
         </p>
-      ) : (
+      ) : parts.hire.included ? (
         <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm">Mandatory hire pack fields are present.</p>
-      )}
+      ) : null}
 
       <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">
         <strong>Decision needed:</strong> {RENTAL_PERIOD_DECISION.note} CRM alerts: {RENTAL_PERIOD_DECISION.alertDays}{" "}
@@ -63,12 +86,13 @@ export default async function HirePackPage({
 
       {pack.srMissing.length > 0 ? (
         <p className="rounded-md border border-line bg-card px-4 py-3 text-sm">
-          Storage &amp; Recovery can still be generated without a hire agreement. Still needed on that document:{" "}
-          {pack.srMissing.join(", ")}.
+          The separate Storage &amp; Recovery button still files that document on its own. Still needed on it: {pack.srMissing.join(", ")}.
+          The Hire Agreement includes that page only when storage or recovery has been arranged through CAS.
         </p>
       ) : (
-        <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm">
-          Storage &amp; Recovery can be generated as a standalone document (document {pack.srNumber}).
+        <p className="rounded-md border border-line bg-card px-4 py-3 text-sm">
+          The separate Storage &amp; Recovery button can still file that document on its own ({pack.srNumber}). The Hire Agreement
+          includes that page only when storage or recovery has been arranged through CAS.
         </p>
       )}
 
@@ -167,22 +191,47 @@ export default async function HirePackPage({
         <fieldset className="space-y-3 rounded-xl border border-line bg-card p-5">
           <legend className="font-serif text-xl text-navy-deep">Hire vehicle and period</legend>
           <p className="text-sm text-slate">
-            Hire vehicle from fleet allocation: {pack.hire ? `${pack.hire.hire_make} ${pack.hire.hire_model} ${pack.hire.hire_reg}` : "None allocated yet"}.
-            Client&apos;s own vehicle (Storage &amp; Recovery, not the hire car): {pack.clientMake} {pack.clientModel}{" "}
-            {pack.ctx.clientVehicleRegistration || "Unknown"}.
+            Hire vehicle supplied: {pack.hire ? `${pack.hire.hire_make} ${pack.hire.hire_model} ${pack.hire.hire_reg}` : "None allocated yet"}.
+            Its GTA group is {gtaGroupLabel(suppliedGroup)} and is not used to calculate the rate.
+            Client&apos;s own vehicle: {pack.clientMake} {pack.clientModel} {pack.ctx.clientVehicleRegistration || "not on file"}.
+            Its GTA group is {gtaGroupLabel(clientGroup)}.
           </p>
+          {suppliedHigher ? (
+            <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2 text-sm">
+              A higher-group vehicle is being supplied ({gtaGroupLabel(suppliedGroup)}). The daily rate still follows the client&apos;s own group ({gtaGroupLabel(clientGroup)}).
+            </p>
+          ) : null}
+          {chargedHigher ? (
+            <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-3 py-2 text-sm">
+              Group Charged is above the client&apos;s own vehicle group. That is above normal CAS policy. Record why below. Saving is not blocked.
+            </p>
+          ) : null}
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="text-sm">
               Fuel
               <input name="hire_fuel" className={field} defaultValue={String(s.hire_fuel || pack.hire?.hire_fuel || "")} />
             </label>
             <label className="text-sm">
-              Vehicle group
-              <input name="vehicle_group" className={field} defaultValue={String(s.vehicle_group || "")} />
+              Client&apos;s own vehicle GTA group
+              <select name="client_gta_group" className={field} defaultValue={clientGroup || ""}>
+                <option value="">{GTA_NOT_CLASSIFIED}</option>
+                {GTA_GROUPS.map((group) => (
+                  <option key={group} value={group}>{group}</option>
+                ))}
+              </select>
             </label>
             <label className="text-sm">
-              Group charged (e.g. S4 — for later BHR/GTA comparison, separate from the daily rate)
-              <input name="group_charged" className={field} defaultValue={String(s.group_charged || "")} />
+              Group Charged
+              <select name="group_charged" className={field} defaultValue={charged || ""}>
+                <option value="">Same as the client&apos;s own group</option>
+                {GTA_GROUPS.map((group) => (
+                  <option key={group} value={group}>{group}</option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm sm:col-span-2">
+              Reason if Group Charged is above the client&apos;s group
+              <input name="group_override_reason" className={field} defaultValue={String(s.group_override_reason || "")} />
             </label>
             <label className="text-sm">
               Date out
@@ -198,11 +247,12 @@ export default async function HirePackPage({
         <fieldset className="space-y-3 rounded-xl border border-line bg-card p-5">
           <legend className="font-serif text-xl text-navy-deep">Charges (pounds, plus VAT on the pack)</legend>
           <p className="text-sm text-slate">
-            Do not add extras automatically. Enter the actual rates for this agreement. Current daily rate on the hire episode: {formatGbp(Number(pack.hire?.rate_pence_per_day || 0))}.
-            Itemised extras, group charged and additional-driver details ({HIRE_PACK_OPTIONAL.length} optional fields on the supplied pack) are captured even when they are not mandatory.
+            Daily rate is the GTA ceiling for Group Charged, plus {markup}% markup
+            {calculated != null ? ` (${(calculated / 100).toFixed(2)} pounds before you edit it)` : ""}. Reference rates are the supplied table for{" "}
+            {GTA_RATE_PERIOD_LABEL}, which replaces the July 2025 – June 2026 workbook. Other charges stay as entered on this file. They are not filled from a default.
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
-            <Money name="daily_rate" label="Daily rate" value={pounds(s.daily_rate_pence)} />
+            <Money name="daily_rate" label="Daily rate" value={dailyValue} />
             <Money name="cdw" label="Collision damage waiver" value={pounds(s.cdw_pence)} />
             <Money name="delivery_collection" label="Delivery & collection" value={pounds(s.delivery_collection_pence)} />
             <Money name="additional_driver" label="Additional driver" value={pounds(s.additional_driver_pence)} />
@@ -364,7 +414,10 @@ export default async function HirePackPage({
           <button className="rounded-md bg-navy px-4 py-2 text-sm text-white" type="submit">
             Save pack information
           </button>
-          <button className="rounded-md bg-teal px-4 py-2 text-sm text-white" type="submit" formAction={actionGenerateHirePack}>
+          <button className="rounded-md bg-teal px-4 py-2 text-sm text-white" type="submit" formAction={actionGenerateHireAgreement}>
+            Generate Hire Agreement
+          </button>
+          <button className="rounded-md bg-navy px-4 py-2 text-sm text-white" type="submit" formAction={actionGenerateHirePack}>
             Generate Hire Pack
           </button>
           <button className="rounded-md bg-navy px-4 py-2 text-sm text-white" type="submit" formAction={actionGenerateStorageRecovery}>
