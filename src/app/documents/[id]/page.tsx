@@ -20,7 +20,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
   const storedFilename = String(doc.original_filename || "document.pdf");
 
   return (
-    <div className="mx-auto max-w-3xl space-y-4">
+    <div className="document-sheet mx-auto max-w-3xl space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3 print:hidden">
         <div>
           <p className="ref text-sm text-slate">{doc.file_reference ? String(doc.file_reference) : fleetId ? "Fleet vehicle" : ""}</p>

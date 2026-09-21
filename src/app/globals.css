@@ -116,16 +116,105 @@ body {
   padding: 0.75rem;
 }
 
+.hire-agreement table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+  font-size: 0.9rem;
+}
+
+.hire-agreement td,
+.hire-agreement th {
+  border: 1px solid var(--color-line);
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+}
+
 @media print {
+  @page {
+    size: A4;
+    margin: 14mm 16mm 16mm;
+  }
+
+  html,
+  body {
+    background: white;
+  }
+
+  /* Hiding the sidebar removes it from the grid. Without this, the agreement
+     falls into the leftover 240px column and spills across dozens of pages. */
+  .app-shell {
+    display: block !important;
+    min-height: 0 !important;
+    background: white;
+  }
+
   aside,
   .print\:hidden {
     display: none !important;
   }
+
   main {
-    padding: 0;
+    padding: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
   }
+
+  .document-sheet,
   .letter-paper {
-    border: none;
-    box-shadow: none;
+    max-width: none !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border: none !important;
+    box-shadow: none !important;
+    background: white !important;
+  }
+
+  .hire-agreement {
+    width: 100%;
+    max-width: none;
+    font-size: 10.5pt;
+    line-height: 1.35;
+    color: #101c24;
+  }
+
+  .hire-agreement p {
+    margin: 0.3em 0;
+    line-height: 1.35;
+    orphans: 2;
+    widows: 2;
+  }
+
+  .hire-agreement h2 {
+    font-size: 13pt;
+    line-height: 1.25;
+    margin: 0 0 0.35em;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .hire-agreement h3 {
+    font-size: 11.5pt;
+    line-height: 1.25;
+    margin: 0.65em 0 0.2em;
+    break-after: avoid;
+    page-break-after: avoid;
+  }
+
+  .hire-agreement section + section {
+    break-before: page;
+    page-break-before: always;
+  }
+
+  .hire-agreement table {
+    font-size: 9.5pt;
+    margin: 0.4em 0;
+  }
+
+  .hire-agreement tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
 }

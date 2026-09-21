@@ -136,6 +136,13 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+21 September 2026 — Hire Agreement print layout:
+
+- Printing used the on-screen sidebar grid. With the sidebar hidden, the agreement fell into the leftover 240px column, so a 4-part file ran to about 35 physical pages.
+- Print is now A4 with ordinary margins and the full text width. The sidebar and the prototype banner are omitted. Each logical part starts on a new physical page. Clause wording, numbering and the “1 of 4” labels are unchanged. Those labels count logical parts, not physical sheets.
+- Regenerated TEST-0003 (hire and storage: logical 1 of 4 to 4 of 4) prints to 10 physical pages. TEST-0004 (hire only: logical 1 of 3 to 3 of 3) prints to 9. Terms still include the supplied wording, including the 89-day rental period and “without demand. unless”.
+- Stored V5C pages are still drawn as images by a separate route. That route was not changed.
+
 21 September 2026 — Stored PDF viewer:
 
 - Opening a stored V5C no longer embeds the raw PDF in the page (Chrome's plugin froze the CRM). Pages are drawn as images; the original can be downloaded. The rest of the screen stays usable if a page cannot be drawn.

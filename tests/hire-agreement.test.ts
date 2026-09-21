@@ -285,4 +285,23 @@ describe("hire agreement rating and the four-page document", () => {
     });
     db.close();
   });
+
+  it("prints the agreement on A4 at full width, without changing the terms", () => {
+    const css = fs.readFileSync(path.join(process.cwd(), "src/app/globals.css"), "utf8");
+    const shell = fs.readFileSync(path.join(process.cwd(), "src/components/AppShell.tsx"), "utf8");
+    assert.match(shell, /app-shell/);
+    assert.match(css, /@page\s*\{[^}]*size:\s*A4/s);
+    assert.match(css, /\.app-shell\s*\{[^}]*display:\s*block\s*!important/s);
+    assert.match(css, /\.hire-agreement section \+ section\s*\{[^}]*break-before:\s*page/s);
+    assert.doesNotMatch(css, /\.hire-agreement section\s*\{[^}]*break-inside:\s*avoid/s);
+
+    const html = renderHireAgreement(baseView());
+    assert.match(html, /class="letter hire-agreement"/);
+    assert.equal(html.includes("style="), false);
+    assert.ok(html.includes(CAS_HIRE_TERMS_HTML.trim()));
+    assert.match(html, /4\.9 Where We terminate this agreement under clause 4\.8/);
+    assert.match(html, /without demand\. unless You have previously arranged/);
+    assert.match(html, /Hire Agreement — 1 of 4/);
+    assert.match(html, /Hire Agreement — 4 of 4/);
+  });
 });

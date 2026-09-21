@@ -32,7 +32,7 @@ export function AppShell({
   }
 
   return (
-    <div className="min-h-screen grid grid-cols-[240px_1fr]">
+    <div className="app-shell min-h-screen grid grid-cols-[240px_1fr]">
       <aside className="sticky top-0 h-screen overflow-y-auto bg-navy-deep text-[#e8efe9]">
         <div className="border-b border-white/10 px-5 py-5">
           <p className="font-serif text-xl tracking-tight text-white">CAS</p>
@@ -63,7 +63,7 @@ export function AppShell({
         </div>
       </aside>
       <div className="min-w-0">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-copper/30 bg-[#efe4d2] px-4 py-2 text-sm text-ink">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-copper/30 bg-[#efe4d2] px-4 py-2 text-sm text-ink print:hidden">
           <p>
             <strong>Prototype — fictional test data.</strong> Lookups, email and WhatsApp are simulated.
             Do not send real correspondence from this system.
