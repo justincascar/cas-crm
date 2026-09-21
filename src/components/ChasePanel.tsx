@@ -1,0 +1,407 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  actionCancelChase,
+  actionClearChaseOutcome,
+  actionClearChaseOverride,
+  actionLogChaseOutcome,
+  actionMarkChaseSent,
+  actionPauseChase,
+  actionPrepareChase,
+  actionResumeChase,
+  actionSaveChaseOverride,
+} from "@/app/chase-actions";
+import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
+import { formatUkDate, formatUkDateTime } from "@/lib/dates";
+import { buildMailtoHref } from "@/lib/email/mailto";
+import { LIABILITY_DECISIONS, REPAIR_OUTCOMES } from "@/lib/domain/chase";
+import type { ChaseView } from "@/lib/db/chase";
+import type { EngineerChaseView } from "@/lib/db/engineer-chase";
+
+const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
+
+type PreparedChase = {
+  id: string;
+  subject: string | null;
+  to_address: string | null;
+  body: string | null;
+  created_at: string;
+};
+
+function intervalSourceLabel(chase: ChaseView) {
+  if (chase.intervalSource === "claim_override") {
+    return `${chase.intervalDays} calendar days on this file${chase.overrideReason ? ` — ${chase.overrideReason}` : ""}. Global default is ${chase.globalIntervalDays} days.`;
+  }
+  if (chase.intervalSource === "frozen") {
+    return `${chase.intervalDays} calendar days (held from when this chase was paused or cancelled). Global default is ${chase.globalIntervalDays} days.`;
+  }
+  return `${chase.intervalDays} calendar days (global default).`;
+}
+
+function stateLabel(chase: ChaseView) {
+  if (chase.outcomeOnFile) return "Outcome logged — chase not showing as due";
+  if (chase.handlerState === "paused") return "Paused";
+  if (chase.handlerState === "cancelled") return "Cancelled";
+  if (chase.due) return "Chase due";
+  return "Tracking — interval not yet reached";
+}
+
+export function ChasePanel({
+  claimId,
+  chase,
+  prepared,
+}: {
+  claimId: string;
+  chase: ChaseView;
+  prepared: PreparedChase | null;
+}) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [mailto, setMailto] = useState<string | null>(() =>
+    prepared?.to_address && prepared.body
+      ? buildMailtoHref(prepared.to_address, prepared.subject || chase.title, prepared.body)
+      : null,
+  );
+  const [preparedId, setPreparedId] = useState(prepared?.id || "");
+  const [toAddress, setToAddress] = useState(prepared?.to_address || chase.contactEmail);
+
+  async function run(action: (form: FormData) => Promise<{ error?: string }>, extra?: Record<string, string>) {
+    setBusy(true);
+    setMessage(null);
+    const form = new FormData();
+    form.set("claimId", claimId);
+    form.set("kind", chase.kind);
+    if (extra) {
+      for (const [key, value] of Object.entries(extra)) form.set(key, value);
+    }
+    const result = await action(form);
+    setBusy(false);
+    if (result.error) {
+      setMessage(result.error);
+      return result;
+    }
+    router.refresh();
+    return result;
+  }
+
+  async function prepare() {
+    const result = await run(actionPrepareChase);
+    if (!result || result.error || !("mailto" in result) || !result.mailto) return;
+    setMailto(result.mailto as string);
+    setPreparedId(String(result.correspondenceId || ""));
+    setToAddress(String(result.to || chase.contactEmail));
+    window.location.href = result.mailto as string;
+  }
+
+  async function markSent() {
+    if (!preparedId) {
+      setMessage("Prepare the chase email first, then mark it as sent after you have sent it.");
+      return;
+    }
+    const result = await run(actionMarkChaseSent, { correspondenceId: preparedId });
+    if (result.error) return;
+    setMessage(`Marked as sent. The chase interval has restarted. Not auto-sent from ${CAS_CLAIMS_MAILBOX}.`);
+    setMailto(null);
+    setPreparedId("");
+  }
+
+  const tone = chase.due
+    ? "border-overdue bg-[#f8ecec]"
+    : chase.handlerState === "paused"
+      ? "border-warn/40 bg-[#fff6e8]"
+      : chase.handlerState === "cancelled"
+        ? "border-line bg-card"
+        : chase.outcomeOnFile
+          ? "border-ok/40 bg-[#eef6ef]"
+          : "border-teal bg-[#e8f4f2]";
+
+  const contactLine =
+    chase.kind === "engineer_report"
+      ? `Engineer: ${chase.contactName}${chase.contactEmail ? ` · ${chase.contactEmail}` : ""}`
+      : `Insurer contact: ${chase.contactName}${chase.contactEmail ? ` · ${chase.contactEmail}` : ""}`;
+
+  return (
+    <section className={`rounded-xl border-2 p-5 ${tone}`}>
+      <h2 className="font-serif text-xl text-navy-deep">{chase.title}</h2>
+      <p className="mt-1 text-sm">
+        <strong>Current state: {stateLabel(chase)}.</strong> Recalculated from this file each time you open it. Nothing is
+        sent automatically from {CAS_CLAIMS_MAILBOX}.
+      </p>
+      <dl className="mt-3 grid gap-1 text-sm">
+        <div>{contactLine}</div>
+        {chase.clockAt ? (
+          <div>
+            <span className="text-slate">Clock started: </span>
+            {formatUkDateTime(chase.clockAt)}
+            {chase.daysOutstanding !== null ? ` · ${chase.daysOutstanding} day${chase.daysOutstanding === 1 ? "" : "s"} outstanding` : ""}
+          </div>
+        ) : null}
+        {chase.dueAt ? (
+          <div>
+            <span className="text-slate">Chase due from: </span>
+            {formatUkDate(chase.dueAt)}
+          </div>
+        ) : null}
+        <div>
+          <span className="text-slate">Interval: </span>
+          {intervalSourceLabel(chase)}
+        </div>
+        <div>
+          <span className="text-slate">Why: </span>
+          {chase.reason}
+        </div>
+      </dl>
+
+      {chase.due ? (
+        <p className="mt-3 rounded-md border border-overdue/40 bg-white px-4 py-3 text-sm font-semibold text-overdue">
+          {chase.dueLabel}
+        </p>
+      ) : null}
+
+      {chase.contactMissing && chase.due ? (
+        <p className="mt-3 rounded-md border border-warn/40 bg-white px-4 py-3 text-sm">{chase.contactMissingMessage}</p>
+      ) : null}
+
+      {chase.handlerState !== "cancelled" && !chase.outcomeOnFile ? (
+        <div className="mt-4 flex flex-wrap gap-2">
+          {chase.due && !chase.contactMissing ? (
+            <>
+              <button
+                type="button"
+                className="rounded-md bg-teal px-4 py-2 text-sm font-semibold text-white"
+                disabled={busy}
+                onClick={() => void prepare()}
+              >
+                Prepare chase email
+              </button>
+              {mailto ? (
+                <a className="rounded-md border border-teal bg-white px-4 py-2 text-sm font-semibold text-teal-dark" href={mailto}>
+                  Open pre-filled email
+                </a>
+              ) : null}
+            </>
+          ) : null}
+          {chase.handlerState === "paused" ? (
+            <button
+              type="button"
+              className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white"
+              disabled={busy}
+              onClick={() => void run(actionResumeChase)}
+            >
+              Resume chase
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="rounded-md border border-line bg-white px-4 py-2 text-sm"
+              disabled={busy}
+              onClick={() => void run(actionPauseChase)}
+            >
+              Pause chase
+            </button>
+          )}
+          <button
+            type="button"
+            className="rounded-md border border-overdue bg-white px-4 py-2 text-sm text-overdue"
+            disabled={busy}
+            onClick={() => void run(actionCancelChase)}
+          >
+            Cancel chase
+          </button>
+        </div>
+      ) : null}
+
+      {mailto && chase.due ? (
+        <p className="mt-3 rounded-md border border-ok/40 bg-white px-4 py-3 text-sm">
+          A pre-filled email to <strong>{toAddress}</strong> is ready in your email client. After you click send there,
+          mark it as sent on this file. The CRM has not sent it from {CAS_CLAIMS_MAILBOX}.
+        </p>
+      ) : prepared && preparedId && chase.due ? (
+        <p className="mt-3 rounded-md border border-warn/40 bg-white px-4 py-3 text-sm">
+          A chase email was prepared {formatUkDateTime(prepared.created_at)} for {prepared.to_address}. Open it from your
+          client if you still need to send it, then mark it as sent.
+        </p>
+      ) : null}
+
+      {preparedId && chase.due && !chase.contactMissing ? (
+        <div className="mt-3">
+          <button
+            type="button"
+            className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white"
+            disabled={busy}
+            onClick={() => void markSent()}
+          >
+            Mark chase as sent
+          </button>
+        </div>
+      ) : null}
+
+      {!chase.outcomeOnFile ? (
+        <form
+          className="mt-4 grid gap-2 rounded-md border border-line bg-white p-3 sm:grid-cols-[1fr_auto] sm:items-end"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            void run(actionLogChaseOutcome, {
+              occurredAt: String(form.get("occurredAt") || ""),
+              liabilityDecision: String(form.get("liabilityDecision") || ""),
+              repairOutcome: String(form.get("repairOutcome") || ""),
+            });
+          }}
+        >
+          {chase.kind === "liability_response" ? (
+            <label className="text-sm">
+              Insurer decision
+              <select name="liabilityDecision" className={field} required defaultValue="">
+                <option value="" disabled>
+                  Choose a decision
+                </option>
+                {LIABILITY_DECISIONS.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          {chase.kind === "repair_authorisation" ? (
+            <label className="text-sm">
+              What was received
+              <select name="repairOutcome" className={field} required defaultValue="">
+                <option value="" disabled>
+                  Choose authorisation or payment
+                </option>
+                {REPAIR_OUTCOMES.map((item) => (
+                  <option key={item.value} value={item.value}>
+                    {item.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <label className="text-sm">
+            {chase.kind === "engineer_report"
+              ? "Date report received"
+              : chase.kind === "liability_response"
+                ? "Date decision received"
+                : "Date received"}
+            <input name="occurredAt" type="date" className={field} />
+          </label>
+          <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white" disabled={busy}>
+            {chase.kind === "engineer_report"
+              ? "Log report received"
+              : chase.kind === "liability_response"
+                ? "Log liability decision"
+                : "Log authorisation or payment received"}
+          </button>
+        </form>
+      ) : (
+        <div className="mt-4">
+          <button
+            type="button"
+            className="rounded-md border border-line bg-white px-4 py-2 text-sm"
+            disabled={busy}
+            onClick={() => void run(actionClearChaseOutcome)}
+          >
+            Logged in error
+          </button>
+        </div>
+      )}
+
+      {chase.handlerState !== "cancelled" ? (
+        <form
+          className="mt-4 grid gap-2 rounded-md border border-line bg-white p-3 md:grid-cols-[8rem_1fr_auto] md:items-end"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const form = new FormData(event.currentTarget);
+            void run(actionSaveChaseOverride, {
+              overrideDays: String(form.get("overrideDays") || ""),
+              overrideReason: String(form.get("overrideReason") || ""),
+            });
+          }}
+        >
+          <label className="text-sm">
+            This file&apos;s interval (days)
+            <input
+              name="overrideDays"
+              type="number"
+              min={1}
+              step={1}
+              required
+              className={field}
+              defaultValue={chase.overrideDays || ""}
+            />
+          </label>
+          <label className="text-sm">
+            Why (for example “agreed with insurer”)
+            <input
+              name="overrideReason"
+              type="text"
+              required
+              className={field}
+              defaultValue={chase.overrideReason || ""}
+              placeholder="Agreed with insurer"
+            />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white" disabled={busy}>
+              Save file interval
+            </button>
+            {chase.overrideDays ? (
+              <button
+                type="button"
+                className="rounded-md border border-line bg-white px-4 py-2 text-sm"
+                disabled={busy}
+                onClick={() => void run(actionClearChaseOverride)}
+              >
+                Use global default
+              </button>
+            ) : null}
+          </div>
+        </form>
+      ) : null}
+
+      {message ? <p className="mt-3 text-sm">{message}</p> : null}
+    </section>
+  );
+}
+
+export function EngineerChasePanel({
+  claimId,
+  chase,
+  prepared,
+}: {
+  claimId: string;
+  chase: EngineerChaseView;
+  prepared: PreparedChase | null;
+}) {
+  const view: ChaseView = {
+    kind: "engineer_report",
+    claimId,
+    title: "Engineer report chase",
+    dueLabel: chase.label || "Engineer report chase due",
+    active: chase.active,
+    due: chase.due,
+    outcomeOnFile: chase.reportOnFile,
+    handlerState: chase.handlerState,
+    daysOutstanding: chase.daysOutstanding,
+    clockAt: chase.clockAt,
+    dueAt: chase.dueAt,
+    reason: chase.reason,
+    label: chase.label,
+    contactName: chase.engineerName,
+    contactEmail: chase.engineerEmail,
+    contactMissing: !chase.engineerEmail,
+    contactMissingMessage: chase.engineerEmail ? null : "This engineer has no email address. Add one under Settings → Engineers.",
+    frozenIntervalDays: chase.frozenIntervalDays,
+    globalIntervalDays: chase.frozenIntervalDays,
+    overrideDays: null,
+    overrideReason: null,
+    intervalDays: chase.frozenIntervalDays,
+    intervalSource: chase.handlerState === "tracking" ? "settings" : "frozen",
+  };
+  return <ChasePanel claimId={claimId} chase={view} prepared={prepared} />;
+}

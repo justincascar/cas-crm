@@ -325,6 +325,8 @@ CREATE TABLE IF NOT EXISTS automations (
   next_run_at TEXT,
   interval_days INTEGER NOT NULL DEFAULT 3,
   interval_unit TEXT NOT NULL DEFAULT 'calendar_days',
+  interval_override_days INTEGER,
+  interval_override_reason TEXT,
   paused INTEGER NOT NULL DEFAULT 0,
   last_outcome TEXT,
   reason TEXT,

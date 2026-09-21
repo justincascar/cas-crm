@@ -9,7 +9,7 @@ import { CLAIM_SCREENS, getClaimScreen, screensByGroup } from "@/lib/claim-scree
 import { requireStaff } from "@/lib/auth/session";
 import { getClaim, listFleet, listKnownAgents, listKnownInsurers, listReservations } from "@/lib/db/queries";
 import { findPreparedEngineerInstruction, listActiveEngineers } from "@/lib/db/engineers";
-import { engineerChaseForClaim, findPreparedEngineerReportChase } from "@/lib/db/engineer-chase";
+import { findPreparedChase, listChasesForClaim } from "@/lib/db/chase";
 import { seedScreenDefaults } from "@/lib/db/screens";
 
 export default async function ClaimWorkScreenPage({
@@ -39,17 +39,24 @@ export default async function ClaimWorkScreenPage({
         created_at: String(preparedRow.created_at),
       }
     : null;
-  const chase = engineerChaseForClaim(String(data.claim.id));
-  const preparedChaseRow = findPreparedEngineerReportChase(String(data.claim.id));
-  const preparedEngineerChase = preparedChaseRow
-    ? {
-        id: String(preparedChaseRow.id),
-        subject: preparedChaseRow.subject,
-        to_address: preparedChaseRow.to_address,
-        body: preparedChaseRow.body,
-        created_at: String(preparedChaseRow.created_at),
-      }
-    : null;
+  const chases = listChasesForClaim(String(data.claim.id));
+  const preparedByKind = Object.fromEntries(
+    chases.map((chase) => {
+      const preparedChaseRow = findPreparedChase(chase.kind, String(data.claim.id));
+      return [
+        chase.kind,
+        preparedChaseRow
+          ? {
+              id: String(preparedChaseRow.id),
+              subject: preparedChaseRow.subject,
+              to_address: preparedChaseRow.to_address,
+              body: preparedChaseRow.body,
+              created_at: String(preparedChaseRow.created_at),
+            }
+          : null,
+      ];
+    }),
+  );
 
   return (
     <div className="space-y-4">
@@ -83,8 +90,8 @@ export default async function ClaimWorkScreenPage({
           engineers={listActiveEngineers()}
           selectedEngineerId={String(data.claim.engineer_id || "")}
           preparedEngineerInstruction={preparedEngineerInstruction}
-          engineerChase={chase}
-          preparedEngineerChase={preparedEngineerChase}
+          chases={chases}
+          preparedByKind={preparedByKind}
         />
       ) : null}
 

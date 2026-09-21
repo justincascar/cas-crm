@@ -5,13 +5,13 @@ import { actionAddNote, actionAddTask, actionCompleteTask, actionUpdateClaim } f
 import { FileHistory } from "@/components/FileHistory";
 import { ClaimAudatexFields } from "@/components/ClaimAudatexFields";
 import { ClaimWorkflowStatus } from "@/components/ClaimWorkflowStatus";
-import { EngineerChasePanel } from "@/components/EngineerChasePanel";
+import { ChasePanel } from "@/components/ChasePanel";
 import { PageHeader } from "@/components/ClaimTable";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import { requireStaff } from "@/lib/auth/session";
 import { getClaim, listStaff, suggestAudatexCodesForClaim } from "@/lib/db/queries";
-import { engineerChaseForClaim, findPreparedEngineerReportChase } from "@/lib/db/engineer-chase";
+import { findPreparedChase, listChasesForClaim } from "@/lib/db/chase";
 import { formatGbp } from "@/lib/money";
 import { HEAD_LABELS, type HeadOfLoss } from "@/lib/constants";
 import { formatVehicleRegistration } from "@/lib/text";
@@ -33,17 +33,24 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
   const { claim } = data;
   const staff = listStaff();
   const audatexSuggestion = suggestAudatexCodesForClaim(String(claim.id));
-  const chase = engineerChaseForClaim(String(claim.id));
-  const preparedChaseRow = findPreparedEngineerReportChase(String(claim.id));
-  const preparedChase = preparedChaseRow
-    ? {
-        id: String(preparedChaseRow.id),
-        subject: preparedChaseRow.subject,
-        to_address: preparedChaseRow.to_address,
-        body: preparedChaseRow.body,
-        created_at: String(preparedChaseRow.created_at),
-      }
-    : null;
+  const chases = listChasesForClaim(String(claim.id));
+  const preparedByKind = Object.fromEntries(
+    chases.map((chase) => {
+      const row = findPreparedChase(chase.kind, String(claim.id));
+      return [
+        chase.kind,
+        row
+          ? {
+              id: String(row.id),
+              subject: row.subject,
+              to_address: row.to_address,
+              body: row.body,
+              created_at: String(row.created_at),
+            }
+          : null,
+      ];
+    }),
+  );
 
   return (
     <div className="space-y-6">
@@ -74,7 +81,9 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
         roadworthiness={String(claim.roadworthiness || "")}
       />
 
-      {chase ? <EngineerChasePanel claimId={String(claim.id)} chase={chase} prepared={preparedChase} /> : null}
+      {chases.map((chase) => (
+        <ChasePanel key={chase.kind} claimId={String(claim.id)} chase={chase} prepared={preparedByKind[chase.kind] || null} />
+      ))}
 
       <ClaimAudatexFields
         claimId={String(claim.id)}

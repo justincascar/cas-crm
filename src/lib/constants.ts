@@ -52,12 +52,20 @@ export const DEFAULT_VEHICLE_LOCATION =
 export const AGREEMENT_MAX_DAYS_DEFAULT = 88;
 export const AGREEMENT_RENEWAL_ALERT_DAY_DEFAULT = 80;
 export const TOTAL_LOSS_HIRE_DAYS_AFTER_QUALIFYING_PAYMENT = 7;
-/** Calendar days after instruction (or last chase marked sent) before the engineer-report reminder is due. Editable in Settings. */
+/** Calendar days after the request is marked sent before a chase reminder is due. Editable in Settings; overridable per claim. */
 export const SETTING_ENGINEER_CHASE_INTERVAL_DAYS = "chaser_interval_days";
+export const SETTING_LIABILITY_CHASE_INTERVAL_DAYS = "liability_chase_interval_days";
+export const SETTING_REPAIR_AUTH_CHASE_INTERVAL_DAYS = "repair_auth_chase_interval_days";
 export const ENGINEER_CHASER_INTERVAL_DAYS_DEFAULT = 3;
 export const ENGINEER_INSTRUCTION_CHASE_RULE = "engineer_instruction_chase";
 export const ENGINEER_REPORT_CHASE_TEMPLATE = "engineer_report_chase";
 export const ENGINEER_REPORT_CHASE_DUE_LABEL = "Engineer report chase due";
+export const LIABILITY_RESPONSE_CHASE_RULE = "liability_response_chase";
+export const LIABILITY_RESPONSE_CHASE_TEMPLATE = "liability_response_chase";
+export const LIABILITY_RESPONSE_CHASE_DUE_LABEL = "Liability response chase due";
+export const REPAIR_AUTHORISATION_CHASE_RULE = "repair_authorisation_chase";
+export const REPAIR_AUTHORISATION_CHASE_TEMPLATE = "repair_authorisation_chase";
+export const REPAIR_AUTHORISATION_CHASE_DUE_LABEL = "Repair authorisation chase due";
 export const FILE_REFERENCE_PREFIX_DEFAULT = "TEST-";
 
 /** Confirmed Microsoft 365 claims mailbox. Live send/receive is not connected. */

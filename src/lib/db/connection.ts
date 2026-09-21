@@ -6,7 +6,7 @@ import { backfillChronologyIfEmpty, seedIfEmpty } from "./seed";
 import { ensureEngineers } from "./engineers";
 import { ensureKnownInsurers } from "./insurers";
 import { ensureDefaultVehicleLocationSetting } from "./vehicle-location";
-import { ensureDemoEngineerInstructionChase, ensureEngineerChaseIntervalSetting } from "./engineer-chase";
+import { ensureChaseSettings, ensureDemoChases } from "./chase";
 import { migrate } from "./migrate";
 
 type GlobalDb = typeof globalThis & { __casDb?: DatabaseSync };
@@ -32,8 +32,8 @@ function openDatabase(): DatabaseSync {
   ensureKnownInsurers(db);
   ensureEngineers(db);
   ensureDefaultVehicleLocationSetting(db);
-  ensureEngineerChaseIntervalSetting(db);
-  ensureDemoEngineerInstructionChase(db);
+  ensureChaseSettings(db);
+  ensureDemoChases(db);
   ensureStaffAuth(db);
   backfillChronologyIfEmpty(db);
   return db;
@@ -48,8 +48,8 @@ export function getDb(): DatabaseSync {
     ensureKnownInsurers(g.__casDb);
     ensureEngineers(g.__casDb);
     ensureDefaultVehicleLocationSetting(g.__casDb);
-    ensureEngineerChaseIntervalSetting(g.__casDb);
-    ensureDemoEngineerInstructionChase(g.__casDb);
+    ensureChaseSettings(g.__casDb);
+    ensureDemoChases(g.__casDb);
     ensureStaffAuth(g.__casDb);
     backfillChronologyIfEmpty(g.__casDb);
   }

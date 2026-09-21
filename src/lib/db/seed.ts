@@ -6,6 +6,10 @@ import {
   DEFAULT_VEHICLE_LOCATION,
   SETTING_DEFAULT_VEHICLE_LOCATION,
   ENGINEER_INSTRUCTION_CHASE_RULE,
+  LIABILITY_RESPONSE_CHASE_RULE,
+  REPAIR_AUTHORISATION_CHASE_RULE,
+  SETTING_LIABILITY_CHASE_INTERVAL_DAYS,
+  SETTING_REPAIR_AUTH_CHASE_INTERVAL_DAYS,
 } from "../constants";
 import { isoDateFromNow, isoDaysFromNow, nowUtcIso } from "../dates";
 import { pence, vatOnNet } from "../money";
@@ -33,6 +37,8 @@ export function seed(db: DatabaseSync) {
   run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", ["agreement_renewal_alert_day", "80"]);
   run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", ["chaser_interval_days", "3"]);
   run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", ["chaser_interval_unit", "calendar_days"]);
+  run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", [SETTING_LIABILITY_CHASE_INTERVAL_DAYS, "3"]);
+  run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", [SETTING_REPAIR_AUTH_CHASE_INTERVAL_DAYS, "3"]);
   run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", [SETTING_DEFAULT_VEHICLE_LOCATION, DEFAULT_VEHICLE_LOCATION]);
 
   for (const person of DEMO_STAFF) {
@@ -543,13 +549,22 @@ export function seed(db: DatabaseSync) {
     ('a2','c5','liability_chaser','liability', ?, 3, 'calendar_days', 0, NULL, 'Awaiting Aviva response. Call task preferred before escalation.', 'scheduled'),
     ('a3','c11','liability_chaser','liability', ?, 14, 'calendar_days', 0, 'insurer_override', 'Insurer-specific 14-day interval override (Admiral file).', 'scheduled'),
     ('a4','c3','liability_chaser','liability', NULL, 3, 'calendar_days', 1, 'paused', 'Handler pause — do not send.', 'paused'),
-    ('auto-c5-eng-chase','c5',?, 'engineer_instruction', ?, 3, 'calendar_days', 0, 'instruction_marked_sent', 'Waiting for the engineer''s report. Reminder only — not auto-sent.', 'tracking')`,
+    ('auto-c5-eng-chase','c5',?, 'engineer_instruction', ?, 3, 'calendar_days', 0, 'instruction_marked_sent', 'Waiting for the engineer''s report. Reminder only — not auto-sent.', 'tracking'),
+    ('auto-c5-liab-chase','c5',?, 'liability_response', ?, 3, 'calendar_days', 0, 'request_marked_sent', 'Waiting for a liability decision from the insurer. Reminder only — not auto-sent.', 'tracking'),
+    ('auto-c3-liab-chase','c3',?, 'liability_response', ?, 3, 'calendar_days', 0, 'request_marked_sent', 'Waiting for a liability decision from the insurer. Reminder only — not auto-sent.', 'tracking'),
+    ('auto-c6-repair-chase','c6',?, 'repair_authorisation', ?, 3, 'calendar_days', 0, 'request_marked_sent', 'Waiting for repair authorisation or payment. Reminder only — not auto-sent.', 'tracking')`,
     [
       isoDaysFromNow(0, 10, 0),
       isoDaysFromNow(1, 10, 0),
       isoDaysFromNow(8, 10, 0),
       ENGINEER_INSTRUCTION_CHASE_RULE,
       isoDaysFromNow(-4, 10, 0),
+      LIABILITY_RESPONSE_CHASE_RULE,
+      isoDaysFromNow(-2, 10, 0),
+      LIABILITY_RESPONSE_CHASE_RULE,
+      isoDaysFromNow(-2, 10, 0),
+      REPAIR_AUTHORISATION_CHASE_RULE,
+      isoDaysFromNow(-1, 10, 0),
     ]);
 
   run(db, `INSERT INTO litigation(id, claim_id, stage, deadline_on, deadline_source, deadline_trigger, reviewer, approved_to_issue) VALUES
@@ -610,16 +625,18 @@ function insertPrototypeChronology(db: DatabaseSync) {
   ev("ev-c3-rec", "c3", "recovery_completed", "Recovery completed", "Recovered the same evening.", -6, 20, "staff-tom", "system");
   ev("ev-c3-st", "c3", "storage_started", "Vehicle entered storage", "Entered CAS yard.", -6, 21, "staff-tom", "system");
   ev("ev-c3-hire", "c3", "hire_started", "Hire / courtesy started", "Like-for-like automatic Golf supplied at handover.", -6, 20, "staff-tom", "system");
-  ev("ev-c3-letter", "c3", "initial_letter_tp_insurer", "Initial letter to third-party insurer", "Notification to Zurich. Simulated send.", -1, 9, "staff-tom", "email");
+  ev("ev-c3-letter", "c3", "initial_letter_tp_insurer", "Initial letter to third-party insurer", "Notification to Zurich. Simulated send.", -5, 9, "staff-tom", "email");
   ev("ev-c3-eng", "c3", "engineer_instructed", "Engineer instructed", "Instructed in parallel with liability.", -5, 10, "staff-tom", "email");
 
   ev("ev-c4-hire", "c4", "hire_started", "Hire / courtesy started", "Fault courtesy Corsa — not credit hire.", -3, 9, "staff-megan", "system");
 
+  ev("ev-c5-letter", "c5", "initial_letter_tp_insurer", "Initial letter to third-party insurer", "Notification to Aviva. Simulated send.", -5, 10, "staff-sian", "email");
   ev("ev-c5-eng", "c5", "engineer_instructed", "Engineer instructed", "Inspection arranged; report not yet in.", -7, 11, "staff-sian", "email");
 
   ev("ev-c6-letter", "c6", "initial_letter_tp_insurer", "Initial letter to third-party insurer", "Ageas notified.", -16, 9, "staff-tom", "email");
   ev("ev-c6-eng", "c6", "engineer_instructed", "Engineer instructed", "Engineer instructed.", -8, 10, "staff-tom", "email");
   ev("ev-c6-rep", "c6", "engineer_report_received", "Engineer report received", "Staff verified extraction before use.", -5, 14, "staff-tom", "email");
+  ev("ev-c6-repair-req", "c6", "repair_authorisation_requested", "Repair authorisation / payment requested", "Estimate sent to Ageas. Simulated send.", -4, 11, "staff-tom", "email");
 
   ev("ev-c7-rec", "c7", "recovery_completed", "Recovery completed", "Recovered to CAS.", -21, 10, "staff-tom", "system");
   ev("ev-c7-hire", "c7", "hire_started", "Hire / courtesy started", "Prius supplied at actual handover.", -18, 9, "staff-tom", "system");

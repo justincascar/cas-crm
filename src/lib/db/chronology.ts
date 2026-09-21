@@ -25,6 +25,18 @@ import {
   restartEngineerInstructionChaseClock,
   startEngineerInstructionChase,
 } from "./engineer-chase";
+import {
+  chaseDefinition,
+  chaseKindForChaseSentEvent,
+  chaseKindForStartEvent,
+  isLiabilityDecisionValue,
+  isRepairOutcomeValue,
+  LIABILITY_DECISIONS,
+  NO_INSURER_CONTACT_MESSAGE,
+  REPAIR_OUTCOMES,
+  type ChaseKind,
+} from "../domain/chase";
+import { findPreparedChase, restartChaseClock, startChase, chaseForClaim } from "./chase";
 import { ENGINEER_REPORT_CHASE_TEMPLATE } from "../constants";
 import { findKnownInsurerOn } from "./insurers";
 import { vehicleLocationForClaim } from "./vehicle-location";
@@ -97,6 +109,10 @@ export function recordClaimEvent(input: {
 }
 
 function applyEventSideEffects(claimId: string, eventType: ClaimEventType, occurredAt: string) {
+  const startKind = chaseKindForStartEvent(eventType);
+  if (startKind) startChase(startKind, claimId, occurredAt);
+  const sentKind = chaseKindForChaseSentEvent(eventType);
+  if (sentKind && sentKind !== startKind) restartChaseClock(sentKind, claimId, occurredAt);
   if (eventType === "engineer_instructed") {
     run(
       `UPDATE claims SET engineering_status = CASE WHEN engineering_status IN ('report_received') THEN engineering_status ELSE 'instructed' END, last_correspondence_at = COALESCE(last_correspondence_at, ?) WHERE id = ?`,
@@ -129,6 +145,9 @@ function applyEventSideEffects(claimId: string, eventType: ClaimEventType, occur
     eventType === "vehicle_ready_notice_sent" ||
     eventType === "internal_chase_sent" ||
     eventType === "engineer_report_chase_sent" ||
+    eventType === "liability_response_chase_sent" ||
+    eventType === "repair_authorisation_requested" ||
+    eventType === "repair_authorisation_chase_sent" ||
     eventType === "outgoing_whatsapp" ||
     eventType === "incoming_whatsapp" ||
     eventType === "outgoing_call" ||
@@ -916,3 +935,251 @@ export function markEngineerReportChaseSent(input: {
   restartEngineerInstructionChaseClock(input.claimId, when);
   return { handlerName, occurredAt: when };
 }
+
+function chaseEmailCopy(kind: ChaseKind, ctx: CorrespondenceContext, contactName: string, clockAt: string | null) {
+  const fileRef = String(ctx.fileReference);
+  const handlerName = String(ctx.handlerName || "Claims handler");
+  const policy = String(ctx.tpPolicyOrClaimRef || ctx.ownPolicyRef || "").trim();
+  const policyLine = !policy || policy === "Unknown" ? "not yet on file" : policy;
+  const sentOn = clockAt ? formatUkDate(clockAt) : "the date recorded on this file";
+  const greeting = contactName && contactName !== "Insurer" ? `Dear ${contactName}` : "Dear Sir / Madam";
+  if (kind === "liability_response") {
+    const subject = `Our ref: ${fileRef}  Your policy: ${policyLine}`;
+    const body = [
+      `${greeting},`,
+      "",
+      `We refer to ${fileRef} and our enquiry of ${sentOn}. We have not yet received a liability decision.`,
+      "",
+      `Please confirm your position (accepted, rejected or partial) to ${CAS_CLAIMS_MAILBOX}, quoting ${fileRef}.`,
+      "",
+      "This is a reminder from the CRM. It has not been sent automatically.",
+      "",
+      "Kind regards,",
+      handlerName,
+      "Complete Accident Solutions Ltd",
+      `01792 341069 · ${CAS_CLAIMS_MAILBOX}`,
+    ].join("\n");
+    return { subject, body };
+  }
+  const subject = `Our ref: ${fileRef}  Your policy: ${policyLine} — repair authorisation outstanding`;
+  const body = [
+    `${greeting},`,
+    "",
+    `We refer to ${fileRef} and our request of ${sentOn} for repair authorisation or payment. This remains outstanding.`,
+    "",
+    `Please confirm authorisation or send payment details to ${CAS_CLAIMS_MAILBOX}, quoting ${fileRef}.`,
+    "",
+    "This is a reminder from the CRM. It has not been sent automatically.",
+    "",
+    "Kind regards,",
+    handlerName,
+    "Complete Accident Solutions Ltd",
+    `01792 341069 · ${CAS_CLAIMS_MAILBOX}`,
+  ].join("\n");
+  return { subject, body };
+}
+
+export function prepareOutstandingChase(input: { claimId: string; actorId: string; kind: ChaseKind }) {
+  if (input.kind === "engineer_report") {
+    return prepareEngineerReportChase({ claimId: input.claimId, actorId: input.actorId });
+  }
+  const def = chaseDefinition(input.kind);
+  const view = chaseForClaim(input.kind, input.claimId);
+  if (!view) throw new Error(`There is no ${def.title.toLowerCase()} on this file yet.`);
+  if (view.contactMissing || !view.contactEmail) {
+    throw new Error(view.contactMissingMessage || NO_INSURER_CONTACT_MESSAGE);
+  }
+  const existing = findPreparedChase(input.kind, input.claimId);
+  const ctx = letterContext(input.claimId);
+  const { subject, body } = chaseEmailCopy(input.kind, ctx, view.contactName, view.clockAt);
+  const to = view.contactEmail;
+  if (existing) {
+    run(`UPDATE correspondence SET subject = ?, preview = ?, body = ?, to_address = ?, from_address = ? WHERE id = ?`, [
+      subject,
+      body.slice(0, 180),
+      body,
+      to,
+      CAS_CLAIMS_MAILBOX,
+      existing.id,
+    ]);
+    return {
+      correspondenceId: existing.id,
+      mailto: buildMailtoHref(to, subject, letterTextForMailto(body)),
+      to,
+      subject,
+      body,
+    };
+  }
+  const correspondenceId = newId("corr");
+  run(
+    `INSERT INTO correspondence(id, claim_id, direction, channel, subject, preview, body, to_address, from_address, unread, sent_status, template_key, created_at)
+     VALUES (?, ?, 'outgoing', 'email', ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
+    [
+      correspondenceId,
+      input.claimId,
+      subject,
+      body.slice(0, 180),
+      body,
+      to,
+      CAS_CLAIMS_MAILBOX,
+      ENGINEER_INSTRUCTION_PREPARED,
+      def.templateKey,
+      nowUtcIso(),
+    ],
+  );
+  return {
+    correspondenceId,
+    mailto: buildMailtoHref(to, subject, letterTextForMailto(body)),
+    to,
+    subject,
+    body,
+  };
+}
+
+export function markOutstandingChaseSent(input: {
+  claimId: string;
+  correspondenceId: string;
+  actorId: string;
+  kind: ChaseKind;
+  occurredAt?: string;
+}) {
+  if (input.kind === "engineer_report") {
+    return markEngineerReportChaseSent({
+      claimId: input.claimId,
+      correspondenceId: input.correspondenceId,
+      actorId: input.actorId,
+      occurredAt: input.occurredAt,
+    });
+  }
+  const def = chaseDefinition(input.kind);
+  const row = get<{
+    id: string;
+    claim_id: string;
+    subject: string | null;
+    to_address: string | null;
+    sent_status: string | null;
+    template_key: string | null;
+  }>(`SELECT id, claim_id, subject, to_address, sent_status, template_key FROM correspondence WHERE id = ?`, [
+    input.correspondenceId,
+  ]);
+  if (!row || row.claim_id !== input.claimId) throw new Error("Prepared chase not found on this file.");
+  if (row.template_key !== def.templateKey) throw new Error(`This item is not a ${def.title.toLowerCase()}.`);
+  if (row.sent_status === ENGINEER_INSTRUCTION_MARKED_SENT) throw new Error("This chase is already marked as sent.");
+  if (row.sent_status !== ENGINEER_INSTRUCTION_PREPARED) {
+    throw new Error("This item is not a prepared chase waiting to be marked as sent.");
+  }
+  const when = occurredFromForm(input.occurredAt);
+  const handler = get<{ name: string }>(`SELECT name FROM staff WHERE id = ?`, [input.actorId]);
+  const handlerName = handler?.name || "Unknown handler";
+  run(`UPDATE correspondence SET sent_status = ? WHERE id = ?`, [ENGINEER_INSTRUCTION_MARKED_SENT, input.correspondenceId]);
+  const subject = String(row.subject || def.title);
+  const to = String(row.to_address || "");
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "outgoing_email",
+    occurredAt: when,
+    details: `${subject} prepared for ${to}. Marked as sent by ${handlerName} after opening their own email client. Not auto-sent — live sending from ${CAS_CLAIMS_MAILBOX} is not connected.`,
+    actorId: input.actorId,
+    channel: "email",
+    correspondenceId: input.correspondenceId,
+    source: "staff",
+  });
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: def.chaseSentEventType as ClaimEventType,
+    occurredAt: when,
+    details: `${def.title} marked as sent by ${handlerName}. Interval restarted. Prepared, not auto-sent from ${CAS_CLAIMS_MAILBOX}.`,
+    actorId: input.actorId,
+    channel: "email",
+    correspondenceId: input.correspondenceId,
+    source: "staff",
+  });
+  return { handlerName, occurredAt: when };
+}
+
+export function logChaseOutcome(input: {
+  claimId: string;
+  actorId: string;
+  kind: ChaseKind;
+  occurredAt?: string;
+  liabilityDecision?: string;
+  repairOutcome?: string;
+}) {
+  const def = chaseDefinition(input.kind);
+  const when = occurredFromForm(input.occurredAt);
+  const handler = get<{ name: string }>(`SELECT name FROM staff WHERE id = ?`, [input.actorId]);
+  const handlerName = handler?.name || "Unknown handler";
+  if (input.kind === "engineer_report") {
+    return logEngineerReportReceived({ claimId: input.claimId, actorId: input.actorId, occurredAt: input.occurredAt });
+  }
+  if (input.kind === "liability_response") {
+    const decision = String(input.liabilityDecision || "");
+    if (!isLiabilityDecisionValue(decision)) {
+      throw new Error("Choose the insurer's decision: accepted, rejected, or partial. Not yet decided does not clear this chase.");
+    }
+    const label = LIABILITY_DECISIONS.find((item) => item.value === decision)?.label || decision;
+    recordClaimEvent({
+      claimId: input.claimId,
+      eventType: "liability_response_received",
+      occurredAt: when,
+      details: `Liability decision logged as ${label} by ${handlerName}. Chase reminder cleared. CAS liability status was not changed.`,
+      actorId: input.actorId,
+      channel: "file",
+      source: "staff",
+    });
+    run(`UPDATE claims SET insurer_liability_position = ? WHERE id = ?`, [decision, input.claimId]);
+    return { handlerName, occurredAt: when };
+  }
+  const outcome = String(input.repairOutcome || "");
+  if (!isRepairOutcomeValue(outcome)) {
+    throw new Error("Choose whether authorisation or payment was received.");
+  }
+  const spec = REPAIR_OUTCOMES.find((item) => item.value === outcome)!;
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: spec.eventType as ClaimEventType,
+    occurredAt: when,
+    details: `${spec.label} logged by ${handlerName}. Chase reminder cleared.`,
+    actorId: input.actorId,
+    channel: "file",
+    source: "staff",
+  });
+  return { handlerName, occurredAt: when };
+}
+
+export function clearChaseOutcome(input: { claimId: string; actorId: string; kind: ChaseKind; occurredAt?: string }) {
+  if (input.kind === "engineer_report") {
+    return clearEngineerReportReceived({ claimId: input.claimId, actorId: input.actorId, occurredAt: input.occurredAt });
+  }
+  const def = chaseDefinition(input.kind);
+  const when = occurredFromForm(input.occurredAt);
+  const handler = get<{ name: string }>(`SELECT name FROM staff WHERE id = ?`, [input.actorId]);
+  const handlerName = handler?.name || "Unknown handler";
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: def.outcomeClearedEventType as ClaimEventType,
+    occurredAt: when,
+    details: `${def.title} outcome cleared as a correction by ${handlerName}. Chase follows the file again.`,
+    actorId: input.actorId,
+    channel: "file",
+    source: "staff",
+  });
+  return { handlerName, occurredAt: when };
+}
+
+export function logRepairAuthorisationRequested(input: { claimId: string; actorId: string; occurredAt?: string }) {
+  const when = occurredFromForm(input.occurredAt);
+  const handler = get<{ name: string }>(`SELECT name FROM staff WHERE id = ?`, [input.actorId]);
+  const handlerName = handler?.name || "Unknown handler";
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "repair_authorisation_requested",
+    occurredAt: when,
+    details: `Repair authorisation / payment request marked as sent by ${handlerName}. Chase tracking started. Prepared, not auto-sent.`,
+    actorId: input.actorId,
+    channel: "file",
+    source: "staff",
+  });
+  return { handlerName, occurredAt: when };
+}
+

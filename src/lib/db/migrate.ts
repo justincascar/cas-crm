@@ -71,6 +71,10 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["agent_handler_tel", "TEXT"],
     ["liability_admitted", "TEXT"],
   ],
+  automations: [
+    ["interval_override_days", "INTEGER"],
+    ["interval_override_reason", "TEXT"],
+  ],
   hire_pack_data: [
     ["means_documents_requested", "INTEGER"],
     ["means_documents_on_file", "INTEGER"],

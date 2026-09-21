@@ -1,5 +1,5 @@
-import { ENGINEER_REPORT_CHASE_DUE_LABEL, FILE_REFERENCE_PREFIX_DEFAULT, HEAD_LABELS, type HeadOfLoss } from "../constants";
-import { listDueEngineerInstructionChases } from "./engineer-chase";
+import { FILE_REFERENCE_PREFIX_DEFAULT, HEAD_LABELS, type HeadOfLoss } from "../constants";
+import { listDueChases } from "./chase";
 import { accidentDateError, isBeforeLondonDay, isSameLondonDay, londonDateIso, nowUtcIso } from "../dates";
 import { formatGbp, sumDistinctHeads } from "../money";
 import { all, dbPath, get, getDb, newId, run } from "./connection";
@@ -87,18 +87,28 @@ export function listClaims(opts: { q?: string; queue?: string } = {}): ClaimList
     }
   }
   const sql = CLAIM_LIST_SQL + (where.length ? ` WHERE ${where.join(" AND ")}` : "") + " ORDER BY c.file_reference";
-  return overlayEngineerChaseNextAction(all<ClaimListRow>(sql, params));
+  return overlayDueChaseNextAction(all<ClaimListRow>(sql, params));
 }
 
-function overlayEngineerChaseNextAction(rows: ClaimListRow[]): ClaimListRow[] {
+function overlayDueChaseNextAction(rows: ClaimListRow[]): ClaimListRow[] {
   if (rows.length === 0) return rows;
-  const due = new Map(listDueEngineerInstructionChases().map((row) => [row.claimId, row]));
+  const dueByClaim = new Map<string, { labels: string[]; dueAt: string | null }>();
+  for (const chase of listDueChases()) {
+    const current = dueByClaim.get(chase.claimId);
+    const label = chase.label || chase.dueLabel;
+    if (!current) {
+      dueByClaim.set(chase.claimId, { labels: [label], dueAt: chase.dueAt });
+      continue;
+    }
+    if (!current.labels.includes(label)) current.labels.push(label);
+    if (chase.dueAt && (!current.dueAt || chase.dueAt < current.dueAt)) current.dueAt = chase.dueAt;
+  }
   return rows.map((row) => {
-    const chase = due.get(row.id);
+    const chase = dueByClaim.get(row.id);
     if (!chase) return row;
     return {
       ...row,
-      next_action: ENGINEER_REPORT_CHASE_DUE_LABEL,
+      next_action: chase.labels.join(" · "),
       next_action_due: chase.dueAt,
     };
   });
@@ -193,7 +203,12 @@ export function getDashboard() {
   }
   const totals = sumDistinctHeads(lines);
 
-  const engineerChasesDue = listDueEngineerInstructionChases();
+  const chasesDue = listDueChases();
+  const chasesDueByKind = {
+    liability_response: chasesDue.filter((row) => row.kind === "liability_response"),
+    engineer_report: chasesDue.filter((row) => row.kind === "engineer_report"),
+    repair_authorisation: chasesDue.filter((row) => row.kind === "repair_authorisation"),
+  };
 
   const cards = [
     { key: "new_enquiries", label: "New enquiries / incomplete forms", count: listClaims({ queue: "new_enquiries" }).length, tone: "warn" },
@@ -226,7 +241,9 @@ export function getDashboard() {
     byHead,
     totals,
     headLabels: HEAD_LABELS as Record<string, string>,
-    engineerChasesDue,
+    chasesDue,
+    chasesDueByKind,
+    engineerChasesDue: chasesDueByKind.engineer_report,
   };
 }
 

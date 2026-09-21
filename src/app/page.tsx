@@ -4,6 +4,7 @@ import { formatGbp } from "@/lib/money";
 import { requireStaff } from "@/lib/auth/session";
 import { dbLocation, getDashboard } from "@/lib/db/queries";
 import { formatUkDate } from "@/lib/dates";
+import type { ChaseView } from "@/lib/db/chase";
 
 const toneClass: Record<string, string> = {
   info: "border-l-teal",
@@ -11,6 +12,53 @@ const toneClass: Record<string, string> = {
   bad: "border-l-overdue",
   ok: "border-l-ok",
 };
+
+function ChaseDueTable({
+  title,
+  hint,
+  rows,
+}: {
+  title: string;
+  hint: string;
+  rows: ChaseView[];
+}) {
+  return (
+    <section className="mt-8 rounded-xl border border-line bg-card p-5">
+      <h2 className="font-serif text-xl text-navy-deep">{title}</h2>
+      <p className="mb-4 text-sm text-slate">{hint}</p>
+      {rows.length === 0 ? (
+        <p className="text-sm text-slate">None due.</p>
+      ) : (
+        <table className="ledger-table">
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Client</th>
+              <th>Next action</th>
+              <th>Due</th>
+              <th>Handler</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={`${row.kind}-${row.claimId}`}>
+                <td>
+                  <Link href={`/claims/${row.claimId}`} className="ref text-teal-dark hover:underline">
+                    {row.fileReference}
+                  </Link>
+                </td>
+                <td>{row.clientName || "Unknown"}</td>
+                <td>{row.label || row.dueLabel}</td>
+                <td>{row.dueAt ? formatUkDate(row.dueAt) : "Unknown"}</td>
+                <td>{row.handlerName || "Unassigned"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
 
 export default async function DashboardPage() {
   await requireStaff();
@@ -38,43 +86,21 @@ export default async function DashboardPage() {
         ))}
       </section>
 
-      <section className="mt-8 rounded-xl border border-line bg-card p-5">
-        <h2 className="font-serif text-xl text-navy-deep">Engineer report chases due</h2>
-        <p className="mb-4 text-sm text-slate">
-          Reminders only — no email is sent automatically. Logging the report received, or pausing/cancelling on the
-          file, clears the flag immediately.
-        </p>
-        {data.engineerChasesDue.length === 0 ? (
-          <p className="text-sm text-slate">None due.</p>
-        ) : (
-          <table className="ledger-table">
-            <thead>
-              <tr>
-                <th>File</th>
-                <th>Client</th>
-                <th>Next action</th>
-                <th>Due</th>
-                <th>Handler</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.engineerChasesDue.map((row) => (
-                <tr key={row.claimId}>
-                  <td>
-                    <Link href={`/claims/${row.claimId}`} className="ref text-teal-dark hover:underline">
-                      {row.fileReference}
-                    </Link>
-                  </td>
-                  <td>{row.clientName || "Unknown"}</td>
-                  <td>{row.label}</td>
-                  <td>{formatUkDate(row.dueAt)}</td>
-                  <td>{row.handlerName || "Unassigned"}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
+      <ChaseDueTable
+        title="Liability response chases due"
+        hint="Starts when a liability enquiry has been sent. Clears only when a staff member logs an insurer decision (accepted, rejected or partial), or pauses/cancels this chase. Disputed / unclear on the file is not a decision. Reminder only — no email is sent automatically."
+        rows={data.chasesDueByKind.liability_response}
+      />
+      <ChaseDueTable
+        title="Engineer report chases due"
+        hint="Reminders only — no email is sent automatically. Logging the report received, or pausing/cancelling on the file, clears the flag immediately."
+        rows={data.chasesDueByKind.engineer_report}
+      />
+      <ChaseDueTable
+        title="Repair authorisation chases due"
+        hint="Starts when a repair estimate or payment request has been sent. Clears when staff log authorisation or payment received. Reminder only — no email is sent automatically."
+        rows={data.chasesDueByKind.repair_authorisation}
+      />
 
       <section className="mt-8 grid gap-6 xl:grid-cols-3">
         <div className="rounded-xl border border-line bg-card p-5 xl:col-span-2">

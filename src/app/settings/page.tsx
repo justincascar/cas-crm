@@ -1,12 +1,12 @@
 import { PageHeader } from "@/components/ClaimTable";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import Link from "next/link";
-import { actionSaveDefaultVehicleLocation, actionSaveEngineerChaseInterval } from "@/app/settings-actions";
+import { actionSaveChaseIntervals, actionSaveDefaultVehicleLocation } from "@/app/settings-actions";
 import { isAdministrator } from "@/lib/auth/roles";
 import { requireStaff } from "@/lib/auth/session";
 import { dbLocation, getSettings, listStaff } from "@/lib/db/queries";
 import { getDefaultVehicleLocation } from "@/lib/db/vehicle-location";
-import { getEngineerChaseIntervalDays } from "@/lib/db/engineer-chase";
+import { getChaseIntervalDays } from "@/lib/db/chase";
 import { CAS_CLAIMS_MAILBOX, INDICATIVE_DEFAULTS } from "@/lib/constants";
 import { formatGbp } from "@/lib/money";
 
@@ -21,7 +21,9 @@ export default async function SettingsPage({
   const staff = listStaff();
   const admin = isAdministrator(staffUser.role);
   const defaultVehicleLocation = getDefaultVehicleLocation();
-  const chaseIntervalDays = getEngineerChaseIntervalDays();
+  const engineerChaseIntervalDays = getChaseIntervalDays("engineer_report");
+  const liabilityChaseIntervalDays = getChaseIntervalDays("liability_response");
+  const repairChaseIntervalDays = getChaseIntervalDays("repair_authorisation");
   return (
     <div className="max-w-3xl space-y-6">
       <PageHeader
@@ -69,27 +71,53 @@ export default async function SettingsPage({
         </ul>
       </section>
       <section className="rounded-xl border border-line bg-card p-5">
-        <h2 className="font-serif text-xl text-navy-deep">Engineer report chase interval</h2>
+        <h2 className="font-serif text-xl text-navy-deep">Chase reminder intervals</h2>
         <p className="mt-1 text-sm text-slate">
-          After an engineer instruction is marked as sent, the file is flagged if no report has been logged within this
-          many calendar days. This is a reminder only — no email is sent automatically. Changing the number later does
-          not reopen a chase that has already been cancelled, paused, or cleared by a received report.
+          After an outstanding request is marked as sent, the file is flagged if the outcome has not been logged within
+          this many calendar days. Each type has its own default. A longer interval can still be set on an individual
+          file (for example where an insurer has agreed a slower chase). Reminders only — no email is sent
+          automatically. Changing these numbers later does not reopen a chase that has already been cancelled, paused,
+          or cleared by a logged outcome, and does not overwrite a per-file override.
         </p>
-        <ValidatedForm action={actionSaveEngineerChaseInterval} className="mt-4 flex flex-wrap items-end gap-3">
+        <ValidatedForm action={actionSaveChaseIntervals} className="mt-4 grid gap-3 sm:grid-cols-3 sm:items-end">
           <label className="text-sm">
-            Calendar days
+            Engineer report (days)
             <input
               name="engineerChaseIntervalDays"
               type="number"
               min={1}
               step={1}
               required
-              className="mt-1 w-28 rounded-md border border-line bg-white px-3 py-2 text-sm"
-              defaultValue={chaseIntervalDays}
+              className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
+              defaultValue={engineerChaseIntervalDays}
             />
           </label>
-          <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
-            Save chase interval
+          <label className="text-sm">
+            Liability response (days)
+            <input
+              name="liabilityChaseIntervalDays"
+              type="number"
+              min={1}
+              step={1}
+              required
+              className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
+              defaultValue={liabilityChaseIntervalDays}
+            />
+          </label>
+          <label className="text-sm">
+            Repair authorisation (days)
+            <input
+              name="repairAuthChaseIntervalDays"
+              type="number"
+              min={1}
+              step={1}
+              required
+              className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
+              defaultValue={repairChaseIntervalDays}
+            />
+          </label>
+          <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white sm:col-span-3">
+            Save chase intervals
           </button>
         </ValidatedForm>
       </section>

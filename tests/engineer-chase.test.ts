@@ -203,8 +203,8 @@ describe("engineer instruction chase — seeded TEST-0005 and settings", () => {
       const claims = listClaims();
       const five = claims.find((row) => row.file_reference === "TEST-0005");
       const six = claims.find((row) => row.file_reference === "TEST-0006");
-      assert.equal(five?.next_action, ENGINEER_REPORT_CHASE_DUE_LABEL);
-      assert.notEqual(six?.next_action, ENGINEER_REPORT_CHASE_DUE_LABEL);
+      assert.match(String(five?.next_action), /Engineer report chase due/);
+      assert.ok(!String(six?.next_action || "").includes(ENGINEER_REPORT_CHASE_DUE_LABEL));
       assert.ok(listDueEngineerInstructionChases().some((row) => row.fileReference === "TEST-0005"));
       assert.equal(getEngineerChaseIntervalDays(), ENGINEER_CHASER_INTERVAL_DAYS_DEFAULT);
     });
