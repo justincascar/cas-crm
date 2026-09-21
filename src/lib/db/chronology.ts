@@ -21,6 +21,7 @@ import { blankInsurerField } from "../insurers";
 import { all, get, getDb, newId, run } from "./connection";
 import { ENGINEER_INSTRUCTION_MARKED_SENT, ENGINEER_INSTRUCTION_PREPARED, getEngineer, setClaimEngineer } from "./engineers";
 import { findKnownInsurerOn } from "./insurers";
+import { vehicleLocationForClaim } from "./vehicle-location";
 import { buildMailtoHref } from "../email/mailto";
 
 export type ClaimEventRow = {
@@ -254,7 +255,7 @@ function letterContext(claimId: string, letterDate: string, engineerId?: string)
     engineerName: engineer?.name || "",
     engineerAddress: engineer?.address || "",
     engineerEmail: engineer?.email || "",
-    vehicleLocation: String(recovery?.location || ""),
+    vehicleLocation: vehicleLocationForClaim(claimId),
     siteContactName: "",
     siteContactPhone: "",
     reportTurnaroundDays: String(settings?.value || ENGINEER_CHASER_INTERVAL_DAYS_DEFAULT),

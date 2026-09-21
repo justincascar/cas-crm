@@ -88,7 +88,15 @@ function FieldInput({
   const type = field.type || "text";
 
   if (type === "textarea") {
-    return <textarea name={field.name} rows={3} defaultValue={shown} {...casingInputProps(field.name, "textarea", control)} />;
+    return (
+      <textarea
+        name={field.name}
+        rows={3}
+        defaultValue={shown}
+        {...casingInputProps(field.name, "textarea", control)}
+        placeholder={field.placeholder}
+      />
+    );
   }
   if (type === "checkbox") {
     return (
@@ -124,6 +132,7 @@ function FieldInput({
       step={type === "gbp" ? "0.01" : undefined}
       defaultValue={shown}
       {...casing}
+      placeholder={field.placeholder}
     />
   );
 }

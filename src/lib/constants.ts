@@ -44,6 +44,11 @@ export const INDICATIVE_DEFAULTS = {
   vat_rate: 0.2,
 };
 
+/** Where a recovered vehicle is taken unless a claim records a different location. Editable in Settings. */
+export const SETTING_DEFAULT_VEHICLE_LOCATION = "default_vehicle_location";
+export const DEFAULT_VEHICLE_LOCATION =
+  "Complete Accident Solutions Ltd, 171 Cwmgarw Road, Brynamman, Ammanford SA18 1DG";
+
 export const AGREEMENT_MAX_DAYS_DEFAULT = 88;
 export const AGREEMENT_RENEWAL_ALERT_DAY_DEFAULT = 80;
 export const TOTAL_LOSS_HIRE_DAYS_AFTER_QUALIFYING_PAYMENT = 7;

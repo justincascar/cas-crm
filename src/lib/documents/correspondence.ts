@@ -1,5 +1,6 @@
 import { formatUkDate } from "../dates";
 import { CAS_CLAIMS_MAILBOX } from "../constants";
+import { resolveVehicleLocation } from "../domain/vehicle-location";
 import { CAS_COMPANY } from "./cas-hire-terms";
 import type { ChronologyDateMap } from "../domain/events";
 import type { ClaimEventType } from "../domain/events";
@@ -355,7 +356,7 @@ export function correspondenceVars(ctx: CorrespondenceContext): Record<string, s
     tp_insured_name: textOrUnknown(ctx.tpInsuredName),
     engineer_name: textOrUnknown(ctx.engineerName),
     engineer_address: textOrUnknown(ctx.engineerAddress),
-    vehicle_location: textOrUnknown(ctx.vehicleLocation),
+    vehicle_location: resolveVehicleLocation(ctx.vehicleLocation),
     site_contact_name: textOrUnknown(ctx.siteContactName),
     site_contact_phone: textOrUnknown(ctx.siteContactPhone),
     report_turnaround_days: textOrUnknown(ctx.reportTurnaroundDays),

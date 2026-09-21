@@ -1,3 +1,5 @@
+import { DEFAULT_VEHICLE_LOCATION } from "./constants";
+
 export type FieldType = "text" | "textarea" | "date" | "time" | "gbp" | "number" | "checkbox" | "select";
 
 export type ScreenField = {
@@ -7,6 +9,7 @@ export type ScreenField = {
   options?: Array<{ value: string; label: string }>;
   span?: 1 | 2;
   hint?: string;
+  placeholder?: string;
 };
 
 export type ScreenSection = {
@@ -204,7 +207,13 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
           { name: "clientModel", label: "Model" },
           { name: "clientReg", label: "Registration" },
           { name: "clientColour", label: "Colour" },
-          { name: "clientLocation1", label: "Vehicle location line 1", span: 2 },
+          {
+            name: "clientLocation1",
+            label: "Vehicle location line 1",
+            span: 2,
+            placeholder: DEFAULT_VEHICLE_LOCATION,
+            hint: "If blank, letters (including Instruct Engineer) use the CAS premises address from Settings. Enter a different address when the vehicle is somewhere else.",
+          },
           { name: "clientLocationPostcode", label: "Location postcode" },
         ],
       },

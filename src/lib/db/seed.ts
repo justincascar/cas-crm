@@ -1,7 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { DEMO_STAFF, demoPasswordFor } from "../auth/demo-staff";
 import { hashPasswordSync } from "../auth/passwords";
-import { FILE_REFERENCE_PREFIX_DEFAULT } from "../constants";
+import { FILE_REFERENCE_PREFIX_DEFAULT, DEFAULT_VEHICLE_LOCATION, SETTING_DEFAULT_VEHICLE_LOCATION } from "../constants";
 import { isoDateFromNow, isoDaysFromNow, nowUtcIso } from "../dates";
 import { pence, vatOnNet } from "../money";
 
@@ -28,6 +28,7 @@ export function seed(db: DatabaseSync) {
   run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", ["agreement_renewal_alert_day", "80"]);
   run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", ["chaser_interval_days", "3"]);
   run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", ["chaser_interval_unit", "calendar_days"]);
+  run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", [SETTING_DEFAULT_VEHICLE_LOCATION, DEFAULT_VEHICLE_LOCATION]);
 
   for (const person of DEMO_STAFF) {
     run(

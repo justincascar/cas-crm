@@ -1,21 +1,25 @@
 import { PageHeader } from "@/components/ClaimTable";
+import { ValidatedForm } from "@/components/ValidatedForm";
 import Link from "next/link";
+import { actionSaveDefaultVehicleLocation } from "@/app/settings-actions";
 import { isAdministrator } from "@/lib/auth/roles";
 import { requireStaff } from "@/lib/auth/session";
 import { dbLocation, getSettings, listStaff } from "@/lib/db/queries";
+import { getDefaultVehicleLocation } from "@/lib/db/vehicle-location";
 import { CAS_CLAIMS_MAILBOX, INDICATIVE_DEFAULTS } from "@/lib/constants";
 import { formatGbp } from "@/lib/money";
 
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string }>;
 }) {
   const staffUser = await requireStaff();
-  const { error } = await searchParams;
+  const { error, saved } = await searchParams;
   const settings = getSettings();
   const staff = listStaff();
   const admin = isAdministrator(staffUser.role);
+  const defaultVehicleLocation = getDefaultVehicleLocation();
   return (
     <div className="max-w-3xl space-y-6">
       <PageHeader
@@ -24,6 +28,9 @@ export default async function SettingsPage({
       />
       {error ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
+      ) : null}
+      {saved ? (
+        <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm text-ok">Saved.</p>
       ) : null}
       <section className="rounded-xl border border-warn/40 bg-[#fff6e8] p-5">
         <h2 className="font-serif text-xl text-navy-deep">Hire agreement length — decision needed</h2>
@@ -59,6 +66,28 @@ export default async function SettingsPage({
           </li>
           <li>Delivery/collection {formatGbp(INDICATIVE_DEFAULTS.delivery_collection_net_pence)} + VAT</li>
         </ul>
+      </section>
+      <section className="rounded-xl border border-line bg-card p-5">
+        <h2 className="font-serif text-xl text-navy-deep">Default vehicle location</h2>
+        <p className="mt-1 text-sm text-slate">
+          Used on letters (including Instruct Engineer) when a claim has no vehicle location recorded. Recovered
+          vehicles normally sit at CAS premises. A location saved on a file is never overwritten by this default.
+        </p>
+        <ValidatedForm action={actionSaveDefaultVehicleLocation} className="mt-4 space-y-3">
+          <label className="block text-sm">
+            Address
+            <textarea
+              name="defaultVehicleLocation"
+              required
+              rows={3}
+              className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
+              defaultValue={defaultVehicleLocation}
+            />
+          </label>
+          <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
+            Save default location
+          </button>
+        </ValidatedForm>
       </section>
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Engineers</h2>
