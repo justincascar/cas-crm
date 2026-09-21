@@ -211,6 +211,15 @@ export function migrate(db: DatabaseSync) {
       taken_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_vehicle_handover_photos ON vehicle_handover_photos(handover_id);
+    CREATE TABLE IF NOT EXISTS vehicle_handover_scans (
+      id TEXT PRIMARY KEY,
+      handover_id TEXT NOT NULL REFERENCES vehicle_handovers(id) ON DELETE CASCADE,
+      slot TEXT NOT NULL,
+      document_id TEXT NOT NULL REFERENCES documents(id),
+      attached_at TEXT NOT NULL,
+      UNIQUE (handover_id, slot)
+    );
+    CREATE INDEX IF NOT EXISTS idx_vehicle_handover_scans ON vehicle_handover_scans(handover_id);
   `);
   db.exec(`
     CREATE TABLE IF NOT EXISTS claim_events (

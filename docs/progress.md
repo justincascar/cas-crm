@@ -136,6 +136,11 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+21 September 2026 — Diagnostic scan on a handover:
+
+- A handover can also hold an optional pre-diagnostic scan and an optional post-diagnostic scan. Each is a file from the tool (PDF, image or text). There is no live link to the scanner.
+- The scans sit apart from the condition photographs. A missing scan does not mark the record incomplete. Incomplete still means the condition photographs have not been added. Attaching a scan does not change the locked mileage, fuel or checklist.
+
 21 September 2026 — Vehicle handover:
 
 - Staff record condition when a hire vehicle is delivered or collected, and when the client's own vehicle is recovered or returned. Each record stores mileage, fuel level (Empty, ¼, ½, ¾ or Full), a short yes/no check (spare wheel, tools, warning lights, tyres visibly legal), a damage note and photographs.

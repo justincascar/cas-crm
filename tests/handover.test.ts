@@ -8,10 +8,12 @@ import { withDatabase } from "../src/lib/db/connection.ts";
 import { generateHireAgreementDocument } from "../src/lib/db/hire-agreement.ts";
 import {
   addHandoverPhotographs,
+  attachHandoverScan,
   handoverIncomplete,
   listVehicleHandovers,
   recordVehicleHandover,
 } from "../src/lib/db/handover.ts";
+import { readStoredFile } from "../src/lib/storage/files.ts";
 import { migrate } from "../src/lib/db/migrate.ts";
 import { seed } from "../src/lib/db/seed.ts";
 
@@ -145,5 +147,109 @@ describe("vehicle handover records", () => {
     assert.match(page, /Mileage/);
     assert.match(page, /Fuel level/);
     assert.match(page, /Tyres visibly legal/);
+    assert.match(page, /Pre-diagnostic scan/);
+    assert.match(page, /Post-diagnostic scan/);
+  });
+
+  it("leaves the incomplete flag tied to photographs when no diagnostic scan is attached", () => {
+    const previous = process.env.CAS_FILES_DIR;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cas-handover-noscan-"));
+    process.env.CAS_FILES_DIR = dir;
+    const db = prepared();
+    try {
+      withDatabase(db, () => {
+        const saved = recordVehicleHandover(handover({ mileage: "4242" }));
+        assert.equal(saved.incomplete, true);
+        let row = listVehicleHandovers("c3").find((item) => item.id === saved.id);
+        assert.equal(row?.scans.length, 0);
+        assert.equal(row?.incomplete, true);
+        assert.equal(row?.mileage, 4242);
+        const added = addHandoverPhotographs({
+          claimId: "c3",
+          handoverId: saved.id,
+          actorId: "staff-sian",
+          photos: [{ buffer: Buffer.from("photo-bytes"), filename: "front.jpg", mimeType: "image/jpeg" }],
+        });
+        assert.equal(added.incomplete, false);
+        row = listVehicleHandovers("c3").find((item) => item.id === saved.id);
+        assert.equal(row?.incomplete, false);
+        assert.equal(row?.scans.length, 0);
+        assert.equal(row?.mileage, 4242);
+        assert.equal(handoverIncomplete(row?.photos.length || 0), false);
+      });
+    } finally {
+      db.close();
+      if (previous === undefined) delete process.env.CAS_FILES_DIR;
+      else process.env.CAS_FILES_DIR = previous;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("attaches a diagnostic scan and retrieves the stored file without clearing incomplete", () => {
+    const previous = process.env.CAS_FILES_DIR;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cas-handover-scan-"));
+    process.env.CAS_FILES_DIR = dir;
+    const db = prepared();
+    try {
+      withDatabase(db, () => {
+        const body = Buffer.from("DTC P0300 stored before handover");
+        const saved = recordVehicleHandover({
+          ...handover({ mileage: "7777" }),
+          preScan: { buffer: body, filename: "pre-scan.txt", mimeType: "text/plain" },
+        });
+        assert.equal(saved.incomplete, true);
+        let row = listVehicleHandovers("c3").find((item) => item.id === saved.id);
+        assert.equal(row?.mileage, 7777);
+        assert.equal(row?.incomplete, true);
+        assert.equal(row?.scans.length, 1);
+        const pre = row?.scans.find((scan) => scan.slot === "pre");
+        assert.equal(pre?.filename, "pre-scan.txt");
+        const stored = db.prepare(`SELECT document_type, mime_type, stored_relpath FROM documents WHERE id = ?`).get(pre?.documentId) as {
+          document_type: string;
+          mime_type: string;
+          stored_relpath: string;
+        };
+        assert.equal(stored.document_type, "handover_scan");
+        assert.equal(stored.mime_type, "text/plain");
+        assert.equal(readStoredFile(stored.stored_relpath).buffer.toString("utf8"), body.toString("utf8"));
+
+        const postBody = Buffer.from("%PDF-1.4 post scan");
+        const attached = attachHandoverScan({
+          claimId: "c3",
+          handoverId: saved.id,
+          actorId: "staff-tom",
+          slot: "post",
+          file: { buffer: postBody, filename: "post-scan.pdf", mimeType: "application/pdf" },
+        });
+        assert.equal(attached.incomplete, true);
+        row = listVehicleHandovers("c3").find((item) => item.id === saved.id);
+        assert.equal(row?.mileage, 7777);
+        assert.equal(row?.photos.length, 0);
+        assert.equal(row?.incomplete, true);
+        const post = row?.scans.find((scan) => scan.slot === "post");
+        const postStored = db.prepare(`SELECT stored_relpath, mime_type FROM documents WHERE id = ?`).get(post?.documentId) as {
+          stored_relpath: string;
+          mime_type: string;
+        };
+        assert.equal(postStored.mime_type, "application/pdf");
+        assert.equal(readStoredFile(postStored.stored_relpath).buffer.toString("utf8"), postBody.toString("utf8"));
+        assert.throws(
+          () =>
+            attachHandoverScan({
+              claimId: "c3",
+              handoverId: saved.id,
+              actorId: "staff-tom",
+              slot: "pre",
+              file: { buffer: Buffer.from("again"), filename: "again.txt", mimeType: "text/plain" },
+            }),
+          /already on this locked record/,
+        );
+      });
+    } finally {
+      db.close();
+      if (previous === undefined) delete process.env.CAS_FILES_DIR;
+      else process.env.CAS_FILES_DIR = previous;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

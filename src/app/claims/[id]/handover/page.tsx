@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { actionAddHandoverPhotos, actionRecordHandover } from "@/app/handover-actions";
+import { actionAddHandoverPhotos, actionAttachHandoverScan, actionRecordHandover } from "@/app/handover-actions";
 import { PageHeader } from "@/components/ClaimTable";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { formatUkDateTime } from "@/lib/dates";
@@ -11,10 +11,17 @@ import {
   HANDOVER_EVENTS,
   listHireBookings,
   listVehicleHandovers,
+  SCAN_SLOTS,
+  type HandoverScan,
 } from "@/lib/db/handover";
 import { getClaim } from "@/lib/db/queries";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
+const scanAccept = "application/pdf,image/jpeg,image/png,image/webp,image/gif,text/plain,text/csv,text/html,text/xml,application/json,.pdf,.txt,.csv,.xml,.html,.json,.log";
+
+function scanFor(scans: HandoverScan[], slot: "pre" | "post") {
+  return scans.find((scan) => scan.slot === slot) || null;
+}
 
 function yesNo(name: string, label: string) {
   return (
@@ -125,6 +132,17 @@ export default async function HandoverPage({
           <input name="photos" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple className={field} />
         </label>
         <p className="text-sm text-slate">Photographs can be added after you save, for example if the signal drops on site. Until then the record is marked incomplete. Mileage and fuel are still kept.</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm">
+            Pre-diagnostic scan
+            <input name="preScan" type="file" accept={scanAccept} className={field} />
+          </label>
+          <label className="block text-sm">
+            Post-diagnostic scan
+            <input name="postScan" type="file" accept={scanAccept} className={field} />
+          </label>
+        </div>
+        <p className="text-sm text-slate">Optional. A PDF, photograph or text export from the diagnostic tool. A missing scan does not mark the record incomplete, and it is kept separate from the condition photographs.</p>
         <button className="rounded-md bg-navy px-4 py-2 text-sm text-white" type="submit">
           Save handover record
         </button>
@@ -182,6 +200,39 @@ export default async function HandoverPage({
               </button>
             </ValidatedForm>
             <p className="mt-2 text-xs text-slate">This does not change the mileage, fuel or checklist already saved.</p>
+            <div className="mt-4 space-y-3 border-t border-line pt-4">
+              <h4 className="font-medium">Diagnostic scans</h4>
+              {SCAN_SLOTS.map((slot) => {
+                const scan = scanFor(record.scans, slot.slot);
+                return (
+                  <div key={slot.slot}>
+                    {scan ? (
+                      <p>
+                        {slot.label}:{" "}
+                        <a className="text-teal-dark underline" href={`/documents/${scan.documentId}`}>
+                          {scan.filename}
+                        </a>
+                        <span className="text-slate"> · {formatUkDateTime(scan.attachedAt)}</span>
+                      </p>
+                    ) : (
+                      <ValidatedForm action={actionAttachHandoverScan} encType="multipart/form-data" className="flex flex-wrap items-end gap-3">
+                        <input type="hidden" name="claimId" value={id} />
+                        <input type="hidden" name="handoverId" value={record.id} />
+                        <input type="hidden" name="slot" value={slot.slot} />
+                        <label className="text-sm">
+                          {slot.label}
+                          <input name="scan" type="file" accept={scanAccept} required className={field} />
+                        </label>
+                        <button className="rounded-md border border-navy px-3 py-2 text-sm text-navy" type="submit">
+                          Attach
+                        </button>
+                      </ValidatedForm>
+                    )}
+                  </div>
+                );
+              })}
+              <p className="text-xs text-slate">Optional. Attaching a scan does not change the mileage, fuel, checklist or the incomplete flag.</p>
+            </div>
           </article>
         ))}
       </section>

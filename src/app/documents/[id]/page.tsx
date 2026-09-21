@@ -18,6 +18,9 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
   const claimId = doc.claim_id ? String(doc.claim_id) : "";
   const fleetId = doc.fleet_vehicle_id ? String(doc.fleet_vehicle_id) : "";
   const storedFilename = String(doc.original_filename || "document.pdf");
+  const mime = String(doc.mime_type || "").toLowerCase();
+  const isImage = mime.startsWith("image/");
+  const isPdf = mime === "application/pdf" || storedFilename.toLowerCase().endsWith(".pdf");
 
   return (
     <div className="document-sheet mx-auto max-w-3xl space-y-4">
@@ -62,10 +65,12 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
       {specForTemplate(String(doc.template_key || ""))?.legalCitations ? (
         <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm print:hidden">{CAS_LEGAL_SIGNOFF_NOTICE}</p>
       ) : null}
-      {storedPath && String(doc.mime_type || "").startsWith("image/") ? (
+      {storedPath && isImage ? (
         <img src={`/documents/${id}/file`} alt={String(doc.title)} className="max-w-full rounded-xl border border-line bg-white" />
-      ) : storedPath ? (
+      ) : storedPath && isPdf ? (
         <StoredFilePreview documentId={id} title={String(doc.title)} />
+      ) : storedPath ? (
+        <p className="rounded-md border border-line bg-card px-4 py-3 text-sm">This file is stored with the claim. Use Download original to open it.</p>
       ) : doc.body_html ? (
         <div className="letter-paper rounded-xl border border-line bg-card p-8" dangerouslySetInnerHTML={{ __html: String(doc.body_html) }} />
       ) : (
