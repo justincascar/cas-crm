@@ -3,6 +3,7 @@ import { ClaimTable, PageHeader, SearchForm } from "@/components/ClaimTable";
 import { formatGbp } from "@/lib/money";
 import { requireStaff } from "@/lib/auth/session";
 import { dbLocation, getDashboard } from "@/lib/db/queries";
+import { formatUkDate } from "@/lib/dates";
 
 const toneClass: Record<string, string> = {
   info: "border-l-teal",
@@ -35,6 +36,44 @@ export default async function DashboardPage() {
             <p className="mt-2 font-serif text-4xl tabular text-navy-deep">{card.count}</p>
           </Link>
         ))}
+      </section>
+
+      <section className="mt-8 rounded-xl border border-line bg-card p-5">
+        <h2 className="font-serif text-xl text-navy-deep">Engineer report chases due</h2>
+        <p className="mb-4 text-sm text-slate">
+          Reminders only — no email is sent automatically. Logging the report received, or pausing/cancelling on the
+          file, clears the flag immediately.
+        </p>
+        {data.engineerChasesDue.length === 0 ? (
+          <p className="text-sm text-slate">None due.</p>
+        ) : (
+          <table className="ledger-table">
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Client</th>
+                <th>Next action</th>
+                <th>Due</th>
+                <th>Handler</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.engineerChasesDue.map((row) => (
+                <tr key={row.claimId}>
+                  <td>
+                    <Link href={`/claims/${row.claimId}`} className="ref text-teal-dark hover:underline">
+                      {row.fileReference}
+                    </Link>
+                  </td>
+                  <td>{row.clientName || "Unknown"}</td>
+                  <td>{row.label}</td>
+                  <td>{formatUkDate(row.dueAt)}</td>
+                  <td>{row.handlerName || "Unassigned"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </section>
 
       <section className="mt-8 grid gap-6 xl:grid-cols-3">

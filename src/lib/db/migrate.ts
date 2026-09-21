@@ -227,6 +227,7 @@ export function migrate(db: DatabaseSync) {
     );
     CREATE INDEX IF NOT EXISTS idx_sessions_staff ON sessions(staff_id);
     CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_automations_claim_rule ON automations(claim_id, rule_key);
   `);
 
   for (const [table, columns] of Object.entries(TABLES)) {

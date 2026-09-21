@@ -464,3 +464,4 @@ CREATE INDEX IF NOT EXISTS idx_parties_claim ON claim_parties(claim_id);
 CREATE INDEX IF NOT EXISTS idx_notes_claim ON notes(claim_id);
 CREATE INDEX IF NOT EXISTS idx_financial_claim ON financial_lines(claim_id);
 CREATE INDEX IF NOT EXISTS idx_events_claim ON claim_events(claim_id, occurred_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_automations_claim_rule ON automations(claim_id, rule_key);

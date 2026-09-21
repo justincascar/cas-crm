@@ -16,10 +16,16 @@ import {
 } from "../documents/correspondence";
 import { generateEmail, isEmailTemplateKey } from "../documents/email-templates";
 import { generateLetter, isLetterTemplateKey, type LetterTemplateKey } from "../documents/templates";
-import { nowUtcIso, occurredFromForm } from "../dates";
+import { formatUkDate, nowUtcIso, occurredFromForm } from "../dates";
 import { blankInsurerField } from "../insurers";
 import { all, get, getDb, newId, run } from "./connection";
-import { ENGINEER_INSTRUCTION_MARKED_SENT, ENGINEER_INSTRUCTION_PREPARED, getEngineer, setClaimEngineer } from "./engineers";
+import { ENGINEER_INSTRUCTION_MARKED_SENT, ENGINEER_INSTRUCTION_PREPARED, getEngineer, setClaimEngineer, SEEDED_ENGINEER } from "./engineers";
+import {
+  findPreparedEngineerReportChase,
+  restartEngineerInstructionChaseClock,
+  startEngineerInstructionChase,
+} from "./engineer-chase";
+import { ENGINEER_REPORT_CHASE_TEMPLATE } from "../constants";
 import { findKnownInsurerOn } from "./insurers";
 import { vehicleLocationForClaim } from "./vehicle-location";
 import { buildMailtoHref } from "../email/mailto";
@@ -97,8 +103,8 @@ function applyEventSideEffects(claimId: string, eventType: ClaimEventType, occur
       [occurredAt, claimId],
     );
   }
-  if (eventType === "engineer_report_received") {
-    run(`UPDATE claims SET engineering_status = 'report_received' WHERE id = ?`, [claimId]);
+  if (eventType === "engineer_report_received" || eventType === "engineer_report_received_cleared") {
+    refreshEngineeringStatusFromEvents(claimId);
   }
   if (eventType === "repairs_started") {
     run(`UPDATE claims SET repair_status = 'in_progress' WHERE id = ?`, [claimId]);
@@ -122,6 +128,7 @@ function applyEventSideEffects(claimId: string, eventType: ClaimEventType, occur
     eventType === "client_status_update_sent" ||
     eventType === "vehicle_ready_notice_sent" ||
     eventType === "internal_chase_sent" ||
+    eventType === "engineer_report_chase_sent" ||
     eventType === "outgoing_whatsapp" ||
     eventType === "incoming_whatsapp" ||
     eventType === "outgoing_call" ||
@@ -709,5 +716,203 @@ export function markEngineerInstructionSent(input: {
     correspondenceId: input.correspondenceId,
     source: "staff",
   });
+  startEngineerInstructionChase(input.claimId, when);
+  return { handlerName, occurredAt: when };
+}
+
+function refreshEngineeringStatusFromEvents(claimId: string) {
+  const received = get<{ occurred_at: string }>(
+    `SELECT occurred_at FROM claim_events WHERE claim_id = ? AND event_type = 'engineer_report_received' ORDER BY occurred_at DESC, recorded_at DESC LIMIT 1`,
+    [claimId],
+  );
+  const cleared = get<{ occurred_at: string }>(
+    `SELECT occurred_at FROM claim_events WHERE claim_id = ? AND event_type = 'engineer_report_received_cleared' ORDER BY occurred_at DESC, recorded_at DESC LIMIT 1`,
+    [claimId],
+  );
+  const instructed = get<{ occurred_at: string }>(
+    `SELECT occurred_at FROM claim_events WHERE claim_id = ? AND event_type = 'engineer_instructed' ORDER BY occurred_at DESC, recorded_at DESC LIMIT 1`,
+    [claimId],
+  );
+  const receivedAt = received?.occurred_at ? String(received.occurred_at) : null;
+  const clearedAt = cleared?.occurred_at ? String(cleared.occurred_at) : null;
+  const instructedAt = instructed?.occurred_at ? String(instructed.occurred_at) : null;
+  const onFile =
+    Boolean(receivedAt) &&
+    (!clearedAt || receivedAt >= clearedAt) &&
+    (!instructedAt || receivedAt >= instructedAt);
+  if (onFile) {
+    run(`UPDATE claims SET engineering_status = 'report_received' WHERE id = ?`, [claimId]);
+    return;
+  }
+  if (instructedAt) {
+    run(`UPDATE claims SET engineering_status = 'awaiting_report' WHERE id = ?`, [claimId]);
+  }
+}
+
+export function logEngineerReportReceived(input: { claimId: string; actorId: string; occurredAt?: string }) {
+  const when = occurredFromForm(input.occurredAt);
+  const handler = get<{ name: string }>(`SELECT name FROM staff WHERE id = ?`, [input.actorId]);
+  const handlerName = handler?.name || "Unknown handler";
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "engineer_report_received",
+    occurredAt: when,
+    details: `Engineer's report logged as received by ${handlerName}. Chase reminder cleared.`,
+    actorId: input.actorId,
+    channel: "file",
+    source: "staff",
+  });
+  return { handlerName, occurredAt: when };
+}
+
+export function clearEngineerReportReceived(input: { claimId: string; actorId: string; occurredAt?: string }) {
+  const when = occurredFromForm(input.occurredAt);
+  const handler = get<{ name: string }>(`SELECT name FROM staff WHERE id = ?`, [input.actorId]);
+  const handlerName = handler?.name || "Unknown handler";
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "engineer_report_received_cleared",
+    occurredAt: when,
+    details: `Engineer's report receipt cleared as a correction by ${handlerName}. Chase follows the file again.`,
+    actorId: input.actorId,
+    channel: "file",
+    source: "staff",
+  });
+  return { handlerName, occurredAt: when };
+}
+
+export function prepareEngineerReportChase(input: { claimId: string; actorId: string }) {
+  const existing = findPreparedEngineerReportChase(input.claimId);
+  const ctx = letterContext(input.claimId);
+  const claim = get<{ engineer_id: string | null }>(`SELECT engineer_id FROM claims WHERE id = ?`, [input.claimId]);
+  const saved = getEngineer(String(claim?.engineer_id || ""));
+  const engineerName = saved?.name || String(ctx.engineerName || "") || SEEDED_ENGINEER.name;
+  const engineerEmail = saved?.email || String(ctx.engineerEmail || "") || SEEDED_ENGINEER.email;
+  if (!engineerEmail.trim()) {
+    throw new Error("This engineer has no email address. Add one under Settings → Engineers.");
+  }
+  const instructedOn = ctx.dates.engineer_instructed ? formatUkDate(ctx.dates.engineer_instructed) : "Unknown";
+  const days = ctx.dates.engineer_instructed
+    ? Math.max(0, Math.round((Date.now() - new Date(ctx.dates.engineer_instructed).getTime()) / 86_400_000))
+    : null;
+  const outstanding =
+    days === null
+      ? "the instruction is still outstanding"
+      : `the instruction has been outstanding for ${days} day${days === 1 ? "" : "s"}`;
+  const fileRef = String(ctx.fileReference);
+  const subject = `Chase — ${fileRef} — engineer's report outstanding`;
+  const handlerName = String(ctx.handlerName || "Claims handler");
+  const body = [
+    `Dear ${engineerName},`,
+    "",
+    `We instructed you on ${fileRef} on ${instructedOn} and ${outstanding}. We have not yet received the engineer's report.`,
+    "",
+    `Please could you send the report to ${CAS_CLAIMS_MAILBOX}, quoting ${fileRef}, or let us know when we should expect it.`,
+    "",
+    "This is a reminder from the CRM. It has not been sent automatically.",
+    "",
+    "Kind regards,",
+    handlerName,
+    "Complete Accident Solutions Ltd",
+    `01792 341069 · ${CAS_CLAIMS_MAILBOX}`,
+  ].join("\n");
+  if (existing) {
+    run(`UPDATE correspondence SET subject = ?, preview = ?, body = ?, to_address = ?, from_address = ? WHERE id = ?`, [
+      subject,
+      body.slice(0, 180),
+      body,
+      engineerEmail,
+      CAS_CLAIMS_MAILBOX,
+      existing.id,
+    ]);
+    return {
+      correspondenceId: existing.id,
+      mailto: buildMailtoHref(engineerEmail, subject, letterTextForMailto(body)),
+      to: engineerEmail,
+      subject,
+      body,
+      engineerName,
+    };
+  }
+  const correspondenceId = newId("corr");
+  run(
+    `INSERT INTO correspondence(id, claim_id, direction, channel, subject, preview, body, to_address, from_address, unread, sent_status, template_key, created_at)
+     VALUES (?, ?, 'outgoing', 'email', ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
+    [
+      correspondenceId,
+      input.claimId,
+      subject,
+      body.slice(0, 180),
+      body,
+      engineerEmail,
+      CAS_CLAIMS_MAILBOX,
+      ENGINEER_INSTRUCTION_PREPARED,
+      ENGINEER_REPORT_CHASE_TEMPLATE,
+      nowUtcIso(),
+    ],
+  );
+  return {
+    correspondenceId,
+    mailto: buildMailtoHref(engineerEmail, subject, letterTextForMailto(body)),
+    to: engineerEmail,
+    subject,
+    body,
+    engineerName,
+  };
+}
+
+export function markEngineerReportChaseSent(input: {
+  claimId: string;
+  correspondenceId: string;
+  actorId: string;
+  occurredAt?: string;
+}) {
+  const row = get<{
+    id: string;
+    claim_id: string;
+    subject: string | null;
+    to_address: string | null;
+    sent_status: string | null;
+    template_key: string | null;
+  }>(`SELECT id, claim_id, subject, to_address, sent_status, template_key FROM correspondence WHERE id = ?`, [
+    input.correspondenceId,
+  ]);
+  if (!row || row.claim_id !== input.claimId) throw new Error("Prepared engineer-report chase not found on this file.");
+  if (row.template_key !== ENGINEER_REPORT_CHASE_TEMPLATE) {
+    throw new Error("This item is not an engineer-report chase.");
+  }
+  if (row.sent_status === ENGINEER_INSTRUCTION_MARKED_SENT) {
+    throw new Error("This chase is already marked as sent.");
+  }
+  if (row.sent_status !== ENGINEER_INSTRUCTION_PREPARED) {
+    throw new Error("This item is not a prepared chase waiting to be marked as sent.");
+  }
+  const when = occurredFromForm(input.occurredAt);
+  const handler = get<{ name: string }>(`SELECT name FROM staff WHERE id = ?`, [input.actorId]);
+  const handlerName = handler?.name || "Unknown handler";
+  run(`UPDATE correspondence SET sent_status = ? WHERE id = ?`, [ENGINEER_INSTRUCTION_MARKED_SENT, input.correspondenceId]);
+  const subject = String(row.subject || "Engineer report chase");
+  const to = String(row.to_address || "");
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "outgoing_email",
+    occurredAt: when,
+    details: `${subject} prepared for ${to}. Marked as sent by ${handlerName} after opening their own email client. Not auto-sent — live sending from ${CAS_CLAIMS_MAILBOX} is not connected.`,
+    actorId: input.actorId,
+    channel: "email",
+    correspondenceId: input.correspondenceId,
+    source: "staff",
+  });
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "engineer_report_chase_sent",
+    occurredAt: when,
+    details: `Engineer report chase marked as sent by ${handlerName}. Interval restarted. Prepared, not auto-sent from ${CAS_CLAIMS_MAILBOX}.`,
+    actorId: input.actorId,
+    channel: "email",
+    correspondenceId: input.correspondenceId,
+    source: "staff",
+  });
+  restartEngineerInstructionChaseClock(input.claimId, when);
   return { handlerName, occurredAt: when };
 }

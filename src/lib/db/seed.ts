@@ -1,7 +1,12 @@
 import type { DatabaseSync } from "node:sqlite";
 import { DEMO_STAFF, demoPasswordFor } from "../auth/demo-staff";
 import { hashPasswordSync } from "../auth/passwords";
-import { FILE_REFERENCE_PREFIX_DEFAULT, DEFAULT_VEHICLE_LOCATION, SETTING_DEFAULT_VEHICLE_LOCATION } from "../constants";
+import {
+  FILE_REFERENCE_PREFIX_DEFAULT,
+  DEFAULT_VEHICLE_LOCATION,
+  SETTING_DEFAULT_VEHICLE_LOCATION,
+  ENGINEER_INSTRUCTION_CHASE_RULE,
+} from "../constants";
 import { isoDateFromNow, isoDaysFromNow, nowUtcIso } from "../dates";
 import { pence, vatOnNet } from "../money";
 
@@ -537,8 +542,15 @@ export function seed(db: DatabaseSync) {
     ('a1','c6','engineer_report_chaser','engineer_report', ?, 3, 'calendar_days', 0, 'report_dispatched', 'Demonstration: chase every 3 calendar days until answered.', 'due'),
     ('a2','c5','liability_chaser','liability', ?, 3, 'calendar_days', 0, NULL, 'Awaiting Aviva response. Call task preferred before escalation.', 'scheduled'),
     ('a3','c11','liability_chaser','liability', ?, 14, 'calendar_days', 0, 'insurer_override', 'Insurer-specific 14-day interval override (Admiral file).', 'scheduled'),
-    ('a4','c3','liability_chaser','liability', NULL, 3, 'calendar_days', 1, 'paused', 'Handler pause — do not send.', 'paused')`,
-    [isoDaysFromNow(0, 10, 0), isoDaysFromNow(1, 10, 0), isoDaysFromNow(8, 10, 0)]);
+    ('a4','c3','liability_chaser','liability', NULL, 3, 'calendar_days', 1, 'paused', 'Handler pause — do not send.', 'paused'),
+    ('auto-c5-eng-chase','c5',?, 'engineer_instruction', ?, 3, 'calendar_days', 0, 'instruction_marked_sent', 'Waiting for the engineer''s report. Reminder only — not auto-sent.', 'tracking')`,
+    [
+      isoDaysFromNow(0, 10, 0),
+      isoDaysFromNow(1, 10, 0),
+      isoDaysFromNow(8, 10, 0),
+      ENGINEER_INSTRUCTION_CHASE_RULE,
+      isoDaysFromNow(-4, 10, 0),
+    ]);
 
   run(db, `INSERT INTO litigation(id, claim_id, stage, deadline_on, deadline_source, deadline_trigger, reviewer, approved_to_issue) VALUES
     ('l1','c12','pre_action', ?, 'Letter of claim dated 21 days ago — response period under the Pre-Action Protocol for Low Value PI? No: this is a vehicle damage / hire protocol letter on file, not a generic invented date.', 'Protocol response window from the dated letter on the file', 'Justin Roberts', 0)` ,

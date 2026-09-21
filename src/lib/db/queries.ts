@@ -1,4 +1,5 @@
-import { FILE_REFERENCE_PREFIX_DEFAULT, HEAD_LABELS, type HeadOfLoss } from "../constants";
+import { ENGINEER_REPORT_CHASE_DUE_LABEL, FILE_REFERENCE_PREFIX_DEFAULT, HEAD_LABELS, type HeadOfLoss } from "../constants";
+import { listDueEngineerInstructionChases } from "./engineer-chase";
 import { accidentDateError, isBeforeLondonDay, isSameLondonDay, londonDateIso, nowUtcIso } from "../dates";
 import { formatGbp, sumDistinctHeads } from "../money";
 import { all, dbPath, get, getDb, newId, run } from "./connection";
@@ -86,7 +87,21 @@ export function listClaims(opts: { q?: string; queue?: string } = {}): ClaimList
     }
   }
   const sql = CLAIM_LIST_SQL + (where.length ? ` WHERE ${where.join(" AND ")}` : "") + " ORDER BY c.file_reference";
-  return all<ClaimListRow>(sql, params);
+  return overlayEngineerChaseNextAction(all<ClaimListRow>(sql, params));
+}
+
+function overlayEngineerChaseNextAction(rows: ClaimListRow[]): ClaimListRow[] {
+  if (rows.length === 0) return rows;
+  const due = new Map(listDueEngineerInstructionChases().map((row) => [row.claimId, row]));
+  return rows.map((row) => {
+    const chase = due.get(row.id);
+    if (!chase) return row;
+    return {
+      ...row,
+      next_action: ENGINEER_REPORT_CHASE_DUE_LABEL,
+      next_action_due: chase.dueAt,
+    };
+  });
 }
 
 function queueWhere(queue: string): { sql: string; params: unknown[] } {
@@ -178,6 +193,8 @@ export function getDashboard() {
   }
   const totals = sumDistinctHeads(lines);
 
+  const engineerChasesDue = listDueEngineerInstructionChases();
+
   const cards = [
     { key: "new_enquiries", label: "New enquiries / incomplete forms", count: listClaims({ queue: "new_enquiries" }).length, tone: "warn" },
     { key: "tasks_today", label: "Tasks due today", count: today.length, tone: "info", href: "/tasks?when=today" },
@@ -209,6 +226,7 @@ export function getDashboard() {
     byHead,
     totals,
     headLabels: HEAD_LABELS as Record<string, string>,
+    engineerChasesDue,
   };
 }
 

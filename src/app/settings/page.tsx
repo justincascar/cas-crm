@@ -1,11 +1,12 @@
 import { PageHeader } from "@/components/ClaimTable";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import Link from "next/link";
-import { actionSaveDefaultVehicleLocation } from "@/app/settings-actions";
+import { actionSaveDefaultVehicleLocation, actionSaveEngineerChaseInterval } from "@/app/settings-actions";
 import { isAdministrator } from "@/lib/auth/roles";
 import { requireStaff } from "@/lib/auth/session";
 import { dbLocation, getSettings, listStaff } from "@/lib/db/queries";
 import { getDefaultVehicleLocation } from "@/lib/db/vehicle-location";
+import { getEngineerChaseIntervalDays } from "@/lib/db/engineer-chase";
 import { CAS_CLAIMS_MAILBOX, INDICATIVE_DEFAULTS } from "@/lib/constants";
 import { formatGbp } from "@/lib/money";
 
@@ -20,6 +21,7 @@ export default async function SettingsPage({
   const staff = listStaff();
   const admin = isAdministrator(staffUser.role);
   const defaultVehicleLocation = getDefaultVehicleLocation();
+  const chaseIntervalDays = getEngineerChaseIntervalDays();
   return (
     <div className="max-w-3xl space-y-6">
       <PageHeader
@@ -48,7 +50,6 @@ export default async function SettingsPage({
           <Row label="File prefix" value={settings.file_prefix} />
           <Row label="Agreement maximum days" value={settings.agreement_max_days} />
           <Row label="Renewal alert day" value={settings.agreement_renewal_alert_day} />
-          <Row label="Chaser interval" value={`${settings.chaser_interval_days} ${settings.chaser_interval_unit} (demonstration setting)`} />
           <Row label="Claims mailbox" value={`${CAS_CLAIMS_MAILBOX} (decided; live send not connected)`} />
           <Row label="Database file" value={dbLocation()} />
         </dl>
@@ -66,6 +67,31 @@ export default async function SettingsPage({
           </li>
           <li>Delivery/collection {formatGbp(INDICATIVE_DEFAULTS.delivery_collection_net_pence)} + VAT</li>
         </ul>
+      </section>
+      <section className="rounded-xl border border-line bg-card p-5">
+        <h2 className="font-serif text-xl text-navy-deep">Engineer report chase interval</h2>
+        <p className="mt-1 text-sm text-slate">
+          After an engineer instruction is marked as sent, the file is flagged if no report has been logged within this
+          many calendar days. This is a reminder only — no email is sent automatically. Changing the number later does
+          not reopen a chase that has already been cancelled, paused, or cleared by a received report.
+        </p>
+        <ValidatedForm action={actionSaveEngineerChaseInterval} className="mt-4 flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            Calendar days
+            <input
+              name="engineerChaseIntervalDays"
+              type="number"
+              min={1}
+              step={1}
+              required
+              className="mt-1 w-28 rounded-md border border-line bg-white px-3 py-2 text-sm"
+              defaultValue={chaseIntervalDays}
+            />
+          </label>
+          <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
+            Save chase interval
+          </button>
+        </ValidatedForm>
       </section>
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Default vehicle location</h2>

@@ -9,6 +9,7 @@ import { CLAIM_SCREENS, getClaimScreen, screensByGroup } from "@/lib/claim-scree
 import { requireStaff } from "@/lib/auth/session";
 import { getClaim, listFleet, listKnownAgents, listKnownInsurers, listReservations } from "@/lib/db/queries";
 import { findPreparedEngineerInstruction, listActiveEngineers } from "@/lib/db/engineers";
+import { engineerChaseForClaim, findPreparedEngineerReportChase } from "@/lib/db/engineer-chase";
 import { seedScreenDefaults } from "@/lib/db/screens";
 
 export default async function ClaimWorkScreenPage({
@@ -36,6 +37,17 @@ export default async function ClaimWorkScreenPage({
         to_address: preparedRow.to_address,
         body: preparedRow.body,
         created_at: String(preparedRow.created_at),
+      }
+    : null;
+  const chase = engineerChaseForClaim(String(data.claim.id));
+  const preparedChaseRow = findPreparedEngineerReportChase(String(data.claim.id));
+  const preparedEngineerChase = preparedChaseRow
+    ? {
+        id: String(preparedChaseRow.id),
+        subject: preparedChaseRow.subject,
+        to_address: preparedChaseRow.to_address,
+        body: preparedChaseRow.body,
+        created_at: String(preparedChaseRow.created_at),
       }
     : null;
 
@@ -71,6 +83,8 @@ export default async function ClaimWorkScreenPage({
           engineers={listActiveEngineers()}
           selectedEngineerId={String(data.claim.engineer_id || "")}
           preparedEngineerInstruction={preparedEngineerInstruction}
+          engineerChase={chase}
+          preparedEngineerChase={preparedEngineerChase}
         />
       ) : null}
 

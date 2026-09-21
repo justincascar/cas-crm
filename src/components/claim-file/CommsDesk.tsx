@@ -12,9 +12,11 @@ import {
 } from "@/app/actions";
 import { DocumentGenerateForm } from "@/components/DocumentGenerateForm";
 import { InstructEngineerPanel } from "@/components/InstructEngineerPanel";
+import { EngineerChasePanel } from "@/components/EngineerChasePanel";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { EMAIL_TEMPLATES } from "@/lib/documents/email-templates";
 import { formatUkDateTime } from "@/lib/dates";
+import type { EngineerChaseView } from "@/lib/db/engineer-chase";
 import Link from "next/link";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
@@ -43,6 +45,8 @@ export function CommsDesk({
   engineers,
   selectedEngineerId,
   preparedEngineerInstruction,
+  engineerChase,
+  preparedEngineerChase,
 }: {
   claimId: string;
   handlerId: string;
@@ -53,6 +57,14 @@ export function CommsDesk({
   engineers: Array<{ id: string; name: string; address: string; email: string; active: number }>;
   selectedEngineerId: string;
   preparedEngineerInstruction: {
+    id: string;
+    subject: string | null;
+    to_address: string | null;
+    body: string | null;
+    created_at: string;
+  } | null;
+  engineerChase: EngineerChaseView | null;
+  preparedEngineerChase: {
     id: string;
     subject: string | null;
     to_address: string | null;
@@ -83,6 +95,10 @@ export function CommsDesk({
         selectedEngineerId={selectedEngineerId}
         prepared={preparedEngineerInstruction}
       />
+
+      {engineerChase ? (
+        <EngineerChasePanel claimId={claimId} chase={engineerChase} prepared={preparedEngineerChase} />
+      ) : null}
 
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">On this file</h2>
