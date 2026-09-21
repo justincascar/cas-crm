@@ -51,6 +51,12 @@ export const DEFAULT_VEHICLE_LOCATION =
 
 export const AGREEMENT_MAX_DAYS_DEFAULT = 88;
 export const AGREEMENT_RENEWAL_ALERT_DAY_DEFAULT = 80;
+export const SETTING_AGREEMENT_MAX_DAYS = "agreement_max_days";
+export const SETTING_AGREEMENT_RENEWAL_ALERT_DAY = "agreement_renewal_alert_day";
+export const HIRE_AGREEMENT_RENEWAL_CHASE_RULE = "hire_agreement_renewal_chase";
+export const HIRE_AGREEMENT_RENEWAL_CHASE_TEMPLATE = "hire_agreement_renewal_chase";
+export const HIRE_AGREEMENT_RENEWAL_DUE_LABEL = "Hire agreement renewal due";
+export const HIRE_AGREEMENT_RENEWAL_OVERDUE_LABEL = "Hire agreement renewal overdue — agreement limit reached";
 export const TOTAL_LOSS_HIRE_DAYS_AFTER_QUALIFYING_PAYMENT = 7;
 /** Calendar days after the request is marked sent before a chase reminder is due. Editable in Settings; overridable per claim. */
 export const SETTING_ENGINEER_CHASE_INTERVAL_DAYS = "chaser_interval_days";

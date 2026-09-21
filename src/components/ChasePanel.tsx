@@ -31,6 +31,16 @@ type PreparedChase = {
 };
 
 function intervalSourceLabel(chase: ChaseView) {
+  if (chase.kind === "hire_agreement_renewal") {
+    const max = chase.agreementMaxDays || 88;
+    if (chase.intervalSource === "claim_override") {
+      return `Renewal alert on day ${chase.intervalDays} of the current signed agreement on this file${chase.overrideReason ? ` — ${chase.overrideReason}` : ""}. Agreement limit ${max} days. Global alert day is ${chase.globalIntervalDays}.`;
+    }
+    if (chase.intervalSource === "frozen") {
+      return `Renewal alert on day ${chase.intervalDays} (held from when this chase was paused or cancelled). Agreement limit ${max} days. Global alert day is ${chase.globalIntervalDays}.`;
+    }
+    return `Renewal alert on day ${chase.intervalDays} of the current signed agreement (global default). Agreement limit ${max} days.`;
+  }
   if (chase.intervalSource === "claim_override") {
     return `${chase.intervalDays} calendar days on this file${chase.overrideReason ? ` — ${chase.overrideReason}` : ""}. Global default is ${chase.globalIntervalDays} days.`;
   }
@@ -41,6 +51,14 @@ function intervalSourceLabel(chase: ChaseView) {
 }
 
 function stateLabel(chase: ChaseView) {
+  if (chase.kind === "hire_agreement_renewal") {
+    if (chase.handlerState === "paused") return "Paused";
+    if (chase.handlerState === "cancelled") return "Cancelled";
+    if (chase.due) return chase.label || chase.dueLabel;
+    if (!chase.clockAt) return "Agreement start date not recorded";
+    if (!chase.active) return "Hire ended — no renewal alert";
+    return "Tracking — renewal alert day not yet reached";
+  }
   if (chase.outcomeOnFile) return "Outcome logged — chase not showing as due";
   if (chase.handlerState === "paused") return "Paused";
   if (chase.handlerState === "cancelled") return "Cancelled";
@@ -68,7 +86,10 @@ export function ChasePanel({
   const [preparedId, setPreparedId] = useState(prepared?.id || "");
   const [toAddress, setToAddress] = useState(prepared?.to_address || chase.contactEmail);
 
-  async function run(action: (form: FormData) => Promise<{ error?: string }>, extra?: Record<string, string>) {
+  async function run<T extends { error?: string }>(
+    action: (form: FormData) => Promise<T>,
+    extra?: Record<string, string>,
+  ): Promise<T> {
     setBusy(true);
     setMessage(null);
     const form = new FormData();
@@ -89,11 +110,18 @@ export function ChasePanel({
 
   async function prepare() {
     const result = await run(actionPrepareChase);
-    if (!result || result.error || !("mailto" in result) || !result.mailto) return;
-    setMailto(result.mailto as string);
-    setPreparedId(String(result.correspondenceId || ""));
-    setToAddress(String(result.to || chase.contactEmail));
-    window.location.href = result.mailto as string;
+    if (result.error) return;
+    const prepared = result as {
+      error?: string;
+      mailto?: string;
+      correspondenceId?: string;
+      to?: string;
+    };
+    if (!prepared.mailto) return;
+    setMailto(prepared.mailto);
+    setPreparedId(String(prepared.correspondenceId || ""));
+    setToAddress(String(prepared.to || chase.contactEmail));
+    window.location.href = prepared.mailto;
   }
 
   async function markSent() {
@@ -119,7 +147,9 @@ export function ChasePanel({
           : "border-teal bg-[#e8f4f2]";
 
   const contactLine =
-    chase.kind === "engineer_report"
+    chase.kind === "hire_agreement_renewal"
+      ? "Counted from the current signed hire agreement start date, not from the fleet booking dates."
+      : chase.kind === "engineer_report"
       ? `Engineer: ${chase.contactName}${chase.contactEmail ? ` · ${chase.contactEmail}` : ""}`
       : `Insurer contact: ${chase.contactName}${chase.contactEmail ? ` · ${chase.contactEmail}` : ""}`;
 
@@ -134,9 +164,13 @@ export function ChasePanel({
         <div>{contactLine}</div>
         {chase.clockAt ? (
           <div>
-            <span className="text-slate">Clock started: </span>
+            <span className="text-slate">{chase.kind === "hire_agreement_renewal" ? "Current agreement started: " : "Clock started: "}</span>
             {formatUkDateTime(chase.clockAt)}
-            {chase.daysOutstanding !== null ? ` · ${chase.daysOutstanding} day${chase.daysOutstanding === 1 ? "" : "s"} outstanding` : ""}
+            {chase.kind === "hire_agreement_renewal" && chase.agreementDay != null
+              ? ` · day ${chase.agreementDay} of this agreement`
+              : chase.daysOutstanding !== null
+                ? ` · ${chase.daysOutstanding} day${chase.daysOutstanding === 1 ? "" : "s"} outstanding`
+                : ""}
           </div>
         ) : null}
         {chase.dueAt ? (
@@ -167,7 +201,7 @@ export function ChasePanel({
 
       {chase.handlerState !== "cancelled" && !chase.outcomeOnFile ? (
         <div className="mt-4 flex flex-wrap gap-2">
-          {chase.due && !chase.contactMissing ? (
+          {chase.due && !chase.contactMissing && chase.kind !== "hire_agreement_renewal" ? (
             <>
               <button
                 type="button"
@@ -287,7 +321,9 @@ export function ChasePanel({
               ? "Date report received"
               : chase.kind === "liability_response"
                 ? "Date decision received"
-                : "Date received"}
+                : chase.kind === "hire_agreement_renewal"
+                  ? "Date this renewal starts"
+                  : "Date received"}
             <input name="occurredAt" type="date" className={field} />
           </label>
           <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white" disabled={busy}>
@@ -295,7 +331,9 @@ export function ChasePanel({
               ? "Log report received"
               : chase.kind === "liability_response"
                 ? "Log liability decision"
-                : "Log authorisation or payment received"}
+                : chase.kind === "hire_agreement_renewal"
+                  ? "Log agreement renewed"
+                  : "Log authorisation or payment received"}
           </button>
         </form>
       ) : (
@@ -310,6 +348,18 @@ export function ChasePanel({
           </button>
         </div>
       )}
+      {chase.kind === "hire_agreement_renewal" && chase.canClearHireRenewal && !chase.outcomeOnFile ? (
+        <div className="mt-3">
+          <button
+            type="button"
+            className="rounded-md border border-line bg-white px-4 py-2 text-sm"
+            disabled={busy}
+            onClick={() => void run(actionClearChaseOutcome)}
+          >
+            Last logged renewal was in error
+          </button>
+        </div>
+      ) : null}
 
       {chase.handlerState !== "cancelled" ? (
         <form
@@ -324,7 +374,7 @@ export function ChasePanel({
           }}
         >
           <label className="text-sm">
-            This file&apos;s interval (days)
+            {chase.kind === "hire_agreement_renewal" ? "This file's alert day" : "This file's interval (days)"}
             <input
               name="overrideDays"
               type="number"
@@ -336,14 +386,14 @@ export function ChasePanel({
             />
           </label>
           <label className="text-sm">
-            Why (for example “agreed with insurer”)
+            Why (for example {chase.kind === "hire_agreement_renewal" ? "“longer first agreement”" : "“agreed with insurer”"})
             <input
               name="overrideReason"
               type="text"
               required
               className={field}
               defaultValue={chase.overrideReason || ""}
-              placeholder="Agreed with insurer"
+              placeholder={chase.kind === "hire_agreement_renewal" ? "Agreed longer first period" : "Agreed with insurer"}
             />
           </label>
           <div className="flex flex-wrap gap-2">

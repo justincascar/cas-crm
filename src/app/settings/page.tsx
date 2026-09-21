@@ -1,12 +1,12 @@
 import { PageHeader } from "@/components/ClaimTable";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import Link from "next/link";
-import { actionSaveChaseIntervals, actionSaveDefaultVehicleLocation } from "@/app/settings-actions";
+import { actionSaveAgreementLimits, actionSaveChaseIntervals, actionSaveDefaultVehicleLocation } from "@/app/settings-actions";
 import { isAdministrator } from "@/lib/auth/roles";
 import { requireStaff } from "@/lib/auth/session";
 import { dbLocation, getSettings, listStaff } from "@/lib/db/queries";
 import { getDefaultVehicleLocation } from "@/lib/db/vehicle-location";
-import { getChaseIntervalDays } from "@/lib/db/chase";
+import { getAgreementMaxDays, getChaseIntervalDays } from "@/lib/db/chase";
 import { CAS_CLAIMS_MAILBOX, INDICATIVE_DEFAULTS } from "@/lib/constants";
 import { formatGbp } from "@/lib/money";
 
@@ -24,6 +24,8 @@ export default async function SettingsPage({
   const engineerChaseIntervalDays = getChaseIntervalDays("engineer_report");
   const liabilityChaseIntervalDays = getChaseIntervalDays("liability_response");
   const repairChaseIntervalDays = getChaseIntervalDays("repair_authorisation");
+  const agreementRenewalAlertDay = getChaseIntervalDays("hire_agreement_renewal");
+  const agreementMaxDays = getAgreementMaxDays();
   return (
     <div className="max-w-3xl space-y-6">
       <PageHeader
@@ -39,11 +41,40 @@ export default async function SettingsPage({
       <section className="rounded-xl border border-warn/40 bg-[#fff6e8] p-5">
         <h2 className="font-serif text-xl text-navy-deep">Hire agreement length — decision needed</h2>
         <p className="mt-2 text-sm">
-          The supplied Hire Pack caps the Rental Period at <strong>89 days</strong>. CRM renewal alerts use{" "}
-          <strong>{settings.agreement_max_days} days</strong> (currently the 88-day demonstration setting). Neither
-          number has been changed. Confirm with the solicitor which figure is correct before the wording or the alerts
-          are aligned.
+          The supplied Hire Pack caps the Rental Period at <strong>89 days</strong> from the date of the agreement. CRM
+          renewal alerts use a separate CAS operational limit of <strong>{agreementMaxDays} days</strong>, with a
+          reminder from day <strong>{agreementRenewalAlertDay}</strong>. Neither the pack wording nor this operational
+          limit has been silently aligned. Confirm with the solicitor which figure is correct before live enforcement.
         </p>
+        <ValidatedForm action={actionSaveAgreementLimits} className="mt-4 grid gap-3 sm:grid-cols-2 sm:items-end">
+          <label className="text-sm">
+            Renewal alert day
+            <input
+              name="agreementRenewalAlertDay"
+              type="number"
+              min={1}
+              step={1}
+              required
+              className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
+              defaultValue={agreementRenewalAlertDay}
+            />
+          </label>
+          <label className="text-sm">
+            Agreement maximum days
+            <input
+              name="agreementMaxDays"
+              type="number"
+              min={1}
+              step={1}
+              required
+              className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
+              defaultValue={agreementMaxDays}
+            />
+          </label>
+          <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white sm:col-span-2">
+            Save agreement day limits
+          </button>
+        </ValidatedForm>
       </section>
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Environment</h2>

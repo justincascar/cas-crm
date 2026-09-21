@@ -1,21 +1,29 @@
 import { addCalendarDaysIso, daysBetweenLondon } from "../dates";
+import { agreementDayNumber } from "./rules";
 import {
+  AGREEMENT_MAX_DAYS_DEFAULT,
+  AGREEMENT_RENEWAL_ALERT_DAY_DEFAULT,
   ENGINEER_CHASER_INTERVAL_DAYS_DEFAULT,
   ENGINEER_INSTRUCTION_CHASE_RULE,
   ENGINEER_REPORT_CHASE_DUE_LABEL,
   ENGINEER_REPORT_CHASE_TEMPLATE,
+  HIRE_AGREEMENT_RENEWAL_CHASE_RULE,
+  HIRE_AGREEMENT_RENEWAL_CHASE_TEMPLATE,
+  HIRE_AGREEMENT_RENEWAL_DUE_LABEL,
+  HIRE_AGREEMENT_RENEWAL_OVERDUE_LABEL,
   LIABILITY_RESPONSE_CHASE_DUE_LABEL,
   LIABILITY_RESPONSE_CHASE_RULE,
   LIABILITY_RESPONSE_CHASE_TEMPLATE,
   REPAIR_AUTHORISATION_CHASE_DUE_LABEL,
   REPAIR_AUTHORISATION_CHASE_RULE,
   REPAIR_AUTHORISATION_CHASE_TEMPLATE,
+  SETTING_AGREEMENT_RENEWAL_ALERT_DAY,
   SETTING_ENGINEER_CHASE_INTERVAL_DAYS,
   SETTING_LIABILITY_CHASE_INTERVAL_DAYS,
   SETTING_REPAIR_AUTH_CHASE_INTERVAL_DAYS,
 } from "../constants";
 
-export const CHASE_KINDS = ["engineer_report", "liability_response", "repair_authorisation"] as const;
+export const CHASE_KINDS = ["engineer_report", "liability_response", "repair_authorisation", "hire_agreement_renewal"] as const;
 export type ChaseKind = (typeof CHASE_KINDS)[number];
 
 export type ChaseHandlerState = "tracking" | "paused" | "cancelled";
@@ -40,9 +48,12 @@ export type ChaseKindDefinition = {
   pauseEventType: string;
   resumeEventType: string;
   cancelEventType: string;
-  recipient: "engineer" | "insurer";
+  recipient: "engineer" | "insurer" | "none";
   notStartedReason: string;
   outcomeOnFileReason: string;
+  clockMode?: "interval" | "agreement_day";
+  ignoreLastChaseSent?: boolean;
+  overdueLabel?: string;
 };
 
 const DEFAULT_INTERVAL = ENGINEER_CHASER_INTERVAL_DAYS_DEFAULT;
@@ -117,9 +128,40 @@ export const CHASE_KIND_DEFINITIONS: Record<ChaseKind, ChaseKindDefinition> = {
     notStartedReason: "No repair authorisation or payment request has been marked as sent.",
     outcomeOnFileReason: "Repair authorisation or payment has been logged as received.",
   },
+  hire_agreement_renewal: {
+    kind: "hire_agreement_renewal",
+    ruleKey: HIRE_AGREEMENT_RENEWAL_CHASE_RULE,
+    track: "hire_agreement_renewal",
+    settingKey: SETTING_AGREEMENT_RENEWAL_ALERT_DAY,
+    defaultIntervalDays: AGREEMENT_RENEWAL_ALERT_DAY_DEFAULT,
+    templateKey: HIRE_AGREEMENT_RENEWAL_CHASE_TEMPLATE,
+    dueLabel: HIRE_AGREEMENT_RENEWAL_DUE_LABEL,
+    overdueLabel: HIRE_AGREEMENT_RENEWAL_OVERDUE_LABEL,
+    title: "Hire agreement renewal",
+    waitingReason: "Waiting for a renewal before the agreement limit. Reminder only — not auto-sent.",
+    startEventTypes: ["hire_agreement_renewed"],
+    startTemplateKeys: [],
+    chaseSentEventType: "hire_agreement_renewal_chase_sent",
+    extraChaseSentEventTypes: [],
+    outcomeReceivedEventTypes: [],
+    outcomeClearedEventType: "hire_agreement_renewal_cleared",
+    pauseEventType: "hire_agreement_renewal_chase_paused",
+    resumeEventType: "hire_agreement_renewal_chase_resumed",
+    cancelEventType: "hire_agreement_renewal_chase_cancelled",
+    recipient: "none",
+    notStartedReason: "Agreement start date is not recorded — the CRM will not guess one from the booking dates.",
+    outcomeOnFileReason: "A renewal has been logged for the current agreement period.",
+    clockMode: "agreement_day",
+    ignoreLastChaseSent: true,
+  },
 };
 
-export const CHASE_KIND_ORDER: ChaseKind[] = ["liability_response", "engineer_report", "repair_authorisation"];
+export const CHASE_KIND_ORDER: ChaseKind[] = [
+  "liability_response",
+  "engineer_report",
+  "repair_authorisation",
+  "hire_agreement_renewal",
+];
 
 export function isChaseKind(value: string | null | undefined): value is ChaseKind {
   return CHASE_KINDS.includes(String(value || "") as ChaseKind);
@@ -292,6 +334,80 @@ export function chaseClockDecision(opts: ChaseClockDecisionInput): ChaseClockDec
     due: true,
     label: opts.dueLabel,
     reason: `${opts.dueLabel} after ${intervalDays} calendar days. Prepared email only — not auto-sent.`,
+  };
+}
+
+export const HIRE_AGREEMENT_START_MISSING_REASON =
+  "Agreement start date is not recorded — the CRM will not guess one from the booking dates.";
+export const HIRE_AGREEMENT_ENDED_REASON = "Hire has ended. A renewal alert does not apply.";
+export const HIRE_AGREEMENT_NOT_APPLICABLE_REASON =
+  "This is not an active hire agreement (courtesy and staff bookings are excluded unless a hire agreement is on the file).";
+
+export type HireAgreementRenewalDecisionInput = {
+  applies: boolean;
+  hireEnded: boolean;
+  startOn: string | null;
+  asAt: string;
+  alertDay: number;
+  maxDays: number;
+  handlerState: ChaseHandlerState;
+  dueLabel: string;
+  overdueLabel: string;
+};
+
+/** Day 80 / day 88 of the current signed agreement. Sending a reminder does not restart the count. */
+export function hireAgreementRenewalDecision(opts: HireAgreementRenewalDecisionInput): ChaseClockDecision {
+  const alertDay = parseChaseIntervalDays(opts.alertDay, AGREEMENT_RENEWAL_ALERT_DAY_DEFAULT);
+  const maxDays = parseChaseIntervalDays(opts.maxDays, AGREEMENT_MAX_DAYS_DEFAULT);
+  const handlerState = opts.handlerState;
+  const clockAt = opts.startOn && String(opts.startOn).trim() ? String(opts.startOn) : null;
+  const agreementDay = clockAt ? agreementDayNumber(clockAt, opts.asAt) : null;
+  const dueAt = clockAt ? addCalendarDaysIso(clockAt, Math.max(alertDay - 1, 0)) : null;
+  const base = {
+    active: Boolean(opts.applies && !opts.hireEnded),
+    outcomeOnFile: false,
+    handlerState,
+    daysOutstanding: agreementDay,
+    clockAt,
+    dueAt,
+    label: null as string | null,
+  };
+
+  if (!opts.applies) {
+    return { ...base, active: false, due: false, reason: HIRE_AGREEMENT_NOT_APPLICABLE_REASON };
+  }
+  if (opts.hireEnded) {
+    return { ...base, active: false, due: false, reason: HIRE_AGREEMENT_ENDED_REASON };
+  }
+  if (!clockAt || agreementDay === null) {
+    return { ...base, due: false, reason: HIRE_AGREEMENT_START_MISSING_REASON };
+  }
+  if (handlerState === "cancelled") {
+    return { ...base, due: false, reason: "Chase cancelled by staff." };
+  }
+  if (handlerState === "paused") {
+    return { ...base, due: false, reason: "Chase paused by staff." };
+  }
+  if (agreementDay < alertDay && agreementDay < maxDays) {
+    return {
+      ...base,
+      due: false,
+      reason: `Day ${agreementDay} of the current signed agreement. Renewal alert from day ${alertDay} (limit ${maxDays} days).`,
+    };
+  }
+  if (agreementDay >= maxDays) {
+    return {
+      ...base,
+      due: true,
+      label: opts.overdueLabel,
+      reason: `${opts.overdueLabel}. Day ${agreementDay} of the current signed agreement (limit ${maxDays} days). Clears only when a renewal is logged.`,
+    };
+  }
+  return {
+    ...base,
+    due: true,
+    label: opts.dueLabel,
+    reason: `${opts.dueLabel}. Day ${agreementDay} of the current signed agreement (alert day ${alertDay}, limit ${maxDays} days). Clears only when a renewal is logged.`,
   };
 }
 

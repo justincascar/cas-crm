@@ -220,6 +220,7 @@ export function getDashboard() {
     liability_response: chasesDue.filter((row) => row.kind === "liability_response"),
     engineer_report: chasesDue.filter((row) => row.kind === "engineer_report"),
     repair_authorisation: chasesDue.filter((row) => row.kind === "repair_authorisation"),
+    hire_agreement_renewal: chasesDue.filter((row) => row.kind === "hire_agreement_renewal"),
   };
 
   const cards = [

@@ -16,7 +16,7 @@ import {
 } from "../documents/correspondence";
 import { generateEmail, isEmailTemplateKey } from "../documents/email-templates";
 import { generateLetter, isLetterTemplateKey, type LetterTemplateKey } from "../documents/templates";
-import { formatUkDate, nowUtcIso, occurredFromForm } from "../dates";
+import { addCalendarDaysIso, formatUkDate, londonDateIso, nowUtcIso, occurredFromForm } from "../dates";
 import { blankInsurerField } from "../insurers";
 import { all, get, getDb, newId, run } from "./connection";
 import { ENGINEER_INSTRUCTION_MARKED_SENT, ENGINEER_INSTRUCTION_PREPARED, getEngineer, setClaimEngineer, SEEDED_ENGINEER } from "./engineers";
@@ -36,7 +36,7 @@ import {
   REPAIR_OUTCOMES,
   type ChaseKind,
 } from "../domain/chase";
-import { findPreparedChase, restartChaseClock, startChase, chaseForClaim } from "./chase";
+import { findPreparedChase, getAgreementMaxDays, getChaseIntervalDays, restartChaseClock, startChase, chaseForClaim } from "./chase";
 import { ENGINEER_REPORT_CHASE_TEMPLATE } from "../constants";
 import { findKnownInsurerOn } from "./insurers";
 import { vehicleLocationForClaim } from "./vehicle-location";
@@ -160,7 +160,7 @@ function applyEventSideEffects(claimId: string, eventType: ClaimEventType, occur
   }
 }
 
-function letterContext(claimId: string, letterDate: string, engineerId?: string): CorrespondenceContext {
+function letterContext(claimId: string, letterDate: string = nowUtcIso(), engineerId?: string): CorrespondenceContext {
   const claim = get<Record<string, string | number | null>>(
     `SELECT c.*, s.name AS handler_name, s.id AS handler_staff_id,
             p.full_name AS client_name, p.email AS client_email, p.telephone AS client_telephone,
@@ -429,7 +429,7 @@ export async function sendClaimEmail(input: {
   });
   if (input.templateKey && isDocumentTemplateKey(input.templateKey)) {
     const specific = eventTypeForTemplate(input.templateKey);
-    if (specific !== "outgoing_email" && specific !== "document_generated") {
+    if (specific !== "document_generated") {
       recordClaimEvent({
         claimId: input.claimId,
         eventType: specific,
@@ -755,10 +755,11 @@ function refreshEngineeringStatusFromEvents(claimId: string) {
   const receivedAt = received?.occurred_at ? String(received.occurred_at) : null;
   const clearedAt = cleared?.occurred_at ? String(cleared.occurred_at) : null;
   const instructedAt = instructed?.occurred_at ? String(instructed.occurred_at) : null;
-  const onFile =
-    Boolean(receivedAt) &&
-    (!clearedAt || receivedAt >= clearedAt) &&
-    (!instructedAt || receivedAt >= instructedAt);
+  const onFile = Boolean(
+    receivedAt &&
+      (!clearedAt || receivedAt >= clearedAt) &&
+      (!instructedAt || receivedAt >= instructedAt),
+  );
   if (onFile) {
     run(`UPDATE claims SET engineering_status = 'report_received' WHERE id = ?`, [claimId]);
     return;
@@ -802,7 +803,7 @@ export function clearEngineerReportReceived(input: { claimId: string; actorId: s
 
 export function prepareEngineerReportChase(input: { claimId: string; actorId: string }) {
   const existing = findPreparedEngineerReportChase(input.claimId);
-  const ctx = letterContext(input.claimId);
+  const ctx = letterContext(input.claimId, nowUtcIso());
   const claim = get<{ engineer_id: string | null }>(`SELECT engineer_id FROM claims WHERE id = ?`, [input.claimId]);
   const saved = getEngineer(String(claim?.engineer_id || ""));
   const engineerName = saved?.name || String(ctx.engineerName || "") || SEEDED_ENGINEER.name;
@@ -983,6 +984,9 @@ export function prepareOutstandingChase(input: { claimId: string; actorId: strin
   if (input.kind === "engineer_report") {
     return prepareEngineerReportChase({ claimId: input.claimId, actorId: input.actorId });
   }
+  if (input.kind === "hire_agreement_renewal") {
+    throw new Error("This reminder does not send an email. Log the renewal on the file.");
+  }
   const def = chaseDefinition(input.kind);
   const view = chaseForClaim(input.kind, input.claimId);
   if (!view) throw new Error(`There is no ${def.title.toLowerCase()} on this file yet.`);
@@ -990,7 +994,7 @@ export function prepareOutstandingChase(input: { claimId: string; actorId: strin
     throw new Error(view.contactMissingMessage || NO_INSURER_CONTACT_MESSAGE);
   }
   const existing = findPreparedChase(input.kind, input.claimId);
-  const ctx = letterContext(input.claimId);
+  const ctx = letterContext(input.claimId, nowUtcIso());
   const { subject, body } = chaseEmailCopy(input.kind, ctx, view.contactName, view.clockAt);
   const to = view.contactEmail;
   if (existing) {
@@ -1112,6 +1116,9 @@ export function logChaseOutcome(input: {
   if (input.kind === "engineer_report") {
     return logEngineerReportReceived({ claimId: input.claimId, actorId: input.actorId, occurredAt: input.occurredAt });
   }
+  if (input.kind === "hire_agreement_renewal") {
+    return logHireAgreementRenewal({ claimId: input.claimId, actorId: input.actorId, occurredAt: input.occurredAt });
+  }
   if (input.kind === "liability_response") {
     const decision = String(input.liabilityDecision || "");
     if (!isLiabilityDecisionValue(decision)) {
@@ -1151,6 +1158,9 @@ export function clearChaseOutcome(input: { claimId: string; actorId: string; kin
   if (input.kind === "engineer_report") {
     return clearEngineerReportReceived({ claimId: input.claimId, actorId: input.actorId, occurredAt: input.occurredAt });
   }
+  if (input.kind === "hire_agreement_renewal") {
+    return clearHireAgreementRenewal({ claimId: input.claimId, actorId: input.actorId, occurredAt: input.occurredAt });
+  }
   const def = chaseDefinition(input.kind);
   const when = occurredFromForm(input.occurredAt);
   const handler = get<{ name: string }>(`SELECT name FROM staff WHERE id = ?`, [input.actorId]);
@@ -1160,6 +1170,108 @@ export function clearChaseOutcome(input: { claimId: string; actorId: string; kin
     eventType: def.outcomeClearedEventType as ClaimEventType,
     occurredAt: when,
     details: `${def.title} outcome cleared as a correction by ${handlerName}. Chase follows the file again.`,
+    actorId: input.actorId,
+    channel: "file",
+    source: "staff",
+  });
+  return { handlerName, occurredAt: when };
+}
+
+function runningHireEpisode(claimId: string) {
+  return get<{ id: string }>(
+    `SELECT id FROM hire_episodes
+     WHERE claim_id = ? AND collection_at IS NULL
+     ORDER BY started_at DESC
+     LIMIT 1`,
+    [claimId],
+  );
+}
+
+export function listHireAgreements(claimId: string) {
+  return all<{
+    id: string;
+    hire_episode_id: string;
+    sequence: number;
+    start_on: string;
+    planned_end_on: string;
+    signed: number;
+    signature_status: string;
+  }>(
+    `SELECT a.id, a.hire_episode_id, a.sequence, a.start_on, a.planned_end_on, a.signed, a.signature_status
+     FROM agreements a
+     JOIN hire_episodes he ON he.id = a.hire_episode_id
+     WHERE he.claim_id = ?
+     ORDER BY a.sequence ASC`,
+    [claimId],
+  );
+}
+
+export function logHireAgreementRenewal(input: { claimId: string; actorId: string; occurredAt?: string }) {
+  const when = occurredFromForm(input.occurredAt);
+  const handler = get<{ name: string }>(`SELECT name FROM staff WHERE id = ?`, [input.actorId]);
+  const handlerName = handler?.name || "Unknown handler";
+  const episode = runningHireEpisode(input.claimId);
+  if (!episode) {
+    throw new Error("There is no running hire episode on this file to attach a renewal to.");
+  }
+  const maxSeq = get<{ m: number | null }>(`SELECT MAX(sequence) AS m FROM agreements WHERE hire_episode_id = ?`, [episode.id]);
+  const sequence = Number(maxSeq?.m || 0) + 1;
+  const maxDays = getAgreementMaxDays();
+  const alertDay = getChaseIntervalDays("hire_agreement_renewal");
+  const startOn = londonDateIso(new Date(when));
+  const plannedEndOn = londonDateIso(new Date(addCalendarDaysIso(when, maxDays)));
+  const id = newId("ag");
+  run(
+    `INSERT INTO agreements(id, hire_episode_id, sequence, start_on, planned_end_on, max_days, renewal_alert_day, signed, signed_at, signature_status, template_note)
+     VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, 'signed', ?)`,
+    [
+      id,
+      episode.id,
+      sequence,
+      startOn,
+      plannedEndOn,
+      maxDays,
+      alertDay,
+      when,
+      "Renewal logged by staff. Earlier agreements on this hire episode were kept.",
+    ],
+  );
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "hire_agreement_renewed",
+    occurredAt: when,
+    details: `Hire agreement ${sequence} logged by ${handlerName} from ${formatUkDate(when)}. Earlier agreement periods on this hire episode were kept and not overwritten.`,
+    actorId: input.actorId,
+    channel: "file",
+    source: "staff",
+  });
+  return { handlerName, occurredAt: when, agreementId: id, sequence, startOn };
+}
+
+export function clearHireAgreementRenewal(input: { claimId: string; actorId: string; occurredAt?: string }) {
+  const when = occurredFromForm(input.occurredAt);
+  const handler = get<{ name: string }>(`SELECT name FROM staff WHERE id = ?`, [input.actorId]);
+  const handlerName = handler?.name || "Unknown handler";
+  const latest = get<{ id: string; sequence: number }>(
+    `SELECT a.id, a.sequence FROM agreements a
+     JOIN hire_episodes he ON he.id = a.hire_episode_id
+     WHERE he.claim_id = ? AND a.signed = 1
+     ORDER BY a.sequence DESC
+     LIMIT 1`,
+    [input.claimId],
+  );
+  if (!latest || Number(latest.sequence) <= 1) {
+    throw new Error("There is no logged renewal to clear. The first agreement is left as recorded.");
+  }
+  run(
+    `UPDATE agreements SET signed = 0, signed_at = NULL, signature_status = 'cleared_in_error' WHERE id = ?`,
+    [latest.id],
+  );
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "hire_agreement_renewal_cleared",
+    occurredAt: when,
+    details: `Hire agreement ${latest.sequence} cleared as a correction by ${handlerName}. The agreement row was kept. Chase follows the previous signed agreement again.`,
     actorId: input.actorId,
     channel: "file",
     source: "staff",

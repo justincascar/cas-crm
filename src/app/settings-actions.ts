@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/auth/session";
 import { setDefaultVehicleLocation } from "@/lib/db/vehicle-location";
-import { setChaseIntervalDays } from "@/lib/db/chase";
+import { setChaseIntervalDays, setAgreementMaxDays } from "@/lib/db/chase";
 
 function revalidateSettings() {
   revalidatePath("/settings");
@@ -44,6 +44,19 @@ export async function actionSaveChaseIntervals(formData: FormData) {
     setChaseIntervalDays("repair_authorisation", String(formData.get("repairAuthChaseIntervalDays") || ""));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not save the chase intervals.";
+    redirect(`/settings?error=${encodeURIComponent(message)}`);
+  }
+  revalidateSettings();
+  redirect("/settings?saved=1");
+}
+
+export async function actionSaveAgreementLimits(formData: FormData) {
+  await requireStaff();
+  try {
+    setChaseIntervalDays("hire_agreement_renewal", String(formData.get("agreementRenewalAlertDay") || ""));
+    setAgreementMaxDays(String(formData.get("agreementMaxDays") || ""));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not save the agreement day limits.";
     redirect(`/settings?error=${encodeURIComponent(message)}`);
   }
   revalidateSettings();

@@ -101,6 +101,11 @@ export default async function DashboardPage() {
         hint="Starts when a repair estimate or payment request has been sent. Clears when staff log authorisation or payment received. Reminder only — no email is sent automatically."
         rows={data.chasesDueByKind.repair_authorisation}
       />
+      <ChaseDueTable
+        title="Hire agreement renewals due"
+        hint="Counted from the current signed hire agreement start date. Courtesy cars are excluded unless a hire agreement is on the file. Clears only when a renewal is logged — it does not disappear just because time passes. Reminder only — no email is sent automatically."
+        rows={data.chasesDueByKind.hire_agreement_renewal}
+      />
 
       <section className="mt-8 grid gap-6 xl:grid-cols-3">
         <div className="rounded-xl border border-line bg-card p-5 xl:col-span-2">

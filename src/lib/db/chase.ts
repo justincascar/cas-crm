@@ -1,4 +1,8 @@
 import type { DatabaseSync } from "node:sqlite";
+import {
+  AGREEMENT_MAX_DAYS_DEFAULT,
+  SETTING_AGREEMENT_MAX_DAYS,
+} from "../constants";
 import { addCalendarDaysIso, daysBetweenLondon, nowUtcIso } from "../dates";
 import {
   CHASE_KIND_DEFINITIONS,
@@ -8,6 +12,7 @@ import {
   chaseDefinition,
   chaseKindForRuleKey,
   effectiveChaseIntervalDays,
+  hireAgreementRenewalDecision,
   laterIso,
   laterIsoAll,
   NO_INSURER_CONTACT_MESSAGE,
@@ -56,6 +61,9 @@ export type ChaseView = {
   overrideReason: string | null;
   intervalDays: number;
   intervalSource: ChaseIntervalSource;
+  agreementDay?: number | null;
+  agreementMaxDays?: number | null;
+  canClearHireRenewal?: boolean;
 };
 
 function handlerStateFromRow(row: { status: string; paused: number } | undefined): ChaseHandlerState {
@@ -77,6 +85,7 @@ export function ensureChaseSettings(db: DatabaseSync) {
     const def = CHASE_KIND_DEFINITIONS[kind];
     ensureSetting(db, def.settingKey, String(def.defaultIntervalDays));
   }
+  ensureSetting(db, SETTING_AGREEMENT_MAX_DAYS, String(AGREEMENT_MAX_DAYS_DEFAULT));
   db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_automations_claim_rule
     ON automations(claim_id, rule_key);
@@ -87,6 +96,22 @@ export function getChaseIntervalDays(kind: ChaseKind): number {
   const def = chaseDefinition(kind);
   const row = get<{ value: string }>(`SELECT value FROM settings WHERE key = ?`, [def.settingKey]);
   return parseChaseIntervalDays(row?.value, def.defaultIntervalDays);
+}
+
+export function getAgreementMaxDays(): number {
+  const row = get<{ value: string }>(`SELECT value FROM settings WHERE key = ?`, [SETTING_AGREEMENT_MAX_DAYS]);
+  return parseChaseIntervalDays(row?.value, AGREEMENT_MAX_DAYS_DEFAULT);
+}
+
+export function setAgreementMaxDays(value: string | number) {
+  const days = parseChaseIntervalDays(value, 0);
+  if (days < 1) throw new Error("Enter the agreement maximum as a whole number of days, at least 1.");
+  const existing = get<{ key: string }>(`SELECT key FROM settings WHERE key = ?`, [SETTING_AGREEMENT_MAX_DAYS]);
+  if (existing) {
+    run(`UPDATE settings SET value = ? WHERE key = ?`, [String(days), SETTING_AGREEMENT_MAX_DAYS]);
+  } else {
+    run(`INSERT INTO settings(key, value) VALUES (?, ?)`, [SETTING_AGREEMENT_MAX_DAYS, String(days)]);
+  }
 }
 
 export function setChaseIntervalDays(kind: ChaseKind, value: string | number) {
@@ -145,15 +170,35 @@ function factKey(claimId: string, name: string) {
   return `${claimId}\t${name}`;
 }
 
+type HireClaimFacts = {
+  episodeId: string | null;
+  collectionAt: string | null;
+  billingEndAt: string | null;
+  hireStatus: string | null;
+  reservationKind: string | null;
+  signedStartOn: string | null;
+  latestSignedSequence: number;
+  agreementMaxDays: number | null;
+  agreementAlertDay: number | null;
+  agreementCount: number;
+};
+
 type ChaseFacts = {
   latestEvent: Map<string, string>;
   latestMarkedSent: Map<string, string>;
   intervals: Record<ChaseKind, number>;
+  agreementMaxDays: number;
   contacts: Map<string, { engineerName: string; engineerEmail: string; insurerName: string; insurerEmail: string }>;
+  hire: Map<string, HireClaimFacts>;
 };
 
 function placeholders(count: number) {
   return Array.from({ length: count }, () => "?").join(", ");
+}
+
+function loadAgreementMaxDays(): number {
+  const row = get<{ value: string }>(`SELECT value FROM settings WHERE key = ?`, [SETTING_AGREEMENT_MAX_DAYS]);
+  return parseChaseIntervalDays(row?.value, AGREEMENT_MAX_DAYS_DEFAULT);
 }
 
 /** Load every chase clock fact for the given files in a handful of queries, not one per claim/type. */
@@ -172,12 +217,102 @@ function loadChaseIntervals(): Record<ChaseKind, number> {
   return intervals;
 }
 
+function hireEnded(facts: HireClaimFacts, asAt: string): boolean {
+  if (String(facts.hireStatus || "") === "ended") return true;
+  if (facts.collectionAt) return true;
+  if (facts.billingEndAt && String(facts.billingEndAt) <= asAt) return true;
+  return false;
+}
+
+function hireChaseApplies(facts: HireClaimFacts): boolean {
+  if (!facts.episodeId) return false;
+  const kind = String(facts.reservationKind || "");
+  if ((kind === "courtesy" || kind === "staff") && facts.agreementCount === 0) return false;
+  return true;
+}
+
+function loadHireFacts(claimIds: string[]): Map<string, HireClaimFacts> {
+  const hire = new Map<string, HireClaimFacts>();
+  if (claimIds.length === 0) return hire;
+  const episodes = all<{
+    claim_id: string;
+    episode_id: string;
+    collection_at: string | null;
+    billing_end_at: string | null;
+    hire_status: string | null;
+    reservation_kind: string | null;
+  }>(
+    `SELECT he.claim_id, he.id AS episode_id, he.collection_at, he.billing_end_at, c.hire_status,
+            (
+              SELECT r.kind FROM reservations r
+              WHERE r.claim_id = he.claim_id AND r.fleet_vehicle_id = he.fleet_vehicle_id
+                AND r.status IN ('reserved','active')
+              ORDER BY r.start_at DESC LIMIT 1
+            ) AS reservation_kind
+     FROM hire_episodes he
+     JOIN claims c ON c.id = he.claim_id
+     WHERE he.claim_id IN (${placeholders(claimIds.length)})
+     ORDER BY he.started_at DESC`,
+    claimIds,
+  );
+  for (const row of episodes) {
+    if (hire.has(row.claim_id)) continue;
+    hire.set(row.claim_id, {
+      episodeId: String(row.episode_id),
+      collectionAt: row.collection_at ? String(row.collection_at) : null,
+      billingEndAt: row.billing_end_at ? String(row.billing_end_at) : null,
+      hireStatus: row.hire_status ? String(row.hire_status) : null,
+      reservationKind: row.reservation_kind ? String(row.reservation_kind) : null,
+      signedStartOn: null,
+      latestSignedSequence: 0,
+      agreementMaxDays: null,
+      agreementAlertDay: null,
+      agreementCount: 0,
+    });
+  }
+  const episodeIds = [...hire.values()].map((row) => row.episodeId).filter((id): id is string => Boolean(id));
+  if (episodeIds.length === 0) return hire;
+  const agreements = all<{
+    hire_episode_id: string;
+    start_on: string | null;
+    max_days: number | null;
+    renewal_alert_day: number | null;
+    signed: number;
+    sequence: number;
+  }>(
+    `SELECT hire_episode_id, start_on, max_days, renewal_alert_day, signed, sequence
+     FROM agreements
+     WHERE hire_episode_id IN (${placeholders(episodeIds.length)})
+     ORDER BY sequence DESC`,
+    episodeIds,
+  );
+  const byEpisode = new Map<string, HireClaimFacts>();
+  for (const facts of hire.values()) {
+    if (facts.episodeId) byEpisode.set(facts.episodeId, facts);
+  }
+  for (const row of agreements) {
+    const facts = byEpisode.get(String(row.hire_episode_id));
+    if (!facts) continue;
+    facts.agreementCount += 1;
+    if (Number(row.signed) === 1 && !facts.signedStartOn) {
+      const start = String(row.start_on || "").trim();
+      facts.signedStartOn = start || null;
+      facts.latestSignedSequence = Number(row.sequence);
+      facts.agreementMaxDays = row.max_days == null ? null : Number(row.max_days);
+      facts.agreementAlertDay = row.renewal_alert_day == null ? null : Number(row.renewal_alert_day);
+    }
+  }
+  return hire;
+}
+
 function loadChaseFacts(claimIds: string[]): ChaseFacts {
   const empty: ChaseFacts = {
     latestEvent: new Map(),
     latestMarkedSent: new Map(),
     intervals: loadChaseIntervals(),
+    agreementMaxDays: loadAgreementMaxDays(),
     contacts: new Map(),
+    hire: new Map(),
   };
   if (claimIds.length === 0) return empty;
 
@@ -234,6 +369,7 @@ function loadChaseFacts(claimIds: string[]): ChaseFacts {
       insurerEmail: String(row.insurer_email || row.handler_email || "").trim(),
     });
   }
+  empty.hire = loadHireFacts(claimIds);
   return empty;
 }
 
@@ -265,6 +401,9 @@ function contactFromFacts(facts: ChaseFacts, claimId: string, kind: ChaseKind): 
 } {
   const def = chaseDefinition(kind);
   const row = facts.contacts.get(claimId);
+  if (def.recipient === "none") {
+    return { name: "Hire agreement", email: "", missing: false, missingMessage: null };
+  }
   if (def.recipient === "engineer") {
     const name = row?.engineerName || SEEDED_ENGINEER.name;
     const email = row?.engineerEmail || SEEDED_ENGINEER.email;
@@ -289,7 +428,6 @@ function contactFromFacts(facts: ChaseFacts, claimId: string, kind: ChaseKind): 
 
 function evaluateChase(kind: ChaseKind, claimId: string, row: ChaseRow, facts: ChaseFacts, asAt: string): ChaseView {
   const def = chaseDefinition(kind);
-  const startedAt = startedAtFromFacts(facts, claimId, kind);
   const handlerState = handlerStateFromRow(row);
   const globalDays = facts.intervals[kind];
   const frozenIntervalDays = parseChaseIntervalDays(row.interval_days, globalDays);
@@ -300,24 +438,38 @@ function evaluateChase(kind: ChaseKind, claimId: string, row: ChaseRow, facts: C
     handlerState,
     frozenDays: frozenIntervalDays,
   });
-  const decision = chaseClockDecision({
-    startedAt,
-    lastChaseSentAt: lastChaseSentFromFacts(facts, claimId, kind),
-    outcomeAt: laterIsoAll(def.outcomeReceivedEventTypes.map((eventType) => latestFact(facts.latestEvent, claimId, eventType))),
-    outcomeClearedAt: latestFact(facts.latestEvent, claimId, def.outcomeClearedEventType),
-    handlerState,
-    intervalDays: effective.days,
-    asAt,
-    dueLabel: def.dueLabel,
-    notStartedReason: def.notStartedReason,
-    outcomeOnFileReason: def.outcomeOnFileReason,
-  });
+  const hire = facts.hire.get(claimId);
+  const decision =
+    def.clockMode === "agreement_day"
+      ? hireAgreementRenewalDecision({
+          applies: hire ? hireChaseApplies(hire) : false,
+          hireEnded: hire ? hireEnded(hire, asAt) : false,
+          startOn: hire?.signedStartOn || null,
+          asAt,
+          alertDay: effective.days,
+          maxDays: hire?.agreementMaxDays || facts.agreementMaxDays,
+          handlerState,
+          dueLabel: def.dueLabel,
+          overdueLabel: def.overdueLabel || def.dueLabel,
+        })
+      : chaseClockDecision({
+          startedAt: startedAtFromFacts(facts, claimId, kind),
+          lastChaseSentAt: def.ignoreLastChaseSent ? null : lastChaseSentFromFacts(facts, claimId, kind),
+          outcomeAt: laterIsoAll(def.outcomeReceivedEventTypes.map((eventType) => latestFact(facts.latestEvent, claimId, eventType))),
+          outcomeClearedAt: latestFact(facts.latestEvent, claimId, def.outcomeClearedEventType),
+          handlerState,
+          intervalDays: effective.days,
+          asAt,
+          dueLabel: def.dueLabel,
+          notStartedReason: def.notStartedReason,
+          outcomeOnFileReason: def.outcomeOnFileReason,
+        });
   const contact = contactFromFacts(facts, claimId, kind);
   return {
     kind,
     claimId,
     title: def.title,
-    dueLabel: def.dueLabel,
+    dueLabel: decision.label || def.dueLabel,
     ...decision,
     contactName: contact.name,
     contactEmail: contact.email,
@@ -329,6 +481,9 @@ function evaluateChase(kind: ChaseKind, claimId: string, row: ChaseRow, facts: C
     overrideReason: row.interval_override_reason ? String(row.interval_override_reason) : null,
     intervalDays: effective.days,
     intervalSource: effective.source,
+    agreementDay: def.clockMode === "agreement_day" ? decision.daysOutstanding : null,
+    agreementMaxDays: def.clockMode === "agreement_day" ? hire?.agreementMaxDays || facts.agreementMaxDays : null,
+    canClearHireRenewal: def.clockMode === "agreement_day" && Number(hire?.latestSignedSequence || 0) > 1,
   };
 }
 
@@ -401,11 +556,8 @@ export function listDueChases(asAt: string = nowUtcIso()): ChaseView[] {
 }
 
 export function listDueChasesByKind(asAt: string = nowUtcIso()): Record<ChaseKind, ChaseView[]> {
-  const grouped: Record<ChaseKind, ChaseView[]> = {
-    engineer_report: [],
-    liability_response: [],
-    repair_authorisation: [],
-  };
+  const grouped = {} as Record<ChaseKind, ChaseView[]>;
+  for (const kind of CHASE_KINDS) grouped[kind] = [];
   for (const row of listDueChases(asAt)) {
     grouped[row.kind].push(row);
   }
@@ -669,5 +821,48 @@ export function ensureDemoChases(db: DatabaseSync) {
       )
       .get() as { occurred_at: string } | undefined;
     insertDemoChaseRow(db, "auto-c6-repair-chase", "c6", "repair_authorisation", liveRequest?.occurred_at || requestedAt);
+  }
+
+  ensureHireAgreementRenewalChases(db);
+}
+
+function ensureHireAgreementRenewalChases(db: DatabaseSync) {
+  const rows = db
+    .prepare(
+      `SELECT he.claim_id, he.id AS episode_id, he.started_at, he.collection_at, he.billing_end_at, c.hire_status,
+              (
+                SELECT r.kind FROM reservations r
+                WHERE r.claim_id = he.claim_id AND r.fleet_vehicle_id = he.fleet_vehicle_id
+                  AND r.status IN ('reserved','active')
+                ORDER BY r.start_at DESC LIMIT 1
+              ) AS reservation_kind,
+              (SELECT COUNT(*) FROM agreements a WHERE a.hire_episode_id = he.id) AS agreement_count
+       FROM hire_episodes he
+       JOIN claims c ON c.id = he.claim_id`,
+    )
+    .all() as Array<{
+    claim_id: string;
+    episode_id: string;
+    started_at: string | null;
+    collection_at: string | null;
+    billing_end_at: string | null;
+    hire_status: string | null;
+    reservation_kind: string | null;
+    agreement_count: number;
+  }>;
+  const asAt = nowUtcIso();
+  for (const row of rows) {
+    if (String(row.hire_status || "") === "ended") continue;
+    if (row.collection_at) continue;
+    if (row.billing_end_at && String(row.billing_end_at) <= asAt) continue;
+    const kind = String(row.reservation_kind || "");
+    if ((kind === "courtesy" || kind === "staff") && Number(row.agreement_count) === 0) continue;
+    insertDemoChaseRow(
+      db,
+      `auto-${row.claim_id}-hire-renewal`,
+      row.claim_id,
+      "hire_agreement_renewal",
+      row.started_at || asAt,
+    );
   }
 }
