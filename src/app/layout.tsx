@@ -43,13 +43,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en-GB">
       <body className={`${sans.variable} ${serif.variable} ${mono.variable} antialiased`}>
-        {staff && !isPublic ? (
-          <AppShell staffName={staff.name} staffUsername={staff.username}>
-            {children}
-          </AppShell>
-        ) : (
-          children
-        )}
+        <AppShell staffName={staff?.name ?? ""} staffUsername={staff?.username ?? ""}>
+          {children}
+        </AppShell>
       </body>
     </html>
   );

@@ -27,16 +27,20 @@ export function AppShell({
   staffUsername: string;
 }) {
   const path = usePathname();
+  if (path === "/login") {
+    return children;
+  }
+
   return (
-    <div className="min-h-screen lg:grid lg:grid-cols-[240px_1fr]">
-      <aside className="bg-navy-deep text-[#e8efe9]">
+    <div className="min-h-screen grid grid-cols-[240px_1fr]">
+      <aside className="sticky top-0 h-screen overflow-y-auto bg-navy-deep text-[#e8efe9]">
         <div className="border-b border-white/10 px-5 py-5">
           <p className="font-serif text-xl tracking-tight text-white">CAS</p>
           <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-white/55">
             Complete Accident Solutions
           </p>
         </div>
-        <nav className="flex gap-1 overflow-x-auto px-2 py-3 lg:block lg:space-y-0.5">
+        <nav className="px-2 py-3 space-y-0.5">
           {NAV.map((item) => {
             const active = item.href === "/" ? path === "/" : path.startsWith(item.href);
             return (
@@ -52,7 +56,7 @@ export function AppShell({
             );
           })}
         </nav>
-        <div className="hidden px-5 py-6 text-xs leading-relaxed text-white/45 lg:block">
+        <div className="px-5 py-6 text-xs leading-relaxed text-white/45">
           Prototype — fictional test data.
           <br />
           Simulated lookups. No live sending.

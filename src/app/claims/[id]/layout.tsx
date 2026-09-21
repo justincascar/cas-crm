@@ -47,9 +47,9 @@ export default async function ClaimLayout({
           </Link>
         </div>
       </div>
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_17rem]">
-        <div className="min-w-0">{children}</div>
+      <div className="grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]">
         <ScreenNav claimId={String(data.claim.id)} savedKeys={saved} />
+        <div className="min-w-0">{children}</div>
       </div>
     </div>
   );
