@@ -12,7 +12,7 @@ import {
 } from "@/app/actions";
 import { DocumentGenerateForm } from "@/components/DocumentGenerateForm";
 import { InstructEngineerPanel } from "@/components/InstructEngineerPanel";
-import { ChasePanel } from "@/components/ChasePanel";
+import { ChasePanel, type HireAgreementHistoryRow } from "@/components/ChasePanel";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { EMAIL_TEMPLATES } from "@/lib/documents/email-templates";
 import { formatUkDateTime } from "@/lib/dates";
@@ -46,6 +46,7 @@ export function CommsDesk({
   selectedEngineerId,
   preparedEngineerInstruction,
   chases,
+  hireAgreements,
   preparedByKind,
 }: {
   claimId: string;
@@ -64,6 +65,7 @@ export function CommsDesk({
     created_at: string;
   } | null;
   chases: ChaseView[];
+  hireAgreements: HireAgreementHistoryRow[];
   preparedByKind: Record<
     string,
     {
@@ -100,7 +102,13 @@ export function CommsDesk({
       />
 
       {chases.map((chase) => (
-        <ChasePanel key={chase.kind} claimId={claimId} chase={chase} prepared={preparedByKind[chase.kind] || null} />
+        <ChasePanel
+          key={chase.kind}
+          claimId={claimId}
+          chase={chase}
+          prepared={preparedByKind[chase.kind] || null}
+          agreements={chase.kind === "hire_agreement_renewal" ? hireAgreements : undefined}
+        />
       ))}
 
       <section className="rounded-xl border border-line bg-card p-5">
@@ -167,12 +175,18 @@ export function CommsDesk({
               setFillMsg(preview.error);
               return;
             }
-            if (preview.to) setEmailTo(preview.to);
-            setEmailSubject(preview.subject);
-            setEmailBody(preview.body);
+            const to = "to" in preview && typeof preview.to === "string" ? preview.to : "";
+            const subject = "subject" in preview && typeof preview.subject === "string" ? preview.subject : "";
+            const body = "body" in preview && typeof preview.body === "string" ? preview.body : "";
+            if (to) setEmailTo(to);
+            setEmailSubject(subject);
+            setEmailBody(body);
+            const missing = "missing" in preview && Array.isArray(preview.missing) ? preview.missing : [];
+            const legalSignOffRequired =
+              "legalSignOffRequired" in preview && Boolean(preview.legalSignOffRequired);
             const parts = [];
-            if (preview.missing.length) parts.push(`Missing from the file: ${preview.missing.join(", ")}.`);
-            if (preview.legalSignOffRequired) {
+            if (missing.length) parts.push(`Missing from the file: ${missing.join(", ")}.`);
+            if (legalSignOffRequired) {
               parts.push("Legal wording needs solicitor sign-off before it is used live.");
             }
             setFillMsg(parts.join(" ") || "Filled from this file.");

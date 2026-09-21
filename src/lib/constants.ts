@@ -51,10 +51,13 @@ export const DEFAULT_VEHICLE_LOCATION =
 
 export const AGREEMENT_MAX_DAYS_DEFAULT = 88;
 export const AGREEMENT_RENEWAL_ALERT_DAY_DEFAULT = 80;
+export const AGREEMENT_RENEWAL_APPROACHING_DAY_DEFAULT = 70;
 export const SETTING_AGREEMENT_MAX_DAYS = "agreement_max_days";
 export const SETTING_AGREEMENT_RENEWAL_ALERT_DAY = "agreement_renewal_alert_day";
+export const SETTING_AGREEMENT_RENEWAL_APPROACHING_DAY = "agreement_renewal_approaching_day";
 export const HIRE_AGREEMENT_RENEWAL_CHASE_RULE = "hire_agreement_renewal_chase";
 export const HIRE_AGREEMENT_RENEWAL_CHASE_TEMPLATE = "hire_agreement_renewal_chase";
+export const HIRE_AGREEMENT_RENEWAL_APPROACHING_LABEL = "Hire agreement renewal approaching";
 export const HIRE_AGREEMENT_RENEWAL_DUE_LABEL = "Hire agreement renewal due";
 export const HIRE_AGREEMENT_RENEWAL_OVERDUE_LABEL = "Hire agreement renewal overdue — agreement limit reached";
 export const TOTAL_LOSS_HIRE_DAYS_AFTER_QUALIFYING_PAYMENT = 7;

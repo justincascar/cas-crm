@@ -1,4 +1,4 @@
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { DEMO_STAFF, demoPasswordFor } from "../auth/demo-staff";
 import { hashPasswordSync } from "../auth/passwords";
 import {
@@ -10,12 +10,13 @@ import {
   REPAIR_AUTHORISATION_CHASE_RULE,
   SETTING_LIABILITY_CHASE_INTERVAL_DAYS,
   SETTING_REPAIR_AUTH_CHASE_INTERVAL_DAYS,
+  SETTING_AGREEMENT_RENEWAL_APPROACHING_DAY,
 } from "../constants";
 import { isoDateFromNow, isoDaysFromNow, nowUtcIso } from "../dates";
 import { pence, vatOnNet } from "../money";
 
 function run(db: DatabaseSync, sql: string, params: unknown[] = []) {
-  db.prepare(sql).run(...params);
+  db.prepare(sql).run(...(params as SQLInputValue[]));
 }
 
 function count(db: DatabaseSync, table: string): number {
@@ -35,6 +36,7 @@ export function seed(db: DatabaseSync) {
   run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", ["environment", "prototype"]);
   run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", ["agreement_max_days", "88"]);
   run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", ["agreement_renewal_alert_day", "80"]);
+  run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", [SETTING_AGREEMENT_RENEWAL_APPROACHING_DAY, "70"]);
   run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", ["chaser_interval_days", "3"]);
   run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", ["chaser_interval_unit", "calendar_days"]);
   run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", [SETTING_LIABILITY_CHASE_INTERVAL_DAYS, "3"]);

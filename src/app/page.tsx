@@ -5,6 +5,7 @@ import { requireStaff } from "@/lib/auth/session";
 import { dbLocation, getDashboard } from "@/lib/db/queries";
 import { formatUkDate } from "@/lib/dates";
 import type { ChaseView } from "@/lib/db/chase";
+import { chaseStageRowClass, chaseStageShortLabel, chaseStageTextClass } from "@/lib/domain/chase";
 
 const toneClass: Record<string, string> = {
   info: "border-l-teal",
@@ -34,6 +35,7 @@ function ChaseDueTable({
             <tr>
               <th>File</th>
               <th>Client</th>
+              <th>Stage</th>
               <th>Next action</th>
               <th>Due</th>
               <th>Handler</th>
@@ -41,13 +43,14 @@ function ChaseDueTable({
           </thead>
           <tbody>
             {rows.map((row) => (
-              <tr key={`${row.kind}-${row.claimId}`}>
+              <tr key={`${row.kind}-${row.claimId}`} className={chaseStageRowClass(row.severity)}>
                 <td>
                   <Link href={`/claims/${row.claimId}`} className="ref text-teal-dark hover:underline">
                     {row.fileReference}
                   </Link>
                 </td>
                 <td>{row.clientName || "Unknown"}</td>
+                <td className={chaseStageTextClass(row.severity)}>{chaseStageShortLabel(row.severity)}</td>
                 <td>{row.label || row.dueLabel}</td>
                 <td>{row.dueAt ? formatUkDate(row.dueAt) : "Unknown"}</td>
                 <td>{row.handlerName || "Unassigned"}</td>
@@ -102,8 +105,8 @@ export default async function DashboardPage() {
         rows={data.chasesDueByKind.repair_authorisation}
       />
       <ChaseDueTable
-        title="Hire agreement renewals due"
-        hint="Counted from the current signed hire agreement start date. Courtesy cars are excluded unless a hire agreement is on the file. Clears only when a renewal is logged — it does not disappear just because time passes. Reminder only — no email is sent automatically."
+        title="Hire agreement renewals"
+        hint="Counted from the current signed hire agreement start date, not the fleet booking dates. Amber from day 70 (approaching), red from day 80 (due), red overdue from day 88 if still not renewed. Courtesy cars are excluded unless a hire agreement is on the file. Clears only when a renewal is logged — it does not disappear just because time passes. Reminder only — no email is sent automatically."
         rows={data.chasesDueByKind.hire_agreement_renewal}
       />
 

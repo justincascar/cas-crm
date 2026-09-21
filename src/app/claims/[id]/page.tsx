@@ -12,9 +12,11 @@ import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import { requireStaff } from "@/lib/auth/session";
 import { getClaim, listStaff, suggestAudatexCodesForClaim } from "@/lib/db/queries";
 import { findPreparedChase, listChasesForClaim } from "@/lib/db/chase";
+import { listHireAgreements } from "@/lib/db/chronology";
 import { formatGbp } from "@/lib/money";
 import { HEAD_LABELS, type HeadOfLoss } from "@/lib/constants";
 import { formatVehicleRegistration } from "@/lib/text";
+import { formAction } from "@/lib/form-action";
 import { googleMapsSearchUrl } from "@/lib/lookups/maps";
 import { liabilityStatusLabel, roadworthinessLabel } from "@/lib/domain/claim-status";
 
@@ -34,6 +36,7 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
   const staff = listStaff();
   const audatexSuggestion = suggestAudatexCodesForClaim(String(claim.id));
   const chases = listChasesForClaim(String(claim.id));
+  const hireAgreements = listHireAgreements(String(claim.id));
   const preparedByKind = Object.fromEntries(
     chases.map((chase) => {
       const row = findPreparedChase(chase.kind, String(claim.id));
@@ -82,7 +85,13 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
       />
 
       {chases.map((chase) => (
-        <ChasePanel key={chase.kind} claimId={String(claim.id)} chase={chase} prepared={preparedByKind[chase.kind] || null} />
+        <ChasePanel
+          key={chase.kind}
+          claimId={String(claim.id)}
+          chase={chase}
+          prepared={preparedByKind[chase.kind] || null}
+          agreements={chase.kind === "hire_agreement_renewal" ? hireAgreements : undefined}
+        />
       ))}
 
       <ClaimAudatexFields
@@ -176,7 +185,7 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
       />
 
       <section className="grid gap-6 xl:grid-cols-3">
-        <form action={actionUpdateClaim} className="space-y-3 rounded-xl border border-line bg-card p-5 xl:col-span-2">
+        <form action={formAction(actionUpdateClaim)} className="space-y-3 rounded-xl border border-line bg-card p-5 xl:col-span-2">
           <input type="hidden" name="claimId" value={String(claim.id)} />
           <h2 className="font-serif text-xl text-navy-deep">Claim facts</h2>
           <p className="text-xs text-slate">Staff-reviewed fields. Client-entered material stays in notes and the form status until reviewed.</p>
@@ -482,7 +491,7 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
                   </div>
                 </div>
                 {t.status === "open" ? (
-                  <form action={actionCompleteTask}>
+                  <form action={formAction(actionCompleteTask)}>
                     <input type="hidden" name="taskId" value={String(t.id)} />
                     <button className="text-xs text-teal-dark underline" type="submit">
                       Done

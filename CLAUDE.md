@@ -28,7 +28,7 @@ Open http://localhost:3000. The SQLite database lives in `%LOCALAPPDATA%\CAS-CRM
 - SQLite via `node:sqlite` (no extra native build tools).
 - Money as integer pence. Dates as ISO UTC text, displayed in Europe/London.
 - Lookup providers behind adapters; current implementations are labelled simulated.
-- Demonstration file prefix `TEST-`. Agreement max 88 days, renewal alert day 80, engineer chaser 3 calendar days (labelled demonstration setting).
+- Demonstration file prefix `TEST-`. Agreement max 88 days, amber renewal warning day 70, red renewal alert day 80, engineer chaser 3 calendar days (labelled demonstration setting).
 - Each file has a dated chronology. Letters are generated from those dates. Email is filed against the claim; live mailbox send/receive is simulated until CAS's provider is connected.
 
 ## Behaviour that must not regress

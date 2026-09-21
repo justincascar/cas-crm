@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/auth/session";
 import { setDefaultVehicleLocation } from "@/lib/db/vehicle-location";
-import { setChaseIntervalDays, setAgreementMaxDays } from "@/lib/db/chase";
+import { setChaseIntervalDays, setAgreementMaxDays, setAgreementApproachingDay } from "@/lib/db/chase";
 
 function revalidateSettings() {
   revalidatePath("/settings");
@@ -53,6 +53,7 @@ export async function actionSaveChaseIntervals(formData: FormData) {
 export async function actionSaveAgreementLimits(formData: FormData) {
   await requireStaff();
   try {
+    setAgreementApproachingDay(String(formData.get("agreementRenewalApproachingDay") || ""));
     setChaseIntervalDays("hire_agreement_renewal", String(formData.get("agreementRenewalAlertDay") || ""));
     setAgreementMaxDays(String(formData.get("agreementMaxDays") || ""));
   } catch (error) {

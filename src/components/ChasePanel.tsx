@@ -16,11 +16,20 @@ import {
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import { buildMailtoHref } from "@/lib/email/mailto";
-import { LIABILITY_DECISIONS, REPAIR_OUTCOMES } from "@/lib/domain/chase";
+import { LIABILITY_DECISIONS, REPAIR_OUTCOMES, chaseStageShortLabel, chaseStageTextClass } from "@/lib/domain/chase";
 import type { ChaseView } from "@/lib/db/chase";
 import type { EngineerChaseView } from "@/lib/db/engineer-chase";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
+
+export type HireAgreementHistoryRow = {
+  id: string;
+  sequence: number;
+  start_on: string;
+  planned_end_on: string;
+  signed: number;
+  signature_status: string;
+};
 
 type PreparedChase = {
   id: string;
@@ -33,13 +42,14 @@ type PreparedChase = {
 function intervalSourceLabel(chase: ChaseView) {
   if (chase.kind === "hire_agreement_renewal") {
     const max = chase.agreementMaxDays || 88;
+    const approaching = chase.agreementApproachingDay || 70;
     if (chase.intervalSource === "claim_override") {
-      return `Renewal alert on day ${chase.intervalDays} of the current signed agreement on this file${chase.overrideReason ? ` — ${chase.overrideReason}` : ""}. Agreement limit ${max} days. Global alert day is ${chase.globalIntervalDays}.`;
+      return `Amber from day ${approaching}; red alert on day ${chase.intervalDays} of the current signed agreement on this file${chase.overrideReason ? ` — ${chase.overrideReason}` : ""}. Agreement limit ${max} days. Global red alert day is ${chase.globalIntervalDays}.`;
     }
     if (chase.intervalSource === "frozen") {
-      return `Renewal alert on day ${chase.intervalDays} (held from when this chase was paused or cancelled). Agreement limit ${max} days. Global alert day is ${chase.globalIntervalDays}.`;
+      return `Amber from day ${approaching}; red alert on day ${chase.intervalDays} (held from when this chase was paused or cancelled). Agreement limit ${max} days. Global red alert day is ${chase.globalIntervalDays}.`;
     }
-    return `Renewal alert on day ${chase.intervalDays} of the current signed agreement (global default). Agreement limit ${max} days.`;
+    return `Amber from day ${approaching}; red alert on day ${chase.intervalDays} of the current signed agreement (global default). Agreement limit ${max} days.`;
   }
   if (chase.intervalSource === "claim_override") {
     return `${chase.intervalDays} calendar days on this file${chase.overrideReason ? ` — ${chase.overrideReason}` : ""}. Global default is ${chase.globalIntervalDays} days.`;
@@ -57,7 +67,7 @@ function stateLabel(chase: ChaseView) {
     if (chase.due) return chase.label || chase.dueLabel;
     if (!chase.clockAt) return "Agreement start date not recorded";
     if (!chase.active) return "Hire ended — no renewal alert";
-    return "Tracking — renewal alert day not yet reached";
+    return "Tracking — approaching day not yet reached";
   }
   if (chase.outcomeOnFile) return "Outcome logged — chase not showing as due";
   if (chase.handlerState === "paused") return "Paused";
@@ -70,10 +80,12 @@ export function ChasePanel({
   claimId,
   chase,
   prepared,
+  agreements,
 }: {
   claimId: string;
   chase: ChaseView;
   prepared: PreparedChase | null;
+  agreements?: HireAgreementHistoryRow[];
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -136,15 +148,18 @@ export function ChasePanel({
     setPreparedId("");
   }
 
-  const tone = chase.due
-    ? "border-overdue bg-[#f8ecec]"
-    : chase.handlerState === "paused"
-      ? "border-warn/40 bg-[#fff6e8]"
-      : chase.handlerState === "cancelled"
-        ? "border-line bg-card"
-        : chase.outcomeOnFile
-          ? "border-ok/40 bg-[#eef6ef]"
-          : "border-teal bg-[#e8f4f2]";
+  const tone =
+    chase.severity === "amber"
+      ? "border-warn bg-[#fff6e8]"
+      : chase.severity === "red" || chase.severity === "red_overdue" || chase.due
+        ? "border-overdue bg-[#f8ecec]"
+        : chase.handlerState === "paused"
+          ? "border-warn/40 bg-[#fff6e8]"
+          : chase.handlerState === "cancelled"
+            ? "border-line bg-card"
+            : chase.outcomeOnFile
+              ? "border-ok/40 bg-[#eef6ef]"
+              : "border-teal bg-[#e8f4f2]";
 
   const contactLine =
     chase.kind === "hire_agreement_renewal"
@@ -173,6 +188,12 @@ export function ChasePanel({
                 : ""}
           </div>
         ) : null}
+        {chase.kind === "hire_agreement_renewal" && chase.due ? (
+          <div>
+            <span className="text-slate">Stage: </span>
+            <span className={chaseStageTextClass(chase.severity)}>{chaseStageShortLabel(chase.severity)}</span>
+          </div>
+        ) : null}
         {chase.dueAt ? (
           <div>
             <span className="text-slate">Chase due from: </span>
@@ -189,9 +210,35 @@ export function ChasePanel({
         </div>
       </dl>
 
+      {chase.kind === "hire_agreement_renewal" && agreements && agreements.length > 0 ? (
+        <div className="mt-3 rounded-md border border-line bg-white px-4 py-3 text-sm">
+          <p className="font-semibold text-navy-deep">Agreement periods on this hire</p>
+          <p className="mt-1 text-xs text-slate">
+            Continuous history from the first agreement. A renewal adds a new period; earlier periods stay on the file.
+          </p>
+          <ul className="mt-2 space-y-1">
+            {agreements.map((row) => {
+              const start = String(row.start_on || "").trim();
+              return (
+                <li key={row.id}>
+                  Period {row.sequence}: {start ? formatUkDate(start) : "Start date not recorded"}
+                  {row.planned_end_on ? ` to ${formatUkDate(String(row.planned_end_on))}` : ""}
+                  {" · "}
+                  {Number(row.signed) === 1 ? "Signed" : "Unsigned"}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
+
       {chase.due ? (
-        <p className="mt-3 rounded-md border border-overdue/40 bg-white px-4 py-3 text-sm font-semibold text-overdue">
-          {chase.dueLabel}
+        <p
+          className={`mt-3 rounded-md border bg-white px-4 py-3 text-sm font-semibold ${
+            chase.severity === "amber" ? "border-warn/40 text-warn" : "border-overdue/40 text-overdue"
+          }`}
+        >
+          {chase.label || chase.dueLabel}
         </p>
       ) : null}
 
@@ -452,6 +499,7 @@ export function EngineerChasePanel({
     overrideReason: null,
     intervalDays: chase.frozenIntervalDays,
     intervalSource: chase.handlerState === "tracking" ? "settings" : "frozen",
+    severity: chase.due ? "red" : null,
   };
   return <ChasePanel claimId={claimId} chase={view} prepared={prepared} />;
 }

@@ -10,6 +10,7 @@ import { requireStaff } from "@/lib/auth/session";
 import { getClaim, listFleet, listKnownAgents, listKnownInsurers, listReservations } from "@/lib/db/queries";
 import { findPreparedEngineerInstruction, listActiveEngineers } from "@/lib/db/engineers";
 import { findPreparedChase, listChasesForClaim } from "@/lib/db/chase";
+import { listHireAgreements } from "@/lib/db/chronology";
 import { seedScreenDefaults } from "@/lib/db/screens";
 
 export default async function ClaimWorkScreenPage({
@@ -40,6 +41,7 @@ export default async function ClaimWorkScreenPage({
       }
     : null;
   const chases = listChasesForClaim(String(data.claim.id));
+  const hireAgreements = listHireAgreements(String(data.claim.id));
   const preparedByKind = Object.fromEntries(
     chases.map((chase) => {
       const preparedChaseRow = findPreparedChase(chase.kind, String(data.claim.id));
@@ -91,6 +93,7 @@ export default async function ClaimWorkScreenPage({
           selectedEngineerId={String(data.claim.engineer_id || "")}
           preparedEngineerInstruction={preparedEngineerInstruction}
           chases={chases}
+          hireAgreements={hireAgreements}
           preparedByKind={preparedByKind}
         />
       ) : null}

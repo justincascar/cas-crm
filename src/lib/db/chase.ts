@@ -1,7 +1,9 @@
 import type { DatabaseSync } from "node:sqlite";
 import {
   AGREEMENT_MAX_DAYS_DEFAULT,
+  AGREEMENT_RENEWAL_APPROACHING_DAY_DEFAULT,
   SETTING_AGREEMENT_MAX_DAYS,
+  SETTING_AGREEMENT_RENEWAL_APPROACHING_DAY,
 } from "../constants";
 import { addCalendarDaysIso, daysBetweenLondon, nowUtcIso } from "../dates";
 import {
@@ -20,6 +22,7 @@ import {
   type ChaseHandlerState,
   type ChaseIntervalSource,
   type ChaseKind,
+  type ChaseSeverity,
 } from "../domain/chase";
 import { SEEDED_ENGINEER } from "./engineers";
 import { all, get, newId, run } from "./connection";
@@ -51,6 +54,7 @@ export type ChaseView = {
   dueAt: string | null;
   reason: string;
   label: string | null;
+  severity: ChaseSeverity | null;
   contactName: string;
   contactEmail: string;
   contactMissing: boolean;
@@ -63,6 +67,7 @@ export type ChaseView = {
   intervalSource: ChaseIntervalSource;
   agreementDay?: number | null;
   agreementMaxDays?: number | null;
+  agreementApproachingDay?: number | null;
   canClearHireRenewal?: boolean;
 };
 
@@ -86,6 +91,7 @@ export function ensureChaseSettings(db: DatabaseSync) {
     ensureSetting(db, def.settingKey, String(def.defaultIntervalDays));
   }
   ensureSetting(db, SETTING_AGREEMENT_MAX_DAYS, String(AGREEMENT_MAX_DAYS_DEFAULT));
+  ensureSetting(db, SETTING_AGREEMENT_RENEWAL_APPROACHING_DAY, String(AGREEMENT_RENEWAL_APPROACHING_DAY_DEFAULT));
   db.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_automations_claim_rule
     ON automations(claim_id, rule_key);
@@ -111,6 +117,22 @@ export function setAgreementMaxDays(value: string | number) {
     run(`UPDATE settings SET value = ? WHERE key = ?`, [String(days), SETTING_AGREEMENT_MAX_DAYS]);
   } else {
     run(`INSERT INTO settings(key, value) VALUES (?, ?)`, [SETTING_AGREEMENT_MAX_DAYS, String(days)]);
+  }
+}
+
+export function getAgreementApproachingDay(): number {
+  const row = get<{ value: string }>(`SELECT value FROM settings WHERE key = ?`, [SETTING_AGREEMENT_RENEWAL_APPROACHING_DAY]);
+  return parseChaseIntervalDays(row?.value, AGREEMENT_RENEWAL_APPROACHING_DAY_DEFAULT);
+}
+
+export function setAgreementApproachingDay(value: string | number) {
+  const days = parseChaseIntervalDays(value, 0);
+  if (days < 1) throw new Error("Enter the approaching warning as a whole number of days, at least 1.");
+  const existing = get<{ key: string }>(`SELECT key FROM settings WHERE key = ?`, [SETTING_AGREEMENT_RENEWAL_APPROACHING_DAY]);
+  if (existing) {
+    run(`UPDATE settings SET value = ? WHERE key = ?`, [String(days), SETTING_AGREEMENT_RENEWAL_APPROACHING_DAY]);
+  } else {
+    run(`INSERT INTO settings(key, value) VALUES (?, ?)`, [SETTING_AGREEMENT_RENEWAL_APPROACHING_DAY, String(days)]);
   }
 }
 
@@ -188,6 +210,7 @@ type ChaseFacts = {
   latestMarkedSent: Map<string, string>;
   intervals: Record<ChaseKind, number>;
   agreementMaxDays: number;
+  agreementApproachingDay: number;
   contacts: Map<string, { engineerName: string; engineerEmail: string; insurerName: string; insurerEmail: string }>;
   hire: Map<string, HireClaimFacts>;
 };
@@ -196,9 +219,19 @@ function placeholders(count: number) {
   return Array.from({ length: count }, () => "?").join(", ");
 }
 
-function loadAgreementMaxDays(): number {
-  const row = get<{ value: string }>(`SELECT value FROM settings WHERE key = ?`, [SETTING_AGREEMENT_MAX_DAYS]);
-  return parseChaseIntervalDays(row?.value, AGREEMENT_MAX_DAYS_DEFAULT);
+function loadAgreementLimits(): { maxDays: number; approachingDay: number } {
+  const rows = all<{ key: string; value: string }>(
+    `SELECT key, value FROM settings WHERE key IN (?, ?)`,
+    [SETTING_AGREEMENT_MAX_DAYS, SETTING_AGREEMENT_RENEWAL_APPROACHING_DAY],
+  );
+  const byKey = Object.fromEntries(rows.map((row) => [row.key, row.value]));
+  return {
+    maxDays: parseChaseIntervalDays(byKey[SETTING_AGREEMENT_MAX_DAYS], AGREEMENT_MAX_DAYS_DEFAULT),
+    approachingDay: parseChaseIntervalDays(
+      byKey[SETTING_AGREEMENT_RENEWAL_APPROACHING_DAY],
+      AGREEMENT_RENEWAL_APPROACHING_DAY_DEFAULT,
+    ),
+  };
 }
 
 /** Load every chase clock fact for the given files in a handful of queries, not one per claim/type. */
@@ -306,11 +339,13 @@ function loadHireFacts(claimIds: string[]): Map<string, HireClaimFacts> {
 }
 
 function loadChaseFacts(claimIds: string[]): ChaseFacts {
+  const limits = loadAgreementLimits();
   const empty: ChaseFacts = {
     latestEvent: new Map(),
     latestMarkedSent: new Map(),
     intervals: loadChaseIntervals(),
-    agreementMaxDays: loadAgreementMaxDays(),
+    agreementMaxDays: limits.maxDays,
+    agreementApproachingDay: limits.approachingDay,
     contacts: new Map(),
     hire: new Map(),
   };
@@ -446,9 +481,11 @@ function evaluateChase(kind: ChaseKind, claimId: string, row: ChaseRow, facts: C
           hireEnded: hire ? hireEnded(hire, asAt) : false,
           startOn: hire?.signedStartOn || null,
           asAt,
+          approachingDay: facts.agreementApproachingDay,
           alertDay: effective.days,
           maxDays: hire?.agreementMaxDays || facts.agreementMaxDays,
           handlerState,
+          approachingLabel: def.approachingLabel || def.dueLabel,
           dueLabel: def.dueLabel,
           overdueLabel: def.overdueLabel || def.dueLabel,
         })
@@ -483,6 +520,7 @@ function evaluateChase(kind: ChaseKind, claimId: string, row: ChaseRow, facts: C
     intervalSource: effective.source,
     agreementDay: def.clockMode === "agreement_day" ? decision.daysOutstanding : null,
     agreementMaxDays: def.clockMode === "agreement_day" ? hire?.agreementMaxDays || facts.agreementMaxDays : null,
+    agreementApproachingDay: def.clockMode === "agreement_day" ? facts.agreementApproachingDay : null,
     canClearHireRenewal: def.clockMode === "agreement_day" && Number(hire?.latestSignedSequence || 0) > 1,
   };
 }
@@ -550,6 +588,10 @@ export function listDueChases(asAt: string = nowUtcIso()): ChaseView[] {
   due.sort((a, b) => {
     const kindOrder = CHASE_KIND_ORDER.indexOf(a.kind) - CHASE_KIND_ORDER.indexOf(b.kind);
     if (kindOrder !== 0) return kindOrder;
+    const severityRank = (value: ChaseSeverity | null) =>
+      value === "red_overdue" ? 0 : value === "red" ? 1 : value === "amber" ? 2 : 3;
+    const severityOrder = severityRank(a.severity) - severityRank(b.severity);
+    if (severityOrder !== 0) return severityOrder;
     return String(a.fileReference || a.claimId).localeCompare(String(b.fileReference || b.claimId));
   });
   return due;

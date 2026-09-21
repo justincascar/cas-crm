@@ -3,10 +3,12 @@ import { agreementDayNumber } from "./rules";
 import {
   AGREEMENT_MAX_DAYS_DEFAULT,
   AGREEMENT_RENEWAL_ALERT_DAY_DEFAULT,
+  AGREEMENT_RENEWAL_APPROACHING_DAY_DEFAULT,
   ENGINEER_CHASER_INTERVAL_DAYS_DEFAULT,
   ENGINEER_INSTRUCTION_CHASE_RULE,
   ENGINEER_REPORT_CHASE_DUE_LABEL,
   ENGINEER_REPORT_CHASE_TEMPLATE,
+  HIRE_AGREEMENT_RENEWAL_APPROACHING_LABEL,
   HIRE_AGREEMENT_RENEWAL_CHASE_RULE,
   HIRE_AGREEMENT_RENEWAL_CHASE_TEMPLATE,
   HIRE_AGREEMENT_RENEWAL_DUE_LABEL,
@@ -53,6 +55,7 @@ export type ChaseKindDefinition = {
   outcomeOnFileReason: string;
   clockMode?: "interval" | "agreement_day";
   ignoreLastChaseSent?: boolean;
+  approachingLabel?: string;
   overdueLabel?: string;
 };
 
@@ -136,6 +139,7 @@ export const CHASE_KIND_DEFINITIONS: Record<ChaseKind, ChaseKindDefinition> = {
     defaultIntervalDays: AGREEMENT_RENEWAL_ALERT_DAY_DEFAULT,
     templateKey: HIRE_AGREEMENT_RENEWAL_CHASE_TEMPLATE,
     dueLabel: HIRE_AGREEMENT_RENEWAL_DUE_LABEL,
+    approachingLabel: HIRE_AGREEMENT_RENEWAL_APPROACHING_LABEL,
     overdueLabel: HIRE_AGREEMENT_RENEWAL_OVERDUE_LABEL,
     title: "Hire agreement renewal",
     waitingReason: "Waiting for a renewal before the agreement limit. Reminder only — not auto-sent.",
@@ -258,6 +262,8 @@ export type ChaseClockDecisionInput = {
   outcomeOnFileReason: string;
 };
 
+export type ChaseSeverity = "amber" | "red" | "red_overdue";
+
 export type ChaseClockDecision = {
   active: boolean;
   due: boolean;
@@ -268,6 +274,7 @@ export type ChaseClockDecision = {
   dueAt: string | null;
   reason: string;
   label: string | null;
+  severity: ChaseSeverity | null;
 };
 
 /** Recalculate a chase from the file's current facts. Nothing is sent. */
@@ -286,6 +293,7 @@ export function chaseClockDecision(opts: ChaseClockDecisionInput): ChaseClockDec
     clockAt,
     dueAt,
     label: null as string | null,
+    severity: null as ChaseSeverity | null,
   };
 
   if (!opts.startedAt || !clockAt) {
@@ -333,6 +341,7 @@ export function chaseClockDecision(opts: ChaseClockDecisionInput): ChaseClockDec
     ...base,
     due: true,
     label: opts.dueLabel,
+    severity: "red",
     reason: `${opts.dueLabel} after ${intervalDays} calendar days. Prepared email only — not auto-sent.`,
   };
 }
@@ -348,29 +357,39 @@ export type HireAgreementRenewalDecisionInput = {
   hireEnded: boolean;
   startOn: string | null;
   asAt: string;
+  approachingDay: number;
   alertDay: number;
   maxDays: number;
   handlerState: ChaseHandlerState;
+  approachingLabel: string;
   dueLabel: string;
   overdueLabel: string;
 };
 
-/** Day 80 / day 88 of the current signed agreement. Sending a reminder does not restart the count. */
+function agreementDayAt(clockAt: string, day: number): string {
+  return addCalendarDaysIso(clockAt, Math.max(day - 1, 0));
+}
+
+/** Amber day 70, red day 80, overdue day 88 of the current signed agreement. Sending a reminder does not restart the count. */
 export function hireAgreementRenewalDecision(opts: HireAgreementRenewalDecisionInput): ChaseClockDecision {
+  const approachingDay = parseChaseIntervalDays(opts.approachingDay, AGREEMENT_RENEWAL_APPROACHING_DAY_DEFAULT);
   const alertDay = parseChaseIntervalDays(opts.alertDay, AGREEMENT_RENEWAL_ALERT_DAY_DEFAULT);
   const maxDays = parseChaseIntervalDays(opts.maxDays, AGREEMENT_MAX_DAYS_DEFAULT);
   const handlerState = opts.handlerState;
   const clockAt = opts.startOn && String(opts.startOn).trim() ? String(opts.startOn) : null;
   const agreementDay = clockAt ? agreementDayNumber(clockAt, opts.asAt) : null;
-  const dueAt = clockAt ? addCalendarDaysIso(clockAt, Math.max(alertDay - 1, 0)) : null;
+  const approachingAt = clockAt ? agreementDayAt(clockAt, approachingDay) : null;
+  const alertAt = clockAt ? agreementDayAt(clockAt, alertDay) : null;
+  const overdueAt = clockAt ? agreementDayAt(clockAt, maxDays) : null;
   const base = {
     active: Boolean(opts.applies && !opts.hireEnded),
     outcomeOnFile: false,
     handlerState,
     daysOutstanding: agreementDay,
     clockAt,
-    dueAt,
+    dueAt: approachingAt,
     label: null as string | null,
+    severity: null as ChaseSeverity | null,
   };
 
   if (!opts.applies) {
@@ -388,27 +407,60 @@ export function hireAgreementRenewalDecision(opts: HireAgreementRenewalDecisionI
   if (handlerState === "paused") {
     return { ...base, due: false, reason: "Chase paused by staff." };
   }
-  if (agreementDay < alertDay && agreementDay < maxDays) {
-    return {
-      ...base,
-      due: false,
-      reason: `Day ${agreementDay} of the current signed agreement. Renewal alert from day ${alertDay} (limit ${maxDays} days).`,
-    };
-  }
   if (agreementDay >= maxDays) {
     return {
       ...base,
       due: true,
+      dueAt: overdueAt,
       label: opts.overdueLabel,
+      severity: "red_overdue",
       reason: `${opts.overdueLabel}. Day ${agreementDay} of the current signed agreement (limit ${maxDays} days). Clears only when a renewal is logged.`,
+    };
+  }
+  if (agreementDay >= alertDay) {
+    return {
+      ...base,
+      due: true,
+      dueAt: alertAt,
+      label: opts.dueLabel,
+      severity: "red",
+      reason: `${opts.dueLabel}. Day ${agreementDay} of the current signed agreement (alert day ${alertDay}, limit ${maxDays} days). Clears only when a renewal is logged.`,
+    };
+  }
+  if (agreementDay >= approachingDay) {
+    return {
+      ...base,
+      due: true,
+      dueAt: approachingAt,
+      label: opts.approachingLabel,
+      severity: "amber",
+      reason: `${opts.approachingLabel}. Day ${agreementDay} of the current signed agreement (approaching from day ${approachingDay}, alert day ${alertDay}, limit ${maxDays} days). Clears only when a renewal is logged.`,
     };
   }
   return {
     ...base,
-    due: true,
-    label: opts.dueLabel,
-    reason: `${opts.dueLabel}. Day ${agreementDay} of the current signed agreement (alert day ${alertDay}, limit ${maxDays} days). Clears only when a renewal is logged.`,
+    due: false,
+    reason: `Day ${agreementDay} of the current signed agreement. Approaching from day ${approachingDay}, alert from day ${alertDay} (limit ${maxDays} days).`,
   };
+}
+
+export function chaseStageShortLabel(severity: ChaseSeverity | null | undefined): string {
+  if (severity === "amber") return "Approaching";
+  if (severity === "red_overdue") return "Overdue";
+  if (severity === "red") return "Due";
+  return "Due";
+}
+
+export function chaseStageRowClass(severity: ChaseSeverity | null | undefined): string {
+  if (severity === "amber") return "bg-[#fff6e8]";
+  if (severity === "red" || severity === "red_overdue") return "bg-[#f8ecec]";
+  return "";
+}
+
+export function chaseStageTextClass(severity: ChaseSeverity | null | undefined): string {
+  if (severity === "amber") return "font-semibold text-warn";
+  if (severity === "red" || severity === "red_overdue") return "font-semibold text-overdue";
+  return "";
 }
 
 export const NO_INSURER_CONTACT_MESSAGE =

@@ -6,7 +6,7 @@ import { isAdministrator } from "@/lib/auth/roles";
 import { requireStaff } from "@/lib/auth/session";
 import { dbLocation, getSettings, listStaff } from "@/lib/db/queries";
 import { getDefaultVehicleLocation } from "@/lib/db/vehicle-location";
-import { getAgreementMaxDays, getChaseIntervalDays } from "@/lib/db/chase";
+import { getAgreementApproachingDay, getAgreementMaxDays, getChaseIntervalDays } from "@/lib/db/chase";
 import { CAS_CLAIMS_MAILBOX, INDICATIVE_DEFAULTS } from "@/lib/constants";
 import { formatGbp } from "@/lib/money";
 
@@ -25,6 +25,7 @@ export default async function SettingsPage({
   const liabilityChaseIntervalDays = getChaseIntervalDays("liability_response");
   const repairChaseIntervalDays = getChaseIntervalDays("repair_authorisation");
   const agreementRenewalAlertDay = getChaseIntervalDays("hire_agreement_renewal");
+  const agreementRenewalApproachingDay = getAgreementApproachingDay();
   const agreementMaxDays = getAgreementMaxDays();
   return (
     <div className="max-w-3xl space-y-6">
@@ -42,13 +43,26 @@ export default async function SettingsPage({
         <h2 className="font-serif text-xl text-navy-deep">Hire agreement length — decision needed</h2>
         <p className="mt-2 text-sm">
           The supplied Hire Pack caps the Rental Period at <strong>89 days</strong> from the date of the agreement. CRM
-          renewal alerts use a separate CAS operational limit of <strong>{agreementMaxDays} days</strong>, with a
-          reminder from day <strong>{agreementRenewalAlertDay}</strong>. Neither the pack wording nor this operational
-          limit has been silently aligned. Confirm with the solicitor which figure is correct before live enforcement.
+          renewal alerts use a separate CAS operational limit of <strong>{agreementMaxDays} days</strong>, with an amber
+          warning from day <strong>{agreementRenewalApproachingDay}</strong> and a red reminder from day{" "}
+          <strong>{agreementRenewalAlertDay}</strong>. Neither the pack wording nor this operational limit has been
+          silently aligned. Confirm with the solicitor which figure is correct before live enforcement.
         </p>
-        <ValidatedForm action={actionSaveAgreementLimits} className="mt-4 grid gap-3 sm:grid-cols-2 sm:items-end">
+        <ValidatedForm action={actionSaveAgreementLimits} className="mt-4 grid gap-3 sm:grid-cols-3 sm:items-end">
           <label className="text-sm">
-            Renewal alert day
+            Approaching (amber) day
+            <input
+              name="agreementRenewalApproachingDay"
+              type="number"
+              min={1}
+              step={1}
+              required
+              className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
+              defaultValue={agreementRenewalApproachingDay}
+            />
+          </label>
+          <label className="text-sm">
+            Renewal due (red) day
             <input
               name="agreementRenewalAlertDay"
               type="number"
@@ -71,7 +85,7 @@ export default async function SettingsPage({
               defaultValue={agreementMaxDays}
             />
           </label>
-          <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white sm:col-span-2">
+          <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white sm:col-span-3">
             Save agreement day limits
           </button>
         </ValidatedForm>
@@ -82,7 +96,8 @@ export default async function SettingsPage({
           <Row label="Status" value={settings.environment || "prototype"} />
           <Row label="File prefix" value={settings.file_prefix} />
           <Row label="Agreement maximum days" value={settings.agreement_max_days} />
-          <Row label="Renewal alert day" value={settings.agreement_renewal_alert_day} />
+          <Row label="Renewal approaching (amber) day" value={settings.agreement_renewal_approaching_day} />
+          <Row label="Renewal due (red) day" value={settings.agreement_renewal_alert_day} />
           <Row label="Claims mailbox" value={`${CAS_CLAIMS_MAILBOX} (decided; live send not connected)`} />
           <Row label="Database file" value={dbLocation()} />
         </dl>

@@ -1203,7 +1203,15 @@ export function listHireAgreements(claimId: string) {
      WHERE he.claim_id = ?
      ORDER BY a.sequence ASC`,
     [claimId],
-  );
+  ).map((row) => ({
+    id: String(row.id),
+    hire_episode_id: String(row.hire_episode_id),
+    sequence: Number(row.sequence),
+    start_on: String(row.start_on || ""),
+    planned_end_on: String(row.planned_end_on || ""),
+    signed: Number(row.signed),
+    signature_status: String(row.signature_status || ""),
+  }));
 }
 
 export function logHireAgreementRenewal(input: { claimId: string; actorId: string; occurredAt?: string }) {
