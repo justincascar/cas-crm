@@ -4,7 +4,7 @@ import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { DEFAULT_VEHICLE_LOCATION } from "../constants";
 import { nowUtcIso } from "../dates";
 import { isVehicleClass, type VehicleClass } from "../fleet/classes";
-import { storedFileExists, storeFileCopy } from "../storage/files";
+import { renameStoredFile, safeFilename, storedFileExists, storeFileCopy } from "../storage/files";
 import { formatVehicleRegistration } from "../text";
 import { get, getDb, newId, run } from "./connection";
 import {
@@ -83,6 +83,94 @@ export function v5cSourceDir(): string {
 export function loadRealFleetCatalog(): RealFleetCatalogRow[] {
   const file = path.join(process.cwd(), "src", "lib", "fleet", "cas-real-fleet.json");
   return JSON.parse(fs.readFileSync(file, "utf8")) as RealFleetCatalogRow[];
+}
+
+export const CONFIRMED_V5C_CORRECTIONS: Array<{
+  registration: string;
+  make: string;
+  model: string;
+  onlyReplaceModels: string[];
+  newSourceFile: string;
+}> = [
+  {
+    registration: "YT18 VJL",
+    make: "AUDI",
+    model: "Q7 S LINE TDI QUATTRO AUTO",
+    onlyReplaceModels: ["S4 S LINE TDI QUATTRO AUTO"],
+    newSourceFile: "YT18VJL - V5C -Audi Q7 White.pdf",
+  },
+];
+
+function compactReg(value: string | null | undefined): string {
+  return formatVehicleRegistration(value || "").replace(/\s+/g, "");
+}
+
+function findRealFleetByRegistrationOn(db: DatabaseSync, registration: string) {
+  const key = compactReg(registration);
+  if (!key) return undefined;
+  const rows = db
+    .prepare(
+      `SELECT fv.id, fv.vehicle_id, v.registration
+       FROM fleet_vehicles fv
+       JOIN vehicles v ON v.id = fv.vehicle_id
+       WHERE fv.is_real = 1 AND v.registration IS NOT NULL AND trim(v.registration) != ''`,
+    )
+    .all() as Array<{ id: string; vehicle_id: string; registration: string }>;
+  return rows.find((row) => compactReg(row.registration) === key);
+}
+
+function relabelFleetV5cOn(
+  db: DatabaseSync,
+  input: { fleetVehicleId: string; newFilename: string; newTitle?: string },
+) {
+  const doc = findFleetDocumentOn(db, input.fleetVehicleId, DOCUMENT_TYPE_V5C);
+  if (!doc?.stored_relpath) return;
+  if (!storedFileExists(doc.stored_relpath) && path.basename(doc.stored_relpath) === safeFilename(input.newFilename)) {
+    return;
+  }
+  let storedRelpath = doc.stored_relpath;
+  let byteSize: number | null = null;
+  if (storedFileExists(doc.stored_relpath)) {
+    const renamed = renameStoredFile(doc.stored_relpath, input.newFilename);
+    storedRelpath = renamed.storedRelpath;
+    byteSize = renamed.byteSize;
+  }
+  db.prepare(
+    `UPDATE documents
+     SET original_filename = ?, title = ?, stored_relpath = ?, byte_size = COALESCE(?, byte_size)
+     WHERE id = ?`,
+  ).run(input.newFilename, input.newTitle || `V5C — ${input.newFilename}`, storedRelpath, byteSize, doc.id);
+}
+
+export function applyConfirmedFleetCorrectionsOn(db: DatabaseSync) {
+  for (const correction of CONFIRMED_V5C_CORRECTIONS) {
+    const found = findRealFleetByRegistrationOn(db, correction.registration);
+    if (!found) continue;
+    const vehicle = db
+      .prepare(`SELECT make, model FROM vehicles WHERE id = ?`)
+      .get(found.vehicle_id) as { make: string | null; model: string | null } | undefined;
+    const currentModel = (vehicle?.model || "").trim();
+    const alreadyCorrect = currentModel === correction.model && (vehicle?.make || "").trim() === correction.make;
+    const importedMisread = correction.onlyReplaceModels.includes(currentModel);
+    if (importedMisread || alreadyCorrect) {
+      if (importedMisread) {
+        db.prepare(`UPDATE vehicles SET make = ?, model = ? WHERE id = ?`).run(
+          correction.make,
+          correction.model,
+          found.vehicle_id,
+        );
+      }
+    }
+    db.prepare(`UPDATE fleet_vehicles SET v5c_source_file = ? WHERE id = ?`).run(correction.newSourceFile, found.id);
+    relabelFleetV5cOn(db, {
+      fleetVehicleId: found.id,
+      newFilename: correction.newSourceFile,
+    });
+  }
+}
+
+export function applyConfirmedFleetCorrections() {
+  applyConfirmedFleetCorrectionsOn(getDb());
 }
 
 function sourceKey(sourceFile: string): string {
@@ -223,10 +311,11 @@ export function ensureRealFleet(db: DatabaseSync) {
     const bySource = db
       .prepare(`SELECT id, vehicle_id FROM fleet_vehicles WHERE v5c_source_file = ?`)
       .get(row.sourceFile) as { id: string; vehicle_id: string } | undefined;
-    const existing = bySource
-      || (db
-        .prepare(`SELECT id, vehicle_id FROM fleet_vehicles WHERE id = ?`)
-        .get(fleetId) as { id: string; vehicle_id: string } | undefined);
+    const byId = db.prepare(`SELECT id, vehicle_id FROM fleet_vehicles WHERE id = ?`).get(fleetId) as
+      | { id: string; vehicle_id: string }
+      | undefined;
+    const byReg = registration ? findRealFleetByRegistrationOn(db, registration) : undefined;
+    const existing = bySource || byReg || byId;
 
     if (!existing) {
       db.prepare(
@@ -275,6 +364,7 @@ export function ensureRealFleet(db: DatabaseSync) {
       });
     }
   }
+  applyConfirmedFleetCorrectionsOn(db);
 }
 
 export function attachV5cBuffer(input: {

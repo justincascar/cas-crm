@@ -6,6 +6,7 @@ import { DatabaseSync } from "node:sqlite";
 import { after, before, describe, it } from "node:test";
 import { withDatabase } from "../src/lib/db/connection.ts";
 import {
+  applyConfirmedFleetCorrectionsOn,
   attachV5cBuffer,
   createFleetVehicle,
   DEFAULT_V5C_SOURCE_DIR,
@@ -101,6 +102,13 @@ describe("real CAS fleet", () => {
       const s1 = real.find((row) => row.registration === "S1 EOH");
       assert.ok(s1);
       assert.equal(s1.make, "BMW");
+
+      const yt18 = real.find((row) => row.registration === "YT18 VJL");
+      assert.ok(yt18);
+      assert.equal(yt18.make, "AUDI");
+      assert.equal(yt18.model, "Q7 S LINE TDI QUATTRO AUTO");
+      const realRegs = real.map((row) => String(row.registration || "")).filter(Boolean);
+      assert.equal(new Set(realRegs).size, realRegs.length);
 
       const premiers = real.filter((row) => (row.model || "").includes("PREMIER"));
       assert.ok(premiers.length >= 3);
@@ -309,10 +317,65 @@ describe("real CAS fleet", () => {
         assert.equal(docs.length, 45);
         assert.ok(docs.every((doc) => storedFileExists(doc.stored_relpath)));
         assert.ok(docs.every((doc) => doc.original_filename.toLowerCase().endsWith(".pdf")));
+        const yt18Doc = docs.find((doc) => /YT18/i.test(doc.original_filename));
+        assert.ok(yt18Doc);
+        assert.match(yt18Doc.original_filename, /Q7/i);
+        assert.doesNotMatch(yt18Doc.original_filename, /A4/i);
+        assert.match(yt18Doc.stored_relpath, /Q7/i);
       });
     } finally {
       process.env.CAS_V5C_SOURCE_DIR = previous;
       db.close();
     }
+  });
+
+  it("corrects the imported YT18 VJL S4 misread to the V5C Q7 model without duplicating the vehicle", () => {
+    const db = prepared();
+    withDatabase(db, () => {
+      ensureRealFleet(db);
+      const before = db
+        .prepare(`SELECT fv.id, fv.vehicle_id FROM fleet_vehicles fv JOIN vehicles v ON v.id = fv.vehicle_id WHERE v.registration = 'YT18 VJL'`)
+        .all() as Array<{ id: string; vehicle_id: string }>;
+      assert.equal(before.length, 1);
+      db.prepare(`UPDATE vehicles SET model = 'S4 S LINE TDI QUATTRO AUTO' WHERE id = ?`).run(before[0].vehicle_id);
+      attachV5cBuffer({
+        fleetVehicleId: before[0].id,
+        vehicleId: before[0].vehicle_id,
+        originalFilename: "YT18VJL - V5C -Audi A4 White.pdf",
+        buffer: fixturePdf,
+      });
+      applyConfirmedFleetCorrectionsOn(db);
+      const after = db
+        .prepare(
+          `SELECT v.make, v.model, fv.v5c_source_file, d.original_filename, d.stored_relpath
+           FROM fleet_vehicles fv
+           JOIN vehicles v ON v.id = fv.vehicle_id
+           LEFT JOIN documents d ON d.fleet_vehicle_id = fv.id AND d.document_type = 'V5C'
+           WHERE v.registration = 'YT18 VJL'`,
+        )
+        .all() as Array<{
+        make: string;
+        model: string;
+        v5c_source_file: string;
+        original_filename: string;
+        stored_relpath: string;
+      }>;
+      assert.equal(after.length, 1);
+      assert.equal(after[0].make, "AUDI");
+      assert.equal(after[0].model, "Q7 S LINE TDI QUATTRO AUTO");
+      assert.match(after[0].v5c_source_file, /Q7/);
+      assert.match(after[0].original_filename, /Q7/);
+      assert.doesNotMatch(after[0].original_filename, /A4/);
+      assert.equal(storedFileExists(after[0].stored_relpath), true);
+
+      db.prepare(`UPDATE vehicles SET model = 'STAFF CORRECTED MODEL' WHERE id = ?`).run(before[0].vehicle_id);
+      applyConfirmedFleetCorrectionsOn(db);
+      const staffKept = db.prepare(`SELECT model FROM vehicles WHERE id = ?`).get(before[0].vehicle_id) as { model: string };
+      assert.equal(staffKept.model, "STAFF CORRECTED MODEL");
+
+      const realCount = db.prepare(`SELECT COUNT(*) AS c FROM fleet_vehicles WHERE is_real = 1`).get() as { c: number };
+      assert.equal(Number(realCount.c), 45);
+    });
+    db.close();
   });
 });

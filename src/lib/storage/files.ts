@@ -50,6 +50,22 @@ export function storedFileExists(relpath: string): boolean {
   }
 }
 
+export function renameStoredFile(oldRelpath: string, newFilename: string): { storedRelpath: string; byteSize: number } {
+  const oldAbs = resolveStoredPath(oldRelpath);
+  const dirParts = oldRelpath.split("/").filter(Boolean).slice(0, -1);
+  const storedRelpath = [...dirParts, safeFilename(newFilename)].join("/");
+  const newAbs = resolveStoredPath(storedRelpath);
+  if (!fs.existsSync(oldAbs)) {
+    throw new Error("Stored file is missing.");
+  }
+  if (path.resolve(oldAbs) !== path.resolve(newAbs)) {
+    fs.mkdirSync(path.dirname(newAbs), { recursive: true });
+    if (fs.existsSync(newAbs)) fs.unlinkSync(oldAbs);
+    else fs.renameSync(oldAbs, newAbs);
+  }
+  return { storedRelpath, byteSize: fs.statSync(newAbs).size };
+}
+
 export function readStoredFile(relpath: string): { buffer: Buffer; absPath: string } {
   const abs = resolveStoredPath(relpath);
   return { buffer: fs.readFileSync(abs), absPath: abs };
