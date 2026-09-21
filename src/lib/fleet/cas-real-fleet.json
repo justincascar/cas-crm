@@ -6,7 +6,7 @@
     "model": "HR-V S I-DTEC",
     "colour": "BLACK",
     "engineCc": 1597,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2016-10-10",
     "missing": [],
     "vehicleClass": "car"
@@ -18,7 +18,7 @@
     "model": "TRAFIC 30 L2H1 COMBI RED",
     "colour": "GREY",
     "engineCc": 1997,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2025-09-02",
     "missing": [],
     "vehicleClass": "van"
@@ -30,7 +30,7 @@
     "model": "VIVARO 2700 CDTI 115 SWB",
     "colour": "WHITE",
     "engineCc": 1995,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2013-03-15",
     "missing": [],
     "vehicleClass": "van"
@@ -42,7 +42,7 @@
     "model": "YARIS ICON D-4D",
     "colour": "RED",
     "engineCc": 1364,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2016-06-03",
     "missing": [],
     "vehicleClass": "car"
@@ -54,7 +54,7 @@
     "model": "RANGE ROVER EVOQUE S D MHEV A",
     "colour": "WHITE",
     "engineCc": 1998,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2021-03-12",
     "missing": [],
     "vehicleClass": "car"
@@ -66,7 +66,7 @@
     "model": "C3 PICASSO SELECTION HDI",
     "colour": "GREY",
     "engineCc": 1560,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2014-05-28",
     "missing": [],
     "vehicleClass": "car"
@@ -78,7 +78,7 @@
     "model": "A5 SPORT TDI ULTRA S-A",
     "colour": "BLUE",
     "engineCc": 1968,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2017-07-21",
     "missing": [],
     "vehicleClass": "car"
@@ -90,7 +90,7 @@
     "model": "TOURNEO CUSTOM 310 T-NIUM TDCI",
     "colour": "BLACK",
     "engineCc": 1995,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2018-07-13",
     "missing": [],
     "vehicleClass": "van"
@@ -138,7 +138,7 @@
     "model": "AUTO TRAIL FRONTIER CHIEFTAIN",
     "colour": "GREY",
     "engineCc": 2999,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2015-05-01",
     "missing": [],
     "vehicleClass": "campervan"
@@ -174,7 +174,7 @@
     "model": "TRANSIT CUSTOM 300 TREND",
     "colour": "WHITE",
     "engineCc": 1995,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2018-10-18",
     "missing": [],
     "vehicleClass": "van"
@@ -186,7 +186,7 @@
     "model": "AVENSIS BUSINESS EDITION D-4D",
     "colour": "BLACK",
     "engineCc": 1995,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2016-06-30",
     "missing": [],
     "vehicleClass": "car"
@@ -198,7 +198,7 @@
     "model": "AVENSIS BUSINESS EDITION D-4D",
     "colour": "BLACK",
     "engineCc": 1995,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2017-09-29",
     "missing": [],
     "vehicleClass": "car"
@@ -210,7 +210,7 @@
     "model": "RAPID SPACEBACK S TDI",
     "colour": "SILVER",
     "engineCc": 1422,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2017-03-16",
     "missing": [],
     "vehicleClass": "car"
@@ -222,7 +222,7 @@
     "model": "RAPID SPACEBACK S TDI",
     "colour": "GREY",
     "engineCc": 1422,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2017-05-03",
     "missing": [],
     "vehicleClass": "car"
@@ -258,7 +258,7 @@
     "model": "C220 D SE EXECUTIVE AUTO",
     "colour": "BLACK",
     "engineCc": 2143,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2016-01-27",
     "missing": [],
     "vehicleClass": "car"
@@ -270,7 +270,7 @@
     "model": "C 220 SE D AUTO",
     "colour": "SILVER",
     "engineCc": 2143,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2018-01-12",
     "missing": [],
     "vehicleClass": "car"
@@ -282,7 +282,7 @@
     "model": "CLIO DYNAMIQUE NAV DCI",
     "colour": "SILVER",
     "engineCc": 1461,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2018-02-15",
     "missing": [],
     "vehicleClass": "car"
@@ -294,7 +294,7 @@
     "model": "RANGER WILDTRAK 4X4 DCB TDCI",
     "colour": "BLACK",
     "engineCc": 3198,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2019-03-01",
     "missing": [],
     "vehicleClass": "van"
@@ -306,7 +306,7 @@
     "model": "TRANSIT 125 T350 RWD",
     "colour": "WHITE",
     "engineCc": 2198,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2013-08-27",
     "missing": [],
     "vehicleClass": "van"
@@ -342,7 +342,7 @@
     "model": "SHARAN S BLUEMOTION TDI",
     "colour": "SILVER",
     "engineCc": 1968,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2015-05-29",
     "missing": [],
     "vehicleClass": "car"
@@ -354,7 +354,7 @@
     "model": "TRANSIT CONNECT 220 BASE TDCI",
     "colour": "WHITE",
     "engineCc": 1499,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2019-03-19",
     "missing": [],
     "vehicleClass": "van"
@@ -378,7 +378,7 @@
     "model": "730D XDRIVE M SPORT AUTO",
     "colour": "GREY",
     "engineCc": 2993,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2019-02-15",
     "missing": [],
     "vehicleClass": "car"
@@ -390,7 +390,7 @@
     "model": "",
     "colour": "WHITE",
     "engineCc": 2148,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2008-09-09",
     "missing": [
       "model"
@@ -404,7 +404,7 @@
     "model": "730D M SPORT AUTO",
     "colour": "BLACK",
     "engineCc": 2993,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2018-07-23",
     "missing": [],
     "vehicleClass": "car"
@@ -416,7 +416,7 @@
     "model": "PREMIER RX",
     "colour": "BLACK",
     "engineCc": 1560,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2017-03-01",
     "missing": [],
     "vehicleClass": "wheelchair_accessible_taxi"
@@ -428,7 +428,7 @@
     "model": "PREMIER RX",
     "colour": "BLACK",
     "engineCc": 1560,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2017-03-01",
     "missing": [],
     "vehicleClass": "wheelchair_accessible_taxi"
@@ -440,24 +440,21 @@
     "model": "PREMIER RX",
     "colour": "BLACK",
     "engineCc": 1560,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2017-03-01",
     "missing": [],
     "vehicleClass": "wheelchair_accessible_taxi"
   },
   {
     "sourceFile": "SF16AWC - V5C - Peugeot MPV Black.pdf",
-    "registration": "",
-    "make": "",
-    "model": "",
+    "registration": "SF16 AWC",
+    "make": "PEUGEOT",
+    "model": "— model unconfirmed, V5C unreadable, confirm from paper copy or DVLA check",
     "colour": "",
     "engineCc": null,
     "fuel": "",
     "firstRegisteredOn": "",
     "missing": [
-      "registration",
-      "make",
-      "model",
       "colour",
       "engine_cc",
       "fuel",
@@ -472,7 +469,7 @@
     "model": "EUROTAXI LX",
     "colour": "BLACK",
     "engineCc": 1997,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2015-10-13",
     "missing": [],
     "vehicleClass": "wheelchair_accessible_taxi"
@@ -484,7 +481,7 @@
     "model": "PREMIER RX BLUE HDI S/S",
     "colour": "BLACK",
     "engineCc": 1560,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2016-11-29",
     "missing": [],
     "vehicleClass": "wheelchair_accessible_taxi"
@@ -496,7 +493,7 @@
     "model": "PREMIER RX BLUE HDI S/S",
     "colour": "BLACK",
     "engineCc": 1560,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2016-11-29",
     "missing": [],
     "vehicleClass": "wheelchair_accessible_taxi"
@@ -508,7 +505,7 @@
     "model": "E7 SE",
     "colour": "BLACK",
     "engineCc": 1997,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2016-09-28",
     "missing": [],
     "vehicleClass": "wheelchair_accessible_taxi"
@@ -520,7 +517,7 @@
     "model": "TRANSIT CONNECT 200 TREND TDCI",
     "colour": "WHITE",
     "engineCc": 1499,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2018-10-30",
     "missing": [],
     "vehicleClass": "van"
@@ -532,7 +529,7 @@
     "model": "BOXER 335 PROF PREM + L3 BHDI",
     "colour": "WHITE",
     "engineCc": 2179,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2024-04-09",
     "missing": [],
     "vehicleClass": "van"
@@ -544,7 +541,7 @@
     "model": "Q7 S LINE TDI QUATTRO AUTO",
     "colour": "WHITE",
     "engineCc": 2967,
-    "fuel": "heavy oil",
+    "fuel": "Diesel",
     "firstRegisteredOn": "2018-03-19",
     "missing": [],
     "vehicleClass": "car"

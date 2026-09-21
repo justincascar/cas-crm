@@ -76,6 +76,32 @@ function registrationKey(value: string): string {
   return formatVehicleRegistration(value).replace(/\s+/g, "");
 }
 
+/** Plate printed in the supplied V5C filename, used when the scan itself cannot be read. */
+export function registrationFromV5cFilename(sourceFile: string): string | null {
+  const base = path.basename(sourceFile).replace(/\.pdf$/i, "");
+  const marker = base.search(/v5c/i);
+  const head = (marker === -1 ? base : base.slice(0, marker)).replace(/[\s-]+$/g, "").trim();
+  const compact = head.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
+  if (!compact) return null;
+  const current = compact.match(/^([A-Z]{2}\d{2})([A-Z]{3})$/);
+  if (current) return `${current[1]} ${current[2]}`;
+  const older = compact.match(/^([A-Z]\d{1,3})([A-Z]{3})$/);
+  if (older) return `${older[1]} ${older[2]}`;
+  return formatVehicleRegistration(head);
+}
+
+/** V5C field P.3 "HEAVY OIL" is diesel. Other fuel words are stored as read. */
+export function fuelFromV5c(value: string | null | undefined): string | null {
+  const text = blank(value);
+  if (!text) return null;
+  if (text.toLowerCase() === "heavy oil") return "Diesel";
+  return text;
+}
+
+export const SF16_AWC_UNCONFIRMED_MAKE = "PEUGEOT";
+export const SF16_AWC_UNCONFIRMED_MODEL =
+  "— model unconfirmed, V5C unreadable, confirm from paper copy or DVLA check";
+
 export function v5cSourceDir(): string {
   return process.env.CAS_V5C_SOURCE_DIR || DEFAULT_V5C_SOURCE_DIR;
 }
@@ -171,6 +197,82 @@ export function applyConfirmedFleetCorrectionsOn(db: DatabaseSync) {
 
 export function applyConfirmedFleetCorrections() {
   applyConfirmedFleetCorrectionsOn(getDb());
+}
+
+function missingList(value: string | null): string[] {
+  if (!value) return [];
+  try {
+    const parsed = JSON.parse(value) as unknown;
+    return Array.isArray(parsed) ? parsed.map((item) => String(item)) : [];
+  } catch {
+    return [];
+  }
+}
+
+function missingNote(missing: string[]): string | null {
+  return missing.length ? `V5C fields left blank (not guessed): ${missing.join(", ")}.` : null;
+}
+
+/** Fill a blank registration from the V5C filename, and store HEAVY OIL as Diesel. Does not overwrite a make or model already saved. */
+export function applyReadableFleetFixesOn(db: DatabaseSync) {
+  const rows = db
+    .prepare(
+      `SELECT fv.id, fv.vehicle_id, fv.v5c_source_file, fv.notes,
+              v.registration, v.make, v.model, v.fuel, v.v5c_missing_json
+       FROM fleet_vehicles fv
+       JOIN vehicles v ON v.id = fv.vehicle_id
+       WHERE fv.is_real = 1`,
+    )
+    .all() as Array<{
+    id: string;
+    vehicle_id: string;
+    v5c_source_file: string | null;
+    notes: string | null;
+    registration: string | null;
+    make: string | null;
+    model: string | null;
+    fuel: string | null;
+    v5c_missing_json: string | null;
+  }>;
+
+  for (const row of rows) {
+    const fromFile = row.v5c_source_file ? registrationFromV5cFilename(row.v5c_source_file) : null;
+    const registration = blank(row.registration) || fromFile;
+    const fuel = fuelFromV5c(row.fuel);
+    const makeBlank = !blank(row.make);
+    const modelBlank = !blank(row.model);
+    const isSf16 = compactReg(registration) === "SF16AWC" || /sf16awc/i.test(row.v5c_source_file || "");
+    const fillIdentity = isSf16 && makeBlank && modelBlank;
+    let missing = missingList(row.v5c_missing_json);
+    if (registration) missing = missing.filter((item) => item !== "registration");
+    if (fillIdentity) missing = missing.filter((item) => item !== "make" && item !== "model");
+    const nextNote = missingNote(missing);
+    const previousNote = missingNote(missingList(row.v5c_missing_json));
+    const notesUntouched = row.notes == null || row.notes === previousNote;
+
+    if (!blank(row.registration) && registration) {
+      db.prepare(`UPDATE vehicles SET registration = ?, lookup_incomplete = 0 WHERE id = ?`).run(registration, row.vehicle_id);
+    }
+    if (fuel && fuel !== row.fuel) {
+      db.prepare(`UPDATE vehicles SET fuel = ? WHERE id = ?`).run(fuel, row.vehicle_id);
+    }
+    if (fillIdentity) {
+      db.prepare(`UPDATE vehicles SET make = ?, model = ? WHERE id = ?`).run(
+        SF16_AWC_UNCONFIRMED_MAKE,
+        SF16_AWC_UNCONFIRMED_MODEL,
+        row.vehicle_id,
+      );
+    }
+    if (JSON.stringify(missing) !== JSON.stringify(missingList(row.v5c_missing_json))) {
+      db.prepare(`UPDATE vehicles SET v5c_missing_json = ? WHERE id = ?`).run(
+        missing.length ? JSON.stringify(missing) : null,
+        row.vehicle_id,
+      );
+    }
+    if (notesUntouched && nextNote !== row.notes) {
+      db.prepare(`UPDATE fleet_vehicles SET notes = ? WHERE id = ?`).run(nextNote, row.id);
+    }
+  }
 }
 
 function sourceKey(sourceFile: string): string {
@@ -297,11 +399,12 @@ export function ensureRealFleet(db: DatabaseSync) {
     const key = sourceKey(row.sourceFile);
     const fleetId = `fv-real-${key}`;
     const vehicleId = `v-real-${key}`;
-    const registration = blank(row.registration) ? formatVehicleRegistration(String(row.registration)) : null;
+    const registration =
+      blank(row.registration) ? formatVehicleRegistration(String(row.registration)) : registrationFromV5cFilename(row.sourceFile);
     const make = blank(row.make);
     const model = blank(row.model);
     const colour = blank(row.colour);
-    const fuel = blank(row.fuel);
+    const fuel = fuelFromV5c(row.fuel);
     const firstRegisteredOn = blank(row.firstRegisteredOn);
     const engineCc = parseEngineCc(row.engineCc);
     const vehicleClass = isVehicleClass(String(row.vehicleClass || "")) ? row.vehicleClass : null;
@@ -365,6 +468,7 @@ export function ensureRealFleet(db: DatabaseSync) {
     }
   }
   applyConfirmedFleetCorrectionsOn(db);
+  applyReadableFleetFixesOn(db);
 }
 
 export function attachV5cBuffer(input: {

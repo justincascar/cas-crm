@@ -123,7 +123,12 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 21 September 2026 — YT18 VJL V5C correction:
 
 - YT18 VJL is an Audi Q7. The supplied folder was labelled A4, and the import stored model `S4 S LINE TDI QUATTRO AUTO` (a misread of D.3 `Q7 S LINE TDI QUATTRO AUTO` on the actual V5C). The record and stored filename now read Q7. Staff edits of make/model after import are not overwritten.
-- All 45 stored V5Cs were compared to the vehicle records. No other confirmed make/model mismatch, and no V5C filed under the wrong registration. SF16 AWC remains unreadable in this prototype (JPEG2000 page).
+- All 45 stored V5Cs were compared to the vehicle records. No other confirmed make/model mismatch, and no V5C filed under the wrong registration. SF16 AWC's V5C is JPEG2000. It cannot be previewed in the CRM (the on-screen pages come out blank), so staff must download the original PDF. Its registration, make and model were left blank at import because the V5C could not be read.
+
+21 September 2026 — SF16 AWC plate and diesel fuel:
+
+- SF16 AWC's registration is taken from the supplied filename (`SF16 AWC`), not from the unreadable scan. Make is PEUGEOT. The model is marked unconfirmed, for a paper V5C or DVLA check. A blank registration on a future import uses the filename plate in the same way.
+- Where a V5C shows fuel as HEAVY OIL, the fleet record stores Diesel. Other fuel words are left as read. A make or model a staff member has already typed is not overwritten.
 
 21 September 2026 — Stored PDF viewer:
 

@@ -7,16 +7,21 @@ import { after, before, describe, it } from "node:test";
 import { withDatabase } from "../src/lib/db/connection.ts";
 import {
   applyConfirmedFleetCorrectionsOn,
+  applyReadableFleetFixesOn,
   attachV5cBuffer,
   createFleetVehicle,
   DEFAULT_V5C_SOURCE_DIR,
   ensureRealFleet,
   FleetRemoveBlockedError,
+  fuelFromV5c,
   getFleetVehicle,
   listBlockingReservations,
   listFleetVehicleDocuments,
   loadRealFleetCatalog,
+  registrationFromV5cFilename,
   removeFleetVehicle,
+  SF16_AWC_UNCONFIRMED_MAKE,
+  SF16_AWC_UNCONFIRMED_MODEL,
   updateFleetVehicle,
 } from "../src/lib/db/fleet.ts";
 import { migrate } from "../src/lib/db/migrate.ts";
@@ -79,7 +84,7 @@ describe("real CAS fleet", () => {
 
       const real = db
         .prepare(
-          `SELECT v.registration, v.make, v.model, v.vehicle_class, v.transmission, v.seats, fv.is_real
+          `SELECT v.registration, v.make, v.model, v.fuel, v.vehicle_class, v.transmission, v.seats, fv.is_real
            FROM fleet_vehicles fv JOIN vehicles v ON v.id = fv.vehicle_id
            WHERE fv.is_real = 1
            ORDER BY v.registration`,
@@ -88,6 +93,7 @@ describe("real CAS fleet", () => {
         registration: string | null;
         make: string | null;
         model: string | null;
+        fuel: string | null;
         vehicle_class: string | null;
         transmission: string | null;
         seats: number | null;
@@ -107,6 +113,13 @@ describe("real CAS fleet", () => {
       assert.ok(yt18);
       assert.equal(yt18.make, "AUDI");
       assert.equal(yt18.model, "Q7 S LINE TDI QUATTRO AUTO");
+      assert.equal(real.filter((row) => !row.registration).length, 0);
+      const sf16 = real.find((row) => row.registration === "SF16 AWC");
+      assert.ok(sf16);
+      assert.equal(sf16.make, SF16_AWC_UNCONFIRMED_MAKE);
+      assert.equal(sf16.model, SF16_AWC_UNCONFIRMED_MODEL);
+      assert.equal(real.filter((row) => (row.fuel || "").toLowerCase() === "heavy oil").length, 0);
+      assert.ok(real.some((row) => row.fuel === "Diesel"));
       const realRegs = real.map((row) => String(row.registration || "")).filter(Boolean);
       assert.equal(new Set(realRegs).size, realRegs.length);
 
@@ -375,6 +388,52 @@ describe("real CAS fleet", () => {
 
       const realCount = db.prepare(`SELECT COUNT(*) AS c FROM fleet_vehicles WHERE is_real = 1`).get() as { c: number };
       assert.equal(Number(realCount.c), 45);
+      const testCount = db.prepare(`SELECT COUNT(*) AS c FROM fleet_vehicles WHERE is_real = 0`).get() as { c: number };
+      assert.equal(Number(testCount.c), 10);
+    });
+    db.close();
+  });
+
+  it("fills a blank registration from the V5C filename and stores HEAVY OIL as Diesel without replacing a staff edit", () => {
+    assert.equal(registrationFromV5cFilename("SF16AWC - V5C - Peugeot MPV Black.pdf"), "SF16 AWC");
+    assert.equal(registrationFromV5cFilename("S1EOH - V5C - BMW 730D Xdrive Grey.pdf"), "S1 EOH");
+    assert.equal(registrationFromV5cFilename("CP24MSX-V5C-Suzuki Grey.pdf"), "CP24 MSX");
+    assert.equal(registrationFromV5cFilename("CE13 ECX - V5C - Vauxhall Vivaro White.pdf"), "CE13 ECX");
+    assert.equal(fuelFromV5c("heavy oil"), "Diesel");
+    assert.equal(fuelFromV5c("HEAVY OIL"), "Diesel");
+    assert.equal(fuelFromV5c("petrol"), "petrol");
+
+    const db = prepared();
+    withDatabase(db, () => {
+      ensureRealFleet(db);
+      const sf16 = db
+        .prepare(
+          `SELECT fv.vehicle_id FROM fleet_vehicles fv JOIN vehicles v ON v.id = fv.vehicle_id WHERE v.registration = 'SF16 AWC'`,
+        )
+        .get() as { vehicle_id: string };
+      db.prepare(`UPDATE vehicles SET registration = NULL, make = NULL, model = NULL WHERE id = ?`).run(sf16.vehicle_id);
+      const diesel = db
+        .prepare(`SELECT id FROM vehicles WHERE fuel = 'Diesel' AND id != ? LIMIT 1`)
+        .get(sf16.vehicle_id) as { id: string };
+      db.prepare(`UPDATE vehicles SET fuel = 'heavy oil' WHERE id = ?`).run(diesel.id);
+      db.prepare(`UPDATE vehicles SET make = 'STAFF MAKE', model = 'STAFF MODEL', fuel = 'LPG' WHERE id = ?`).run(sf16.vehicle_id);
+      applyReadableFleetFixesOn(db);
+      const kept = db.prepare(`SELECT registration, make, model, fuel FROM vehicles WHERE id = ?`).get(sf16.vehicle_id) as {
+        registration: string | null;
+        make: string;
+        model: string;
+        fuel: string;
+      };
+      assert.equal(kept.registration, "SF16 AWC");
+      assert.equal(kept.make, "STAFF MAKE");
+      assert.equal(kept.model, "STAFF MODEL");
+      assert.equal(kept.fuel, "LPG");
+      const mapped = db.prepare(`SELECT fuel FROM vehicles WHERE id = ?`).get(diesel.id) as { fuel: string };
+      assert.equal(mapped.fuel, "Diesel");
+      const realCount = db.prepare(`SELECT COUNT(*) AS c FROM fleet_vehicles WHERE is_real = 1`).get() as { c: number };
+      const testCount = db.prepare(`SELECT COUNT(*) AS c FROM fleet_vehicles WHERE is_real = 0`).get() as { c: number };
+      assert.equal(Number(realCount.c), 45);
+      assert.equal(Number(testCount.c), 10);
     });
     db.close();
   });

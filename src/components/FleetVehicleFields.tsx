@@ -64,7 +64,7 @@ export function FleetVehicleFields({
       </label>
       <label className="text-sm">
         Fuel
-        <input name="fuel" className={field} defaultValue={String(values?.fuel || "")} placeholder="As on the V5C, e.g. heavy oil" />
+        <input name="fuel" className={field} defaultValue={String(values?.fuel || "")} placeholder="As on the V5C, e.g. Diesel" />
       </label>
       <label className="text-sm">
         Date of first registration
