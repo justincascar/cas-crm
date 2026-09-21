@@ -55,6 +55,8 @@ function baseView(overrides: Partial<HireAgreementView> = {}): HireAgreementView
     dateOut: "2026-09-15T09:00:00.000Z",
     dateIn: "",
     dailyRatePence: standardDailyRatePence("S4", 30),
+    hireMileage: "",
+    hireFuelLevel: "",
     extras: {},
     clientVehiclePresent: true,
     clientMake: "Volkswagen",

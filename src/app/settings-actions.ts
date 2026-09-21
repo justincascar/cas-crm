@@ -57,6 +57,9 @@ export async function actionSaveAgreementLimits(formData: FormData) {
     setChaseIntervalDays("hire_agreement_renewal", String(formData.get("agreementRenewalAlertDay") || ""));
     setAgreementMaxDays(String(formData.get("agreementMaxDays") || ""));
   } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not save the agreement limits.";
+    redirect(`/settings?error=${encodeURIComponent(message)}`);
+  }
   revalidateSettings();
   redirect("/settings?saved=1");
 }

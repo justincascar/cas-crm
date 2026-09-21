@@ -61,6 +61,8 @@ export const CLAIM_EVENT_TYPES = [
   { key: "case_closed", label: "Case closed" },
   { key: "document_generated", label: "Document generated" },
   { key: "hire_group_charged_override", label: "Group Charged set above the client's own vehicle group" },
+  { key: "vehicle_handover_recorded", label: "Vehicle handover recorded" },
+  { key: "vehicle_handover_photos_added", label: "Condition photographs added to a handover" },
   { key: "liability_status_changed", label: "Liability status changed" },
   { key: "roadworthiness_changed", label: "Roadworthiness changed" },
   { key: "audatex_network_code_changed", label: "Audatex network code changed" },

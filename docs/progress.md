@@ -136,6 +136,12 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+21 September 2026 — Vehicle handover:
+
+- Staff record condition when a hire vehicle is delivered or collected, and when the client's own vehicle is recovered or returned. Each record stores mileage, fuel level (Empty, ¼, ½, ¾ or Full), a short yes/no check (spare wheel, tools, warning lights, tyres visibly legal), a damage note and photographs.
+- The record is timestamped and named to the staff member who saved it. It is not edited afterwards. A correction is a new record, with the reason in the note. Photographs can be added later; until then the record is marked incomplete and is still saved.
+- The latest delivery handover fills mileage and fuel level on the Hire Agreement hire page. The latest recovery handover fills mileage and fuel on the Storage & Recovery page. Tyre depths in millimetres, a hand-drawn diagram, tax disc, CD magazine and sat nav disc are not on the handover screen.
+
 21 September 2026 — Hire Agreement print layout:
 
 - Printing used the on-screen sidebar grid. With the sidebar hidden, the agreement fell into the leftover 240px column, so a 4-part file ran to about 35 physical pages.

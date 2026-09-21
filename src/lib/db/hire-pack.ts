@@ -8,6 +8,7 @@ import {
 } from "../documents/hire-pack-fields";
 import { formatUkDate, formatUkDateTime, nowUtcIso } from "../dates";
 import { describeHireAgreementParts } from "../documents/hire-agreement-parts";
+import { formatHandoverMileage, handoverReadingsForClaim, type HandoverReading } from "./handover";
 import { dobSaveError } from "../age";
 import { FieldValidationError } from "../form-validation";
 import { mobileNumberError } from "../phone-number";
@@ -127,6 +128,7 @@ export function getHirePack(claimId: string) {
     recoveryRecoveredAt: recoveryJob?.recovered_at ? String(recoveryJob.recovered_at) : null,
     hasReservation: Boolean(reservation),
   });
+  const handoverReadings = handoverReadingsForClaim(claimId, hire?.id ? String(hire.id) : null);
   const stored = savedRow || {};
   const address = [claim.address_line1, claim.town, claim.postcode].filter(Boolean).join(", ");
   const merged: HirePackData = {
@@ -181,6 +183,7 @@ export function getHirePack(claimId: string) {
     clientModel: String(claim.client_model || ""),
     packSaved: Boolean(savedRow),
     parts,
+    handoverReadings,
   };
 }
 
@@ -310,6 +313,16 @@ export function generateStorageRecoveryDocument(claimId: string, actorId: string
   return { documentId, missing: pack.srMissing };
 }
 
+function shownReading(reading: HandoverReading | null | undefined, fallback: string | number | null | undefined) {
+  if (reading) return `${formatHandoverMileage(reading.mileage)}`;
+  return v(fallback);
+}
+
+function shownFuel(reading: HandoverReading | null | undefined, fallback: string | number | null | undefined) {
+  if (reading) return reading.fuelLabel;
+  return v(fallback);
+}
+
 function v(value: string | number | null | undefined) {
   if (value === null || value === undefined || value === "" || value === 0) return "Unknown";
   return String(value);
@@ -353,8 +366,8 @@ ${missingBanner}
 <p>Hire vehicle: ${escape(hireVehicle)} &nbsp; ${escape(v(hire?.hire_reg))}</p>
 <table>
 <tr><th></th><th>Delivered to client</th><th>Collected from client</th></tr>
-<tr><td>Mileage</td><td>${escape(v(s.delivery_mileage))}</td><td>${escape(v(s.collection_mileage))}</td></tr>
-<tr><td>Fuel</td><td>${escape(v(s.delivery_fuel))}</td><td>${escape(v(s.collection_fuel))}</td></tr>
+<tr><td>Mileage</td><td>${escape(shownReading(pack.handoverReadings?.hireDelivery, s.delivery_mileage))}</td><td>${escape(shownReading(pack.handoverReadings?.hireCollection, s.collection_mileage))}</td></tr>
+<tr><td>Fuel</td><td>${escape(shownFuel(pack.handoverReadings?.hireDelivery, s.delivery_fuel))}</td><td>${escape(shownFuel(pack.handoverReadings?.hireCollection, s.collection_fuel))}</td></tr>
 <tr><td>Tyre depths</td><td colspan="2">${escape(v(s.delivery_tyres))}</td></tr>
 <tr><td>Interior</td><td colspan="2">${escape(v(s.delivery_interior))}</td></tr>
 <tr><td>Damage (delivery)</td><td colspan="2">${escape(v(s.delivery_damage))}</td></tr>
@@ -483,7 +496,7 @@ ${missingBanner}
 <h3>${OWN_VEHICLE_DETAILS_HEADING}</h3>
 <p>This is the client's own damaged vehicle being recovered and stored — not a hire vehicle.</p>
 <p>Make: ${escape(v(pack.clientMake))} &nbsp; Model: ${escape(v(pack.clientModel))} &nbsp; Reg: ${escape(v(pack.ctx.clientVehicleRegistration))}</p>
-<p>Mileage: ${escape(v(s.own_vehicle_mileage))} &nbsp; Fuel: ${escape(v(s.own_vehicle_fuel))}</p>
+<p>Mileage: ${escape(shownReading(pack.handoverReadings?.clientRecovery, s.own_vehicle_mileage))} &nbsp; Fuel: ${escape(shownFuel(pack.handoverReadings?.clientRecovery, s.own_vehicle_fuel))}</p>
 <p>Tyre depths NSF / OSF / NSR / OSR: ${escape(v(s.own_vehicle_tyres))}</p>
 <p>Damage: ${escape(v(s.own_vehicle_damage))}</p>
 <p>Recovered on: ${escape(recoveredOn)}</p>

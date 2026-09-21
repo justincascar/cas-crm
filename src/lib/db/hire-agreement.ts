@@ -13,6 +13,7 @@ import { formatUkDate, formatUkDateTime, nowUtcIso } from "../dates";
 import { formatGbp } from "../money";
 import { get, newId, run } from "./connection";
 import { recordClaimEvent } from "./chronology";
+import { formatHandoverMileage } from "./handover";
 import { getHirePack, type HirePackData } from "./hire-pack";
 
 export const HIRE_AGREEMENT_TEMPLATE_KEY = "hire_agreement";
@@ -54,6 +55,8 @@ export type HireAgreementView = {
   dateOut: string;
   dateIn: string;
   dailyRatePence: number | null;
+  hireMileage: string;
+  hireFuelLevel: string;
   extras: Record<string, number | null>;
   clientVehiclePresent: boolean;
   clientMake: string;
@@ -191,7 +194,8 @@ Transmission: ${shown(view.hireTransmission)} &nbsp; Fuel: ${shown(view.hireFuel
 Group of vehicle supplied (not used for the rate): ${escape(gtaGroupLabel(view.suppliedGroup))}<br/>
 Group Charged: ${shown(gtaGroupLabel(view.groupCharged) === GTA_NOT_CLASSIFIED ? "" : gtaGroupLabel(view.groupCharged))}<br/>
 Client's own vehicle group (the rating group): ${escape(gtaGroupLabel(view.clientGroup))}<br/>
-Date out: ${shown(dateOut)} &nbsp; Date in: ${escape(dateIn || "not entered")}</p>
+Date out: ${shown(dateOut)} &nbsp; Date in: ${escape(dateIn || "not entered")}<br/>
+Mileage at delivery: ${shown(view.hireMileage, "not entered")} &nbsp; Fuel level at delivery: ${shown(view.hireFuelLevel, "not entered")}</p>
 <h3>Charges</h3>
 <table>${chargeRows}</table>
 <p>All charges are subject to VAT at the current rate.</p>
@@ -394,6 +398,8 @@ export function buildHireAgreementView(
     dateOut: String(s.date_out || hire?.started_at || ""),
     dateIn: String(s.date_in || ""),
     dailyRatePence,
+    hireMileage: pack.handoverReadings?.hireDelivery ? formatHandoverMileage(pack.handoverReadings.hireDelivery.mileage) : "",
+    hireFuelLevel: pack.handoverReadings?.hireDelivery?.fuelLabel || "",
     extras: {
       sat_nav: pack.packSaved ? optionalPence(s.sat_nav_pence) : null,
       additional_driver: pack.packSaved ? optionalPence(s.additional_driver_pence) : null,
@@ -413,8 +419,12 @@ export function buildHireAgreementView(
     clientMake: String(pack.clientMake || ""),
     clientModel: String(pack.clientModel || ""),
     clientRegistration: clientReg,
-    ownMileage: s.own_vehicle_mileage,
-    ownFuel: String(s.own_vehicle_fuel || ""),
+    ownMileage: pack.handoverReadings?.clientRecovery
+      ? formatHandoverMileage(pack.handoverReadings.clientRecovery.mileage)
+      : s.own_vehicle_mileage,
+    ownFuel: pack.handoverReadings?.clientRecovery
+      ? pack.handoverReadings.clientRecovery.fuelLabel
+      : String(s.own_vehicle_fuel || ""),
     ownTyres: String(s.own_vehicle_tyres || ""),
     ownDamage: String(s.own_vehicle_damage || ""),
     storageDailyPence: pack.packSaved ? optionalPence(s.storage_daily_pence) : optionalPence(pack.claim.storage_rate_pence),

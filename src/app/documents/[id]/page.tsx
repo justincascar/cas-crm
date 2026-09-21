@@ -62,7 +62,9 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
       {specForTemplate(String(doc.template_key || ""))?.legalCitations ? (
         <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm print:hidden">{CAS_LEGAL_SIGNOFF_NOTICE}</p>
       ) : null}
-      {storedPath ? (
+      {storedPath && String(doc.mime_type || "").startsWith("image/") ? (
+        <img src={`/documents/${id}/file`} alt={String(doc.title)} className="max-w-full rounded-xl border border-line bg-white" />
+      ) : storedPath ? (
         <StoredFilePreview documentId={id} title={String(doc.title)} />
       ) : doc.body_html ? (
         <div className="letter-paper rounded-xl border border-line bg-card p-8" dangerouslySetInnerHTML={{ __html: String(doc.body_html) }} />

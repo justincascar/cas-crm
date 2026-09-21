@@ -187,6 +187,32 @@ function rebuildDocumentsTable(db: DatabaseSync) {
 export function migrate(db: DatabaseSync) {
   rebuildDocumentsTable(db);
   db.exec(`
+    CREATE TABLE IF NOT EXISTS vehicle_handovers (
+      id TEXT PRIMARY KEY,
+      claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+      hire_episode_id TEXT REFERENCES hire_episodes(id) ON DELETE CASCADE,
+      event_kind TEXT NOT NULL,
+      occurred_at TEXT NOT NULL,
+      recorded_by TEXT NOT NULL REFERENCES staff(id),
+      mileage INTEGER NOT NULL,
+      fuel_level TEXT NOT NULL,
+      spare_wheel TEXT NOT NULL,
+      tools_present TEXT NOT NULL,
+      warning_lights_off TEXT NOT NULL,
+      tyres_legal TEXT NOT NULL,
+      condition_note TEXT NOT NULL DEFAULT '',
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_vehicle_handovers_claim ON vehicle_handovers(claim_id, occurred_at);
+    CREATE TABLE IF NOT EXISTS vehicle_handover_photos (
+      id TEXT PRIMARY KEY,
+      handover_id TEXT NOT NULL REFERENCES vehicle_handovers(id) ON DELETE CASCADE,
+      document_id TEXT NOT NULL REFERENCES documents(id),
+      taken_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_vehicle_handover_photos ON vehicle_handover_photos(handover_id);
+  `);
+  db.exec(`
     CREATE TABLE IF NOT EXISTS claim_events (
       id TEXT PRIMARY KEY,
       claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,

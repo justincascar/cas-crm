@@ -475,6 +475,8 @@ function poundsToPence(formData: FormData, name: string) {
 export async function actionSaveHirePack(formData: FormData) {
   await requireStaff();
   const claimId = String(formData.get("claimId"));
+  const prior = getHirePack(claimId);
+  if (!prior) throw new Error("File not found.");
   try {
     const rating = prepareHireRating({
       claimId,
@@ -530,18 +532,18 @@ export async function actionSaveHirePack(formData: FormData) {
     cannot_fund_hire: formData.get("cannot_fund_hire") ? 1 : 0,
     no_other_credit: formData.get("no_other_credit") ? 1 : 0,
     means_notes: String(formData.get("means_notes") || ""),
-    own_vehicle_mileage: Number(formData.get("own_vehicle_mileage") || 0) || null,
-    own_vehicle_fuel: String(formData.get("own_vehicle_fuel") || ""),
-    own_vehicle_tyres: String(formData.get("own_vehicle_tyres") || ""),
-    own_vehicle_damage: String(formData.get("own_vehicle_damage") || ""),
-    delivery_mileage: Number(formData.get("delivery_mileage") || 0) || null,
-    delivery_fuel: String(formData.get("delivery_fuel") || ""),
-    delivery_tyres: String(formData.get("delivery_tyres") || ""),
-    delivery_damage: String(formData.get("delivery_damage") || ""),
-    delivery_interior: String(formData.get("delivery_interior") || ""),
-    collection_mileage: Number(formData.get("collection_mileage") || 0) || null,
-    collection_fuel: String(formData.get("collection_fuel") || ""),
-    collection_damage: String(formData.get("collection_damage") || ""),
+    own_vehicle_mileage: prior.stored.own_vehicle_mileage,
+    own_vehicle_fuel: prior.stored.own_vehicle_fuel,
+    own_vehicle_tyres: prior.stored.own_vehicle_tyres,
+    own_vehicle_damage: prior.stored.own_vehicle_damage,
+    delivery_mileage: prior.stored.delivery_mileage,
+    delivery_fuel: prior.stored.delivery_fuel,
+    delivery_tyres: prior.stored.delivery_tyres,
+    delivery_damage: prior.stored.delivery_damage,
+    delivery_interior: prior.stored.delivery_interior,
+    collection_mileage: prior.stored.collection_mileage,
+    collection_fuel: prior.stored.collection_fuel,
+    collection_damage: prior.stored.collection_damage,
     storage_daily_pence: poundsToPence(formData, "storage_daily"),
     recovery_pence: poundsToPence(formData, "recovery"),
     driver_delivery_start: String(formData.get("driver_delivery_start") || ""),

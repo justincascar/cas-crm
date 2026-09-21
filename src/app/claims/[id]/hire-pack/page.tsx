@@ -327,69 +327,14 @@ export default async function HirePackPage({
         </fieldset>
 
         <fieldset className="space-y-3 rounded-xl border border-line bg-card p-5">
-          <legend className="font-serif text-xl text-navy-deep">Your Own Vehicle Details (storage &amp; recovery)</legend>
+          <legend className="font-serif text-xl text-navy-deep">Vehicle condition at handover</legend>
           <p className="text-sm text-slate">
-            The client&apos;s damaged vehicle — not the hire vehicle. Storage &amp; Recovery can be generated without a hire agreement. Solicitor-reviewed standalone wording is still to come.
+            Mileage and fuel for the hire vehicle and the client&apos;s own vehicle are taken from the handover record.
+            Record each delivery, collection, recovery or return there. A saved record stays locked.
           </p>
-          <p className="text-sm">
-            {pack.clientMake} {pack.clientModel} {pack.ctx.clientVehicleRegistration || "Unknown"}
-          </p>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-sm">
-              Mileage
-              <input name="own_vehicle_mileage" type="number" className={field} defaultValue={s.own_vehicle_mileage ? String(s.own_vehicle_mileage) : ""} />
-            </label>
-            <label className="text-sm">
-              Fuel (E / 1/4 / 1/2 / 3/4 / F)
-              <input name="own_vehicle_fuel" className={field} defaultValue={String(s.own_vehicle_fuel || "")} />
-            </label>
-            <label className="text-sm sm:col-span-2">
-              Tyre depths NSF / OSF / NSR / OSR
-              <input name="own_vehicle_tyres" className={field} defaultValue={String(s.own_vehicle_tyres || "")} />
-            </label>
-            <label className="text-sm sm:col-span-2">
-              Damage
-              <input name="own_vehicle_damage" className={field} defaultValue={String(s.own_vehicle_damage || "")} />
-            </label>
-          </div>
-        </fieldset>
-
-        <fieldset className="space-y-3 rounded-xl border border-line bg-card p-5">
-          <legend className="font-serif text-xl text-navy-deep">Handover / collection (hire vehicle)</legend>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-sm">
-              Delivery mileage
-              <input name="delivery_mileage" type="number" className={field} defaultValue={s.delivery_mileage ? String(s.delivery_mileage) : ""} />
-            </label>
-            <label className="text-sm">
-              Collection mileage
-              <input name="collection_mileage" type="number" className={field} defaultValue={s.collection_mileage ? String(s.collection_mileage) : ""} />
-            </label>
-            <label className="text-sm">
-              Delivery fuel (E / 1/4 / 1/2 / 3/4 / F)
-              <input name="delivery_fuel" className={field} defaultValue={String(s.delivery_fuel || "")} />
-            </label>
-            <label className="text-sm">
-              Collection fuel
-              <input name="collection_fuel" className={field} defaultValue={String(s.collection_fuel || "")} />
-            </label>
-            <label className="text-sm sm:col-span-2">
-              Tyre depths NSF / OSF / NSR / OSR
-              <input name="delivery_tyres" className={field} defaultValue={String(s.delivery_tyres || "")} />
-            </label>
-            <label className="text-sm">
-              Interior cleanliness
-              <input name="delivery_interior" className={field} defaultValue={String(s.delivery_interior || "")} />
-            </label>
-            <label className="text-sm">
-              Damage on delivery
-              <input name="delivery_damage" className={field} defaultValue={String(s.delivery_damage || "")} />
-            </label>
-            <label className="text-sm sm:col-span-2">
-              Damage on collection
-              <input name="collection_damage" className={field} defaultValue={String(s.collection_damage || "")} />
-            </label>
-          </div>
+          <Link href={`/claims/${id}/handover`} className="inline-block text-sm text-teal-dark underline">
+            Record a handover
+          </Link>
         </fieldset>
 
         <fieldset className="space-y-3 rounded-xl border border-dashed border-copper/40 bg-[#fbf6ec] p-5">
