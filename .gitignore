@@ -15,3 +15,10 @@ coverage
 *.db
 *.db-wal
 *.db-shm
+
+# V5C OCR scratch (source PDFs stay on the desktop; stored copies live in %LOCALAPPDATA%\CAS-CRM\files)
+tmp-v5c-extract/
+tmp-v5c-ocr/
+tmp-v5c-pages/
+eng.traineddata
+tsconfig.tsbuildinfo

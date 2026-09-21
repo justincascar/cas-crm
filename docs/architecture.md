@@ -7,6 +7,7 @@ Justin needs a maintainable system on a Windows PC, without buying hosting yet. 
 - **Next.js** — one codebase for screens and server logic.
 - **SQLite via Node’s built-in `node:sqlite`** — persistent file database, no separate database server, no Visual Studio build tools.
 - **Database location** — `%LOCALAPPDATA%\CAS-CRM\cas-crm.sqlite` so OneDrive cannot lock it.
+- **Stored files** — `%LOCALAPPDATA%\CAS-CRM\files`. Each file is a `documents` row (type tag such as V5C, original filename, link to a vehicle and/or a claim).
 - **Tailwind CSS** — layout without a separate design kit.
 
 PostgreSQL can replace SQLite later if CAS hosts a shared office server. Lookup, email and WhatsApp sit behind adapter interfaces so providers can change.

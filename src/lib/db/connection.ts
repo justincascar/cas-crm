@@ -7,6 +7,7 @@ import { ensureEngineers } from "./engineers";
 import { ensureKnownInsurers } from "./insurers";
 import { ensureDefaultVehicleLocationSetting } from "./vehicle-location";
 import { ensureChaseSettings, ensureDemoChases } from "./chase";
+import { ensureRealFleet } from "./fleet";
 import { migrate } from "./migrate";
 
 type GlobalDb = typeof globalThis & { __casDb?: DatabaseSync };
@@ -37,6 +38,7 @@ function openDatabase(): DatabaseSync {
   ensureChaseSettings(db);
   ensureDemoChases(db);
   ensureStaffAuth(db);
+  ensureRealFleet(db);
   backfillChronologyIfEmpty(db);
   preparedDatabases.add(db);
   return db;

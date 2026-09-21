@@ -7,11 +7,6 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["from_address", "TEXT"],
     ["template_key", "TEXT"],
   ],
-  documents: [
-    ["body_html", "TEXT"],
-    ["template_key", "TEXT"],
-    ["missing_json", "TEXT"],
-  ],
   people: [
     ["title", "TEXT"],
     ["forename", "TEXT"],
@@ -27,6 +22,29 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["mot_status", "TEXT"],
     ["insurance_recorded", "TEXT"],
     ["details_match_client", "INTEGER"],
+    ["engine_cc", "INTEGER"],
+    ["first_registered_on", "TEXT"],
+    ["vehicle_class", "TEXT"],
+    ["v5c_missing_json", "TEXT"],
+  ],
+  fleet_vehicles: [
+    ["is_real", "INTEGER NOT NULL DEFAULT 0"],
+    ["removed_at", "TEXT"],
+    ["removed_reason", "TEXT"],
+    ["v5c_source_file", "TEXT"],
+  ],
+  documents: [
+    ["body_html", "TEXT"],
+    ["template_key", "TEXT"],
+    ["missing_json", "TEXT"],
+    ["vehicle_id", "TEXT"],
+    ["fleet_vehicle_id", "TEXT"],
+    ["document_type", "TEXT"],
+    ["original_filename", "TEXT"],
+    ["stored_relpath", "TEXT"],
+    ["mime_type", "TEXT"],
+    ["byte_size", "INTEGER"],
+    ["created_by", "TEXT"],
   ],
   claims: [
     ["client_role", "TEXT"],
@@ -88,7 +106,82 @@ const TABLES: Record<string, Array<[string, string]>> = {
   ],
 };
 
+function tableColumns(db: DatabaseSync, table: string): Array<{ name: string; notnull: number }> {
+  return db.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string; notnull: number }>;
+}
+
+function rebuildDocumentsTable(db: DatabaseSync) {
+  const cols = tableColumns(db, "documents");
+  if (!cols.length) return;
+  const claim = cols.find((c) => c.name === "claim_id");
+  const required = [
+    "vehicle_id",
+    "fleet_vehicle_id",
+    "document_type",
+    "original_filename",
+    "stored_relpath",
+    "mime_type",
+    "byte_size",
+    "created_by",
+  ];
+  const hasRequired = required.every((name) => cols.some((c) => c.name === name));
+  if (claim && claim.notnull === 0 && hasRequired) return;
+
+  const existingNames = new Set(cols.map((c) => c.name));
+  const copy = [
+    "id",
+    "claim_id",
+    "title",
+    "kind",
+    "version",
+    "signed",
+    "simulated",
+    "body_html",
+    "template_key",
+    "missing_json",
+    "created_at",
+    "vehicle_id",
+    "fleet_vehicle_id",
+    "document_type",
+    "original_filename",
+    "stored_relpath",
+    "mime_type",
+    "byte_size",
+    "created_by",
+  ].filter((name) => existingNames.has(name));
+
+  db.exec("PRAGMA foreign_keys = OFF");
+  db.exec(`
+    CREATE TABLE documents_migrated (
+      id TEXT PRIMARY KEY,
+      claim_id TEXT REFERENCES claims(id) ON DELETE CASCADE,
+      vehicle_id TEXT REFERENCES vehicles(id),
+      fleet_vehicle_id TEXT REFERENCES fleet_vehicles(id),
+      title TEXT NOT NULL,
+      kind TEXT,
+      document_type TEXT,
+      version INTEGER NOT NULL DEFAULT 1,
+      signed INTEGER NOT NULL DEFAULT 0,
+      simulated INTEGER NOT NULL DEFAULT 1,
+      body_html TEXT,
+      template_key TEXT,
+      missing_json TEXT,
+      original_filename TEXT,
+      stored_relpath TEXT,
+      mime_type TEXT,
+      byte_size INTEGER,
+      created_by TEXT,
+      created_at TEXT NOT NULL
+    );
+  `);
+  db.exec(`INSERT INTO documents_migrated (${copy.join(", ")}) SELECT ${copy.join(", ")} FROM documents`);
+  db.exec("DROP TABLE documents");
+  db.exec("ALTER TABLE documents_migrated RENAME TO documents");
+  db.exec("PRAGMA foreign_keys = ON");
+}
+
 export function migrate(db: DatabaseSync) {
+  rebuildDocumentsTable(db);
   db.exec(`
     CREATE TABLE IF NOT EXISTS claim_events (
       id TEXT PRIMARY KEY,
@@ -243,4 +336,11 @@ export function migrate(db: DatabaseSync) {
       }
     }
   }
+
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_documents_claim ON documents(claim_id);
+    CREATE INDEX IF NOT EXISTS idx_documents_fleet ON documents(fleet_vehicle_id);
+    CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(document_type);
+    CREATE INDEX IF NOT EXISTS idx_fleet_real ON fleet_vehicles(is_real, removed_at);
+  `);
 }

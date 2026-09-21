@@ -382,7 +382,7 @@ export function getDocument(id: string) {
   return get<Record<string, string | number | null>>(
     `SELECT d.*, c.file_reference, p.full_name AS client_name
      FROM documents d
-     JOIN claims c ON c.id = d.claim_id
+     LEFT JOIN claims c ON c.id = d.claim_id
      LEFT JOIN people p ON p.id = c.client_person_id
      WHERE d.id = ?`,
     [id],

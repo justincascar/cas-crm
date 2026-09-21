@@ -194,7 +194,9 @@ export function getDashboard() {
     if (t.due_at && isBeforeLondonDay(t.due_at)) byHandler[name].overdue += 1;
   }
 
-  const fleet = all<{ status: string; c: number }>("SELECT status, COUNT(*) AS c FROM fleet_vehicles GROUP BY status");
+  const fleet = all<{ status: string; c: number }>(
+    "SELECT status, COUNT(*) AS c FROM fleet_vehicles WHERE removed_at IS NULL GROUP BY status",
+  );
   const fleetMap = Object.fromEntries(fleet.map((r) => [r.status, Number(r.c)]));
 
   const lines = all<{
@@ -423,12 +425,15 @@ export function listTasks(when?: string) {
   return rows;
 }
 
-export function listFleet() {
+export function listFleet(opts?: { includeRemoved?: boolean }) {
+  const where = opts?.includeRemoved ? "" : "WHERE fv.removed_at IS NULL";
   return all<Record<string, string | number | null>>(`
-    SELECT fv.*, v.registration, v.make, v.model, v.transmission, v.seats, v.body_type, v.fuel
+    SELECT fv.*, v.registration, v.make, v.model, v.transmission, v.seats, v.body_type, v.fuel,
+           v.colour, v.engine_cc, v.first_registered_on, v.vehicle_class, v.v5c_missing_json
     FROM fleet_vehicles fv JOIN vehicles v ON v.id = fv.vehicle_id
-    ORDER BY v.registration
-  `);
+    ${where}
+    ORDER BY CASE WHEN fv.is_real = 1 THEN 0 ELSE 1 END, v.registration COLLATE NOCASE
+  `).map((row) => ({ ...row }));
 }
 
 export function listReservations() {
@@ -776,9 +781,9 @@ function latestAudatexCodeForInsurer(params: {
          )
        )
      ORDER BY COALESCE(
-       (SELECT MAX(e.occurred_at) FROM claim_events e
+       (SELECT MAX(e.rowid) FROM claim_events e
         WHERE e.claim_id = c.id AND e.event_type = ?),
-       c.updated_at
+       0
      ) DESC, c.updated_at DESC, c.id DESC
      LIMIT 1`,
     [params.excludeClaimId, insurerName, insurerName, params.eventType],
@@ -850,6 +855,11 @@ export function createReservation(input: {
     existing,
   });
   if (!decision.ok) throw new Error(decision.reason);
+  const fleetRow = get<{ removed_at: string | null }>(`SELECT removed_at FROM fleet_vehicles WHERE id = ?`, [
+    input.fleetVehicleId,
+  ]);
+  if (!fleetRow) throw new Error("Vehicle not found.");
+  if (fleetRow.removed_at) throw new Error("That vehicle has been removed from the fleet and cannot be reserved.");
   run(
     `INSERT INTO reservations(id, fleet_vehicle_id, claim_id, start_at, end_at, kind, status, charges_started, created_by, created_at)
      VALUES (?, ?, ?, ?, ?, ?, 'reserved', 0, ?, ?)`,

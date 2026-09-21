@@ -113,6 +113,13 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - Hire/Fleet reservations are recorded against the signed-in staff member, not always Sian. Empty Documents list rows (no generated body) are labelled as simulated placeholders.
 - Hire agreement renewal is a shared chase type. It counts from the current signed agreement start (amber approaching from day 70, red due from day 80, red overdue from day 88), not from fleet booking dates, and not for courtesy/staff use unless a hire agreement is on the file. Logging a renewal adds a new agreement period and keeps the earlier ones. An ended hire never alerts. The supplied pack still says 89 days; the CRM operational limit stays 88 unless changed in Settings.
 
+21 September 2026 — Real CAS fleet and stored V5Cs:
+
+- Forty-five genuine fleet vehicles imported from V5C PDFs, tagged `is_real = 1`, kept separate from fictional TEST CAS 1–10. A TEST-data reset that deletes `is_real = 0` must not wipe them.
+- V5C fields stored only where legible. Gearbox and seating left blank (not on a V5C). Vehicle class covers car, van, motorcycle, campervan, and wheelchair-accessible taxi.
+- Each V5C PDF is copied into `%LOCALAPPDATA%\CAS-CRM\files` and linked from `documents` (type `V5C`, vehicle/fleet id). Staff can view the original from the vehicle record.
+- Hire/Fleet can add a real vehicle, edit details, and soft-remove (never hard-delete). Removing a vehicle with an active or future reservation warns and requires confirmation. Booking history stays.
+
 Blocked: provider accounts, per-file permissions, shared hosting, live DVLA, live mailbox send.
 
 ## Not yet claimed

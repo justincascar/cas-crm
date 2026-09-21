@@ -55,6 +55,10 @@ CREATE TABLE IF NOT EXISTS vehicles (
   lookup_source TEXT,
   lookup_incomplete INTEGER NOT NULL DEFAULT 0,
   provenance TEXT,
+  engine_cc INTEGER,
+  first_registered_on TEXT,
+  vehicle_class TEXT,
+  v5c_missing_json TEXT,
   tax_status TEXT,
   mot_status TEXT,
   insurance_recorded TEXT,
@@ -76,7 +80,11 @@ CREATE TABLE IF NOT EXISTS fleet_vehicles (
   vehicle_id TEXT NOT NULL REFERENCES vehicles(id),
   status TEXT NOT NULL,
   location TEXT,
-  notes TEXT
+  notes TEXT,
+  is_real INTEGER NOT NULL DEFAULT 0,
+  removed_at TEXT,
+  removed_reason TEXT,
+  v5c_source_file TEXT
 );
 
 CREATE TABLE IF NOT EXISTS claims (
@@ -290,15 +298,23 @@ CREATE TABLE IF NOT EXISTS correspondence (
 
 CREATE TABLE IF NOT EXISTS documents (
   id TEXT PRIMARY KEY,
-  claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+  claim_id TEXT REFERENCES claims(id) ON DELETE CASCADE,
+  vehicle_id TEXT REFERENCES vehicles(id),
+  fleet_vehicle_id TEXT REFERENCES fleet_vehicles(id),
   title TEXT NOT NULL,
   kind TEXT,
+  document_type TEXT,
   version INTEGER NOT NULL DEFAULT 1,
   signed INTEGER NOT NULL DEFAULT 0,
   simulated INTEGER NOT NULL DEFAULT 1,
   body_html TEXT,
   template_key TEXT,
   missing_json TEXT,
+  original_filename TEXT,
+  stored_relpath TEXT,
+  mime_type TEXT,
+  byte_size INTEGER,
+  created_by TEXT,
   created_at TEXT NOT NULL
 );
 

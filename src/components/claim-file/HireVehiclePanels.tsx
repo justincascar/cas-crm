@@ -42,7 +42,7 @@ export function HireVehiclePanel({
             {fleet.map((v) => (
               <tr key={String(v.id)}>
                 <td className="ref">{String(v.id)}</td>
-                <td>{String(v.body_type || "Standard")}</td>
+                <td>{String(v.vehicle_class || v.body_type || "Standard").replaceAll("_", " ")}</td>
                 <td>{String(v.registration)}</td>
                 <td>{String(v.make)}</td>
                 <td>{String(v.model)}</td>
