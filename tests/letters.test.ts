@@ -3,6 +3,11 @@ import { describe, it } from "node:test";
 import { generateLetter } from "../src/lib/documents/templates.ts";
 import { generateEmail } from "../src/lib/documents/email-templates.ts";
 import { DOCUMENT_TEMPLATES } from "../src/lib/documents/catalog.ts";
+import {
+  DOCUMENT_PLACEHOLDER_NOTE,
+  documentHasGeneratedBody,
+  documentListSignedLabel,
+} from "../src/lib/documents/list-display.ts";
 import { emptyCorrespondenceFields } from "../src/lib/documents/correspondence.ts";
 import { latestDates } from "../src/lib/domain/events.ts";
 import { SimulatedEmailGateway } from "../src/lib/email/gateway.ts";
@@ -277,5 +282,17 @@ describe("chronology dates", () => {
     ]);
     assert.equal(dates.engineer_instructed, "2026-09-03T09:00:00.000Z");
     assert.equal(dates.repairs_started, "2026-09-10T08:00:00.000Z");
+  });
+});
+
+describe("documents list placeholders", () => {
+  it("does not present an empty row as a stored original", () => {
+    assert.equal(documentHasGeneratedBody(null), false);
+    assert.equal(documentHasGeneratedBody(""), false);
+    assert.equal(documentHasGeneratedBody("<p>Engineer instruction</p>"), true);
+    assert.equal(documentListSignedLabel({ body_html: null, signed: 0 }), DOCUMENT_PLACEHOLDER_NOTE);
+    assert.match(documentListSignedLabel({ body_html: null, signed: 1 }), /simulated signed copy/i);
+    assert.equal(documentListSignedLabel({ body_html: "<p>x</p>", signed: 0 }), "Unsigned");
+    assert.equal(documentListSignedLabel({ body_html: "<p>x</p>", signed: 1 }), "Signed copy on file");
   });
 });

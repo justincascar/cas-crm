@@ -4,6 +4,8 @@ import { DatabaseSync } from "node:sqlite";
 import { describe, it } from "node:test";
 import path from "node:path";
 import { seed } from "../src/lib/db/seed.ts";
+import { withDatabase } from "../src/lib/db/connection.ts";
+import { createReservation } from "../src/lib/db/queries.ts";
 
 function seeded() {
   const schema = fs.readFileSync(path.join(process.cwd(), "src/lib/db/schema.sql"), "utf8");
@@ -46,6 +48,31 @@ describe("seeded prototype data", () => {
       "SELECT title FROM claim_events WHERE claim_id = 'c3' AND event_type = 'initial_letter_tp_insurer'",
     ).get() as { title: string };
     assert.equal(letter.title, "Initial letter to third-party insurer");
+    const placeholders = db
+      .prepare(`SELECT title, body_html, signed FROM documents WHERE id IN ('d1','d2','d3','d4','d5')`)
+      .all() as Array<{ title: string; body_html: string | null; signed: number }>;
+    assert.equal(placeholders.length, 5);
+    assert.ok(placeholders.every((row) => !row.body_html));
+    db.close();
+  });
+
+  it("records a reservation against the staff member passed in, not a hardcoded handler", () => {
+    const db = seeded();
+    withDatabase(db, () => {
+      createReservation({
+        fleetVehicleId: "fv-4",
+        startAt: "2026-10-01T08:00:00.000Z",
+        endAt: "2026-10-05T18:00:00.000Z",
+        kind: "staff",
+        createdBy: "staff-justin",
+      });
+      const row = db.prepare(`SELECT created_by, charges_started FROM reservations WHERE fleet_vehicle_id = 'fv-4' ORDER BY created_at DESC`).get() as {
+        created_by: string;
+        charges_started: number;
+      };
+      assert.equal(row.created_by, "staff-justin");
+      assert.equal(row.charges_started, 0);
+    });
     db.close();
   });
 });

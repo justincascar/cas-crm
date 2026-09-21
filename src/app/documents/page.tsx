@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/ClaimTable";
 import { requireStaff } from "@/lib/auth/session";
 import { listDocuments } from "@/lib/db/queries";
+import { documentHasGeneratedBody, documentListSignedLabel, DOCUMENT_PLACEHOLDER_NOTE } from "@/lib/documents/list-display";
 
 export default async function DocumentsPage() {
   await requireStaff();
@@ -10,7 +11,7 @@ export default async function DocumentsPage() {
     <div>
       <PageHeader
         title="Documents"
-        subtitle="Letters are generated from the file history dates. CAS's own templates will replace this placeholder wording. Signed originals will be preserved."
+        subtitle="Letters generated from a file use CAS's supplied templates and can be opened here. Empty rows are simulated placeholders, not stored originals."
       />
       <div className="overflow-x-auto rounded-xl border border-line bg-card">
         <table className="ledger-table">
@@ -23,26 +24,32 @@ export default async function DocumentsPage() {
             </tr>
           </thead>
           <tbody>
-            {docs.map((d) => (
-              <tr key={String(d.id)}>
-                <td>
-                  <Link className="ref text-teal-dark hover:underline" href={`/claims/${d.claim_id}`}>
-                    {String(d.file_reference)}
-                  </Link>
-                </td>
-                <td>
-                  {d.body_html ? (
-                    <Link className="text-teal-dark underline" href={`/documents/${d.id}`}>
-                      {String(d.title)}
+            {docs.map((d) => {
+              const onFile = documentHasGeneratedBody(d.body_html);
+              return (
+                <tr key={String(d.id)}>
+                  <td>
+                    <Link className="ref text-teal-dark hover:underline" href={`/claims/${d.claim_id}`}>
+                      {String(d.file_reference)}
                     </Link>
-                  ) : (
-                    String(d.title)
-                  )}
-                </td>
-                <td>{String(d.kind)}</td>
-                <td>{Number(d.signed) ? "Signed copy on file" : "Unsigned"}</td>
-              </tr>
-            ))}
+                  </td>
+                  <td>
+                    {onFile ? (
+                      <Link className="text-teal-dark underline" href={`/documents/${d.id}`}>
+                        {String(d.title)}
+                      </Link>
+                    ) : (
+                      <span>
+                        {String(d.title)}
+                        <span className="mt-1 block text-xs text-slate">{DOCUMENT_PLACEHOLDER_NOTE}</span>
+                      </span>
+                    )}
+                  </td>
+                  <td>{String(d.kind)}</td>
+                  <td>{documentListSignedLabel(d)}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

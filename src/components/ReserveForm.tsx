@@ -58,7 +58,6 @@ export function ReserveForm({
           <option value="staff">Staff booking</option>
         </select>
       </label>
-      <input type="hidden" name="createdBy" value="staff-sian" />
       <div className="flex items-end">
         <button className="rounded-md bg-navy px-4 py-2 text-sm text-white" type="submit">
           Reserve

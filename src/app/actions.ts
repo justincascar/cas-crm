@@ -149,7 +149,7 @@ export async function actionUpdateAudatexCodes(formData: FormData) {
 }
 
 export async function actionReserveVehicle(formData: FormData) {
-  await requireStaff();
+  const staff = await requireStaff();
   const claimId = String(formData.get("claimId") || "");
   const returnTo = String(formData.get("returnTo") || "");
   try {
@@ -159,7 +159,7 @@ export async function actionReserveVehicle(formData: FormData) {
       startAt: new Date(String(formData.get("startAt"))).toISOString(),
       endAt: new Date(String(formData.get("endAt"))).toISOString(),
       kind: String(formData.get("kind") || "hire"),
-      createdBy: String(formData.get("createdBy") || "staff-sian"),
+      createdBy: staff.id,
     });
     revalidatePath("/hire");
     if (claimId) {
@@ -298,8 +298,9 @@ export async function actionPreviewCorrespondence(formData: FormData) {
     String(formData.get("letterDate") || "") || undefined,
     String(formData.get("engineerId") || "") || undefined,
   );
+  const to = "to" in preview && typeof preview.to === "string" ? preview.to : "";
   return {
-    to: "to" in preview ? preview.to : "",
+    to,
     subject: preview.subject,
     body: preview.text,
     html: preview.html,
