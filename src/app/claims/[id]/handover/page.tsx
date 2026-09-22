@@ -15,6 +15,7 @@ import {
   listVehicleHandovers,
   MAX_DAMAGE_PHOTOS,
   missingStandardShots,
+  requiredShotProgress,
   SCAN_SLOTS,
   shotsForSet,
   type HandoverPhoto,
@@ -61,40 +62,22 @@ function cameraOrFile(input: { cameraName: string; fileName: string; cameraLabel
   );
 }
 
-function latestShot(photos: HandoverPhoto[], slot: string) {
-  return [...photos].reverse().find((photo) => photo.slot === slot) || null;
-}
-
 function guidedShots(claimId: string, handoverId: string, photos: HandoverPhoto[], shotSet: string) {
   const post = `/claims/${claimId}/handover/photo`;
   const damage = photos.filter((photo) => photo.slot === DAMAGE_SHOT);
-  const required = shotsForSet(shotSet);
-  const firstMissing = missingStandardShots(photos.map((photo) => photo.slot), shotSet)[0]?.slot;
-  const savedWord = required.length === 7 ? "seven" : "five";
+  const progress = requiredShotProgress(photos.map((photo) => photo.slot), shotSet);
+  const savedWord = progress.total === 7 ? "seven" : "five";
   return (
     <div className="space-y-4">
-      {required.map((shot) => {
-        const taken = latestShot(photos, shot.slot);
-        return (
-          <div key={shot.slot} id={`shot-${shot.slot}`} className="scroll-mt-4 rounded-md border border-line p-3">
-            <div className="mb-2 flex items-baseline justify-between gap-2">
-              <p className="text-sm font-medium">{shot.label}</p>
-              <p className={taken ? "text-sm font-medium text-ok" : "text-sm text-slate"}>{taken ? "Taken" : "Not taken yet"}</p>
-            </div>
-            {taken ? (
-              <a href={`/documents/${taken.documentId}`}>
-                <img src={`/documents/${taken.documentId}/file`} alt={shot.label} className="h-24 w-32 rounded-md border border-line object-cover" />
-              </a>
-            ) : (
-              <>
-                {firstMissing === shot.slot ? <p className="mb-2 text-sm text-teal-dark">Take this photograph next.</p> : null}
-                <ShotCamera action={post} claimId={claimId} handoverId={handoverId} slot={shot.slot} cameraLabel="Open camera" />
-              </>
-            )}
-          </div>
-        );
-      })}
-      <div id="shot-damage" className="scroll-mt-4 rounded-md border border-line p-3">
+      <p className="text-base font-semibold">{progress.label}</p>
+      {progress.outstanding.map((shot, index) => (
+        <div key={shot.slot} id={`shot-${handoverId}-${shot.slot}`} className="scroll-mt-4 rounded-md border border-line p-3">
+          <p className="mb-2 text-sm font-medium">{shot.label}</p>
+          {index === 0 ? <p className="mb-2 text-sm text-teal-dark">Take this photograph next.</p> : null}
+          <ShotCamera action={post} claimId={claimId} handoverId={handoverId} slot={shot.slot} cameraLabel="Open camera" />
+        </div>
+      ))}
+      <div id={`shot-${handoverId}-damage`} className="scroll-mt-4 rounded-md border border-line p-3">
         <p className="text-sm font-medium">Damage photos</p>
         <p className="mt-1 text-sm text-slate">
           Optional. Close-ups of any damage. Up to {MAX_DAMAGE_PHOTOS}. {damage.length} of {MAX_DAMAGE_PHOTOS} saved.
@@ -118,8 +101,8 @@ function guidedShots(claimId: string, handoverId: string, photos: HandoverPhoto[
           <p className="mt-3 text-sm text-slate">Six damage photographs are saved.</p>
         )}
       </div>
-      {firstMissing ? null : (
-        <div id="shot-finish" className="scroll-mt-4 rounded-md border border-ok/40 bg-[#eef6ee] p-3">
+      {progress.outstanding.length > 0 ? null : (
+        <div id={`shot-${handoverId}-finish`} className="scroll-mt-4 rounded-md border border-ok/40 bg-[#eef6ee] p-3">
           <p className="text-sm">The {savedWord} photographs are saved. Damage photographs are optional.</p>
           <form method="post" action={`/claims/${claimId}/handover/finish`} className="mt-3">
             <input type="hidden" name="claimId" value={claimId} />

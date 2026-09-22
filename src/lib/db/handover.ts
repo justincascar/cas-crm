@@ -70,6 +70,12 @@ export const SHOT_SET_SEVEN = "seven";
 export function shotsForSet(shotSet: string | null | undefined) {
   return shotSet === SHOT_SET_SEVEN ? STANDARD_SHOTS : ORIGINAL_SHOTS;
 }
+
+/** A hire car is one of our fleet, so it stays on the original five. The customer's own vehicle needs Dash and Chassis number. */
+export function shotSetForKind(kind: string) {
+  const event = handoverEvent(kind);
+  return event?.needsBooking ? SHOT_SET_FIVE : SHOT_SET_SEVEN;
+}
 export const DAMAGE_SHOT = "damage";
 
 export type HandoverFileInput = {
@@ -172,6 +178,19 @@ export function missingStandardShots(
 ): Array<(typeof STANDARD_SHOTS)[number]> {
   const have = new Set(slots);
   return shotsForSet(shotSet).filter((shot) => !have.has(shot.slot));
+}
+
+/** What is still on screen. A saved required shot drops off the list. Damage photographs are not counted. */
+export function requiredShotProgress(slots: Iterable<string>, shotSet: string | null | undefined = SHOT_SET_SEVEN) {
+  const required = shotsForSet(shotSet);
+  const outstanding = missingStandardShots(slots, shotSet);
+  const done = required.length - outstanding.length;
+  return {
+    done,
+    total: required.length,
+    outstanding,
+    label: `${done} of ${required.length} done`,
+  };
 }
 
 /** Incomplete until every photograph in this handover's set is present. Damage photographs do not count. */
@@ -424,6 +443,7 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
   const enteredAt = nowUtcIso();
   const actual = actualHandover(input, staff, enteredAt);
   const occurredAt = actual.occurredAt;
+  const shotSet = shotSetForKind(event.kind);
   const id = newId("vh");
   const db = getDb();
   db.exec("BEGIN");
@@ -450,7 +470,7 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
         note,
         enteredAt,
         actual.driverId,
-        SHOT_SET_SEVEN,
+        shotSet,
       ],
     );
     storePhotos(input.claimId, id, staff.id, input.photos, occurredAt);
@@ -468,7 +488,7 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
       eventType: "vehicle_handover_recorded",
       occurredAt,
       actorId: staff.id,
-      details: `${event.label} (${bookingLabel}). Mileage ${formatHandoverMileage(mileage)}. Fuel ${fuelLevelLabel(fuel)}. Happened ${formatUkDateTime(occurredAt)}. Driver ${actual.driverName}. Entered by ${staff.name}. ${photoProgress(input.photos.map((photo) => photo.slot))}${attachedScans.length ? ` Diagnostic ${attachedScans.join(" and ")} attached.` : ""}${note ? ` Note: ${note}` : ""}`,
+      details: `${event.label} (${bookingLabel}). Mileage ${formatHandoverMileage(mileage)}. Fuel ${fuelLevelLabel(fuel)}. Happened ${formatUkDateTime(occurredAt)}. Driver ${actual.driverName}. Entered by ${staff.name}. ${photoProgress(input.photos.map((photo) => photo.slot), shotSet)}${attachedScans.length ? ` Diagnostic ${attachedScans.join(" and ")} attached.` : ""}${note ? ` Note: ${note}` : ""}`,
       source: "staff",
     });
     if (event.kind === "client_recovered" && input.actualOccurredAt !== undefined) {
@@ -482,7 +502,7 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
     db.exec("ROLLBACK");
     throw error;
   }
-  return { id, incomplete: handoverIncomplete(input.photos.map((photo) => photo.slot), SHOT_SET_SEVEN) };
+  return { id, incomplete: handoverIncomplete(input.photos.map((photo) => photo.slot), shotSet) };
 }
 
 export function addHandoverPhotographs(input: {

@@ -136,9 +136,29 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+22 September 2026 — My jobs today stays a list of jobs assigned for today:
+
+- The list was already only the jobs assigned to the signed-in person for today. Dates such as 18/09, 14/09 and 21/09 on that page were the time the work happened, typed in when a job was written up afterwards. They were not the day the job is listed for. Each job now says the day it is assigned for, and Done or Not done.
+- The Volkswagen Golf CAS 2 line labelled Vehicle handover is the old demonstration job, not one of the four job types. The copy on Justin's own list was left over from testing and has been removed. The driver login still receives one each day, so a phone trial has a job. The mechanic login still receives the demonstration repair.
+
+22 September 2026 — Saving a handover opens that handover's own photograph list:
+
+- After the details are saved, the page was jumping to the first Front on the file. On TEST-0003 that was an older five-shot handover, so a new customer's-vehicle record looked like it only had five shots. Each handover now has its own place on the page, and the phone is taken to the one just saved.
+- The two customer's-vehicle handovers saved from the phone at 20:22 and 20:23 on 22 September 2026 are stored as seven shots, including Dash and Chassis number. The five-shot customer's-vehicle records above them were saved earlier in the day.
+
+22 September 2026 — A hire car needs five photographs; the customer's vehicle needs seven:
+
+- A hire car is one of our own fleet, so a new hire handover needs Front, Rear, Driver's side, Passenger's side and Interior. Finish handover appears after those five. Dash and Chassis number are not asked for.
+- The customer's own vehicle still needs those five, then Dash and Chassis number, before Finish handover appears. Dash shows the mileage and any warning lights. Chassis number shows the plate that identifies that vehicle.
+- A handover already saved keeps the set it was given. The hire car Justin photographed at 20:22 on 22 September 2026 was the hire handover entered at 11:44, which only ever had the original five. It was not a new hire handover.
+
+22 September 2026 — A taken handover photograph leaves the list:
+
+- On a handover, a required photograph that has been saved is no longer shown as Taken. The screen lists only the shots still to take, with a count such as 2 of 5 done for a hire car or 4 of 7 done for the customer's vehicle. When all of that handover’s photographs are saved, the list is empty and Finish handover is shown. Damage photographs stay in their own optional section. The photographs themselves are stored as before.
+
 22 September 2026 — Handover photographs now include the dash and the chassis number:
 
-- A new handover, whether it is a hire car or the customer's own vehicle, needs seven photographs before Finish handover appears: Front, Rear, Driver's side, Passenger's side, Interior, Dash, then Chassis number. Dash shows the mileage and any warning lights. Chassis number shows the plate that identifies the vehicle. Each one opens the camera and moves on to the next, the same as the earlier shots. Damage photographs stay optional.
+- Dash and Chassis number were first added to every new handover. The entry above corrects that: a hire car stays on the original five, and only the customer's own vehicle needs all seven. Each shot still opens the camera and moves on to the next. Damage photographs stay optional.
 - A handover already saved before this change keeps the original five photographs. It is not marked incomplete for want of Dash or Chassis number, and those two shots are not added to it.
 
 22 September 2026 — Assign a job lists staff as well as driver logins:

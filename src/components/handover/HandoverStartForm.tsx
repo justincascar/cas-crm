@@ -145,7 +145,7 @@ export function HandoverStartForm({
         <textarea name="conditionNote" rows={3} className={field} placeholder="What you can see. If this corrects an earlier record, say what was wrong." />
       </label>
       <p className="text-sm text-slate">
-        Save the mileage and fuel first. Each photograph is stored as soon as you take it, and the page moves on to the next shot: Front, Rear, Driver&apos;s side, Passenger&apos;s side, Interior, Dash, then Chassis number. Damage photos are optional.
+        Save the mileage and fuel first. Each photograph is stored as soon as you take it, and the page moves on to the next one. A hire car needs Front, Rear, Driver&apos;s side, Passenger&apos;s side, then Interior. The customer&apos;s own vehicle needs those, then Dash and Chassis number. Damage photos are optional.
       </p>
       <button className="min-h-11 w-full rounded-md bg-navy px-4 py-3 text-base text-white sm:w-auto" type="submit">
         Save details and take photographs

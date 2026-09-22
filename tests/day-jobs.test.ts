@@ -355,6 +355,9 @@ describe("assigning a driver and a date", () => {
     assert.match(form, /Already completed/);
     assert.match(form, /datetime-local/);
     assert.match(form, /action=\{action\}/);
+    assert.match(page, /Assigned for/);
+    assert.match(page, /Not done/);
+    assert.match(page, /Only jobs assigned to you for this day are listed/);
     assert.match(page, /AssignJobForm/);
     assert.doesNotMatch(page, /Assign a job for today/);
     const handover = fs.readFileSync(path.join(process.cwd(), "src/components/handover/HandoverStartForm.tsx"), "utf8");

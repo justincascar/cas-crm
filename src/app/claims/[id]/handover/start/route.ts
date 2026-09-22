@@ -26,7 +26,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     if (!event) throw new Error("Choose what is happening.");
     if (vehicle === "hire" && !event.needsBooking) throw new Error("Choose a hire car handover.");
     if (vehicle === "customer" && event.needsBooking) throw new Error("Choose a customer's vehicle handover.");
-    recordVehicleHandover({
+    const saved = recordVehicleHandover({
       claimId,
       eventKind,
       hireEpisodeId: vehicle === "hire" ? String(form.get("hireEpisodeId") || "") : "",
@@ -40,7 +40,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     });
     const url = new URL(`/claims/${claimId}/handover`, origin);
     url.searchParams.set("saved", "details");
-    url.hash = "shot-front";
+    url.hash = `shot-${saved.id}-front`;
     return NextResponse.redirect(url, 303);
   } catch (error) {
     const message = error instanceof Error ? error.message : "The handover could not be saved.";

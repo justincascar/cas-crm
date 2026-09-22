@@ -50,7 +50,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const focus = focusAfterShot(slot, (record?.photos || []).map((photo) => photo.slot), record?.shotSet);
     const url = new URL(`/claims/${claimId}/handover`, origin);
     url.searchParams.set("saved", "photo");
-    url.hash = `shot-${focus}`;
+    url.hash = `shot-${handoverId}-${focus}`;
     return NextResponse.redirect(url, 303);
   } catch (error) {
     const message = error instanceof Error ? error.message : "The photograph could not be saved.";

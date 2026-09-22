@@ -16,6 +16,7 @@ import {
   MAX_DAMAGE_PHOTOS,
   missingStandardShots,
   ORIGINAL_SHOTS,
+  requiredShotProgress,
   recordVehicleHandover,
   SHOT_SET_FIVE,
   STANDARD_SHOTS,
@@ -256,7 +257,7 @@ describe("vehicle handover records", () => {
     }
   });
 
-  it("finishes once the seven standard shots are saved, without a damage photograph", () => {
+  it("finishes a hire car once the five standard shots are saved, without a damage photograph", () => {
     const previous = process.env.CAS_FILES_DIR;
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cas-handover-finish-"));
     process.env.CAS_FILES_DIR = dir;
@@ -264,19 +265,23 @@ describe("vehicle handover records", () => {
     try {
       withDatabase(db, () => {
         const saved = recordVehicleHandover(handover());
+        assert.equal(listVehicleHandovers("c3").find((row) => row.id === saved.id)?.shotSet, "five");
         assert.throws(
           () => finishVehicleHandover({ claimId: "c3", handoverId: saved.id, actorId: "staff-sian" }),
           /before finishing/,
         );
-        addHandoverPhotographs({
+        const added = addHandoverPhotographs({
           claimId: "c3",
           handoverId: saved.id,
           actorId: "staff-sian",
-          photos: requiredShots(),
+          photos: originalShots(),
         });
+        assert.equal(added.incomplete, false);
+        assert.equal(requiredShotProgress(originalShots().map((photo) => photo.slot), "five").label, "5 of 5 done");
         const finished = finishVehicleHandover({ claimId: "c3", handoverId: saved.id, actorId: "staff-sian" });
         const row = listVehicleHandovers("c3").find((item) => item.id === saved.id);
         assert.equal(row?.incomplete, false);
+        assert.equal(row?.photos.some((photo) => photo.slot === "dash" || photo.slot === "chassis"), false);
         assert.equal(row?.photos.some((photo) => photo.slot === "damage"), false);
         assert.equal(row?.finishedAt, finished.finishedAt);
         const again = finishVehicleHandover({ claimId: "c3", handoverId: saved.id, actorId: "staff-sian" });
@@ -290,16 +295,28 @@ describe("vehicle handover records", () => {
     }
   });
 
-  it("completes a new hire-car handover and a customer's-vehicle handover only after all seven shots", () => {
-    const order = ["front", "rear", "driver_side", "passenger_side", "interior", "dash", "chassis"];
-    let taken: string[] = [];
-    for (const slot of order) {
-      assert.equal(handoverIncomplete(taken), true);
-      taken = [...taken, slot];
-      const next = focusAfterShot(slot, taken);
-      assert.equal(next, slot === "chassis" ? "finish" : order[order.indexOf(slot) + 1]);
+  it("finishes a hire car after five shots and the customer's vehicle only after seven", () => {
+    const hireOrder = ["front", "rear", "driver_side", "passenger_side", "interior"];
+    let hireTaken: string[] = [];
+    for (const slot of hireOrder) {
+      assert.equal(requiredShotProgress(hireTaken, "five").label, `${hireTaken.length} of 5 done`);
+      hireTaken = [...hireTaken, slot];
+      const next = focusAfterShot(slot, hireTaken, "five");
+      assert.equal(next, slot === "interior" ? "finish" : hireOrder[hireOrder.indexOf(slot) + 1]);
     }
-    assert.equal(handoverIncomplete(taken), false);
+    assert.equal(requiredShotProgress(hireTaken, "five").label, "5 of 5 done");
+    assert.equal(focusAfterShot("interior", hireTaken, "five"), "finish");
+
+    const ownOrder = [...hireOrder, "dash", "chassis"];
+    let ownTaken: string[] = [];
+    for (const slot of ownOrder) {
+      assert.equal(requiredShotProgress(ownTaken, "seven").label, `${ownTaken.length} of 7 done`);
+      ownTaken = [...ownTaken, slot];
+      const next = focusAfterShot(slot, ownTaken, "seven");
+      assert.equal(next, slot === "chassis" ? "finish" : ownOrder[ownOrder.indexOf(slot) + 1]);
+    }
+    assert.equal(requiredShotProgress(ownTaken, "seven").label, "7 of 7 done");
+    assert.equal(focusAfterShot("interior", hireTaken, "seven"), "dash");
 
     const previous = process.env.CAS_FILES_DIR;
     const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cas-handover-seven-"));
@@ -309,38 +326,47 @@ describe("vehicle handover records", () => {
       withDatabase(db, () => {
         const hire = recordVehicleHandover(handover());
         const own = recordVehicleHandover(
-          handover({ eventKind: "client_recovered", hireEpisodeId: "", mileage: "88001", fuelLevel: "quarter" }),
+          handover({ eventKind: "client_returned", hireEpisodeId: "", mileage: "88001", fuelLevel: "quarter" }),
         );
-        for (const saved of [hire, own]) {
-          const fiveOnly = addHandoverPhotographs({
-            claimId: "c3",
-            handoverId: saved.id,
-            actorId: "staff-sian",
-            photos: originalShots(),
-          });
-          assert.equal(fiveOnly.incomplete, true);
-          assert.throws(
-            () => finishVehicleHandover({ claimId: "c3", handoverId: saved.id, actorId: "staff-sian" }),
-            /Dash, Chassis number/,
-          );
-          const done = addHandoverPhotographs({
-            claimId: "c3",
-            handoverId: saved.id,
-            actorId: "staff-sian",
-            photos: [shot("dash"), shot("chassis")],
-          });
-          assert.equal(done.incomplete, false);
-          finishVehicleHandover({ claimId: "c3", handoverId: saved.id, actorId: "staff-sian" });
-        }
+        assert.equal(listVehicleHandovers("c3").find((row) => row.id === hire.id)?.shotSet, "five");
+        assert.equal(listVehicleHandovers("c3").find((row) => row.id === own.id)?.shotSet, "seven");
+        const hireDone = addHandoverPhotographs({
+          claimId: "c3",
+          handoverId: hire.id,
+          actorId: "staff-sian",
+          photos: originalShots(),
+        });
+        assert.equal(hireDone.incomplete, false);
+        finishVehicleHandover({ claimId: "c3", handoverId: hire.id, actorId: "staff-sian" });
+        const fiveOnly = addHandoverPhotographs({
+          claimId: "c3",
+          handoverId: own.id,
+          actorId: "staff-sian",
+          photos: originalShots(),
+        });
+        assert.equal(fiveOnly.incomplete, true);
+        assert.equal(requiredShotProgress(hireOrder, "seven").label, "5 of 7 done");
+        assert.throws(
+          () => finishVehicleHandover({ claimId: "c3", handoverId: own.id, actorId: "staff-sian" }),
+          /Dash, Chassis number/,
+        );
+        const done = addHandoverPhotographs({
+          claimId: "c3",
+          handoverId: own.id,
+          actorId: "staff-sian",
+          photos: [shot("dash"), shot("chassis")],
+        });
+        assert.equal(done.incomplete, false);
+        finishVehicleHandover({ claimId: "c3", handoverId: own.id, actorId: "staff-sian" });
         const rows = listVehicleHandovers("c3");
         const hireRow = rows.find((row) => row.id === hire.id);
         const ownRow = rows.find((row) => row.id === own.id);
-        assert.equal(hireRow?.shotSet, "seven");
+        assert.equal(hireRow?.shotSet, "five");
         assert.equal(hireRow?.incomplete, false);
-        assert.equal(hireRow?.finishedAt == null, false);
-        assert.deepEqual([...(hireRow?.photos || []).map((photo) => photo.slot)].sort(), [...order].sort());
-        assert.equal(ownRow?.eventKind, "client_recovered");
+        assert.equal(hireRow?.photos.some((photo) => photo.slot === "dash" || photo.slot === "chassis"), false);
+        assert.equal(ownRow?.eventKind, "client_returned");
         assert.equal(ownRow?.hireEpisodeId, null);
+        assert.equal(ownRow?.shotSet, "seven");
         assert.equal(ownRow?.incomplete, false);
         assert.equal(ownRow?.photos.some((photo) => photo.slot === "chassis"), true);
         assert.equal(ownRow?.photos.some((photo) => photo.slot === "dash"), true);
@@ -351,6 +377,33 @@ describe("vehicle handover records", () => {
       else process.env.CAS_FILES_DIR = previous;
       fs.rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it("drops each required shot from the outstanding list and leaves a finished handover with nothing left to take", () => {
+    const order = ["front", "rear", "driver_side", "passenger_side", "interior", "dash", "chassis"];
+    const labels = ["Front", "Rear", "Driver's side", "Passenger's side", "Interior", "Dash", "Chassis number"];
+    let taken: string[] = [];
+    assert.equal(requiredShotProgress(taken).label, "0 of 7 done");
+    assert.deepEqual(requiredShotProgress(taken).outstanding.map((shot) => shot.label), labels);
+    for (const slot of order) {
+      taken = [...taken, slot];
+      const progress = requiredShotProgress(taken);
+      assert.equal(progress.done, taken.length);
+      assert.equal(progress.total, 7);
+      assert.equal(progress.label, `${taken.length} of 7 done`);
+      assert.equal(progress.outstanding.some((shot) => shot.slot === slot), false);
+      assert.deepEqual(progress.outstanding.map((shot) => shot.slot), order.slice(taken.length));
+    }
+    assert.equal(requiredShotProgress(taken).outstanding.length, 0);
+    const five = requiredShotProgress(order.slice(0, 5), "five");
+    assert.equal(five.label, "5 of 5 done");
+    assert.equal(five.outstanding.length, 0);
+    const finishedSeven = requiredShotProgress(order, "seven");
+    assert.equal(finishedSeven.label, "7 of 7 done");
+    assert.equal(finishedSeven.outstanding.length, 0);
+    const withDamage = requiredShotProgress([...order.slice(0, 3), "damage", "damage"], "seven");
+    assert.equal(withDamage.label, "3 of 7 done");
+    assert.equal(withDamage.outstanding.some((shot) => shot.slot === "damage"), false);
   });
 
   it("leaves an already-completed five-shot handover complete, without asking for Dash or Chassis number", () => {
@@ -413,7 +466,8 @@ describe("vehicle handover records", () => {
     assert.match(page, /Add another damage photo/);
     assert.match(page, /Finish handover/);
     assert.match(page, /Damage photographs are optional/);
-    assert.match(page, /Not taken yet/);
+    assert.match(page, /progress\.label/);
+    assert.doesNotMatch(page, /Not taken yet/);
     assert.match(page, /Damage photos/);
     assert.match(camera, /Or choose a saved photo/);
     assert.doesNotMatch(page, /STANDARD_SHOTS/);
@@ -422,6 +476,8 @@ describe("vehicle handover records", () => {
     for (const label of ["Front", "Rear", "Driver's side", "Passenger's side", "Interior", "Dash", "Chassis number"]) {
       assert.match(shots, new RegExp(label.replace("'", "\\'")));
     }
+    assert.match(page, /shot-\$\{handoverId\}-\$\{shot\.slot\}/);
+    assert.match(fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/handover/start/route.ts"), "utf8"), /shot-\$\{saved\.id\}-front/);
     assert.match(page, /shotsForSet/);
     assert.match(start, /Dash/);
     assert.match(start, /Chassis number/);
