@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ScreenNav } from "@/components/claim-file/ScreenNav";
@@ -15,6 +16,8 @@ export default async function ClaimLayout({
 }) {
   await requireStaff();
   const { id } = await params;
+  const pathname = (await headers()).get("x-cas-pathname") || "";
+  const onHandover = pathname.endsWith("/handover");
   const data = getClaim(id);
   if (!data) notFound();
   const saved = listScreenSummaries(String(data.claim.id)).map((r) => r.screen_key);
@@ -42,7 +45,7 @@ export default async function ClaimLayout({
           <Link href={`/claims/${data.claim.id}/work/general`} className="text-teal-dark underline">
             File screens
           </Link>
-          <Link href={`/claims/${data.claim.id}/handover`} className="text-teal-dark underline">
+          <Link href={`/claims/${data.claim.id}/handover`} className="min-h-11 rounded-md bg-navy px-3 py-2 font-semibold text-white">
             Handover
           </Link>
           <Link href={`/claims/${data.claim.id}/hire-pack`} className="rounded-md bg-teal px-3 py-1.5 font-semibold text-white">
@@ -50,8 +53,8 @@ export default async function ClaimLayout({
           </Link>
         </div>
       </div>
-      <div className="grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]">
-        <ScreenNav claimId={String(data.claim.id)} savedKeys={saved} />
+      <div className={onHandover ? "" : "grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]"}>
+        {onHandover ? null : <ScreenNav claimId={String(data.claim.id)} savedKeys={saved} />}
         <div className="min-w-0">{children}</div>
       </div>
     </div>

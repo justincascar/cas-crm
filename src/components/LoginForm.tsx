@@ -4,7 +4,7 @@ import { useState } from "react";
 import { actionLogin } from "@/app/auth-actions";
 import { ValidatedForm } from "@/components/ValidatedForm";
 
-const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
+const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-3 text-base";
 
 export function LoginForm({ nextPath }: { nextPath: string }) {
   const [error, setError] = useState<string | null>(null);

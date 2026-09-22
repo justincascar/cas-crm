@@ -149,6 +149,16 @@ describe("vehicle handover records", () => {
     assert.match(page, /Tyres visibly legal/);
     assert.match(page, /Pre-diagnostic scan/);
     assert.match(page, /Post-diagnostic scan/);
+    assert.match(page, /capture="environment"/);
+    assert.match(page, /Take a photograph/);
+    assert.match(page, /already on the phone/);
+    assert.match(page, /Or choose a saved scan file/);
+    const shell = fs.readFileSync(path.join(process.cwd(), "src/components/AppShell.tsx"), "utf8");
+    assert.match(shell, /md:grid md:grid-cols-\[240px_1fr\]/);
+    assert.match(shell, /md:hidden/);
+    const claims = fs.readFileSync(path.join(process.cwd(), "src/components/ClaimTable.tsx"), "utf8");
+    assert.match(claims, /md:hidden/);
+    assert.match(claims, /\/handover/);
   });
 
   it("leaves the incomplete flag tied to photographs when no diagnostic scan is attached", () => {

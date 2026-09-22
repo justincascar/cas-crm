@@ -136,6 +136,12 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+22 September 2026 — Handover on a phone:
+
+- On a narrow screen the sidebar is a Menu, and the claims list is a card with Open file and Handover, so a driver does not have to scroll sideways to reach the form.
+- Condition photographs and diagnostic scans each have Take a photograph (the phone camera) and a separate choice for a file already on the phone. A missing scan still does not mark the record incomplete.
+- There is still no driver-only login. Roles are administrator and staff. Anyone signed in can open every file. A driver login, if added, would need a new role. That is not built yet.
+
 21 September 2026 — Diagnostic scan on a handover:
 
 - A handover can also hold an optional pre-diagnostic scan and an optional post-diagnostic scan. Each is a file from the tool (PDF, image or text). There is no live link to the scanner.

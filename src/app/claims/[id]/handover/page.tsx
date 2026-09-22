@@ -16,8 +16,31 @@ import {
 } from "@/lib/db/handover";
 import { getClaim } from "@/lib/db/queries";
 
-const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
+const field = "mt-1 w-full max-w-full rounded-md border border-line bg-white px-3 py-3 text-base";
 const scanAccept = "application/pdf,image/jpeg,image/png,image/webp,image/gif,text/plain,text/csv,text/html,text/xml,application/json,.pdf,.txt,.csv,.xml,.html,.json,.log";
+const photoAccept = "image/jpeg,image/png,image/webp,image/gif";
+
+function cameraOrFile(input: {
+  cameraName: string;
+  fileName: string;
+  cameraLabel: string;
+  fileLabel: string;
+  accept: string;
+  multiple?: boolean;
+}) {
+  return (
+    <div className="grid gap-3">
+      <label className="block text-sm">
+        {input.cameraLabel}
+        <input name={input.cameraName} type="file" accept="image/*" capture="environment" className={field} />
+      </label>
+      <label className="block text-sm">
+        {input.fileLabel}
+        <input name={input.fileName} type="file" accept={input.accept} multiple={input.multiple} className={field} />
+      </label>
+    </div>
+  );
+}
 
 function scanFor(scans: HandoverScan[], slot: "pre" | "post") {
   return scans.find((scan) => scan.slot === slot) || null;
@@ -28,11 +51,11 @@ function yesNo(name: string, label: string) {
     <fieldset className="text-sm">
       <legend>{label}</legend>
       <div className="mt-1 flex gap-4">
-        <label className="flex items-center gap-2">
-          <input name={name} type="radio" value="yes" required /> Yes
+        <label className="flex min-h-11 items-center gap-3 text-base">
+          <input name={name} type="radio" value="yes" required className="h-5 w-5" /> Yes
         </label>
-        <label className="flex items-center gap-2">
-          <input name={name} type="radio" value="no" required /> No
+        <label className="flex min-h-11 items-center gap-3 text-base">
+          <input name={name} type="radio" value="no" required className="h-5 w-5" /> No
         </label>
       </div>
     </fieldset>
@@ -127,23 +150,42 @@ export default async function HandoverPage({
           Damage and condition
           <textarea name="conditionNote" rows={3} className={field} placeholder="What you can see. If this corrects an earlier record, say what was wrong." />
         </label>
-        <label className="block text-sm">
-          Condition photographs
-          <input name="photos" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple className={field} />
-        </label>
-        <p className="text-sm text-slate">Photographs can be added after you save, for example if the signal drops on site. Until then the record is marked incomplete. Mileage and fuel are still kept.</p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block text-sm">
-            Pre-diagnostic scan
-            <input name="preScan" type="file" accept={scanAccept} className={field} />
-          </label>
-          <label className="block text-sm">
-            Post-diagnostic scan
-            <input name="postScan" type="file" accept={scanAccept} className={field} />
-          </label>
+        <div>
+          <p className="text-sm font-medium">Condition photographs</p>
+          {cameraOrFile({
+            cameraName: "photos",
+            fileName: "photos",
+            cameraLabel: "Take a photograph",
+            fileLabel: "Or choose photographs already on the phone",
+            accept: photoAccept,
+            multiple: true,
+          })}
         </div>
-        <p className="text-sm text-slate">Optional. A PDF, photograph or text export from the diagnostic tool. A missing scan does not mark the record incomplete, and it is kept separate from the condition photographs.</p>
-        <button className="rounded-md bg-navy px-4 py-2 text-sm text-white" type="submit">
+        <p className="text-sm text-slate">Take a photograph opens the phone camera. You can still choose a picture already saved. Photographs can be added after you save, for example if the signal drops on site. Until then the record is marked incomplete. Mileage and fuel are still kept.</p>
+        <div className="grid gap-4">
+          <div>
+            <p className="text-sm font-medium">Pre-diagnostic scan</p>
+            {cameraOrFile({
+              cameraName: "preScanCamera",
+              fileName: "preScan",
+              cameraLabel: "Photograph the scan",
+              fileLabel: "Or choose a saved scan file",
+              accept: scanAccept,
+            })}
+          </div>
+          <div>
+            <p className="text-sm font-medium">Post-diagnostic scan</p>
+            {cameraOrFile({
+              cameraName: "postScanCamera",
+              fileName: "postScan",
+              cameraLabel: "Photograph the scan",
+              fileLabel: "Or choose a saved scan file",
+              accept: scanAccept,
+            })}
+          </div>
+        </div>
+        <p className="text-sm text-slate">Optional. Photograph the tool’s screen, or choose a PDF, image or text file already saved. Use one of those for each scan, not both. A missing scan does not mark the record incomplete.</p>
+        <button className="min-h-11 w-full rounded-md bg-navy px-4 py-3 text-base text-white sm:w-auto" type="submit">
           Save handover record
         </button>
       </ValidatedForm>
@@ -188,14 +230,19 @@ export default async function HandoverPage({
                 ))}
               </ul>
             ) : null}
-            <ValidatedForm action={actionAddHandoverPhotos} encType="multipart/form-data" className="mt-4 flex flex-wrap items-end gap-3">
+            <ValidatedForm action={actionAddHandoverPhotos} encType="multipart/form-data" className="mt-4 space-y-3">
               <input type="hidden" name="claimId" value={id} />
               <input type="hidden" name="handoverId" value={record.id} />
-              <label className="text-sm">
-                Add photographs
-                <input name="photos" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple required className={field} />
-              </label>
-              <button className="rounded-md border border-navy px-3 py-2 text-sm text-navy" type="submit">
+              <p className="text-sm font-medium">Add photographs</p>
+              {cameraOrFile({
+                cameraName: "photos",
+                fileName: "photos",
+                cameraLabel: "Take a photograph",
+                fileLabel: "Or choose photographs already on the phone",
+                accept: photoAccept,
+                multiple: true,
+              })}
+              <button className="min-h-11 w-full rounded-md border border-navy px-3 py-3 text-base text-navy sm:w-auto" type="submit">
                 Attach
               </button>
             </ValidatedForm>
@@ -215,15 +262,19 @@ export default async function HandoverPage({
                         <span className="text-slate"> · {formatUkDateTime(scan.attachedAt)}</span>
                       </p>
                     ) : (
-                      <ValidatedForm action={actionAttachHandoverScan} encType="multipart/form-data" className="flex flex-wrap items-end gap-3">
+                      <ValidatedForm action={actionAttachHandoverScan} encType="multipart/form-data" className="space-y-3">
                         <input type="hidden" name="claimId" value={id} />
                         <input type="hidden" name="handoverId" value={record.id} />
                         <input type="hidden" name="slot" value={slot.slot} />
-                        <label className="text-sm">
-                          {slot.label}
-                          <input name="scan" type="file" accept={scanAccept} required className={field} />
-                        </label>
-                        <button className="rounded-md border border-navy px-3 py-2 text-sm text-navy" type="submit">
+                        <p className="text-sm font-medium">{slot.label}</p>
+                        {cameraOrFile({
+                          cameraName: "scanCamera",
+                          fileName: "scan",
+                          cameraLabel: "Photograph the scan",
+                          fileLabel: "Or choose a saved scan file",
+                          accept: scanAccept,
+                        })}
+                        <button className="min-h-11 w-full rounded-md border border-navy px-3 py-3 text-base text-navy sm:w-auto" type="submit">
                           Attach
                         </button>
                       </ValidatedForm>

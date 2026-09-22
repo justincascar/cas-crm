@@ -22,7 +22,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(login);
   }
 
-  return NextResponse.next();
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = {

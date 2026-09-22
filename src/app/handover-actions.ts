@@ -10,6 +10,18 @@ function page(claimId: string) {
   return `/claims/${claimId}/handover`;
 }
 
+async function oneFile(formData: FormData, fields: string[], label: string): Promise<HandoverPhotoInput | null> {
+  const found: HandoverPhotoInput[] = [];
+  for (const field of fields) {
+    const file = await fileFromField(formData, field);
+    if (file) found.push(file);
+  }
+  if (found.length > 1) {
+    throw new Error(`Choose either a new photograph or an existing file for the ${label}, not both.`);
+  }
+  return found[0] || null;
+}
+
 async function fileFromField(formData: FormData, field: string): Promise<HandoverPhotoInput | null> {
   const value = formData.get(field);
   if (!value || typeof value === "string" || value.size === 0) return null;
@@ -37,6 +49,8 @@ export async function actionRecordHandover(formData: FormData) {
   const staff = await requireStaff();
   const claimId = String(formData.get("claimId") || "");
   try {
+    const preScan = await oneFile(formData, ["preScanCamera", "preScan"], "pre-diagnostic scan");
+    const postScan = await oneFile(formData, ["postScanCamera", "postScan"], "post-diagnostic scan");
     await recordVehicleHandover({
       claimId,
       eventKind: String(formData.get("eventKind") || ""),
@@ -50,8 +64,8 @@ export async function actionRecordHandover(formData: FormData) {
       conditionNote: String(formData.get("conditionNote") || ""),
       actorId: staff.id,
       photos: await photosFromForm(formData),
-      preScan: await fileFromField(formData, "preScan"),
-      postScan: await fileFromField(formData, "postScan"),
+      preScan,
+      postScan,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "The handover could not be saved.";
@@ -86,7 +100,7 @@ export async function actionAttachHandoverScan(formData: FormData) {
   const claimId = String(formData.get("claimId") || "");
   const handoverId = String(formData.get("handoverId") || "");
   try {
-    const file = await fileFromField(formData, "scan");
+    const file = await oneFile(formData, ["scanCamera", "scan"], "diagnostic scan");
     if (!file) throw new Error("Choose a diagnostic scan file.");
     await attachHandoverScan({
       claimId,
