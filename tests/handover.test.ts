@@ -11,7 +11,9 @@ import {
   attachHandoverScan,
   handoverIncomplete,
   listVehicleHandovers,
+  missingStandardShots,
   recordVehicleHandover,
+  STANDARD_SHOTS,
 } from "../src/lib/db/handover.ts";
 import { readStoredFile } from "../src/lib/storage/files.ts";
 import { migrate } from "../src/lib/db/migrate.ts";
@@ -26,6 +28,14 @@ function prepared() {
   migrate(db);
   seed(db);
   return db;
+}
+
+function shot(slot: string, name = slot) {
+  return { buffer: Buffer.from(slot), filename: `${name}.jpg`, mimeType: "image/jpeg", slot };
+}
+
+function fiveShots() {
+  return STANDARD_SHOTS.map((item) => shot(item.slot));
 }
 
 function handover(overrides: Record<string, string> = {}) {
@@ -52,7 +62,9 @@ describe("vehicle handover records", () => {
     withDatabase(db, () => {
       const saved = recordVehicleHandover(handover());
       assert.equal(saved.incomplete, true);
-      assert.equal(handoverIncomplete(0), true);
+      assert.equal(handoverIncomplete([]), true);
+      assert.equal(missingStandardShots(["front", "rear"]).map((item) => item.slot).join(","), "driver_side,passenger_side,interior");
+      assert.equal(handoverIncomplete(["front", "rear", "driver_side", "passenger_side", "interior", "damage"]), false);
       const rows = listVehicleHandovers("c3");
       assert.equal(rows.length, 1);
       assert.equal(rows[0].mileage, 12345);
@@ -85,16 +97,23 @@ describe("vehicle handover records", () => {
     try {
       withDatabase(db, () => {
         const saved = recordVehicleHandover(handover({ mileage: "5555" }));
+        const partial = addHandoverPhotographs({
+          claimId: "c3",
+          handoverId: saved.id,
+          actorId: "staff-tom",
+          photos: [shot("front"), shot("damage", "bumper")],
+        });
+        assert.equal(partial.incomplete, true);
         const added = addHandoverPhotographs({
           claimId: "c3",
           handoverId: saved.id,
           actorId: "staff-tom",
-          photos: [{ buffer: Buffer.from("not-a-real-image"), filename: "bumper.png", mimeType: "image/png" }],
+          photos: fiveShots().filter((photo) => photo.slot !== "front"),
         });
         assert.equal(added.incomplete, false);
         const row = listVehicleHandovers("c3").find((item) => item.id === saved.id);
         assert.equal(row?.mileage, 5555);
-        assert.equal(row?.photos.length, 1);
+        assert.equal(row?.photos.some((photo) => photo.slot === "damage"), true);
         assert.equal(row?.incomplete, false);
       });
     } finally {
@@ -134,6 +153,16 @@ describe("vehicle handover records", () => {
     db.close();
   });
 
+  it("stays incomplete until the five standard shots are present, and treats damage photographs as optional", () => {
+    assert.equal(handoverIncomplete(["front", "rear", "driver_side", "passenger_side"]), true);
+    assert.equal(handoverIncomplete(["front", "rear", "driver_side", "passenger_side", "interior"]), false);
+    assert.equal(handoverIncomplete(["damage", "damage"]), true);
+    assert.deepEqual(
+      missingStandardShots(["damage"]).map((shot) => shot.label),
+      ["Front", "Rear", "Driver's side", "Passenger's side", "Interior"],
+    );
+  });
+
   it("does not put the retired paper-form fields on the handover screen", () => {
     const page = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/handover/page.tsx"), "utf8");
     const pack = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/hire-pack/page.tsx"), "utf8");
@@ -153,8 +182,16 @@ describe("vehicle handover records", () => {
     assert.match(page, /Pre-diagnostic scan/);
     assert.match(page, /Post-diagnostic scan/);
     assert.match(page, /capture="environment"/);
-    assert.match(page, /Take a photograph/);
-    assert.match(page, /already on the phone/);
+    assert.match(page, /Open camera/);
+    assert.match(page, /Not taken yet/);
+    assert.match(page, /Damage photos/);
+    assert.match(page, /Or choose a saved photo/);
+    assert.match(page, /STANDARD_SHOTS/);
+    assert.doesNotMatch(page, /<label[^>]*>[\s\S]{0,120}capture="environment"/);
+    const shots = fs.readFileSync(path.join(process.cwd(), "src/lib/db/handover.ts"), "utf8");
+    for (const label of ["Front", "Rear", "Driver's side", "Passenger's side", "Interior"]) {
+      assert.match(shots, new RegExp(label.replace("'", "\\'")));
+    }
     assert.match(page, /Or choose a saved scan file/);
     const shell = fs.readFileSync(path.join(process.cwd(), "src/components/AppShell.tsx"), "utf8");
     assert.match(shell, /md:grid md:grid-cols-\[240px_1fr\]/);
@@ -181,14 +218,19 @@ describe("vehicle handover records", () => {
           claimId: "c3",
           handoverId: saved.id,
           actorId: "staff-sian",
-          photos: [{ buffer: Buffer.from("photo-bytes"), filename: "front.jpg", mimeType: "image/jpeg" }],
+          photos: fiveShots(),
         });
         assert.equal(added.incomplete, false);
         row = listVehicleHandovers("c3").find((item) => item.id === saved.id);
         assert.equal(row?.incomplete, false);
         assert.equal(row?.scans.length, 0);
         assert.equal(row?.mileage, 4242);
-        assert.equal(handoverIncomplete(row?.photos.length || 0), false);
+        assert.equal(handoverIncomplete((row?.photos || []).map((photo) => photo.slot)), false);
+        const damageOnly = recordVehicleHandover({
+          ...handover({ mileage: "4243" }),
+          photos: [shot("damage", "scratch")],
+        });
+        assert.equal(damageOnly.incomplete, true);
       });
     } finally {
       db.close();

@@ -287,6 +287,7 @@ CREATE TABLE IF NOT EXISTS vehicle_handover_photos (
   id TEXT PRIMARY KEY,
   handover_id TEXT NOT NULL REFERENCES vehicle_handovers(id) ON DELETE CASCADE,
   document_id TEXT NOT NULL REFERENCES documents(id),
+  slot TEXT NOT NULL DEFAULT 'damage',
   taken_at TEXT NOT NULL
 );
 

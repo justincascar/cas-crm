@@ -136,6 +136,12 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+22 September 2026 — Guided handover photographs:
+
+- Each condition photograph is a named shot: Front, Rear, Driver's side, Passenger's side and Interior. Each shows Taken or Not taken yet. Damage photographs are a separate optional list, with no fixed number.
+- Open camera is the phone's camera. The button is the file control itself, with the browser's camera hint (`capture="environment"`), so a tap is not handed to a general file chooser. A saved photo on the phone is still available underneath, if the camera does not open.
+- The handover stays incomplete until those five shots are present. Damage photographs, and a diagnostic scan, do not clear that flag. Mileage and fuel stay locked once the record is saved.
+
 22 September 2026 — Driver and mechanic logins:
 
 - Two roles were added. A driver can complete a handover (mileage, fuel, photographs) only on a booking assigned to them today. A bodyshop / mechanic can add repair photographs, diagnostic scans and a geometry report only on a repair assigned to them today. Both are refused, on the server, if they open any other address.

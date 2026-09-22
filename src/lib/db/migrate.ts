@@ -208,9 +208,16 @@ export function migrate(db: DatabaseSync) {
       id TEXT PRIMARY KEY,
       handover_id TEXT NOT NULL REFERENCES vehicle_handovers(id) ON DELETE CASCADE,
       document_id TEXT NOT NULL REFERENCES documents(id),
+      slot TEXT NOT NULL DEFAULT 'damage',
       taken_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_vehicle_handover_photos ON vehicle_handover_photos(handover_id);
+  `);
+  const photoColumns = db.prepare(`PRAGMA table_info(vehicle_handover_photos)`).all() as Array<{ name: string }>;
+  if (photoColumns.length > 0 && !photoColumns.some((column) => column.name === "slot")) {
+    db.exec(`ALTER TABLE vehicle_handover_photos ADD COLUMN slot TEXT NOT NULL DEFAULT 'damage'`);
+  }
+  db.exec(`
     CREATE TABLE IF NOT EXISTS vehicle_handover_scans (
       id TEXT PRIMARY KEY,
       handover_id TEXT NOT NULL REFERENCES vehicle_handovers(id) ON DELETE CASCADE,

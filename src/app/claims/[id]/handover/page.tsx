@@ -7,11 +7,15 @@ import { formatUkDateTime } from "@/lib/dates";
 import { isOfficeRole } from "@/lib/auth/roles";
 import { requireSignedIn } from "@/lib/auth/session";
 import {
+  DAMAGE_SHOT,
   FUEL_LEVELS,
   HANDOVER_EVENTS,
   listHireBookings,
   listVehicleHandovers,
+  missingStandardShots,
   SCAN_SLOTS,
+  STANDARD_SHOTS,
+  type HandoverPhoto,
   type HandoverScan,
 } from "@/lib/db/handover";
 import { listMyJobs } from "@/lib/db/jobs";
@@ -21,24 +25,89 @@ const field = "mt-1 w-full max-w-full rounded-md border border-line bg-white px-
 const scanAccept = "application/pdf,image/jpeg,image/png,image/webp,image/gif,text/plain,text/csv,text/html,text/xml,application/json,.pdf,.txt,.csv,.xml,.html,.json,.log";
 const photoAccept = "image/jpeg,image/png,image/webp,image/gif";
 
-function cameraOrFile(input: {
-  cameraName: string;
-  fileName: string;
-  cameraLabel: string;
-  fileLabel: string;
-  accept: string;
-  multiple?: boolean;
-}) {
+/** The input itself is the button. A surrounding label would open the file chooser instead of the camera. */
+function openCamera(name: string, label: string) {
+  return (
+    <div className="relative">
+      <input
+        name={name}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        aria-label={label}
+        className="block w-full text-[0px] file:min-h-11 file:w-full file:cursor-pointer file:rounded-md file:border-0 file:bg-navy file:px-3 file:py-3 file:text-base file:font-semibold file:text-transparent"
+      />
+      <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-base font-semibold text-white">{label}</span>
+    </div>
+  );
+}
+
+function chooseSaved(name: string, label: string, accept: string, multiple = false) {
+  return (
+    <label className="block text-sm text-slate">
+      {label}
+      <input name={name} type="file" accept={accept} multiple={multiple || undefined} className={field} />
+    </label>
+  );
+}
+
+function cameraOrFile(input: { cameraName: string; fileName: string; cameraLabel: string; fileLabel: string; accept: string }) {
   return (
     <div className="grid gap-3">
-      <label className="block text-sm">
-        {input.cameraLabel}
-        <input name={input.cameraName} type="file" accept="image/*" capture="environment" className={field} />
-      </label>
-      <label className="block text-sm">
-        {input.fileLabel}
-        <input name={input.fileName} type="file" accept={input.accept} multiple={input.multiple} className={field} />
-      </label>
+      {openCamera(input.cameraName, input.cameraLabel)}
+      {chooseSaved(input.fileName, input.fileLabel, input.accept)}
+    </div>
+  );
+}
+
+function latestShot(photos: HandoverPhoto[], slot: string) {
+  return [...photos].reverse().find((photo) => photo.slot === slot) || null;
+}
+
+function guidedShots(photos: HandoverPhoto[]) {
+  const damage = photos.filter((photo) => photo.slot === DAMAGE_SHOT);
+  return (
+    <div className="space-y-4">
+      {STANDARD_SHOTS.map((shot) => {
+        const taken = latestShot(photos, shot.slot);
+        return (
+          <div key={shot.slot} className="rounded-md border border-line p-3">
+            <div className="mb-2 flex items-baseline justify-between gap-2">
+              <p className="text-sm font-medium">{shot.label}</p>
+              <p className={taken ? "text-sm font-medium text-ok" : "text-sm text-slate"}>{taken ? "Taken" : "Not taken yet"}</p>
+            </div>
+            {taken ? (
+              <a href={`/documents/${taken.documentId}`}>
+                <img src={`/documents/${taken.documentId}/file`} alt={shot.label} className="h-24 w-32 rounded-md border border-line object-cover" />
+              </a>
+            ) : (
+              <div className="grid gap-3">
+                {openCamera(`${shot.slot}Camera`, "Open camera")}
+                {chooseSaved(`${shot.slot}File`, "Or choose a saved photo", photoAccept)}
+              </div>
+            )}
+          </div>
+        );
+      })}
+      <div className="rounded-md border border-line p-3">
+        <p className="text-sm font-medium">Damage photos</p>
+        <p className="mt-1 text-sm text-slate">Optional. Close-ups of any damage. Add as many as you need.</p>
+        {damage.length > 0 ? (
+          <ul className="mt-3 flex flex-wrap gap-3">
+            {damage.map((photo) => (
+              <li key={photo.id}>
+                <a href={`/documents/${photo.documentId}`}>
+                  <img src={`/documents/${photo.documentId}/file`} alt="Damage" className="h-24 w-32 rounded-md border border-line object-cover" />
+                </a>
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        <div className="mt-3 grid gap-3">
+          {openCamera("damageCamera", "Open camera")}
+          {chooseSaved("damageFiles", "Or choose saved photos", photoAccept, true)}
+        </div>
+      </div>
     </div>
   );
 }
@@ -148,16 +217,9 @@ export default async function HandoverPage({
         </label>
         <div>
           <p className="text-sm font-medium">Condition photographs</p>
-          {cameraOrFile({
-            cameraName: "photos",
-            fileName: "photos",
-            cameraLabel: "Take a photograph",
-            fileLabel: "Or choose photographs already on the phone",
-            accept: photoAccept,
-            multiple: true,
-          })}
+          <p className="mt-1 text-sm text-slate">Open camera starts the phone camera for that shot. If it does not, choose a photo already saved. The record stays incomplete until Front, Rear, Driver&apos;s side, Passenger&apos;s side and Interior are all taken. Damage photos are optional. You can add any that are missing after you save.</p>
+          <div className="mt-3">{guidedShots([])}</div>
         </div>
-        <p className="text-sm text-slate">Take a photograph opens the phone camera. You can still choose a picture already saved. Photographs can be added after you save, for example if the signal drops on site. Until then the record is marked incomplete. Mileage and fuel are still kept.</p>
         {office ? (
           <>
             <div className="grid gap-4">
@@ -203,39 +265,22 @@ export default async function HandoverPage({
                 </p>
               </div>
               {record.incomplete ? (
-                <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2">Incomplete — no condition photographs yet.</p>
+                <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2">
+                  Incomplete — still needed: {missingStandardShots(record.photos.map((photo) => photo.slot)).map((shot) => shot.label).join(", ")}.
+                </p>
               ) : (
-                <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-3 py-2">{record.photos.length} photograph{record.photos.length === 1 ? "" : "s"}</p>
+                <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-3 py-2">Five standard photographs are on this record.</p>
               )}
             </div>
             <p className="mt-3">
               Mileage {record.mileage.toLocaleString("en-GB")} · Fuel {record.fuelLabel}
             </p>
             {record.conditionNote ? <p className="mt-2">{record.conditionNote}</p> : null}
-            {record.photos.length > 0 ? (
-              <ul className="mt-3 flex flex-wrap gap-3">
-                {record.photos.map((photo) => (
-                  <li key={photo.id}>
-                    <a href={`/documents/${photo.documentId}`}>
-                      <img src={`/documents/${photo.documentId}/file`} alt={photo.title} className="h-24 w-32 rounded-md border border-line object-cover" />
-                    </a>
-                    <p className="mt-1 text-xs text-slate">{formatUkDateTime(photo.takenAt)}</p>
-                  </li>
-                ))}
-              </ul>
-            ) : null}
             <ValidatedForm action={actionAddHandoverPhotos} encType="multipart/form-data" className="mt-4 space-y-3">
               <input type="hidden" name="claimId" value={id} />
               <input type="hidden" name="handoverId" value={record.id} />
-              <p className="text-sm font-medium">Add photographs</p>
-              {cameraOrFile({
-                cameraName: "photos",
-                fileName: "photos",
-                cameraLabel: "Take a photograph",
-                fileLabel: "Or choose photographs already on the phone",
-                accept: photoAccept,
-                multiple: true,
-              })}
+              <p className="text-sm font-medium">Photographs</p>
+              {guidedShots(record.photos)}
               <button className="min-h-11 w-full rounded-md border border-navy px-3 py-3 text-base text-navy sm:w-auto" type="submit">
                 Attach
               </button>

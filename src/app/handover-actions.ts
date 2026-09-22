@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireSignedIn } from "@/lib/auth/session";
-import { addHandoverPhotographs, attachHandoverScan, recordVehicleHandover, type HandoverPhotoInput } from "@/lib/db/handover";
+import { addHandoverPhotographs, attachHandoverScan, DAMAGE_SHOT, recordVehicleHandover, STANDARD_SHOTS, type HandoverPhotoInput } from "@/lib/db/handover";
 import { errorQuery } from "@/lib/form-validation";
 
 function page(claimId: string) {
@@ -13,7 +13,7 @@ function page(claimId: string) {
 async function oneFile(formData: FormData, fields: string[], label: string): Promise<HandoverPhotoInput | null> {
   const found: HandoverPhotoInput[] = [];
   for (const field of fields) {
-    const file = await fileFromField(formData, field);
+    const file = await fileFromField(formData, field, "scan.pdf");
     if (file) found.push(file);
   }
   if (found.length > 1) {
@@ -22,24 +22,32 @@ async function oneFile(formData: FormData, fields: string[], label: string): Pro
   return found[0] || null;
 }
 
-async function fileFromField(formData: FormData, field: string): Promise<HandoverPhotoInput | null> {
+async function fileFromField(formData: FormData, field: string, fallbackName: string): Promise<HandoverPhotoInput | null> {
   const value = formData.get(field);
   if (!value || typeof value === "string" || value.size === 0) return null;
   return {
     buffer: Buffer.from(await value.arrayBuffer()),
-    filename: value.name || "scan.pdf",
+    filename: value.name || fallbackName,
     mimeType: value.type || "",
+    slot: DAMAGE_SHOT,
   };
 }
 
 async function photosFromForm(formData: FormData): Promise<HandoverPhotoInput[]> {
   const photos: HandoverPhotoInput[] = [];
-  for (const value of formData.getAll("photos")) {
+  for (const shot of STANDARD_SHOTS) {
+    const file = await oneFile(formData, [`${shot.slot}Camera`, `${shot.slot}File`], shot.label);
+    if (file) photos.push({ ...file, slot: shot.slot });
+  }
+  const damageCamera = await fileFromField(formData, "damageCamera", "damage.jpg");
+  if (damageCamera) photos.push({ ...damageCamera, slot: DAMAGE_SHOT });
+  for (const value of formData.getAll("damageFiles")) {
     if (typeof value === "string" || !value || value.size === 0) continue;
     photos.push({
       buffer: Buffer.from(await value.arrayBuffer()),
-      filename: value.name || "photo.jpg",
+      filename: value.name || "damage.jpg",
       mimeType: value.type || "",
+      slot: DAMAGE_SHOT,
     });
   }
   return photos;

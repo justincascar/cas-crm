@@ -45,10 +45,25 @@ export const SCAN_SLOTS = [
 
 export type HandoverScanSlot = (typeof SCAN_SLOTS)[number]["slot"];
 
-export type HandoverPhotoInput = {
+export const STANDARD_SHOTS = [
+  { slot: "front", label: "Front" },
+  { slot: "rear", label: "Rear" },
+  { slot: "driver_side", label: "Driver's side" },
+  { slot: "passenger_side", label: "Passenger's side" },
+  { slot: "interior", label: "Interior" },
+] as const;
+
+export type StandardShotSlot = (typeof STANDARD_SHOTS)[number]["slot"];
+export const DAMAGE_SHOT = "damage";
+
+export type HandoverFileInput = {
   buffer: Buffer;
   filename: string;
   mimeType: string;
+};
+
+export type HandoverPhotoInput = HandoverFileInput & {
+  slot: string;
 };
 
 export type HandoverInput = {
@@ -64,8 +79,8 @@ export type HandoverInput = {
   conditionNote: string;
   actorId: string;
   photos: HandoverPhotoInput[];
-  preScan?: HandoverPhotoInput | null;
-  postScan?: HandoverPhotoInput | null;
+  preScan?: HandoverFileInput | null;
+  postScan?: HandoverFileInput | null;
 };
 
 export type HandoverReading = {
@@ -76,6 +91,7 @@ export type HandoverReading = {
 
 export type HandoverPhoto = {
   id: string;
+  slot: string;
   documentId: string;
   takenAt: string;
   title: string;
@@ -126,8 +142,33 @@ export function formatHandoverMileage(mileage: number): string {
   return mileage.toLocaleString("en-GB");
 }
 
-export function handoverIncomplete(photoCount: number): boolean {
-  return photoCount < 1;
+export function missingStandardShots(slots: Iterable<string>): Array<(typeof STANDARD_SHOTS)[number]> {
+  const have = new Set(slots);
+  return STANDARD_SHOTS.filter((shot) => !have.has(shot.slot));
+}
+
+/** Incomplete until Front, Rear, both sides and Interior are present. Damage photographs do not count. */
+export function handoverIncomplete(slots: Iterable<string>): boolean {
+  return missingStandardShots(slots).length > 0;
+}
+
+function photoSlot(value: string): string {
+  const slot = value.trim();
+  if (slot === DAMAGE_SHOT) return DAMAGE_SHOT;
+  const shot = STANDARD_SHOTS.find((item) => item.slot === slot);
+  if (!shot) throw new Error("Choose which photograph this is.");
+  return shot.slot;
+}
+
+function shotLabel(slot: string): string {
+  return STANDARD_SHOTS.find((shot) => shot.slot === slot)?.label || "Damage";
+}
+
+function photoProgress(slots: Iterable<string>): string {
+  const missing = missingStandardShots(slots);
+  if (missing.length === STANDARD_SHOTS.length) return "No standard photographs yet — incomplete.";
+  if (missing.length === 0) return "Front, Rear, Driver's side, Passenger's side and Interior are photographed.";
+  return `Still needed: ${missing.map((shot) => shot.label).join(", ")}.`;
 }
 
 export function scanSlot(value: string): HandoverScanSlot {
@@ -172,18 +213,21 @@ function imageMime(filename: string, mimeType: string): string {
   throw new Error("Photographs must be JPEG, PNG, WebP or GIF.");
 }
 
-function storePhotos(claimId: string, handoverId: string, actorId: string, eventLabel: string, photos: HandoverPhotoInput[], takenAt: string) {
-  if (photos.length > MAX_PHOTOS) throw new Error("Attach up to 12 photographs at a time.");
+function storePhotos(claimId: string, handoverId: string, actorId: string, photos: HandoverPhotoInput[], takenAt: string) {
+  const damageCount = photos.filter((photo) => photoSlot(photo.slot) === DAMAGE_SHOT).length;
+  if (damageCount > MAX_PHOTOS) throw new Error("Attach up to 12 damage photographs at a time. You can add more afterwards.");
   for (const photo of photos) {
+    const slot = photoSlot(photo.slot);
     if (photo.buffer.length > MAX_PHOTO_BYTES) throw new Error("Each photograph must be 12 MB or smaller.");
     const mime = imageMime(photo.filename, photo.mimeType);
+    const label = shotLabel(slot);
     const stored = storeFileCopy({
       relDir: `claims/${claimId}/handover/${handoverId}`,
       originalFilename: `${newId("photo")}-${photo.filename || "photo.jpg"}`,
       buffer: photo.buffer,
     });
     const documentId = insertStoredDocument({
-      title: `${eventLabel} photograph`,
+      title: slot === DAMAGE_SHOT ? "Damage photograph" : `${label} photograph`,
       documentType: "handover_photo",
       kind: "photograph",
       claimId,
@@ -195,10 +239,16 @@ function storePhotos(claimId: string, handoverId: string, actorId: string, event
       simulated: 0,
     });
     run(
-      `INSERT INTO vehicle_handover_photos(id, handover_id, document_id, taken_at) VALUES (?, ?, ?, ?)`,
-      [newId("hop"), handoverId, documentId, takenAt],
+      `INSERT INTO vehicle_handover_photos(id, handover_id, document_id, slot, taken_at) VALUES (?, ?, ?, ?, ?)`,
+      [newId("hop"), handoverId, documentId, slot, takenAt],
     );
   }
+}
+
+function slotsFor(handoverId: string): string[] {
+  return (all(`SELECT slot FROM vehicle_handover_photos WHERE handover_id = ?`, [handoverId]) as Array<{ slot: string | null }>).map(
+    (row) => row.slot || DAMAGE_SHOT,
+  );
 }
 
 function scanMime(filename: string, mimeType: string): string {
@@ -220,7 +270,7 @@ function scanMime(filename: string, mimeType: string): string {
   throw new Error("A diagnostic scan must be a PDF, an image, or a text export from the tool.");
 }
 
-function storeScan(claimId: string, handoverId: string, actorId: string, slot: HandoverScanSlot, file: HandoverPhotoInput, attachedAt: string) {
+function storeScan(claimId: string, handoverId: string, actorId: string, slot: HandoverScanSlot, file: HandoverFileInput, attachedAt: string) {
   if (file.buffer.length < 1) throw new Error(`Choose a file for the ${scanSlotLabel(slot).toLowerCase()}.`);
   if (file.buffer.length > MAX_SCAN_BYTES) throw new Error("A diagnostic scan must be 12 MB or smaller.");
   const existing = get<{ id: string }>(
@@ -314,7 +364,7 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
         occurredAt,
       ],
     );
-    storePhotos(input.claimId, id, staff.id, event.label, input.photos, occurredAt);
+    storePhotos(input.claimId, id, staff.id, input.photos, occurredAt);
     const attachedScans: string[] = [];
     if (input.preScan) {
       storeScan(input.claimId, id, staff.id, "pre", input.preScan, occurredAt);
@@ -329,7 +379,7 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
       eventType: "vehicle_handover_recorded",
       occurredAt,
       actorId: staff.id,
-      details: `${event.label} (${bookingLabel}). Mileage ${formatHandoverMileage(mileage)}. Fuel ${fuelLevelLabel(fuel)}. Recorded by ${staff.name}. ${input.photos.length ? `${input.photos.length} photograph(s).` : "No photographs yet — incomplete."}${attachedScans.length ? ` Diagnostic ${attachedScans.join(" and ")} attached.` : ""}${note ? ` Note: ${note}` : ""}`,
+      details: `${event.label} (${bookingLabel}). Mileage ${formatHandoverMileage(mileage)}. Fuel ${fuelLevelLabel(fuel)}. Recorded by ${staff.name}. ${photoProgress(input.photos.map((photo) => photo.slot))}${attachedScans.length ? ` Diagnostic ${attachedScans.join(" and ")} attached.` : ""}${note ? ` Note: ${note}` : ""}`,
       source: "staff",
     });
     db.exec("COMMIT");
@@ -337,7 +387,7 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
     db.exec("ROLLBACK");
     throw error;
   }
-  return { id, incomplete: handoverIncomplete(input.photos.length) };
+  return { id, incomplete: handoverIncomplete(input.photos.map((photo) => photo.slot)) };
 }
 
 export function addHandoverPhotographs(input: {
@@ -352,7 +402,6 @@ export function addHandoverPhotographs(input: {
     [input.handoverId, input.claimId],
   );
   if (!row) throw new Error("That handover record was not found on this file.");
-  const event = handoverEvent(row.event_kind);
   const staff = get<{ id: string; name: string; role: string }>(`SELECT id, name, role FROM staff WHERE id = ?`, [input.actorId]);
   if (!staff) throw new Error("The signed-in staff member could not be recorded.");
   assertCanRecordHandover(staff, input.claimId, row.hire_episode_id);
@@ -361,13 +410,13 @@ export function addHandoverPhotographs(input: {
   const db = getDb();
   db.exec("BEGIN");
   try {
-    storePhotos(input.claimId, row.id, staff.id, event?.label || "Handover", input.photos, takenAt);
+    storePhotos(input.claimId, row.id, staff.id, input.photos, takenAt);
     recordClaimEvent({
       claimId: input.claimId,
       eventType: "vehicle_handover_photos_added",
       occurredAt: takenAt,
       actorId: staff.id,
-      details: `${input.photos.length} condition photograph(s) added to the locked handover by ${staff.name}. Mileage and the checklist were not changed.`,
+      details: `Photographs added to the locked handover by ${staff.name}. ${photoProgress(slotsFor(row.id))} Mileage was not changed.`,
       source: "staff",
     });
     db.exec("COMMIT");
@@ -375,15 +424,11 @@ export function addHandoverPhotographs(input: {
     db.exec("ROLLBACK");
     throw error;
   }
-  const after = get<{ mileage: number; photos: number }>(
-    `SELECT h.mileage AS mileage, (SELECT COUNT(*) FROM vehicle_handover_photos p WHERE p.handover_id = h.id) AS photos
-     FROM vehicle_handovers h WHERE h.id = ?`,
-    [row.id],
-  );
+  const after = get<{ mileage: number }>(`SELECT mileage FROM vehicle_handovers WHERE id = ?`, [row.id]);
   if (after && after.mileage !== mileageBefore) {
     throw new Error("The locked handover was changed. That should not happen.");
   }
-  return { incomplete: handoverIncomplete(Number(after?.photos || 0)) };
+  return { incomplete: handoverIncomplete(slotsFor(row.id)) };
 }
 
 export function attachHandoverScan(input: {
@@ -391,7 +436,7 @@ export function attachHandoverScan(input: {
   handoverId: string;
   actorId: string;
   slot: string;
-  file: HandoverPhotoInput;
+  file: HandoverFileInput;
 }): { incomplete: boolean } {
   const slot = scanSlot(input.slot);
   const row = get<{ id: string; mileage: number }>(
@@ -421,15 +466,11 @@ export function attachHandoverScan(input: {
     db.exec("ROLLBACK");
     throw error;
   }
-  const after = get<{ mileage: number; photos: number }>(
-    `SELECT h.mileage AS mileage, (SELECT COUNT(*) FROM vehicle_handover_photos p WHERE p.handover_id = h.id) AS photos
-     FROM vehicle_handovers h WHERE h.id = ?`,
-    [row.id],
-  );
+  const after = get<{ mileage: number }>(`SELECT mileage FROM vehicle_handovers WHERE id = ?`, [row.id]);
   if (after && after.mileage !== mileageBefore) {
     throw new Error("The locked handover was changed. That should not happen.");
   }
-  return { incomplete: handoverIncomplete(Number(after?.photos || 0)) };
+  return { incomplete: handoverIncomplete(slotsFor(row.id)) };
 }
 
 type HandoverRow = {
@@ -480,7 +521,7 @@ function toRecord(row: HandoverRow, photos: HandoverPhoto[], scans: HandoverScan
     bookingLabel: booking || (event?.needsBooking ? "Hire vehicle" : "Client's own vehicle"),
     photos,
     scans,
-    incomplete: handoverIncomplete(photos.length),
+    incomplete: handoverIncomplete(photos.map((photo) => photo.slot)),
   };
 }
 
@@ -505,15 +546,16 @@ function listRows(claimId: string): HandoverRow[] {
 
 function photosFor(handoverId: string): HandoverPhoto[] {
   const rows = all(
-    `SELECT p.id, p.document_id, p.taken_at, d.title
+    `SELECT p.id, p.slot, p.document_id, p.taken_at, d.title
      FROM vehicle_handover_photos p
      JOIN documents d ON d.id = p.document_id
      WHERE p.handover_id = ?
      ORDER BY p.taken_at ASC, p.id ASC`,
     [handoverId],
-  ) as Array<{ id: string; document_id: string; taken_at: string; title: string | null }>;
+  ) as Array<{ id: string; slot: string | null; document_id: string; taken_at: string; title: string | null }>;
   return rows.map((row) => ({
     id: row.id,
+    slot: row.slot || DAMAGE_SHOT,
     documentId: row.document_id,
     takenAt: row.taken_at,
     title: row.title || "Condition photograph",
