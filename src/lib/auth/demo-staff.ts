@@ -32,6 +32,20 @@ export const DEMO_STAFF = [
     email: "megan.price@completeaccidentsolutions.example",
     role: "staff",
   },
+  {
+    id: "staff-driver",
+    username: "driver",
+    name: "Demo Driver",
+    email: "driver.demo@completeaccidentsolutions.example",
+    role: "driver",
+  },
+  {
+    id: "staff-mechanic",
+    username: "mechanic",
+    name: "Demo Mechanic",
+    email: "mechanic.demo@completeaccidentsolutions.example",
+    role: "mechanic",
+  },
 ] as const;
 
 export type DemoStaffId = (typeof DEMO_STAFF)[number]["id"];

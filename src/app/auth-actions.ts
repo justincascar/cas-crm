@@ -2,6 +2,7 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { pathAllowedForRole } from "@/lib/auth/roles";
 import {
   clearSessionCookie,
   createSession,
@@ -23,7 +24,7 @@ export async function actionLogin(formData: FormData) {
   }
   const token = createSession(staff.id);
   await setSessionCookie(token);
-  redirect(next);
+  redirect(pathAllowedForRole(staff.role, next) ? next : "/jobs");
 }
 
 export async function actionLogout() {

@@ -1,9 +1,10 @@
 import { headers } from "next/headers";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ScreenNav } from "@/components/claim-file/ScreenNav";
 import { ClaimWorkflowStatusSummary } from "@/components/ClaimWorkflowStatus";
-import { requireStaff } from "@/lib/auth/session";
+import { isOfficeRole, pathAllowedForRole } from "@/lib/auth/roles";
+import { requireSignedIn } from "@/lib/auth/session";
 import { getClaim } from "@/lib/db/queries";
 import { listScreenSummaries } from "@/lib/db/screens";
 
@@ -14,13 +15,28 @@ export default async function ClaimLayout({
   children: React.ReactNode;
   params: Promise<{ id: string }>;
 }) {
-  await requireStaff();
+  const staffUser = await requireSignedIn();
   const { id } = await params;
   const pathname = (await headers()).get("x-cas-pathname") || "";
+  if (pathname && !pathAllowedForRole(staffUser.role, pathname)) redirect("/jobs");
   const onHandover = pathname.endsWith("/handover");
+  const office = isOfficeRole(staffUser.role);
   const data = getClaim(id);
   if (!data) notFound();
   const saved = listScreenSummaries(String(data.claim.id)).map((r) => r.screen_key);
+
+  if (!office) {
+    return (
+      <div className="space-y-4">
+        <p className="text-sm">
+          <Link href="/jobs" className="text-teal-dark underline">
+            My jobs today
+          </Link>
+        </p>
+        {children}
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
@@ -47,6 +63,9 @@ export default async function ClaimLayout({
           </Link>
           <Link href={`/claims/${data.claim.id}/handover`} className="min-h-11 rounded-md bg-navy px-3 py-2 font-semibold text-white">
             Handover
+          </Link>
+          <Link href={`/claims/${data.claim.id}/repair`} className="text-teal-dark underline">
+            Repair evidence
           </Link>
           <Link href={`/claims/${data.claim.id}/hire-pack`} className="rounded-md bg-teal px-3 py-1.5 font-semibold text-white">
             Hire Pack

@@ -33,18 +33,20 @@ describe("seeded staff credentials", () => {
       password_hash: string;
       role: string;
     }>;
-    assert.equal(rows.length, 4);
+    assert.equal(rows.length, 6);
     assert.deepEqual(
       rows.map((r) => r.username),
-      ["justin", "megan", "sian", "tom"],
+      ["driver", "justin", "mechanic", "megan", "sian", "tom"],
     );
     assert.equal(rows.find((r) => r.username === "justin")?.role, "administrator");
+    assert.equal(rows.find((r) => r.username === "driver")?.role, "driver");
+    assert.equal(rows.find((r) => r.username === "mechanic")?.role, "mechanic");
     for (const row of rows) {
       const password = demoPasswordFor(row.username);
       assert.match(row.password_hash, /^scrypt\$/);
       assert.equal(row.password_hash.includes(password), false);
       assert.equal(verifyPassword(password, row.password_hash), true);
-      if (row.username !== "justin") assert.equal(row.role, "staff");
+      if (row.username !== "justin" && row.username !== "driver" && row.username !== "mechanic") assert.equal(row.role, "staff");
     }
     db.close();
   });

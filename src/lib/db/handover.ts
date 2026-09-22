@@ -1,4 +1,6 @@
+import { isOfficeRole } from "../auth/roles";
 import { nowUtcIso } from "../dates";
+import { assertCanRecordHandover } from "./jobs";
 import { storeFileCopy } from "../storage/files";
 import { all, get, getDb, newId, run } from "./connection";
 import { recordClaimEvent } from "./chronology";
@@ -55,10 +57,10 @@ export type HandoverInput = {
   hireEpisodeId: string;
   mileage: string;
   fuelLevel: string;
-  spareWheel: string;
-  toolsPresent: string;
-  warningLightsOff: string;
-  tyresLegal: string;
+  spareWheel?: string;
+  toolsPresent?: string;
+  warningLightsOff?: string;
+  tyresLegal?: string;
   conditionNote: string;
   actorId: string;
   photos: HandoverPhotoInput[];
@@ -138,10 +140,11 @@ export function scanSlotLabel(slot: string): string {
   return SCAN_SLOTS.find((item) => item.slot === slot)?.label || "Diagnostic scan";
 }
 
-function yesNo(value: string, label: string): "yes" | "no" {
-  const text = value.trim().toLowerCase();
+function storedCheck(value: string | undefined): string {
+  const text = (value || "").trim().toLowerCase();
+  if (!text) return "";
   if (text === "yes" || text === "no") return text;
-  throw new Error(`Choose yes or no for ${label}.`);
+  return "";
 }
 
 function parseMileage(raw: string): number {
@@ -255,7 +258,7 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
   if (!event) throw new Error("Choose which handover this is.");
   const claim = get<{ id: string }>(`SELECT id FROM claims WHERE id = ?`, [input.claimId]);
   if (!claim) throw new Error("File not found.");
-  const staff = get<{ id: string; name: string }>(`SELECT id, name FROM staff WHERE id = ?`, [input.actorId]);
+  const staff = get<{ id: string; name: string; role: string }>(`SELECT id, name, role FROM staff WHERE id = ?`, [input.actorId]);
   if (!staff) throw new Error("The signed-in staff member could not be recorded.");
   let hireEpisodeId: string | null = null;
   let bookingLabel = "Client's own vehicle";
@@ -274,13 +277,14 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
     hireEpisodeId = episode.id;
     bookingLabel = [episode.make, episode.model, episode.registration].filter(Boolean).join(" ") || "Hire vehicle";
   }
+  assertCanRecordHandover(staff, input.claimId, hireEpisodeId);
   const mileage = parseMileage(input.mileage);
   const fuel = parseFuel(input.fuelLevel);
   const checks = {
-    spare_wheel: yesNo(input.spareWheel, "spare wheel present"),
-    tools_present: yesNo(input.toolsPresent, "tools present"),
-    warning_lights_off: yesNo(input.warningLightsOff, "warning lights off"),
-    tyres_legal: yesNo(input.tyresLegal, "tyres visibly legal"),
+    spare_wheel: storedCheck(input.spareWheel),
+    tools_present: storedCheck(input.toolsPresent),
+    warning_lights_off: storedCheck(input.warningLightsOff),
+    tyres_legal: storedCheck(input.tyresLegal),
   };
   const note = input.conditionNote.trim().slice(0, 4000);
   const occurredAt = nowUtcIso();
@@ -343,14 +347,15 @@ export function addHandoverPhotographs(input: {
   photos: HandoverPhotoInput[];
 }): { incomplete: boolean } {
   if (input.photos.length < 1) throw new Error("Choose at least one photograph.");
-  const row = get<{ id: string; event_kind: string; mileage: number }>(
-    `SELECT id, event_kind, mileage FROM vehicle_handovers WHERE id = ? AND claim_id = ?`,
+  const row = get<{ id: string; event_kind: string; mileage: number; hire_episode_id: string | null }>(
+    `SELECT id, event_kind, mileage, hire_episode_id FROM vehicle_handovers WHERE id = ? AND claim_id = ?`,
     [input.handoverId, input.claimId],
   );
   if (!row) throw new Error("That handover record was not found on this file.");
   const event = handoverEvent(row.event_kind);
-  const staff = get<{ id: string; name: string }>(`SELECT id, name FROM staff WHERE id = ?`, [input.actorId]);
+  const staff = get<{ id: string; name: string; role: string }>(`SELECT id, name, role FROM staff WHERE id = ?`, [input.actorId]);
   if (!staff) throw new Error("The signed-in staff member could not be recorded.");
+  assertCanRecordHandover(staff, input.claimId, row.hire_episode_id);
   const takenAt = nowUtcIso();
   const mileageBefore = row.mileage;
   const db = getDb();
@@ -394,8 +399,9 @@ export function attachHandoverScan(input: {
     [input.handoverId, input.claimId],
   );
   if (!row) throw new Error("That handover record was not found on this file.");
-  const staff = get<{ id: string; name: string }>(`SELECT id, name FROM staff WHERE id = ?`, [input.actorId]);
+  const staff = get<{ id: string; name: string; role: string }>(`SELECT id, name, role FROM staff WHERE id = ?`, [input.actorId]);
   if (!staff) throw new Error("The signed-in staff member could not be recorded.");
+  if (!isOfficeRole(staff.role)) throw new Error("You cannot attach a diagnostic scan.");
   const attachedAt = nowUtcIso();
   const mileageBefore = row.mileage;
   const db = getDb();

@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
-import { requireStaff } from "@/lib/auth/session";
+import { requireSignedIn } from "@/lib/auth/session";
+import { canReadDocument } from "@/lib/db/jobs";
 import { getDocument } from "@/lib/db/chronology";
 import { readStoredFile } from "@/lib/storage/files";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
-  await requireStaff();
+  const staff = await requireSignedIn();
   const { id } = await params;
+  if (!canReadDocument(staff, id)) {
+    return new NextResponse("You cannot open that file.", { status: 403 });
+  }
   const doc = getDocument(id);
   if (!doc?.stored_relpath) {
     return new NextResponse("No stored file on this document.", { status: 404 });

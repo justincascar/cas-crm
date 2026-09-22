@@ -1,13 +1,17 @@
 import { NextResponse } from "next/server";
-import { requireStaff } from "@/lib/auth/session";
+import { requireSignedIn } from "@/lib/auth/session";
+import { canReadDocument } from "@/lib/db/jobs";
 import { PdfPreviewError, PdfPreviewRangeError, renderPdfPage } from "@/lib/documents/pdf-preview";
 import { readStoredPdfBytes } from "@/lib/documents/stored-preview";
 
 export const runtime = "nodejs";
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string; page: string }> }) {
-  await requireStaff();
+  const staff = await requireSignedIn();
   const { id, page } = await params;
+  if (!canReadDocument(staff, id)) {
+    return new NextResponse("You cannot open that file.", { status: 403 });
+  }
   const pageNumber = Number(page);
   try {
     const { mimeType, bytes } = await renderPdfPage(readStoredPdfBytes(id), pageNumber);

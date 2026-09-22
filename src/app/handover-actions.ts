@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireStaff } from "@/lib/auth/session";
+import { requireSignedIn } from "@/lib/auth/session";
 import { addHandoverPhotographs, attachHandoverScan, recordVehicleHandover, type HandoverPhotoInput } from "@/lib/db/handover";
 import { errorQuery } from "@/lib/form-validation";
 
@@ -46,7 +46,7 @@ async function photosFromForm(formData: FormData): Promise<HandoverPhotoInput[]>
 }
 
 export async function actionRecordHandover(formData: FormData) {
-  const staff = await requireStaff();
+  const staff = await requireSignedIn();
   const claimId = String(formData.get("claimId") || "");
   try {
     const preScan = await oneFile(formData, ["preScanCamera", "preScan"], "pre-diagnostic scan");
@@ -77,7 +77,7 @@ export async function actionRecordHandover(formData: FormData) {
 }
 
 export async function actionAddHandoverPhotos(formData: FormData) {
-  const staff = await requireStaff();
+  const staff = await requireSignedIn();
   const claimId = String(formData.get("claimId") || "");
   const handoverId = String(formData.get("handoverId") || "");
   try {
@@ -96,7 +96,7 @@ export async function actionAddHandoverPhotos(formData: FormData) {
 }
 
 export async function actionAttachHandoverScan(formData: FormData) {
-  const staff = await requireStaff();
+  const staff = await requireSignedIn();
   const claimId = String(formData.get("claimId") || "");
   const handoverId = String(formData.get("handoverId") || "");
   try {

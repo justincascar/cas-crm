@@ -34,7 +34,7 @@ export default async function SettingsPage({
     <div className="max-w-3xl space-y-6">
       <PageHeader
         title="Settings"
-        subtitle="Prototype configuration. Staff must sign in. All signed-in staff currently see every file — finer permissions are a later stage."
+        subtitle="Prototype configuration. Administrator and staff can open every file. Driver and bodyshop / mechanic can open only the jobs assigned to them today."
       />
       {error ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>

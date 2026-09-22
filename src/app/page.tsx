@@ -73,7 +73,14 @@ export default async function DashboardPage() {
       <PageHeader
         title="Claims desk"
         subtitle="Counts open the matching list. Claimed, agreed and received are shown separately and are never added together."
-        actions={<SearchForm action="/claims" />}
+        actions={
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <Link href="/jobs" className="min-h-11 rounded-md bg-navy px-4 py-2 text-center text-base font-semibold text-white">
+              My jobs today
+            </Link>
+            <SearchForm action="/claims" />
+          </div>
+        }
       />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">

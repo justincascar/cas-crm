@@ -8,7 +8,7 @@ import {
 import { PageHeader } from "@/components/ClaimTable";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { requireAdministrator } from "@/lib/auth/session";
-import { ADMINISTRATOR_ROLE, STAFF_ROLE } from "@/lib/auth/roles";
+import { ADMINISTRATOR_ROLE, DRIVER_ROLE, MECHANIC_ROLE, STAFF_ROLE, roleLabel } from "@/lib/auth/roles";
 import { listAllStaff } from "@/lib/db/staff-admin";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
@@ -26,7 +26,7 @@ export default async function StaffAdminPage({
     <div className="max-w-4xl space-y-6">
       <PageHeader
         title="Staff logins"
-        subtitle="Administrators can create, disable, reset passwords and change roles. This is not claim-level permission — every signed-in person can still open every file."
+        subtitle="Administrators can create, disable, reset passwords and change roles. Administrator and staff can open every file. Driver and bodyshop / mechanic can open only the jobs assigned to them today."
         actions={
           <Link href="/settings" className="text-sm text-teal-dark underline">
             Back to settings
@@ -65,6 +65,8 @@ export default async function StaffAdminPage({
             <select name="role" className={field} defaultValue={STAFF_ROLE}>
               <option value={STAFF_ROLE}>Staff</option>
               <option value={ADMINISTRATOR_ROLE}>Administrator</option>
+              <option value={DRIVER_ROLE}>Driver</option>
+              <option value={MECHANIC_ROLE}>Bodyshop / mechanic</option>
             </select>
           </label>
           <div className="flex items-end">
@@ -81,7 +83,7 @@ export default async function StaffAdminPage({
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="font-serif text-lg text-navy-deep">{person.name}</h2>
               <p className="text-sm text-slate">
-                {person.active ? "Active" : "Disabled"} · {person.role} · {person.username}
+                {person.active ? "Active" : "Disabled"} · {roleLabel(person.role)} · {person.username}
               </p>
             </div>
             <p className="mt-1 text-sm text-slate">{person.email}</p>
@@ -90,9 +92,11 @@ export default async function StaffAdminPage({
                 <input type="hidden" name="staffId" value={person.id} />
                 <label className="block text-sm">
                   Role
-                  <select name="role" className={field} defaultValue={person.role === ADMINISTRATOR_ROLE ? ADMINISTRATOR_ROLE : STAFF_ROLE}>
+                  <select name="role" className={field} defaultValue={person.role}>
                     <option value={STAFF_ROLE}>Staff</option>
                     <option value={ADMINISTRATOR_ROLE}>Administrator</option>
+                    <option value={DRIVER_ROLE}>Driver</option>
+                    <option value={MECHANIC_ROLE}>Bodyshop / mechanic</option>
                   </select>
                 </label>
                 <button type="submit" className="rounded-md border border-line px-3 py-2 text-sm">

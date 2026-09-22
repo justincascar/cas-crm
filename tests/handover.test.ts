@@ -146,7 +146,10 @@ describe("vehicle handover records", () => {
     }
     assert.match(page, /Mileage/);
     assert.match(page, /Fuel level/);
-    assert.match(page, /Tyres visibly legal/);
+    assert.doesNotMatch(page, /Spare wheel present/);
+    assert.doesNotMatch(page, /Tools present/);
+    assert.doesNotMatch(page, /Warning lights off/);
+    assert.doesNotMatch(page, /Tyres visibly legal/);
     assert.match(page, /Pre-diagnostic scan/);
     assert.match(page, /Post-diagnostic scan/);
     assert.match(page, /capture="environment"/);

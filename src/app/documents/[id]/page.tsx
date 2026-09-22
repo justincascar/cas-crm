@@ -1,16 +1,18 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { PrintButton } from "@/components/PrintButton";
 import { StoredFilePreview } from "@/components/StoredFilePreview";
 import { formatUkDateTime } from "@/lib/dates";
-import { requireStaff } from "@/lib/auth/session";
+import { requireSignedIn } from "@/lib/auth/session";
+import { canReadDocument } from "@/lib/db/jobs";
 import { getDocument } from "@/lib/db/chronology";
 import { specForTemplate } from "@/lib/documents/catalog";
 import { CAS_LEGAL_SIGNOFF_NOTICE, CAS_TEMPLATE_NOTICE } from "@/lib/documents/correspondence";
 
 export default async function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireStaff();
+  const staff = await requireSignedIn();
   const { id } = await params;
+  if (!canReadDocument(staff, id)) redirect("/jobs");
   const doc = getDocument(id);
   if (!doc) notFound();
   const missing = doc.missing_json ? (JSON.parse(String(doc.missing_json)) as string[]) : [];

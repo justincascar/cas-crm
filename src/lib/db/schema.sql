@@ -303,6 +303,31 @@ CREATE TABLE IF NOT EXISTS vehicle_handover_scans (
 
 CREATE INDEX IF NOT EXISTS idx_vehicle_handover_scans ON vehicle_handover_scans(handover_id);
 
+CREATE TABLE IF NOT EXISTS day_assignments (
+  id TEXT PRIMARY KEY,
+  assignee_id TEXT NOT NULL REFERENCES staff(id),
+  job_kind TEXT NOT NULL,
+  claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+  hire_episode_id TEXT REFERENCES hire_episodes(id) ON DELETE CASCADE,
+  work_date TEXT NOT NULL,
+  created_by TEXT REFERENCES staff(id),
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_day_assignments_person ON day_assignments(assignee_id, work_date);
+
+CREATE TABLE IF NOT EXISTS repair_evidence (
+  id TEXT PRIMARY KEY,
+  claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  document_id TEXT NOT NULL REFERENCES documents(id),
+  note TEXT NOT NULL DEFAULT '',
+  recorded_by TEXT NOT NULL REFERENCES staff(id),
+  created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_repair_evidence_claim ON repair_evidence(claim_id, created_at);
+
 CREATE TABLE IF NOT EXISTS financial_lines (
   id TEXT PRIMARY KEY,
   claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,

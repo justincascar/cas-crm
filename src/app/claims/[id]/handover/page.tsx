@@ -1,19 +1,20 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { actionAddHandoverPhotos, actionAttachHandoverScan, actionRecordHandover } from "@/app/handover-actions";
 import { PageHeader } from "@/components/ClaimTable";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { formatUkDateTime } from "@/lib/dates";
-import { requireStaff } from "@/lib/auth/session";
+import { isOfficeRole } from "@/lib/auth/roles";
+import { requireSignedIn } from "@/lib/auth/session";
 import {
   FUEL_LEVELS,
-  HANDOVER_CHECKS,
   HANDOVER_EVENTS,
   listHireBookings,
   listVehicleHandovers,
   SCAN_SLOTS,
   type HandoverScan,
 } from "@/lib/db/handover";
+import { listMyJobs } from "@/lib/db/jobs";
 import { getClaim } from "@/lib/db/queries";
 
 const field = "mt-1 w-full max-w-full rounded-md border border-line bg-white px-3 py-3 text-base";
@@ -46,22 +47,6 @@ function scanFor(scans: HandoverScan[], slot: "pre" | "post") {
   return scans.find((scan) => scan.slot === slot) || null;
 }
 
-function yesNo(name: string, label: string) {
-  return (
-    <fieldset className="text-sm">
-      <legend>{label}</legend>
-      <div className="mt-1 flex gap-4">
-        <label className="flex min-h-11 items-center gap-3 text-base">
-          <input name={name} type="radio" value="yes" required className="h-5 w-5" /> Yes
-        </label>
-        <label className="flex min-h-11 items-center gap-3 text-base">
-          <input name={name} type="radio" value="no" required className="h-5 w-5" /> No
-        </label>
-      </div>
-    </fieldset>
-  );
-}
-
 export default async function HandoverPage({
   params,
   searchParams,
@@ -69,13 +54,23 @@ export default async function HandoverPage({
   params: Promise<{ id: string }>;
   searchParams: Promise<{ error?: string; saved?: string }>;
 }) {
-  await requireStaff();
+  const staffUser = await requireSignedIn();
+  const office = isOfficeRole(staffUser.role);
   const { id } = await params;
   const { error, saved } = await searchParams;
   const claim = getClaim(id);
   if (!claim) notFound();
-  const bookings = listHireBookings(id);
-  const records = listVehicleHandovers(id);
+  const assignedEpisodes = office
+    ? null
+    : new Set(
+        listMyJobs(staffUser.id)
+          .filter((job) => job.jobKind === "handover" && job.claimId === id && job.hireEpisodeId)
+          .map((job) => job.hireEpisodeId as string),
+      );
+  if (assignedEpisodes && assignedEpisodes.size === 0) redirect("/jobs");
+  const bookings = listHireBookings(id).filter((booking) => !assignedEpisodes || assignedEpisodes.has(booking.id));
+  const records = listVehicleHandovers(id).filter((record) => !assignedEpisodes || (record.hireEpisodeId && assignedEpisodes.has(record.hireEpisodeId)));
+  const events = assignedEpisodes ? HANDOVER_EVENTS.filter((event) => event.needsBooking) : HANDOVER_EVENTS;
   const fileRef = String(claim.claim.file_reference || "");
 
   return (
@@ -84,9 +79,11 @@ export default async function HandoverPage({
         title={`Handover — ${fileRef}`}
         subtitle="Condition of the hire vehicle or the client's own vehicle at delivery, collection, recovery or return. A saved record is locked. To correct it, record a new handover and explain the correction in the note."
         actions={
-          <Link href={`/claims/${id}`} className="text-sm text-teal-dark underline">
-            Back to file
-          </Link>
+          office ? (
+            <Link href={`/claims/${id}`} className="text-sm text-teal-dark underline">
+              Back to file
+            </Link>
+          ) : null
         }
       />
 
@@ -102,7 +99,7 @@ export default async function HandoverPage({
             <option value="" disabled>
               Choose one
             </option>
-            {HANDOVER_EVENTS.map((event) => (
+            {events.map((event) => (
               <option key={event.kind} value={event.kind}>
                 {event.label}
               </option>
@@ -112,7 +109,7 @@ export default async function HandoverPage({
         <label className="block text-sm">
           Hire booking
           <select name="hireEpisodeId" className={field} defaultValue={bookings[0]?.id || ""}>
-            <option value="">Not a hire vehicle</option>
+            {office ? <option value="">Not a hire vehicle</option> : null}
             {bookings.map((booking) => (
               <option key={booking.id} value={booking.id}>
                 {[booking.make, booking.model, booking.registration].filter(Boolean).join(" ") || "Hire vehicle"}
@@ -121,7 +118,11 @@ export default async function HandoverPage({
             ))}
           </select>
         </label>
-        <p className="text-sm text-slate">Choose the hire booking when the vehicle is the one CAS supplied. Leave it as “Not a hire vehicle” for the client&apos;s own car. Each handover stands on its own if the car is swapped.</p>
+        <p className="text-sm text-slate">
+          {office
+            ? "Choose the hire booking when the vehicle is the one CAS supplied. Leave it as “Not a hire vehicle” for the client's own car. Each handover stands on its own if the car is swapped."
+            : "This is the vehicle assigned to you today."}
+        </p>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm">
             Mileage
@@ -141,11 +142,6 @@ export default async function HandoverPage({
             </select>
           </label>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {HANDOVER_CHECKS.map((check) => (
-            <div key={check.key}>{yesNo(check.key === "tyres_legal" ? "tyresLegal" : check.key === "spare_wheel" ? "spareWheel" : check.key === "tools_present" ? "toolsPresent" : "warningLightsOff", check.label)}</div>
-          ))}
-        </div>
         <label className="block text-sm">
           Damage and condition
           <textarea name="conditionNote" rows={3} className={field} placeholder="What you can see. If this corrects an earlier record, say what was wrong." />
@@ -162,29 +158,33 @@ export default async function HandoverPage({
           })}
         </div>
         <p className="text-sm text-slate">Take a photograph opens the phone camera. You can still choose a picture already saved. Photographs can be added after you save, for example if the signal drops on site. Until then the record is marked incomplete. Mileage and fuel are still kept.</p>
-        <div className="grid gap-4">
-          <div>
-            <p className="text-sm font-medium">Pre-diagnostic scan</p>
-            {cameraOrFile({
-              cameraName: "preScanCamera",
-              fileName: "preScan",
-              cameraLabel: "Photograph the scan",
-              fileLabel: "Or choose a saved scan file",
-              accept: scanAccept,
-            })}
-          </div>
-          <div>
-            <p className="text-sm font-medium">Post-diagnostic scan</p>
-            {cameraOrFile({
-              cameraName: "postScanCamera",
-              fileName: "postScan",
-              cameraLabel: "Photograph the scan",
-              fileLabel: "Or choose a saved scan file",
-              accept: scanAccept,
-            })}
-          </div>
-        </div>
-        <p className="text-sm text-slate">Optional. Photograph the tool’s screen, or choose a PDF, image or text file already saved. Use one of those for each scan, not both. A missing scan does not mark the record incomplete.</p>
+        {office ? (
+          <>
+            <div className="grid gap-4">
+              <div>
+                <p className="text-sm font-medium">Pre-diagnostic scan</p>
+                {cameraOrFile({
+                  cameraName: "preScanCamera",
+                  fileName: "preScan",
+                  cameraLabel: "Photograph the scan",
+                  fileLabel: "Or choose a saved scan file",
+                  accept: scanAccept,
+                })}
+              </div>
+              <div>
+                <p className="text-sm font-medium">Post-diagnostic scan</p>
+                {cameraOrFile({
+                  cameraName: "postScanCamera",
+                  fileName: "postScan",
+                  cameraLabel: "Photograph the scan",
+                  fileLabel: "Or choose a saved scan file",
+                  accept: scanAccept,
+                })}
+              </div>
+            </div>
+            <p className="text-sm text-slate">Optional. Photograph the tool’s screen, or choose a PDF, image or text file already saved. Use one of those for each scan, not both. A missing scan does not mark the record incomplete.</p>
+          </>
+        ) : null}
         <button className="min-h-11 w-full rounded-md bg-navy px-4 py-3 text-base text-white sm:w-auto" type="submit">
           Save handover record
         </button>
@@ -211,12 +211,6 @@ export default async function HandoverPage({
             <p className="mt-3">
               Mileage {record.mileage.toLocaleString("en-GB")} · Fuel {record.fuelLabel}
             </p>
-            <ul className="mt-2 grid gap-1 sm:grid-cols-2">
-              <li>Spare wheel present: {record.spareWheel === "yes" ? "Yes" : "No"}</li>
-              <li>Tools present: {record.toolsPresent === "yes" ? "Yes" : "No"}</li>
-              <li>Warning lights off: {record.warningLightsOff === "yes" ? "Yes" : "No"}</li>
-              <li>Tyres visibly legal: {record.tyresLegal === "yes" ? "Yes" : "No"}</li>
-            </ul>
             {record.conditionNote ? <p className="mt-2">{record.conditionNote}</p> : null}
             {record.photos.length > 0 ? (
               <ul className="mt-3 flex flex-wrap gap-3">
@@ -246,8 +240,8 @@ export default async function HandoverPage({
                 Attach
               </button>
             </ValidatedForm>
-            <p className="mt-2 text-xs text-slate">This does not change the mileage, fuel or checklist already saved.</p>
-            <div className="mt-4 space-y-3 border-t border-line pt-4">
+            <p className="mt-2 text-xs text-slate">This does not change the mileage or fuel already saved.</p>
+            {office ? <div className="mt-4 space-y-3 border-t border-line pt-4">
               <h4 className="font-medium">Diagnostic scans</h4>
               {SCAN_SLOTS.map((slot) => {
                 const scan = scanFor(record.scans, slot.slot);
@@ -282,8 +276,8 @@ export default async function HandoverPage({
                   </div>
                 );
               })}
-              <p className="text-xs text-slate">Optional. Attaching a scan does not change the mileage, fuel, checklist or the incomplete flag.</p>
-            </div>
+              <p className="text-xs text-slate">Optional. Attaching a scan does not change the mileage, fuel or the incomplete flag.</p>
+            </div> : null}
           </article>
         ))}
       </section>

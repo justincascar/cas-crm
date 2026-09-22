@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { actionLogout } from "@/app/auth-actions";
 
 const NAV = [
+  { href: "/jobs", label: "My jobs today" },
   { href: "/", label: "Dashboard" },
   { href: "/claims", label: "Claims" },
   { href: "/tasks", label: "Tasks" },
@@ -21,15 +22,18 @@ export function AppShell({
   children,
   staffName,
   staffUsername,
+  office = true,
 }: {
   children: React.ReactNode;
   staffName: string;
   staffUsername: string;
+  office?: boolean;
 }) {
   const path = usePathname();
   if (path === "/login") {
     return children;
   }
+  const nav = office ? NAV : [{ href: "/jobs", label: "My jobs today" }];
 
   return (
     <div className="app-shell min-h-screen md:grid md:grid-cols-[240px_1fr]">
@@ -41,7 +45,7 @@ export function AppShell({
           </p>
         </div>
         <nav className="px-2 py-3 space-y-0.5">
-          {NAV.map((item) => {
+          {nav.map((item) => {
             const active = item.href === "/" ? path === "/" : path.startsWith(item.href);
             return (
               <Link
@@ -66,7 +70,7 @@ export function AppShell({
         <details className="border-b border-white/10 bg-navy-deep text-[#e8efe9] print:hidden md:hidden">
           <summary className="cursor-pointer px-4 py-3 text-base font-semibold text-white">Menu</summary>
           <nav className="space-y-0.5 px-2 pb-3">
-            {NAV.map((item) => {
+            {nav.map((item) => {
               const active = item.href === "/" ? path === "/" : path.startsWith(item.href);
               return (
                 <Link

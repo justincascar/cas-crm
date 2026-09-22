@@ -5,7 +5,7 @@ import { nowUtcIso } from "../dates";
 import { get, newId, run } from "../db/connection";
 import { SESSION_COOKIE, SESSION_DAYS } from "./constants";
 import { passwordMatches } from "./passwords";
-import { isAdministrator } from "./roles";
+import { isAdministrator, isOfficeRole } from "./roles";
 
 export { SESSION_COOKIE, SESSION_DAYS };
 
@@ -91,9 +91,16 @@ export async function getRequestStaff(): Promise<StaffUser | null> {
   return findValidSession(token) || null;
 }
 
-export async function requireStaff(): Promise<StaffUser> {
+export async function requireSignedIn(): Promise<StaffUser> {
   const staff = await getRequestStaff();
   if (!staff) redirect("/login");
+  return staff;
+}
+
+/** Administrator and staff. Driver and mechanic are sent to My jobs today. */
+export async function requireStaff(): Promise<StaffUser> {
+  const staff = await requireSignedIn();
+  if (!isOfficeRole(staff.role)) redirect("/jobs");
   return staff;
 }
 

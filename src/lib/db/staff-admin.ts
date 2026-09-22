@@ -1,5 +1,5 @@
 import { hashPasswordSync } from "../auth/passwords";
-import { ADMINISTRATOR_ROLE, STAFF_ROLE, normaliseStaffRole, type StaffAccessRole } from "../auth/roles";
+import { ADMINISTRATOR_ROLE, normaliseStaffRole, parseStaffRole } from "../auth/roles";
 import { nowUtcIso } from "../dates";
 import { all, get, newId, run } from "./connection";
 
@@ -24,10 +24,6 @@ function countAdministrators(): number {
     [ADMINISTRATOR_ROLE],
   );
   return Number(row?.c || 0);
-}
-
-export function parseStaffRole(raw: string): StaffAccessRole {
-  return raw === ADMINISTRATOR_ROLE ? ADMINISTRATOR_ROLE : STAFF_ROLE;
 }
 
 function validUsername(username: string): string | null {
@@ -61,6 +57,7 @@ export function createStaffAccount(input: {
   if (taken) return { ok: false, error: "That username or email is already in use." };
   const id = newId("staff");
   const role = parseStaffRole(input.role);
+  if (!role) return { ok: false, error: "Choose administrator, staff, driver or bodyshop / mechanic." };
   run(
     `INSERT INTO staff(id, name, email, username, password_hash, role, active)
      VALUES (?, ?, ?, ?, ?, ?, 1)`,
@@ -111,6 +108,7 @@ export function resetStaffPassword(
 
 export function setStaffRole(id: string, role: string, actorId: string): { ok: true } | { ok: false; error: string } {
   const next = parseStaffRole(role);
+  if (!next) return { ok: false, error: "Choose administrator, staff, driver or bodyshop / mechanic." };
   const row = get<StaffRecord>("SELECT id, name, email, username, role, active FROM staff WHERE id = ?", [id]);
   if (!row) return { ok: false, error: "That staff record was not found." };
   if (row.role === ADMINISTRATOR_ROLE && next !== ADMINISTRATOR_ROLE && countAdministrators() <= 1) {

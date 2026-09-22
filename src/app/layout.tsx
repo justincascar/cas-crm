@@ -3,6 +3,7 @@ import { IBM_Plex_Mono, IBM_Plex_Sans, Source_Serif_4 } from "next/font/google";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
+import { isOfficeRole, pathAllowedForRole } from "@/lib/auth/roles";
 import { getRequestStaff } from "@/lib/auth/session";
 import "./globals.css";
 
@@ -39,11 +40,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   if (!isPublic && !staff) {
     redirect("/login");
   }
+  if (staff && pathname && !pathAllowedForRole(staff.role, pathname)) {
+    redirect("/jobs");
+  }
 
   return (
     <html lang="en-GB">
       <body className={`${sans.variable} ${serif.variable} ${mono.variable} antialiased`}>
-        <AppShell staffName={staff?.name ?? ""} staffUsername={staff?.username ?? ""}>
+        <AppShell staffName={staff?.name ?? ""} staffUsername={staff?.username ?? ""} office={!staff || isOfficeRole(staff.role)}>
           {children}
         </AppShell>
       </body>

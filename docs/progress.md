@@ -136,6 +136,13 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+22 September 2026 — Driver and mechanic logins:
+
+- Two roles were added. A driver can complete a handover (mileage, fuel, photographs) only on a booking assigned to them today. A bodyshop / mechanic can add repair photographs, diagnostic scans and a geometry report only on a repair assigned to them today. Both are refused, on the server, if they open any other address.
+- The four yes/no checks (spare wheel, tools, warning lights, tyres) are no longer on the handover form.
+- My jobs today lists whatever is assigned to the signed-in person for today, including an administrator or a member of staff. If nothing is assigned, it says so. Office access is otherwise unchanged.
+- Repair files are a new list on the claim (Repair evidence). There was no existing place that only held repair photographs and scan reports, so this is that place. Office staff can open it. A mechanic sees only that list.
+
 22 September 2026 — Handover on a phone:
 
 - On a narrow screen the sidebar is a Menu, and the claims list is a card with Open file and Handover, so a driver does not have to scroll sideways to reach the form.
