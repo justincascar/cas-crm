@@ -136,11 +136,27 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+22 September 2026 — Handover photographs save as they are taken, and cover the customer's own vehicle:
+
+- A photograph taken on the phone was not stored. The camera only filled in a file box. Nothing was sent until Save, and that save was a script request. On the phone the picture was dropped when the camera closed, and the same kind of script request had already been failing to leave the phone at all (the sign-in “Load failed”). The screen still said Not taken yet, because Taken only appears after a save that reloads the page. Each shot is now its own ordinary form post, sent by the page itself when the camera returns, after a brief pause so the picture is in the form. The page then comes back on the next shot: Front, then Rear, then Driver's side, then Passenger's side, then Interior. After Interior it shows Finish handover. A phone that sends the picture without a file type is still stored when the bytes are a JPEG or a PNG.
+- Damage photographs are optional and capped at six. Each one uses the same camera button, labelled Add another damage photo. Once the five standard photographs are saved, Finish handover is shown even if no damage photograph was added. It marks that handover finished and returns to My jobs today.
+- The driver's old list only offered “Hire vehicle delivered to client” and “Hire vehicle collected from client”. The customer's own vehicle was already a kind of handover in the records (no hire booking attached), but the driver could not choose it and the check refused it. The first choice is now Hire car or Customer's vehicle. Hire car is handed to the customer or collected from the customer. Customer's vehicle is collected for repair or returned after repair. The saved record shows which of those four it was, and the registration: the hire car's, or the customer's own from the file. A driver assigned to that file today can record either. Mileage and fuel are still required and still locked once the details are saved.
+
 22 September 2026 — Guided handover photographs:
 
 - Each condition photograph is a named shot: Front, Rear, Driver's side, Passenger's side and Interior. Each shows Taken or Not taken yet. Damage photographs are a separate optional list, with no fixed number.
 - Open camera is the phone's camera. The button is the file control itself, with the browser's camera hint (`capture="environment"`), so a tap is not handed to a general file chooser. A saved photo on the phone is still available underneath, if the camera does not open.
 - The handover stays incomplete until those five shots are present. Damage photographs, and a diagnostic scan, do not clear that flag. Mileage and fuel stay locked once the record is saved.
+
+22 September 2026 — Sign-in from the PC’s mobile hotspot:
+
+- The hotspot is a separate address from the office Wi-Fi. The PC is 192.168.137.1 on the hotspot, and still 192.168.1.79 on the office Wi-Fi. The phone has to open the hotspot address.
+- The styled page was already allowed. Sign in was a script request, and Safari reported “Load failed” because that request never reached the server. Sign in is now an ordinary form post to the same address as the page.
+
+22 September 2026 — Sign-in from a phone on the office Wi-Fi:
+
+- Opening the sign-in page from the PC's network address showed plain text, and Sign in did nothing. The page itself was served. The dev server then refused the stylesheet and the scripts, because the phone sends that network address as the request origin. Localhost on the PC does not, so the same page still looked normal there.
+- Development now allows addresses on a 192.168 network to load those files. The dev server has to be restarted after that change.
 
 22 September 2026 — Driver and mechanic logins:
 

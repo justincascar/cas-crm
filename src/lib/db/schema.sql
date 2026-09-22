@@ -278,7 +278,8 @@ CREATE TABLE IF NOT EXISTS vehicle_handovers (
   warning_lights_off TEXT NOT NULL,
   tyres_legal TEXT NOT NULL,
   condition_note TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  finished_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_vehicle_handovers_claim ON vehicle_handovers(claim_id, occurred_at);

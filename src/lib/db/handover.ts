@@ -7,10 +7,10 @@ import { recordClaimEvent } from "./chronology";
 import { insertStoredDocument } from "./documents-store";
 
 export const HANDOVER_EVENTS = [
-  { kind: "hire_delivered", label: "Hire vehicle delivered to client", needsBooking: true },
-  { kind: "hire_collected", label: "Hire vehicle collected from client", needsBooking: true },
-  { kind: "client_recovered", label: "Client's own vehicle recovered", needsBooking: false },
-  { kind: "client_returned", label: "Client's own vehicle returned", needsBooking: false },
+  { kind: "hire_delivered", label: "Hire car — handed to the customer", needsBooking: true },
+  { kind: "hire_collected", label: "Hire car — collected from the customer", needsBooking: true },
+  { kind: "client_recovered", label: "Customer's vehicle — collected for repair", needsBooking: false },
+  { kind: "client_returned", label: "Customer's vehicle — returned after repair", needsBooking: false },
 ] as const;
 
 export type HandoverEventKind = (typeof HANDOVER_EVENTS)[number]["kind"];
@@ -35,7 +35,7 @@ const CHECKS = [
 export const HANDOVER_CHECKS = CHECKS.map(([key, label]) => ({ key, label }));
 
 const MAX_PHOTO_BYTES = 12 * 1024 * 1024;
-const MAX_PHOTOS = 12;
+export const MAX_DAMAGE_PHOTOS = 6;
 const MAX_SCAN_BYTES = 12 * 1024 * 1024;
 
 export const SCAN_SLOTS = [
@@ -128,6 +128,7 @@ export type HandoverRecord = {
   photos: HandoverPhoto[];
   scans: HandoverScan[];
   incomplete: boolean;
+  finishedAt: string | null;
 };
 
 export function handoverEvent(kind: string) {
@@ -152,7 +153,16 @@ export function handoverIncomplete(slots: Iterable<string>): boolean {
   return missingStandardShots(slots).length > 0;
 }
 
-function photoSlot(value: string): string {
+/** Where to put the driver after a photograph is stored. Standard shots run Front through Interior, then Finish. */
+export function focusAfterShot(savedSlot: string, slotsAfter: Iterable<string>): string {
+  if (savedSlot !== DAMAGE_SHOT) {
+    const next = missingStandardShots(slotsAfter)[0];
+    if (next) return next.slot;
+  }
+  return missingStandardShots(slotsAfter).length === 0 ? "finish" : DAMAGE_SHOT;
+}
+
+export function photoSlot(value: string): string {
   const slot = value.trim();
   if (slot === DAMAGE_SHOT) return DAMAGE_SHOT;
   const shot = STANDARD_SHOTS.find((item) => item.slot === slot);
@@ -162,6 +172,24 @@ function photoSlot(value: string): string {
 
 function shotLabel(slot: string): string {
   return STANDARD_SHOTS.find((shot) => shot.slot === slot)?.label || "Damage";
+}
+
+export function assertPhotosFit(existingSlots: string[], incoming: HandoverPhotoInput[]) {
+  const have = new Set(existingSlots);
+  let damage = existingSlots.filter((slot) => slot === DAMAGE_SHOT).length;
+  for (const photo of incoming) {
+    const slot = photoSlot(photo.slot);
+    if (slot === DAMAGE_SHOT) {
+      damage += 1;
+      if (damage > MAX_DAMAGE_PHOTOS) {
+        throw new Error(`A handover can hold ${MAX_DAMAGE_PHOTOS} damage photographs.`);
+      }
+    } else if (have.has(slot)) {
+      throw new Error(`${shotLabel(slot)} is already photographed.`);
+    } else {
+      have.add(slot);
+    }
+  }
 }
 
 function photoProgress(slots: Iterable<string>): string {
@@ -202,24 +230,35 @@ function parseFuel(raw: string): FuelLevel {
   return level.value;
 }
 
-function imageMime(filename: string, mimeType: string): string {
+function imageMime(filename: string, mimeType: string, buffer?: Buffer): string {
   const mime = mimeType.toLowerCase();
-  if (mime === "image/jpeg" || mime === "image/png" || mime === "image/webp" || mime === "image/gif") return mime;
+  if (mime === "image/jpg" || mime === "image/pjpeg" || mime === "image/jpeg") return "image/jpeg";
+  if (mime === "image/png" || mime === "image/webp" || mime === "image/gif") return mime;
   const lower = filename.toLowerCase();
   if (lower.endsWith(".jpg") || lower.endsWith(".jpeg")) return "image/jpeg";
   if (lower.endsWith(".png")) return "image/png";
   if (lower.endsWith(".webp")) return "image/webp";
   if (lower.endsWith(".gif")) return "image/gif";
+  if (buffer && buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) return "image/jpeg";
+  if (
+    buffer &&
+    buffer.length >= 8 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47
+  ) {
+    return "image/png";
+  }
   throw new Error("Photographs must be JPEG, PNG, WebP or GIF.");
 }
 
 function storePhotos(claimId: string, handoverId: string, actorId: string, photos: HandoverPhotoInput[], takenAt: string) {
-  const damageCount = photos.filter((photo) => photoSlot(photo.slot) === DAMAGE_SHOT).length;
-  if (damageCount > MAX_PHOTOS) throw new Error("Attach up to 12 damage photographs at a time. You can add more afterwards.");
+  assertPhotosFit(slotsFor(handoverId), photos);
   for (const photo of photos) {
     const slot = photoSlot(photo.slot);
     if (photo.buffer.length > MAX_PHOTO_BYTES) throw new Error("Each photograph must be 12 MB or smaller.");
-    const mime = imageMime(photo.filename, photo.mimeType);
+    const mime = imageMime(photo.filename, photo.mimeType, photo.buffer);
     const label = shotLabel(slot);
     const stored = storeFileCopy({
       relDir: `claims/${claimId}/handover/${handoverId}`,
@@ -311,7 +350,7 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
   const staff = get<{ id: string; name: string; role: string }>(`SELECT id, name, role FROM staff WHERE id = ?`, [input.actorId]);
   if (!staff) throw new Error("The signed-in staff member could not be recorded.");
   let hireEpisodeId: string | null = null;
-  let bookingLabel = "Client's own vehicle";
+  let bookingLabel = "Customer's vehicle";
   if (event.needsBooking) {
     const episodeId = input.hireEpisodeId.trim();
     if (!episodeId) throw new Error("Choose the hire booking this handover belongs to.");
@@ -325,7 +364,7 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
     );
     if (!episode) throw new Error("That hire booking is not on this file.");
     hireEpisodeId = episode.id;
-    bookingLabel = [episode.make, episode.model, episode.registration].filter(Boolean).join(" ") || "Hire vehicle";
+    bookingLabel = [episode.make, episode.model, episode.registration].filter(Boolean).join(" ") || "Hire car";
   }
   assertCanRecordHandover(staff, input.claimId, hireEpisodeId);
   const mileage = parseMileage(input.mileage);
@@ -473,6 +512,34 @@ export function attachHandoverScan(input: {
   return { incomplete: handoverIncomplete(slotsFor(row.id)) };
 }
 
+export function finishVehicleHandover(input: { claimId: string; handoverId: string; actorId: string }): { finishedAt: string } {
+  const row = get<{ id: string; hire_episode_id: string | null; event_kind: string; finished_at: string | null }>(
+    `SELECT id, hire_episode_id, event_kind, finished_at FROM vehicle_handovers WHERE id = ? AND claim_id = ?`,
+    [input.handoverId, input.claimId],
+  );
+  if (!row) throw new Error("That handover record was not found on this file.");
+  const staff = get<{ id: string; name: string; role: string }>(`SELECT id, name, role FROM staff WHERE id = ?`, [input.actorId]);
+  if (!staff) throw new Error("The signed-in staff member could not be recorded.");
+  assertCanRecordHandover(staff, input.claimId, row.hire_episode_id);
+  const missing = missingStandardShots(slotsFor(row.id));
+  if (missing.length > 0) {
+    throw new Error(`Take ${missing.map((shot) => shot.label).join(", ")} before finishing. Damage photographs are optional.`);
+  }
+  if (row.finished_at) return { finishedAt: row.finished_at };
+  const finishedAt = nowUtcIso();
+  const event = handoverEvent(row.event_kind);
+  run(`UPDATE vehicle_handovers SET finished_at = ? WHERE id = ?`, [finishedAt, row.id]);
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "vehicle_handover_finished",
+    occurredAt: finishedAt,
+    actorId: staff.id,
+    details: `${event?.label || "Handover"} finished by ${staff.name}. The five standard photographs are saved.`,
+    source: "staff",
+  });
+  return { finishedAt };
+}
+
 type HandoverRow = {
   id: string;
   claim_id: string;
@@ -488,6 +555,7 @@ type HandoverRow = {
   warning_lights_off: string;
   tyres_legal: string;
   condition_note: string;
+  finished_at: string | null;
   booking_make: string | null;
   booking_model: string | null;
   booking_reg: string | null;
@@ -518,10 +586,11 @@ function toRecord(row: HandoverRow, photos: HandoverPhoto[], scans: HandoverScan
     warningLightsOff: asYesNo(row.warning_lights_off),
     tyresLegal: asYesNo(row.tyres_legal),
     conditionNote: row.condition_note || "",
-    bookingLabel: booking || (event?.needsBooking ? "Hire vehicle" : "Client's own vehicle"),
+    bookingLabel: booking || (event?.needsBooking ? "Hire car" : "Customer's vehicle"),
     photos,
     scans,
     incomplete: handoverIncomplete(photos.map((photo) => photo.slot)),
+    finishedAt: row.finished_at || null,
   };
 }
 
@@ -532,9 +601,14 @@ export function listVehicleHandovers(claimId: string): HandoverRecord[] {
 
 function listRows(claimId: string): HandoverRow[] {
   return all(
-    `SELECT h.*, s.name AS recorded_by_name, v.make AS booking_make, v.model AS booking_model, v.registration AS booking_reg
+    `SELECT h.*, s.name AS recorded_by_name,
+            CASE WHEN h.hire_episode_id IS NULL THEN own.make ELSE v.make END AS booking_make,
+            CASE WHEN h.hire_episode_id IS NULL THEN own.model ELSE v.model END AS booking_model,
+            CASE WHEN h.hire_episode_id IS NULL THEN own.registration ELSE v.registration END AS booking_reg
      FROM vehicle_handovers h
      LEFT JOIN staff s ON s.id = h.recorded_by
+     LEFT JOIN claims cl ON cl.id = h.claim_id
+     LEFT JOIN vehicles own ON own.id = cl.client_vehicle_id
      LEFT JOIN hire_episodes he ON he.id = h.hire_episode_id
      LEFT JOIN fleet_vehicles fv ON fv.id = he.fleet_vehicle_id
      LEFT JOIN vehicles v ON v.id = fv.vehicle_id

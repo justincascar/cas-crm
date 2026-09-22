@@ -4,7 +4,7 @@ import { SESSION_COOKIE } from "@/lib/auth/constants";
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  const isLogin = pathname === "/login";
+  const isLogin = pathname === "/login" || pathname === "/login/submit";
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-cas-pathname", pathname);
   if (isLogin) {

@@ -13,10 +13,10 @@ const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-3 text
 export default async function MyJobsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; finished?: string }>;
 }) {
   const staff = await requireSignedIn();
-  const { error, saved } = await searchParams;
+  const { error, saved, finished } = await searchParams;
   const jobs = listMyJobs(staff.id);
   const office = isOfficeRole(staff.role);
   const people = office ? listAssignablePeople() : [];
@@ -30,6 +30,7 @@ export default async function MyJobsPage({
         subtitle={`${formatUkDate(londonTodayIso())}. ${office ? "This is a shortcut. Your usual screens are unchanged." : "Only the jobs assigned to you today are listed."}`}
       />
       {error ? <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p> : null}
+      {finished ? <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm">Handover finished.</p> : null}
       {saved ? <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm">Job assigned.</p> : null}
       {jobs.length === 0 ? (
         <p className="rounded-xl border border-line bg-card px-4 py-6 text-base">Nothing assigned today.</p>

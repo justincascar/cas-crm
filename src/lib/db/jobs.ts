@@ -131,6 +131,8 @@ function assignedToday(assigneeId: string, jobKind: "handover" | "repair", claim
 export function assertCanRecordHandover(actor: Actor, claimId: string, hireEpisodeId: string | null) {
   if (isOfficeRole(actor.role)) return;
   if (actor.role !== DRIVER_ROLE) throw new Error("You cannot record a handover.");
+  if (!assignedToday(actor.id, "handover", claimId)) throw new Error("That file is not assigned to you today.");
+  if (!hireEpisodeId) return;
   const job = get<{ id: string }>(
     `SELECT id FROM day_assignments
      WHERE assignee_id = ? AND job_kind = 'handover' AND claim_id = ? AND work_date = ? AND hire_episode_id = ?`,

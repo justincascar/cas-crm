@@ -5,11 +5,11 @@ import { getRequestStaff, safeNextPath } from "@/lib/auth/session";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; error?: string }>;
 }) {
   const staff = await getRequestStaff();
   if (staff) redirect("/");
-  const { next } = await searchParams;
+  const { next, error } = await searchParams;
   const nextPath = safeNextPath(next);
 
   return (
@@ -27,7 +27,7 @@ export default async function LoginPage({
             <span className="ref">docs/AUTH-NOTES.md</span> on this PC.
           </p>
           <div className="mt-6">
-            <LoginForm nextPath={nextPath} />
+            <LoginForm nextPath={nextPath} failed={error === "1"} />
           </div>
         </div>
       </div>

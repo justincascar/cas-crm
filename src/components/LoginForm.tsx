@@ -1,27 +1,8 @@
-"use client";
-
-import { useState } from "react";
-import { actionLogin } from "@/app/auth-actions";
-import { ValidatedForm } from "@/components/ValidatedForm";
-
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-3 text-base";
 
-export function LoginForm({ nextPath }: { nextPath: string }) {
-  const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState(false);
-
-  async function onSubmit(formData: FormData) {
-    setPending(true);
-    setError(null);
-    const result = await actionLogin(formData);
-    if (result?.error) {
-      setError(result.error);
-      setPending(false);
-    }
-  }
-
+export function LoginForm({ nextPath, failed }: { nextPath: string; failed?: boolean }) {
   return (
-    <ValidatedForm action={onSubmit} className="space-y-4">
+    <form method="post" action="/login/submit" className="space-y-4">
       <input type="hidden" name="next" value={nextPath} />
       <label className="block text-sm">
         Username
@@ -31,16 +12,17 @@ export function LoginForm({ nextPath }: { nextPath: string }) {
         Password
         <input className={field} name="password" type="password" autoComplete="current-password" required />
       </label>
-      {error ? (
-        <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-3 py-2 text-sm text-overdue">{error}</p>
+      {failed ? (
+        <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-3 py-2 text-sm text-overdue">
+          Username or password is not right.
+        </p>
       ) : null}
       <button
         type="submit"
-        disabled={pending}
-        className="w-full rounded-md bg-teal px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+        className="w-full rounded-md bg-teal px-4 py-2.5 text-sm font-semibold text-white"
       >
-        {pending ? "Signing in…" : "Sign in"}
+        Sign in
       </button>
-    </ValidatedForm>
+    </form>
   );
 }

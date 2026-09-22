@@ -62,6 +62,7 @@ export const CLAIM_EVENT_TYPES = [
   { key: "document_generated", label: "Document generated" },
   { key: "hire_group_charged_override", label: "Group Charged set above the client's own vehicle group" },
   { key: "vehicle_handover_recorded", label: "Vehicle handover recorded" },
+  { key: "vehicle_handover_finished", label: "Vehicle handover finished" },
   { key: "vehicle_handover_photos_added", label: "Condition photographs added to a handover" },
   { key: "vehicle_handover_scan_added", label: "Diagnostic scan attached to a handover" },
   { key: "liability_status_changed", label: "Liability status changed" },

@@ -49,7 +49,10 @@ export function pathAllowedForRole(role: string | null | undefined, pathname: st
   const path = pathname.split("?")[0] || "/";
   if (path === "/jobs" || path === "/login") return true;
   if (role === DRIVER_ROLE) {
-    return /^\/claims\/[^/]+\/handover$/.test(path) || /^\/documents\/[^/]+(\/file|\/preview|\/preview\/\d+)?$/.test(path);
+    return (
+      /^\/claims\/[^/]+\/handover(\/(photo|start|finish))?$/.test(path) ||
+      /^\/documents\/[^/]+(\/file|\/preview|\/preview\/\d+)?$/.test(path)
+    );
   }
   if (role === MECHANIC_ROLE) {
     return /^\/claims\/[^/]+\/repair$/.test(path) || /^\/documents\/[^/]+(\/file|\/preview|\/preview\/\d+)?$/.test(path);

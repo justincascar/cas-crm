@@ -7,7 +7,7 @@ import { describe, it } from "node:test";
 import { pathAllowedForRole } from "../src/lib/auth/roles.ts";
 import { withDatabase } from "../src/lib/db/connection.ts";
 import { createStaffAccount } from "../src/lib/db/staff-admin.ts";
-import { recordVehicleHandover } from "../src/lib/db/handover.ts";
+import { listVehicleHandovers, recordVehicleHandover } from "../src/lib/db/handover.ts";
 import { addRepairEvidence, assignDayJob, canReadDocument, listMyJobs } from "../src/lib/db/jobs.ts";
 import { migrate } from "../src/lib/db/migrate.ts";
 import { seed } from "../src/lib/db/seed.ts";
@@ -48,6 +48,9 @@ describe("driver and mechanic access", () => {
       assert.equal(pathAllowedForRole(role, "/communications"), false);
     }
     assert.equal(pathAllowedForRole("driver", "/claims/c3/handover"), true);
+    assert.equal(pathAllowedForRole("driver", "/claims/c3/handover/photo"), true);
+    assert.equal(pathAllowedForRole("driver", "/claims/c3/handover/start"), true);
+    assert.equal(pathAllowedForRole("driver", "/claims/c3/handover/finish"), true);
     assert.equal(pathAllowedForRole("driver", "/claims/c3/repair"), false);
     assert.equal(pathAllowedForRole("mechanic", "/claims/c3/repair"), true);
     assert.equal(pathAllowedForRole("mechanic", "/claims/c3/handover"), false);
@@ -81,10 +84,11 @@ describe("driver and mechanic access", () => {
       });
       const saved = recordVehicleHandover(handover(created.id));
       assert.equal(saved.incomplete, true);
-      assert.throws(
-        () => recordVehicleHandover({ ...handover(created.id), eventKind: "client_recovered", hireEpisodeId: "" }),
-        /not assigned to you today/,
-      );
+      const own = recordVehicleHandover({ ...handover(created.id), eventKind: "client_recovered", hireEpisodeId: "" });
+      const listed = listVehicleHandovers("c3").find((row) => row.id === own.id);
+      assert.equal(listed?.eventKind, "client_recovered");
+      assert.equal(listed?.hireEpisodeId, null);
+      assert.match(listed?.eventLabel || "", /Customer's vehicle — collected for repair/);
       assert.throws(() => recordVehicleHandover(handover(created.id, "c4")), /not assigned|Choose the hire booking|not on this file/);
       const jobs = listMyJobs(created.id);
       assert.equal(jobs.length, 1);

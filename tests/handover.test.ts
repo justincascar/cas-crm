@@ -9,8 +9,11 @@ import { generateHireAgreementDocument } from "../src/lib/db/hire-agreement.ts";
 import {
   addHandoverPhotographs,
   attachHandoverScan,
+  finishVehicleHandover,
+  focusAfterShot,
   handoverIncomplete,
   listVehicleHandovers,
+  MAX_DAMAGE_PHOTOS,
   missingStandardShots,
   recordVehicleHandover,
   STANDARD_SHOTS,
@@ -163,32 +166,137 @@ describe("vehicle handover records", () => {
     );
   });
 
+  it("moves on to the next standard shot and caps damage photographs at six", () => {
+    assert.equal(focusAfterShot("front", ["front"]), "rear");
+    assert.equal(focusAfterShot("rear", ["front", "rear"]), "driver_side");
+    assert.equal(
+      focusAfterShot("interior", ["front", "rear", "driver_side", "passenger_side", "interior"]),
+      "finish",
+    );
+    assert.equal(MAX_DAMAGE_PHOTOS, 6);
+    const previous = process.env.CAS_FILES_DIR;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cas-handover-cap-"));
+    process.env.CAS_FILES_DIR = dir;
+    const db = prepared();
+    try {
+      withDatabase(db, () => {
+        const own = recordVehicleHandover(
+          handover({ eventKind: "client_returned", hireEpisodeId: "", mileage: "44000", fuelLevel: "full" }),
+        );
+        const listed = listVehicleHandovers("c3").find((row) => row.id === own.id);
+        assert.equal(listed?.hireEpisodeId, null);
+        assert.match(listed?.eventLabel || "", /Customer's vehicle — returned after repair/);
+        assert.match(listed?.bookingLabel || "", /SA12 CWA/);
+        const saved = recordVehicleHandover(handover());
+        addHandoverPhotographs({
+          claimId: "c3",
+          handoverId: saved.id,
+          actorId: "staff-sian",
+          photos: [shot("front")],
+        });
+        assert.throws(
+          () =>
+            addHandoverPhotographs({
+              claimId: "c3",
+              handoverId: saved.id,
+              actorId: "staff-sian",
+              photos: [shot("front", "front-again")],
+            }),
+          /Front is already photographed/,
+        );
+        addHandoverPhotographs({
+          claimId: "c3",
+          handoverId: saved.id,
+          actorId: "staff-sian",
+          photos: Array.from({ length: 6 }, (_, index) => shot("damage", `damage-${index}`)),
+        });
+        assert.throws(
+          () =>
+            addHandoverPhotographs({
+              claimId: "c3",
+              handoverId: saved.id,
+              actorId: "staff-sian",
+              photos: [shot("damage", "damage-extra")],
+            }),
+          /6 damage photographs/,
+        );
+      });
+    } finally {
+      db.close();
+      if (previous === undefined) delete process.env.CAS_FILES_DIR;
+      else process.env.CAS_FILES_DIR = previous;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("finishes once the five standard shots are saved, without a damage photograph", () => {
+    const previous = process.env.CAS_FILES_DIR;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cas-handover-finish-"));
+    process.env.CAS_FILES_DIR = dir;
+    const db = prepared();
+    try {
+      withDatabase(db, () => {
+        const saved = recordVehicleHandover(handover());
+        assert.throws(
+          () => finishVehicleHandover({ claimId: "c3", handoverId: saved.id, actorId: "staff-sian" }),
+          /before finishing/,
+        );
+        addHandoverPhotographs({
+          claimId: "c3",
+          handoverId: saved.id,
+          actorId: "staff-sian",
+          photos: fiveShots(),
+        });
+        const finished = finishVehicleHandover({ claimId: "c3", handoverId: saved.id, actorId: "staff-sian" });
+        const row = listVehicleHandovers("c3").find((item) => item.id === saved.id);
+        assert.equal(row?.incomplete, false);
+        assert.equal(row?.photos.some((photo) => photo.slot === "damage"), false);
+        assert.equal(row?.finishedAt, finished.finishedAt);
+        const again = finishVehicleHandover({ claimId: "c3", handoverId: saved.id, actorId: "staff-sian" });
+        assert.equal(again.finishedAt, finished.finishedAt);
+      });
+    } finally {
+      db.close();
+      if (previous === undefined) delete process.env.CAS_FILES_DIR;
+      else process.env.CAS_FILES_DIR = previous;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it("does not put the retired paper-form fields on the handover screen", () => {
     const page = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/handover/page.tsx"), "utf8");
+    const start = fs.readFileSync(path.join(process.cwd(), "src/components/handover/HandoverStartForm.tsx"), "utf8");
+    const camera = fs.readFileSync(path.join(process.cwd(), "src/components/handover/ShotCamera.tsx"), "utf8");
     const pack = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/hire-pack/page.tsx"), "utf8");
-    for (const source of [page, pack]) {
+    for (const source of [page, pack, start]) {
       assert.doesNotMatch(source, /tyre depth/i);
       assert.doesNotMatch(source, /tax disc/i);
       assert.doesNotMatch(source, /cd magazine/i);
       assert.doesNotMatch(source, /sat nav disc/i);
       assert.doesNotMatch(source, /<canvas/i);
     }
-    assert.match(page, /Mileage/);
-    assert.match(page, /Fuel level/);
+    assert.match(start, /Mileage/);
+    assert.match(start, /Fuel level/);
+    assert.match(start, /Hire car/);
+    assert.match(start, /Customer/);
     assert.doesNotMatch(page, /Spare wheel present/);
     assert.doesNotMatch(page, /Tools present/);
     assert.doesNotMatch(page, /Warning lights off/);
     assert.doesNotMatch(page, /Tyres visibly legal/);
-    assert.match(page, /Pre-diagnostic scan/);
-    assert.match(page, /Post-diagnostic scan/);
-    assert.match(page, /capture="environment"/);
+    const shots = fs.readFileSync(path.join(process.cwd(), "src/lib/db/handover.ts"), "utf8");
+    assert.match(shots, /Pre-diagnostic scan/);
+    assert.match(shots, /Post-diagnostic scan/);
+    assert.match(camera, /capture="environment"/);
     assert.match(page, /Open camera/);
+    assert.match(page, /Add another damage photo/);
+    assert.match(page, /Finish handover/);
+    assert.match(page, /Damage photographs are optional/);
     assert.match(page, /Not taken yet/);
     assert.match(page, /Damage photos/);
-    assert.match(page, /Or choose a saved photo/);
+    assert.match(camera, /Or choose a saved photo/);
     assert.match(page, /STANDARD_SHOTS/);
+    assert.doesNotMatch(camera, /<label[^>]*>[\s\S]{0,120}capture="environment"/);
     assert.doesNotMatch(page, /<label[^>]*>[\s\S]{0,120}capture="environment"/);
-    const shots = fs.readFileSync(path.join(process.cwd(), "src/lib/db/handover.ts"), "utf8");
     for (const label of ["Front", "Rear", "Driver's side", "Passenger's side", "Interior"]) {
       assert.match(shots, new RegExp(label.replace("'", "\\'")));
     }

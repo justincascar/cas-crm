@@ -1,17 +1,19 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { actionAddHandoverPhotos, actionAttachHandoverScan, actionRecordHandover } from "@/app/handover-actions";
+import { actionAttachHandoverScan } from "@/app/handover-actions";
 import { PageHeader } from "@/components/ClaimTable";
+import { HandoverStartForm } from "@/components/handover/HandoverStartForm";
+import { ShotCamera } from "@/components/handover/ShotCamera";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { formatUkDateTime } from "@/lib/dates";
 import { isOfficeRole } from "@/lib/auth/roles";
 import { requireSignedIn } from "@/lib/auth/session";
 import {
   DAMAGE_SHOT,
-  FUEL_LEVELS,
   HANDOVER_EVENTS,
   listHireBookings,
   listVehicleHandovers,
+  MAX_DAMAGE_PHOTOS,
   missingStandardShots,
   SCAN_SLOTS,
   STANDARD_SHOTS,
@@ -23,7 +25,6 @@ import { getClaim } from "@/lib/db/queries";
 
 const field = "mt-1 w-full max-w-full rounded-md border border-line bg-white px-3 py-3 text-base";
 const scanAccept = "application/pdf,image/jpeg,image/png,image/webp,image/gif,text/plain,text/csv,text/html,text/xml,application/json,.pdf,.txt,.csv,.xml,.html,.json,.log";
-const photoAccept = "image/jpeg,image/png,image/webp,image/gif";
 
 /** The input itself is the button. A surrounding label would open the file chooser instead of the camera. */
 function openCamera(name: string, label: string) {
@@ -64,14 +65,16 @@ function latestShot(photos: HandoverPhoto[], slot: string) {
   return [...photos].reverse().find((photo) => photo.slot === slot) || null;
 }
 
-function guidedShots(photos: HandoverPhoto[]) {
+function guidedShots(claimId: string, handoverId: string, photos: HandoverPhoto[]) {
+  const post = `/claims/${claimId}/handover/photo`;
   const damage = photos.filter((photo) => photo.slot === DAMAGE_SHOT);
+  const firstMissing = missingStandardShots(photos.map((photo) => photo.slot))[0]?.slot;
   return (
     <div className="space-y-4">
       {STANDARD_SHOTS.map((shot) => {
         const taken = latestShot(photos, shot.slot);
         return (
-          <div key={shot.slot} className="rounded-md border border-line p-3">
+          <div key={shot.slot} id={`shot-${shot.slot}`} className="scroll-mt-4 rounded-md border border-line p-3">
             <div className="mb-2 flex items-baseline justify-between gap-2">
               <p className="text-sm font-medium">{shot.label}</p>
               <p className={taken ? "text-sm font-medium text-ok" : "text-sm text-slate"}>{taken ? "Taken" : "Not taken yet"}</p>
@@ -81,17 +84,19 @@ function guidedShots(photos: HandoverPhoto[]) {
                 <img src={`/documents/${taken.documentId}/file`} alt={shot.label} className="h-24 w-32 rounded-md border border-line object-cover" />
               </a>
             ) : (
-              <div className="grid gap-3">
-                {openCamera(`${shot.slot}Camera`, "Open camera")}
-                {chooseSaved(`${shot.slot}File`, "Or choose a saved photo", photoAccept)}
-              </div>
+              <>
+                {firstMissing === shot.slot ? <p className="mb-2 text-sm text-teal-dark">Take this photograph next.</p> : null}
+                <ShotCamera action={post} claimId={claimId} handoverId={handoverId} slot={shot.slot} cameraLabel="Open camera" />
+              </>
             )}
           </div>
         );
       })}
-      <div className="rounded-md border border-line p-3">
+      <div id="shot-damage" className="scroll-mt-4 rounded-md border border-line p-3">
         <p className="text-sm font-medium">Damage photos</p>
-        <p className="mt-1 text-sm text-slate">Optional. Close-ups of any damage. Add as many as you need.</p>
+        <p className="mt-1 text-sm text-slate">
+          Optional. Close-ups of any damage. Up to {MAX_DAMAGE_PHOTOS}. {damage.length} of {MAX_DAMAGE_PHOTOS} saved.
+        </p>
         {damage.length > 0 ? (
           <ul className="mt-3 flex flex-wrap gap-3">
             {damage.map((photo) => (
@@ -103,11 +108,26 @@ function guidedShots(photos: HandoverPhoto[]) {
             ))}
           </ul>
         ) : null}
-        <div className="mt-3 grid gap-3">
-          {openCamera("damageCamera", "Open camera")}
-          {chooseSaved("damageFiles", "Or choose saved photos", photoAccept, true)}
-        </div>
+        {damage.length < MAX_DAMAGE_PHOTOS ? (
+          <div className="mt-3">
+            <ShotCamera action={post} claimId={claimId} handoverId={handoverId} slot={DAMAGE_SHOT} cameraLabel="Add another damage photo" />
+          </div>
+        ) : (
+          <p className="mt-3 text-sm text-slate">Six damage photographs are saved.</p>
+        )}
       </div>
+      {firstMissing ? null : (
+        <div id="shot-finish" className="scroll-mt-4 rounded-md border border-ok/40 bg-[#eef6ee] p-3">
+          <p className="text-sm">The five photographs are saved. Damage photographs are optional.</p>
+          <form method="post" action={`/claims/${claimId}/handover/finish`} className="mt-3">
+            <input type="hidden" name="claimId" value={claimId} />
+            <input type="hidden" name="handoverId" value={handoverId} />
+            <button className="min-h-11 w-full rounded-md bg-navy px-4 py-3 text-base font-semibold text-white sm:w-auto" type="submit">
+              Finish handover
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
@@ -138,15 +158,37 @@ export default async function HandoverPage({
       );
   if (assignedEpisodes && assignedEpisodes.size === 0) redirect("/jobs");
   const bookings = listHireBookings(id).filter((booking) => !assignedEpisodes || assignedEpisodes.has(booking.id));
-  const records = listVehicleHandovers(id).filter((record) => !assignedEpisodes || (record.hireEpisodeId && assignedEpisodes.has(record.hireEpisodeId)));
-  const events = assignedEpisodes ? HANDOVER_EVENTS.filter((event) => event.needsBooking) : HANDOVER_EVENTS;
+  const records = listVehicleHandovers(id).filter(
+    (record) => !assignedEpisodes || !record.hireEpisodeId || assignedEpisodes.has(record.hireEpisodeId),
+  );
   const fileRef = String(claim.claim.file_reference || "");
+  const customerVehicle =
+    [claim.claim.make, claim.claim.model, claim.claim.registration].filter(Boolean).join(" ") || "Not recorded on the file";
+  const savedText =
+    saved === "photo" ? "Photograph saved." : saved === "details" ? "Details saved. Take the photographs below." : saved ? "Handover saved." : "";
 
   return (
     <div className="max-w-4xl space-y-6">
+      <script
+        dangerouslySetInnerHTML={{
+          __html: `(function () {
+            if (window.__casHandoverPhoto) return;
+            window.__casHandoverPhoto = true;
+            document.addEventListener("change", function (event) {
+              var input = event.target;
+              if (!input || input.name !== "photo" || !input.form) return;
+              var action = input.form.getAttribute("action") || "";
+              if (action.indexOf("/handover/photo") === -1) return;
+              var file = input.files && input.files[0];
+              if (!file || file.size < 1) return;
+              window.setTimeout(function () { input.form.submit(); }, 0);
+            }, true);
+          })();`,
+        }}
+      />
       <PageHeader
         title={`Handover — ${fileRef}`}
-        subtitle="Condition of the hire vehicle or the client's own vehicle at delivery, collection, recovery or return. A saved record is locked. To correct it, record a new handover and explain the correction in the note."
+        subtitle="Condition of the hire car, or of the customer's own vehicle, when it is handed over or collected. A saved record is locked. To correct it, record a new handover and explain the correction in the note."
         actions={
           office ? (
             <Link href={`/claims/${id}`} className="text-sm text-teal-dark underline">
@@ -157,100 +199,19 @@ export default async function HandoverPage({
       />
 
       {error ? <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p> : null}
-      {saved ? <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm">Handover saved.</p> : null}
+      {savedText ? <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm">{savedText}</p> : null}
 
-      <ValidatedForm action={actionRecordHandover} encType="multipart/form-data" className="space-y-4 rounded-xl border border-line bg-card p-5">
-        <h2 className="font-serif text-xl text-navy-deep">Record a handover</h2>
-        <input type="hidden" name="claimId" value={id} />
-        <label className="block text-sm">
-          Which handover
-          <select name="eventKind" className={field} required defaultValue="">
-            <option value="" disabled>
-              Choose one
-            </option>
-            {events.map((event) => (
-              <option key={event.kind} value={event.kind}>
-                {event.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="block text-sm">
-          Hire booking
-          <select name="hireEpisodeId" className={field} defaultValue={bookings[0]?.id || ""}>
-            {office ? <option value="">Not a hire vehicle</option> : null}
-            {bookings.map((booking) => (
-              <option key={booking.id} value={booking.id}>
-                {[booking.make, booking.model, booking.registration].filter(Boolean).join(" ") || "Hire vehicle"}
-                {booking.started_at ? ` · out ${formatUkDateTime(booking.started_at)}` : ""}
-              </option>
-            ))}
-          </select>
-        </label>
-        <p className="text-sm text-slate">
-          {office
-            ? "Choose the hire booking when the vehicle is the one CAS supplied. Leave it as “Not a hire vehicle” for the client's own car. Each handover stands on its own if the car is swapped."
-            : "This is the vehicle assigned to you today."}
-        </p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="text-sm">
-            Mileage
-            <input name="mileage" type="number" min={0} step={1} required className={field} />
-          </label>
-          <label className="text-sm">
-            Fuel level
-            <select name="fuelLevel" className={field} required defaultValue="">
-              <option value="" disabled>
-                Choose one
-              </option>
-              {FUEL_LEVELS.map((level) => (
-                <option key={level.value} value={level.value}>
-                  {level.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <label className="block text-sm">
-          Damage and condition
-          <textarea name="conditionNote" rows={3} className={field} placeholder="What you can see. If this corrects an earlier record, say what was wrong." />
-        </label>
-        <div>
-          <p className="text-sm font-medium">Condition photographs</p>
-          <p className="mt-1 text-sm text-slate">Open camera starts the phone camera for that shot. If it does not, choose a photo already saved. The record stays incomplete until Front, Rear, Driver&apos;s side, Passenger&apos;s side and Interior are all taken. Damage photos are optional. You can add any that are missing after you save.</p>
-          <div className="mt-3">{guidedShots([])}</div>
-        </div>
-        {office ? (
-          <>
-            <div className="grid gap-4">
-              <div>
-                <p className="text-sm font-medium">Pre-diagnostic scan</p>
-                {cameraOrFile({
-                  cameraName: "preScanCamera",
-                  fileName: "preScan",
-                  cameraLabel: "Photograph the scan",
-                  fileLabel: "Or choose a saved scan file",
-                  accept: scanAccept,
-                })}
-              </div>
-              <div>
-                <p className="text-sm font-medium">Post-diagnostic scan</p>
-                {cameraOrFile({
-                  cameraName: "postScanCamera",
-                  fileName: "postScan",
-                  cameraLabel: "Photograph the scan",
-                  fileLabel: "Or choose a saved scan file",
-                  accept: scanAccept,
-                })}
-              </div>
-            </div>
-            <p className="text-sm text-slate">Optional. Photograph the tool’s screen, or choose a PDF, image or text file already saved. Use one of those for each scan, not both. A missing scan does not mark the record incomplete.</p>
-          </>
-        ) : null}
-        <button className="min-h-11 w-full rounded-md bg-navy px-4 py-3 text-base text-white sm:w-auto" type="submit">
-          Save handover record
-        </button>
-      </ValidatedForm>
+      <HandoverStartForm
+        action={`/claims/${id}/handover/start`}
+        claimId={id}
+        office={office}
+        customerVehicle={customerVehicle}
+        occasions={HANDOVER_EVENTS.map((event) => ({ kind: event.kind, label: event.label, needsBooking: event.needsBooking }))}
+        bookings={bookings.map((booking) => ({
+          id: booking.id,
+          label: [booking.make, booking.model, booking.registration].filter(Boolean).join(" ") || "Hire car",
+        }))}
+      />
 
       <section className="space-y-4">
         <h2 className="font-serif text-xl text-navy-deep">Saved handovers</h2>
@@ -264,7 +225,9 @@ export default async function HandoverPage({
                   {record.bookingLabel} · {formatUkDateTime(record.occurredAt)} · {record.recordedByName}
                 </p>
               </div>
-              {record.incomplete ? (
+              {record.finishedAt ? (
+                <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-3 py-2">Handover finished.</p>
+              ) : record.incomplete ? (
                 <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2">
                   Incomplete — still needed: {missingStandardShots(record.photos.map((photo) => photo.slot)).map((shot) => shot.label).join(", ")}.
                 </p>
@@ -276,16 +239,11 @@ export default async function HandoverPage({
               Mileage {record.mileage.toLocaleString("en-GB")} · Fuel {record.fuelLabel}
             </p>
             {record.conditionNote ? <p className="mt-2">{record.conditionNote}</p> : null}
-            <ValidatedForm action={actionAddHandoverPhotos} encType="multipart/form-data" className="mt-4 space-y-3">
-              <input type="hidden" name="claimId" value={id} />
-              <input type="hidden" name="handoverId" value={record.id} />
+            <div className="mt-4 space-y-3">
               <p className="text-sm font-medium">Photographs</p>
-              {guidedShots(record.photos)}
-              <button className="min-h-11 w-full rounded-md border border-navy px-3 py-3 text-base text-navy sm:w-auto" type="submit">
-                Attach
-              </button>
-            </ValidatedForm>
-            <p className="mt-2 text-xs text-slate">This does not change the mileage or fuel already saved.</p>
+              {guidedShots(id, record.id, record.photos)}
+              <p className="text-xs text-slate">Taking a photograph stores it at once. It does not change the mileage or fuel already saved.</p>
+            </div>
             {office ? <div className="mt-4 space-y-3 border-t border-line pt-4">
               <h4 className="font-medium">Diagnostic scans</h4>
               {SCAN_SLOTS.map((slot) => {
