@@ -14,6 +14,11 @@ export function HandoverStartForm({
   bookings,
   customerVehicle,
   occasions,
+  initialVehicle,
+  initialEventKind,
+  drivers,
+  defaultDriverId,
+  defaultWhen,
 }: {
   action: string;
   claimId: string;
@@ -21,9 +26,16 @@ export function HandoverStartForm({
   bookings: Booking[];
   customerVehicle: string;
   occasions: Occasion[];
+  initialVehicle?: "hire" | "customer";
+  initialEventKind?: string;
+  drivers: Booking[];
+  defaultDriverId: string;
+  defaultWhen: string;
 }) {
-  const [vehicle, setVehicle] = useState<"hire" | "customer">(bookings.length ? "hire" : "customer");
+  const startVehicle = initialVehicle === "customer" || (initialVehicle === "hire" && bookings.length > 0) ? initialVehicle : bookings.length ? "hire" : "customer";
+  const [vehicle, setVehicle] = useState<"hire" | "customer">(startVehicle);
   const shown = occasions.filter((event) => event.needsBooking === (vehicle === "hire"));
+  const eventDefault = shown.some((event) => event.kind === initialEventKind) ? initialEventKind : shown[0]?.kind || "";
   const onlyBooking = bookings.length === 1 ? bookings[0] : null;
 
   return (
@@ -45,7 +57,7 @@ export function HandoverStartForm({
       </label>
       <label className="block text-sm">
         What is happening
-        <select name="eventKind" key={vehicle} className={field} required defaultValue={shown[0]?.kind || ""}>
+        <select name="eventKind" key={vehicle} className={field} required defaultValue={eventDefault}>
           {shown.map((event) => (
             <option key={event.kind} value={event.kind}>
               {event.label}
@@ -110,6 +122,24 @@ export function HandoverStartForm({
           </select>
         </label>
       </div>
+      <label className="block text-sm">
+        Driver who did this
+        <select name="actualDriverId" className={field} required defaultValue={defaultDriverId}>
+          <option value="">Choose the driver</option>
+          {drivers.map((driver) => (
+            <option key={driver.id} value={driver.id}>
+              {driver.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="block text-sm">
+        Date and time this happened
+        <input name="actualOccurredAt" type="datetime-local" required className={field} defaultValue={defaultWhen} />
+      </label>
+      <p className="text-sm text-slate">
+        These are the driver and the time it happened. They stay as you enter them when someone else types this up later. They are not taken from the sign-in, and they are not the moment you press save.
+      </p>
       <label className="block text-sm">
         Damage and condition
         <textarea name="conditionNote" rows={3} className={field} placeholder="What you can see. If this corrects an earlier record, say what was wrong." />

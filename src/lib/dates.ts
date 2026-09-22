@@ -24,6 +24,27 @@ export function londonTodayIso(asAt = new Date()): string {
   return londonDateIso(asAt);
 }
 
+/** datetime-local value for Europe/London, for a form that the staff member can still change. */
+export function londonDateTimeLocal(asAt = new Date()): string {
+  return formatInTimeZone(asAt, TIMEZONE, "yyyy-MM-dd'T'HH:mm");
+}
+
+export function toLondonDateTimeLocal(iso: string): string {
+  return formatInTimeZone(new Date(iso), TIMEZONE, "yyyy-MM-dd'T'HH:mm");
+}
+
+/**
+ * A date and time typed as Europe/London. Empty or unreadable values are refused.
+ * This does not substitute the current time.
+ */
+export function requireLondonDateTime(value: string | null | undefined): string {
+  const text = (value || "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(text)) {
+    throw new Error("Enter the date and time this happened.");
+  }
+  return utcFromLondonDateTime(text.slice(0, 16));
+}
+
 export function isFutureLondonDate(dateYmd: string, asAt = new Date()): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) return false;
   return dateYmd > londonTodayIso(asAt);

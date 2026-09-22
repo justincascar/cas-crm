@@ -185,7 +185,7 @@ describe("driver and mechanic access", () => {
       });
       const jobs = listMyJobs("staff-justin");
       assert.equal(jobs.length, 1);
-      assert.equal(jobs[0].href, "/claims/c3/handover");
+      assert.match(jobs[0].href, /^\/claims\/c3\/handover\?job=/);
       assert.equal(listMyJobs("staff-tom").length, 0);
     });
     db.close();

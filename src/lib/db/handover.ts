@@ -1,9 +1,10 @@
 import { isOfficeRole } from "../auth/roles";
-import { nowUtcIso } from "../dates";
+import { formatUkDateTime, nowUtcIso, requireLondonDateTime } from "../dates";
 import { assertCanRecordHandover } from "./jobs";
 import { storeFileCopy } from "../storage/files";
 import { all, get, getDb, newId, run } from "./connection";
 import { recordClaimEvent } from "./chronology";
+import { applyClientRecoveryActualDate, applyClientReturnActualDate } from "./storage-recovery-date";
 import { insertStoredDocument } from "./documents-store";
 
 export const HANDOVER_EVENTS = [
@@ -81,6 +82,9 @@ export type HandoverInput = {
   photos: HandoverPhotoInput[];
   preScan?: HandoverFileInput | null;
   postScan?: HandoverFileInput | null;
+  /** When set, even as an empty string, the actual driver and time are required and are not taken from the signed-in person or from now. */
+  actualDriverId?: string;
+  actualOccurredAt?: string;
 };
 
 export type HandoverReading = {
@@ -114,8 +118,11 @@ export type HandoverRecord = {
   eventKind: HandoverEventKind;
   eventLabel: string;
   occurredAt: string;
+  createdAt: string;
   recordedBy: string;
   recordedByName: string;
+  actualDriverId: string | null;
+  actualDriverName: string;
   mileage: number;
   fuelLevel: FuelLevel;
   fuelLabel: string;
@@ -342,6 +349,23 @@ function storeScan(claimId: string, handoverId: string, actorId: string, slot: H
   );
 }
 
+function actualHandover(
+  input: HandoverInput,
+  staff: { id: string; name: string },
+  enteredAt: string,
+): { occurredAt: string; driverId: string; driverName: string } {
+  if (input.actualOccurredAt === undefined && input.actualDriverId === undefined) {
+    return { occurredAt: enteredAt, driverId: staff.id, driverName: staff.name };
+  }
+  const occurredAt = requireLondonDateTime(input.actualOccurredAt);
+  const driver = get<{ id: string; name: string; role: string }>(
+    "SELECT id, name, role FROM staff WHERE id = ? AND active = 1",
+    [(input.actualDriverId || "").trim()],
+  );
+  if (!driver || driver.role !== "driver") throw new Error("Choose the driver who did this job.");
+  return { occurredAt, driverId: driver.id, driverName: driver.name };
+}
+
 export function recordVehicleHandover(input: HandoverInput): { id: string; incomplete: boolean } {
   const event = handoverEvent(input.eventKind);
   if (!event) throw new Error("Choose which handover this is.");
@@ -376,7 +400,9 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
     tyres_legal: storedCheck(input.tyresLegal),
   };
   const note = input.conditionNote.trim().slice(0, 4000);
-  const occurredAt = nowUtcIso();
+  const enteredAt = nowUtcIso();
+  const actual = actualHandover(input, staff, enteredAt);
+  const occurredAt = actual.occurredAt;
   const id = newId("vh");
   const db = getDb();
   db.exec("BEGIN");
@@ -384,8 +410,8 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
     run(
       `INSERT INTO vehicle_handovers(
         id, claim_id, hire_episode_id, event_kind, occurred_at, recorded_by, mileage, fuel_level,
-        spare_wheel, tools_present, warning_lights_off, tyres_legal, condition_note, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        spare_wheel, tools_present, warning_lights_off, tyres_legal, condition_note, created_at, actual_driver_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         input.claimId,
@@ -400,7 +426,8 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
         checks.warning_lights_off,
         checks.tyres_legal,
         note,
-        occurredAt,
+        enteredAt,
+        actual.driverId,
       ],
     );
     storePhotos(input.claimId, id, staff.id, input.photos, occurredAt);
@@ -418,9 +445,15 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
       eventType: "vehicle_handover_recorded",
       occurredAt,
       actorId: staff.id,
-      details: `${event.label} (${bookingLabel}). Mileage ${formatHandoverMileage(mileage)}. Fuel ${fuelLevelLabel(fuel)}. Recorded by ${staff.name}. ${photoProgress(input.photos.map((photo) => photo.slot))}${attachedScans.length ? ` Diagnostic ${attachedScans.join(" and ")} attached.` : ""}${note ? ` Note: ${note}` : ""}`,
+      details: `${event.label} (${bookingLabel}). Mileage ${formatHandoverMileage(mileage)}. Fuel ${fuelLevelLabel(fuel)}. Happened ${formatUkDateTime(occurredAt)}. Driver ${actual.driverName}. Entered by ${staff.name}. ${photoProgress(input.photos.map((photo) => photo.slot))}${attachedScans.length ? ` Diagnostic ${attachedScans.join(" and ")} attached.` : ""}${note ? ` Note: ${note}` : ""}`,
       source: "staff",
     });
+    if (event.kind === "client_recovered" && input.actualOccurredAt !== undefined) {
+      applyClientRecoveryActualDate({ claimId: input.claimId, actualOccurredAt: occurredAt, actorId: staff.id });
+    }
+    if (event.kind === "client_returned" && input.actualOccurredAt !== undefined) {
+      applyClientReturnActualDate({ claimId: input.claimId, actualOccurredAt: occurredAt, actorId: staff.id });
+    }
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");
@@ -548,6 +581,9 @@ type HandoverRow = {
   occurred_at: string;
   recorded_by: string;
   recorded_by_name: string | null;
+  created_at: string;
+  actual_driver_id: string | null;
+  actual_driver_name: string | null;
   mileage: number;
   fuel_level: string;
   spare_wheel: string;
@@ -576,8 +612,11 @@ function toRecord(row: HandoverRow, photos: HandoverPhoto[], scans: HandoverScan
     eventKind: (event?.kind || "hire_delivered") as HandoverEventKind,
     eventLabel: event?.label || row.event_kind,
     occurredAt: row.occurred_at,
+    createdAt: row.created_at,
     recordedBy: row.recorded_by,
     recordedByName: row.recorded_by_name || "Unknown staff",
+    actualDriverId: row.actual_driver_id,
+    actualDriverName: row.actual_driver_name || row.recorded_by_name || "Unknown staff",
     mileage: Number(row.mileage),
     fuelLevel: fuel,
     fuelLabel: fuelLevelLabel(fuel),
@@ -601,12 +640,13 @@ export function listVehicleHandovers(claimId: string): HandoverRecord[] {
 
 function listRows(claimId: string): HandoverRow[] {
   return all(
-    `SELECT h.*, s.name AS recorded_by_name,
+    `SELECT h.*, s.name AS recorded_by_name, driver.name AS actual_driver_name,
             CASE WHEN h.hire_episode_id IS NULL THEN own.make ELSE v.make END AS booking_make,
             CASE WHEN h.hire_episode_id IS NULL THEN own.model ELSE v.model END AS booking_model,
             CASE WHEN h.hire_episode_id IS NULL THEN own.registration ELSE v.registration END AS booking_reg
      FROM vehicle_handovers h
      LEFT JOIN staff s ON s.id = h.recorded_by
+     LEFT JOIN staff driver ON driver.id = h.actual_driver_id
      LEFT JOIN claims cl ON cl.id = h.claim_id
      LEFT JOIN vehicles own ON own.id = cl.client_vehicle_id
      LEFT JOIN hire_episodes he ON he.id = h.hire_episode_id

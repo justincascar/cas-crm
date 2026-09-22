@@ -136,6 +136,34 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+22 September 2026 — Assign a job keeps the choices already made, and confirms beside the button:
+
+- Ticking Already completed was adding a new dropdown into the form. The browser then put Job and Driver back to the first choice, and that reset was saved into the form, so Assign job stopped with “Please select an item in the list.” Those extra fields are now on the form from the start and only shown when the box is ticked. A change the user did not make on Job or Driver is put back.
+- Assign job switches off as soon as it is pressed, so a second click cannot send the form again. After it saves, the confirmation sits directly above the button: the job is saved, and the button does not need pressing again.
+- The accidental Hire car delivery saved on TEST-0003 at 19:28 on 22 September 2026, from that reset, was removed from this PC’s database. The return job and the recovery jobs on that file were left.
+
+22 September 2026 — Storage ends on the day the client's vehicle is returned after repair:
+
+- Completing a Return client's vehicle after repair job, including one written up later with a real date and time, now sets the file's storage end to that calendar day when the file has no storage end date yet. The daily rate, recovery charges, VAT and the hire end date are not recalculated or moved.
+- If a storage end date is already on the file and it falls on a different day, it is left as it is. The file shows a check: use the date from the return job, or keep the date already there. Nothing is overwritten until a person chooses. That choice is a CAS charging check, not a legal conclusion.
+- Typing the storage end on the Storage screen, with no return job, still works as before.
+- This is the storage-end step noted when the recovery date was linked. Hire car collection is still not linked to the hire end date. That hire end is the replacement vehicle coming back to CAS, including the total-loss rule of seven days after a qualifying payment, and it is a sensible next stage. It is not done here.
+
+22 September 2026 — Storage is charged from the day the vehicle was actually recovered:
+
+- Completing a Recover client's vehicle job, including one written up later with a real date and time, now sets the file's storage start to that calendar day when the file has no recovery date and no storage start date yet. Recovered on, on the Storage & Recovery page, uses that same storage start. The daily rate, recovery charges and VAT figures are not recalculated.
+- If a recovery date or a storage start date is already on the file and it falls on a different day, it is left as it is. The file shows a check: use the job's date, or keep the date already there. Nothing is overwritten until a person chooses. That choice is a CAS charging check, not a legal conclusion.
+- Typing the storage start on the Storage screen, with no recovery job, still works as before.
+- This closes the gap noted when jobs were added: storage was still taken only from intake or the Storage screen. Returning the client's vehicle after repair is not linked to the storage end date. That end date is still an explicit date. Using the return job's actual time as a suggested end, with the same kind of check when an end date is already there, is a sensible next stage. It is not done here.
+
+22 September 2026 — Assign a driver and a date, including a job written up afterwards:
+
+- My jobs today had only “Assign a job for today”: a hire handover or a repair, always for today, with no delivery-versus-collection choice and no job for the client’s own vehicle. Staff now choose Hire car delivery, Hire car collection, Recover client's vehicle, or Return client's vehicle after repair, plus a driver and a date. The date starts as today and can be earlier or later. Who does it, and when, is entered by staff. The system does not choose either.
+- A job for today or an earlier date can be marked already completed, with the driver who did it and the date and time it happened. Those are typed in. They are not the person signed in, and they are not the moment the form is saved. A future date cannot be marked already done. My jobs today lists only jobs whose date is today, across those four types, including one marked done today. A past date stays on that past date.
+- The handover record keeps the same split: the time it happened and the driver who did it, separate from the time the record was saved and the person who typed it. On the phone, a driver doing the job now sees their own name and the current time already filled in, and can change both. Office staff typing it up later start with those boxes empty.
+- Recovering or returning the client’s own vehicle is now a job in the same list. A driver who only has that job can open the handover. The demonstration driver’s existing daily test job on TEST-0003 is unchanged.
+- Storage and recovery charge dates were not taken from the new driver or time in this change. The entries above link a completed Recover client's vehicle job to the storage start, and a completed Return client's vehicle after repair job to the storage end. Daily rates are unchanged.
+
 22 September 2026 — Handover photographs save as they are taken, and cover the customer's own vehicle:
 
 - A photograph taken on the phone was not stored. The camera only filled in a file box. Nothing was sent until Save, and that save was a script request. On the phone the picture was dropped when the camera closed, and the same kind of script request had already been failing to leave the phone at all (the sign-in “Load failed”). The screen still said Not taken yet, because Taken only appears after a save that reloads the page. Each shot is now its own ordinary form post, sent by the page itself when the camera returns, after a brief pause so the picture is in the form. The page then comes back on the next shot: Front, then Rear, then Driver's side, then Passenger's side, then Interior. After Interior it shows Finish handover. A phone that sends the picture without a file type is still stored when the bytes are a JPEG or a PNG.

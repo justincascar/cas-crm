@@ -5,7 +5,7 @@ import { PageHeader } from "@/components/ClaimTable";
 import { HandoverStartForm } from "@/components/handover/HandoverStartForm";
 import { ShotCamera } from "@/components/handover/ShotCamera";
 import { ValidatedForm } from "@/components/ValidatedForm";
-import { formatUkDateTime } from "@/lib/dates";
+import { formatUkDateTime, londonDateTimeLocal, toLondonDateTimeLocal } from "@/lib/dates";
 import { isOfficeRole } from "@/lib/auth/roles";
 import { requireSignedIn } from "@/lib/auth/session";
 import {
@@ -20,7 +20,7 @@ import {
   type HandoverPhoto,
   type HandoverScan,
 } from "@/lib/db/handover";
-import { listMyJobs } from "@/lib/db/jobs";
+import { getDayAssignment, handoverSuggestion, isHandoverAssignment, listAssignablePeople, listMyJobs } from "@/lib/db/jobs";
 import { getClaim } from "@/lib/db/queries";
 
 const field = "mt-1 w-full max-w-full rounded-md border border-line bg-white px-3 py-3 text-base";
@@ -141,22 +141,38 @@ export default async function HandoverPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; job?: string }>;
 }) {
   const staffUser = await requireSignedIn();
   const office = isOfficeRole(staffUser.role);
   const { id } = await params;
-  const { error, saved } = await searchParams;
+  const { error, saved, job: jobId } = await searchParams;
   const claim = getClaim(id);
   if (!claim) notFound();
+  const todayJobs = office
+    ? []
+    : listMyJobs(staffUser.id).filter((job) => job.claimId === id && isHandoverAssignment(job.jobKind));
+  if (!office && todayJobs.length === 0) redirect("/jobs");
   const assignedEpisodes = office
     ? null
-    : new Set(
-        listMyJobs(staffUser.id)
-          .filter((job) => job.jobKind === "handover" && job.claimId === id && job.hireEpisodeId)
-          .map((job) => job.hireEpisodeId as string),
-      );
-  if (assignedEpisodes && assignedEpisodes.size === 0) redirect("/jobs");
+    : new Set(todayJobs.map((job) => job.hireEpisodeId).filter((episodeId): episodeId is string => Boolean(episodeId)));
+  const requested = jobId ? getDayAssignment(jobId) : undefined;
+  const focus = office
+    ? requested && requested.claimId === id
+      ? requested
+      : undefined
+    : todayJobs.find((job) => job.id === jobId) || todayJobs[0];
+  const suggestion = focus ? handoverSuggestion(focus.jobKind) : null;
+  const drivers = listAssignablePeople()
+    .filter((person) => person.role === "driver")
+    .map((person) => ({ id: person.id, label: person.name }));
+  const fromCompletedJob = Boolean(focus?.completed && focus.actualOccurredAt && focus.actualDriverId);
+  const defaultDriverId = fromCompletedJob ? focus?.actualDriverId || "" : staffUser.role === "driver" ? staffUser.id : "";
+  const defaultWhen = fromCompletedJob && focus?.actualOccurredAt
+    ? toLondonDateTimeLocal(focus.actualOccurredAt)
+    : staffUser.role === "driver"
+      ? londonDateTimeLocal()
+      : "";
   const bookings = listHireBookings(id).filter((booking) => !assignedEpisodes || assignedEpisodes.has(booking.id));
   const records = listVehicleHandovers(id).filter(
     (record) => !assignedEpisodes || !record.hireEpisodeId || assignedEpisodes.has(record.hireEpisodeId),
@@ -211,6 +227,11 @@ export default async function HandoverPage({
           id: booking.id,
           label: [booking.make, booking.model, booking.registration].filter(Boolean).join(" ") || "Hire car",
         }))}
+        initialVehicle={suggestion?.vehicle}
+        initialEventKind={suggestion?.eventKind}
+        drivers={drivers}
+        defaultDriverId={defaultDriverId}
+        defaultWhen={defaultWhen}
       />
 
       <section className="space-y-4">
@@ -221,8 +242,12 @@ export default async function HandoverPage({
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <h3 className="font-serif text-lg text-navy-deep">{record.eventLabel}</h3>
+                <p className="text-slate">{record.bookingLabel}</p>
                 <p className="text-slate">
-                  {record.bookingLabel} · {formatUkDateTime(record.occurredAt)} · {record.recordedByName}
+                  Driver {record.actualDriverName} · {formatUkDateTime(record.occurredAt)}
+                </p>
+                <p className="text-slate">
+                  Entered by {record.recordedByName} · {formatUkDateTime(record.createdAt)}
                 </p>
               </div>
               {record.finishedAt ? (

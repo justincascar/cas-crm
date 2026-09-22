@@ -19,6 +19,9 @@ import { formatVehicleRegistration } from "@/lib/text";
 import { googleMapsSearchUrl } from "@/lib/lookups/maps";
 import { liabilityStatusLabel, roadworthinessLabel } from "@/lib/domain/claim-status";
 import { describeHireAgreementParts } from "@/lib/documents/hire-agreement-parts";
+import { StorageDateReview } from "@/components/claims/StorageDateReview";
+import { StorageEndDateReview } from "@/components/claims/StorageEndDateReview";
+import { getStorageDateReview, getStorageEndDateReview } from "@/lib/db/storage-recovery-date";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
@@ -365,6 +368,10 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
       <section className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-xl border border-line bg-card p-5">
           <h2 className="font-serif text-xl text-navy-deep">Hire, recovery and storage</h2>
+          <div className="mt-3 space-y-3">
+            <StorageDateReview claimId={String(claim.id)} review={getStorageDateReview(String(claim.id))} returnTo={`/claims/${claim.id}`} />
+            <StorageEndDateReview claimId={String(claim.id)} review={getStorageEndDateReview(String(claim.id))} returnTo={`/claims/${claim.id}`} />
+          </div>
           <AgreementParts claim={claim} hire={data.hire} recoveryJobs={data.recoveryJobs} reservations={data.reservations} />
           <ul className="mt-3 space-y-1 text-sm">
             <li>Hire status: {pretty(claim.hire_status)}</li>

@@ -35,6 +35,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       conditionNote: String(form.get("conditionNote") || ""),
       actorId: staff.id,
       photos: [],
+      actualDriverId: String(form.get("actualDriverId") || ""),
+      actualOccurredAt: String(form.get("actualOccurredAt") || ""),
     });
     const url = new URL(`/claims/${claimId}/handover`, origin);
     url.searchParams.set("saved", "details");

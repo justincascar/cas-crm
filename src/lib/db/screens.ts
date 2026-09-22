@@ -11,6 +11,7 @@ import { poundsToPence } from "./intake";
 import { rememberAgentOn, rememberInsurerOn } from "./insurers";
 import { displayValue } from "../screen-display";
 import { updateClaimAudatexCodes, updateClaimWorkflowStatus, suggestAudatexCodesForClaim } from "./queries";
+import { getStorageDateReview, getStorageEndDateReview } from "./storage-recovery-date";
 import { normalizeLiabilityStatus, normalizeRoadworthiness } from "../domain/claim-status";
 
 export type ScreenValues = Record<string, string>;
@@ -252,6 +253,8 @@ function applySideEffects(claimId: string, screenKey: string, values: ScreenValu
         claimId,
       ],
     );
+    getStorageDateReview(claimId);
+    getStorageEndDateReview(claimId);
   }
 
   if (screenKey === "recovery") {
@@ -271,6 +274,7 @@ function applySideEffects(claimId: string, screenKey: string, values: ScreenValu
           existing.id,
         ],
       );
+      getStorageDateReview(claimId);
     }
   }
 

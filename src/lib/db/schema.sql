@@ -151,7 +151,9 @@ CREATE TABLE IF NOT EXISTS claims (
   photos_at_scene TEXT,
   other_contact_skipped INTEGER NOT NULL DEFAULT 0,
   storage_started_on TEXT,
-  storage_rate_pence INTEGER
+  storage_rate_pence INTEGER,
+  storage_date_review_on TEXT,
+  storage_end_review_on TEXT
 );
 
 CREATE TABLE IF NOT EXISTS claim_parties (
@@ -279,7 +281,8 @@ CREATE TABLE IF NOT EXISTS vehicle_handovers (
   tyres_legal TEXT NOT NULL,
   condition_note TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL,
-  finished_at TEXT
+  finished_at TEXT,
+  actual_driver_id TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_vehicle_handovers_claim ON vehicle_handovers(claim_id, occurred_at);
@@ -313,7 +316,10 @@ CREATE TABLE IF NOT EXISTS day_assignments (
   hire_episode_id TEXT REFERENCES hire_episodes(id) ON DELETE CASCADE,
   work_date TEXT NOT NULL,
   created_by TEXT REFERENCES staff(id),
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  completed_at TEXT,
+  actual_driver_id TEXT,
+  actual_occurred_at TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_day_assignments_person ON day_assignments(assignee_id, work_date);

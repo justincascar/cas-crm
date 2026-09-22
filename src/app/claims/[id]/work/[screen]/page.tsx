@@ -12,6 +12,9 @@ import { findPreparedEngineerInstruction, listActiveEngineers } from "@/lib/db/e
 import { findPreparedChase, listChasesForClaim } from "@/lib/db/chase";
 import { listHireAgreements } from "@/lib/db/chronology";
 import { seedScreenDefaults } from "@/lib/db/screens";
+import { StorageDateReview } from "@/components/claims/StorageDateReview";
+import { StorageEndDateReview } from "@/components/claims/StorageEndDateReview";
+import { getStorageDateReview, getStorageEndDateReview } from "@/lib/db/storage-recovery-date";
 
 export default async function ClaimWorkScreenPage({
   params,
@@ -65,6 +68,20 @@ export default async function ClaimWorkScreenPage({
       <PageHeader title={def.label} subtitle={def.hint} />
       {error ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
+      ) : null}
+      {screen === "storage" || screen === "recovery" ? (
+        <StorageDateReview
+          claimId={String(data.claim.id)}
+          review={getStorageDateReview(String(data.claim.id))}
+          returnTo={`/claims/${data.claim.id}/work/${screen}`}
+        />
+      ) : null}
+      {screen === "storage" ? (
+        <StorageEndDateReview
+          claimId={String(data.claim.id)}
+          review={getStorageEndDateReview(String(data.claim.id))}
+          returnTo={`/claims/${data.claim.id}/work/storage`}
+        />
       ) : null}
       {whatsapp === "1" ? (
         <p className="rounded-md border border-ok/40 bg-[#eef6ef] px-4 py-3 text-sm text-ok">

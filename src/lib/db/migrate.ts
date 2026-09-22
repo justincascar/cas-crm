@@ -63,6 +63,8 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["other_contact_skipped", "INTEGER NOT NULL DEFAULT 0"],
     ["storage_started_on", "TEXT"],
     ["storage_rate_pence", "INTEGER"],
+    ["storage_date_review_on", "TEXT"],
+    ["storage_end_review_on", "TEXT"],
     ["own_insurer_address", "TEXT"],
     ["own_insurer_postcode", "TEXT"],
     ["audatex_network_code", "TEXT"],
@@ -202,7 +204,8 @@ export function migrate(db: DatabaseSync) {
       tyres_legal TEXT NOT NULL,
       condition_note TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
-      finished_at TEXT
+      finished_at TEXT,
+      actual_driver_id TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_vehicle_handovers_claim ON vehicle_handovers(claim_id, occurred_at);
     CREATE TABLE IF NOT EXISTS vehicle_handover_photos (
@@ -217,6 +220,9 @@ export function migrate(db: DatabaseSync) {
   const handoverColumns = db.prepare(`PRAGMA table_info(vehicle_handovers)`).all() as Array<{ name: string }>;
   if (handoverColumns.length > 0 && !handoverColumns.some((column) => column.name === "finished_at")) {
     db.exec(`ALTER TABLE vehicle_handovers ADD COLUMN finished_at TEXT`);
+  }
+  if (handoverColumns.length > 0 && !handoverColumns.some((column) => column.name === "actual_driver_id")) {
+    db.exec(`ALTER TABLE vehicle_handovers ADD COLUMN actual_driver_id TEXT`);
   }
   const photoColumns = db.prepare(`PRAGMA table_info(vehicle_handover_photos)`).all() as Array<{ name: string }>;
   if (photoColumns.length > 0 && !photoColumns.some((column) => column.name === "slot")) {
@@ -240,9 +246,20 @@ export function migrate(db: DatabaseSync) {
       hire_episode_id TEXT REFERENCES hire_episodes(id) ON DELETE CASCADE,
       work_date TEXT NOT NULL,
       created_by TEXT REFERENCES staff(id),
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      completed_at TEXT,
+      actual_driver_id TEXT,
+      actual_occurred_at TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_day_assignments_person ON day_assignments(assignee_id, work_date);
+  `);
+  const assignmentColumns = db.prepare(`PRAGMA table_info(day_assignments)`).all() as Array<{ name: string }>;
+  for (const column of ["completed_at", "actual_driver_id", "actual_occurred_at"]) {
+    if (assignmentColumns.length > 0 && !assignmentColumns.some((existing) => existing.name === column)) {
+      db.exec(`ALTER TABLE day_assignments ADD COLUMN ${column} TEXT`);
+    }
+  }
+  db.exec(`
     CREATE TABLE IF NOT EXISTS repair_evidence (
       id TEXT PRIMARY KEY,
       claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
