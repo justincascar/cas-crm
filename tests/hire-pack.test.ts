@@ -86,7 +86,7 @@ describe("CAS hire pack fields", () => {
   it("keeps the supplied CAS pack notices", () => {
     assert.match(CAS_HIRE_AGREEMENT_BANNER, /not regulated by the Consumer Credit Act 1974/i);
     assert.match(CAS_COMPANY.address, /Cwmgarw Road/);
-    assert.equal(CAS_COMPANY.email, "info@cascar.co.uk");
+    assert.equal(CAS_COMPANY.email, "claims@cascar.co.uk");
   });
 
   it("labels the client's own vehicle correctly and keeps Storage & Recovery off the hire agreement pages", () => {

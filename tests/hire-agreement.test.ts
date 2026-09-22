@@ -232,6 +232,8 @@ describe("hire agreement rating and the four-page document", () => {
       assert.match(hireHtml, /Hire Agreement — 3 of 3/);
       assert.match(hireHtml, /page 3 of 3/);
       assert.match(hireHtml, /Notice of the Right to Cancel/);
+      assert.match(hireHtml, /Electronic mail: claims@cascar\.co\.uk/);
+      assert.equal(hireHtml.includes("info@cascar.co.uk"), false);
       assert.match(hireHtml, /89 days from the date of this agreement/);
       assert.match(hireHtml, /The Storage &amp; Recovery page is not included/);
       assert.equal(hireHtml.includes("Hire Agreement — 4 of"), false);

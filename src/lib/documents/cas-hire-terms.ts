@@ -1,3 +1,5 @@
+import { CAS_CLAIMS_MAILBOX } from "../constants";
+
 /** CAS Hire Pack terms — taken from the supplied Hire Pack.doc, not invented. */
 
 export const CAS_HIRE_AGREEMENT_BANNER =
@@ -6,7 +8,7 @@ export const CAS_HIRE_AGREEMENT_BANNER =
 export const CAS_COMPANY = {
   name: "Complete Accident Solutions Ltd",
   address: "171 Cwmgarw Road, Brynamman, Ammanford, SA18 1DG",
-  email: "info@cascar.co.uk",
+  email: CAS_CLAIMS_MAILBOX,
   phone: "01792 341069",
 };
 

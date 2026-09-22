@@ -93,7 +93,7 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - On Communications, staff pick an engineer from the dropdown. That name and address fill the engineer instruction letter.
 - **Instruct Engineer** generates the letter as before and opens a pre-filled email (`mailto`) to the selected engineer's address, with the letter as the email body, in the handler's own email client. The CRM does **not** send it.
 - After the handler has sent it themselves, **Mark as sent** logs it on the file history with the date and the handler's name, in the same way other correspondence is filed. Status is `handler_marked_sent`, not a live mailbox send.
-- Microsoft 365 mailbox decision: **claims@cascar.co.uk**. Live send/receive is still not connected. Engineer instruction letters ask for the report to be returned to that address. Hire Pack company email remains `info@cascar.co.uk` as in the supplied pack.
+- Microsoft 365 mailbox decision: **claims@cascar.co.uk**. Live send/receive is still not connected. Engineer instruction letters ask for the report to be returned to that address. The Notice of the Right to Cancel asks the client to email that same address.
 
 19 September 2026 — Field-level validation:
 
