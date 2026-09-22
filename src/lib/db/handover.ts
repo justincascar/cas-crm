@@ -1,4 +1,4 @@
-import { isOfficeRole } from "../auth/roles";
+import { canDoFieldJob, isOfficeRole } from "../auth/roles";
 import { formatUkDateTime, nowUtcIso, requireLondonDateTime } from "../dates";
 import { assertCanRecordHandover } from "./jobs";
 import { storeFileCopy } from "../storage/files";
@@ -46,7 +46,8 @@ export const SCAN_SLOTS = [
 
 export type HandoverScanSlot = (typeof SCAN_SLOTS)[number]["slot"];
 
-export const STANDARD_SHOTS = [
+/** Photographs required before Dash and Chassis number were added. Existing records stay on this set. */
+export const ORIGINAL_SHOTS = [
   { slot: "front", label: "Front" },
   { slot: "rear", label: "Rear" },
   { slot: "driver_side", label: "Driver's side" },
@@ -54,7 +55,21 @@ export const STANDARD_SHOTS = [
   { slot: "interior", label: "Interior" },
 ] as const;
 
+export const STANDARD_SHOTS = [
+  ...ORIGINAL_SHOTS,
+  { slot: "dash", label: "Dash" },
+  { slot: "chassis", label: "Chassis number" },
+] as const;
+
 export type StandardShotSlot = (typeof STANDARD_SHOTS)[number]["slot"];
+
+/** Stored on the handover. Rows from before Dash and Chassis number stay on five. */
+export const SHOT_SET_FIVE = "five";
+export const SHOT_SET_SEVEN = "seven";
+
+export function shotsForSet(shotSet: string | null | undefined) {
+  return shotSet === SHOT_SET_SEVEN ? STANDARD_SHOTS : ORIGINAL_SHOTS;
+}
 export const DAMAGE_SHOT = "damage";
 
 export type HandoverFileInput = {
@@ -134,6 +149,7 @@ export type HandoverRecord = {
   bookingLabel: string;
   photos: HandoverPhoto[];
   scans: HandoverScan[];
+  shotSet: typeof SHOT_SET_FIVE | typeof SHOT_SET_SEVEN;
   incomplete: boolean;
   finishedAt: string | null;
 };
@@ -150,23 +166,27 @@ export function formatHandoverMileage(mileage: number): string {
   return mileage.toLocaleString("en-GB");
 }
 
-export function missingStandardShots(slots: Iterable<string>): Array<(typeof STANDARD_SHOTS)[number]> {
+export function missingStandardShots(
+  slots: Iterable<string>,
+  shotSet: string | null | undefined = SHOT_SET_SEVEN,
+): Array<(typeof STANDARD_SHOTS)[number]> {
   const have = new Set(slots);
-  return STANDARD_SHOTS.filter((shot) => !have.has(shot.slot));
+  return shotsForSet(shotSet).filter((shot) => !have.has(shot.slot));
 }
 
-/** Incomplete until Front, Rear, both sides and Interior are present. Damage photographs do not count. */
-export function handoverIncomplete(slots: Iterable<string>): boolean {
-  return missingStandardShots(slots).length > 0;
+/** Incomplete until every photograph in this handover's set is present. Damage photographs do not count. */
+export function handoverIncomplete(slots: Iterable<string>, shotSet: string | null | undefined = SHOT_SET_SEVEN): boolean {
+  return missingStandardShots(slots, shotSet).length > 0;
 }
 
-/** Where to put the driver after a photograph is stored. Standard shots run Front through Interior, then Finish. */
-export function focusAfterShot(savedSlot: string, slotsAfter: Iterable<string>): string {
+/** Where to put the driver after a photograph is stored. New handovers run Front through Chassis number, then Finish. */
+export function focusAfterShot(savedSlot: string, slotsAfter: Iterable<string>, shotSet: string | null | undefined = SHOT_SET_SEVEN): string {
+  const missing = missingStandardShots(slotsAfter, shotSet);
   if (savedSlot !== DAMAGE_SHOT) {
-    const next = missingStandardShots(slotsAfter)[0];
+    const next = missing[0];
     if (next) return next.slot;
   }
-  return missingStandardShots(slotsAfter).length === 0 ? "finish" : DAMAGE_SHOT;
+  return missing.length === 0 ? "finish" : DAMAGE_SHOT;
 }
 
 export function photoSlot(value: string): string {
@@ -199,10 +219,11 @@ export function assertPhotosFit(existingSlots: string[], incoming: HandoverPhoto
   }
 }
 
-function photoProgress(slots: Iterable<string>): string {
-  const missing = missingStandardShots(slots);
-  if (missing.length === STANDARD_SHOTS.length) return "No standard photographs yet — incomplete.";
-  if (missing.length === 0) return "Front, Rear, Driver's side, Passenger's side and Interior are photographed.";
+function photoProgress(slots: Iterable<string>, shotSet: string | null | undefined = SHOT_SET_SEVEN): string {
+  const required = shotsForSet(shotSet);
+  const missing = missingStandardShots(slots, shotSet);
+  if (missing.length === required.length) return "No standard photographs yet — incomplete.";
+  if (missing.length === 0) return `${required.map((shot) => shot.label).join(", ")} are photographed.`;
   return `Still needed: ${missing.map((shot) => shot.label).join(", ")}.`;
 }
 
@@ -362,7 +383,7 @@ function actualHandover(
     "SELECT id, name, role FROM staff WHERE id = ? AND active = 1",
     [(input.actualDriverId || "").trim()],
   );
-  if (!driver || driver.role !== "driver") throw new Error("Choose the driver who did this job.");
+  if (!driver || !canDoFieldJob(driver.role)) throw new Error("Choose the person who did this job.");
   return { occurredAt, driverId: driver.id, driverName: driver.name };
 }
 
@@ -410,8 +431,9 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
     run(
       `INSERT INTO vehicle_handovers(
         id, claim_id, hire_episode_id, event_kind, occurred_at, recorded_by, mileage, fuel_level,
-        spare_wheel, tools_present, warning_lights_off, tyres_legal, condition_note, created_at, actual_driver_id
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        spare_wheel, tools_present, warning_lights_off, tyres_legal, condition_note, created_at, actual_driver_id,
+        shot_set
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         input.claimId,
@@ -428,6 +450,7 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
         note,
         enteredAt,
         actual.driverId,
+        SHOT_SET_SEVEN,
       ],
     );
     storePhotos(input.claimId, id, staff.id, input.photos, occurredAt);
@@ -459,7 +482,7 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
     db.exec("ROLLBACK");
     throw error;
   }
-  return { id, incomplete: handoverIncomplete(input.photos.map((photo) => photo.slot)) };
+  return { id, incomplete: handoverIncomplete(input.photos.map((photo) => photo.slot), SHOT_SET_SEVEN) };
 }
 
 export function addHandoverPhotographs(input: {
@@ -469,8 +492,8 @@ export function addHandoverPhotographs(input: {
   photos: HandoverPhotoInput[];
 }): { incomplete: boolean } {
   if (input.photos.length < 1) throw new Error("Choose at least one photograph.");
-  const row = get<{ id: string; event_kind: string; mileage: number; hire_episode_id: string | null }>(
-    `SELECT id, event_kind, mileage, hire_episode_id FROM vehicle_handovers WHERE id = ? AND claim_id = ?`,
+  const row = get<{ id: string; event_kind: string; mileage: number; hire_episode_id: string | null; shot_set: string | null }>(
+    `SELECT id, event_kind, mileage, hire_episode_id, shot_set FROM vehicle_handovers WHERE id = ? AND claim_id = ?`,
     [input.handoverId, input.claimId],
   );
   if (!row) throw new Error("That handover record was not found on this file.");
@@ -488,7 +511,7 @@ export function addHandoverPhotographs(input: {
       eventType: "vehicle_handover_photos_added",
       occurredAt: takenAt,
       actorId: staff.id,
-      details: `Photographs added to the locked handover by ${staff.name}. ${photoProgress(slotsFor(row.id))} Mileage was not changed.`,
+      details: `Photographs added to the locked handover by ${staff.name}. ${photoProgress(slotsFor(row.id), row.shot_set)} Mileage was not changed.`,
       source: "staff",
     });
     db.exec("COMMIT");
@@ -500,7 +523,7 @@ export function addHandoverPhotographs(input: {
   if (after && after.mileage !== mileageBefore) {
     throw new Error("The locked handover was changed. That should not happen.");
   }
-  return { incomplete: handoverIncomplete(slotsFor(row.id)) };
+  return { incomplete: handoverIncomplete(slotsFor(row.id), row.shot_set) };
 }
 
 export function attachHandoverScan(input: {
@@ -511,8 +534,8 @@ export function attachHandoverScan(input: {
   file: HandoverFileInput;
 }): { incomplete: boolean } {
   const slot = scanSlot(input.slot);
-  const row = get<{ id: string; mileage: number }>(
-    `SELECT id, mileage FROM vehicle_handovers WHERE id = ? AND claim_id = ?`,
+  const row = get<{ id: string; mileage: number; shot_set: string | null }>(
+    `SELECT id, mileage, shot_set FROM vehicle_handovers WHERE id = ? AND claim_id = ?`,
     [input.handoverId, input.claimId],
   );
   if (!row) throw new Error("That handover record was not found on this file.");
@@ -542,32 +565,33 @@ export function attachHandoverScan(input: {
   if (after && after.mileage !== mileageBefore) {
     throw new Error("The locked handover was changed. That should not happen.");
   }
-  return { incomplete: handoverIncomplete(slotsFor(row.id)) };
+  return { incomplete: handoverIncomplete(slotsFor(row.id), row.shot_set) };
 }
 
 export function finishVehicleHandover(input: { claimId: string; handoverId: string; actorId: string }): { finishedAt: string } {
-  const row = get<{ id: string; hire_episode_id: string | null; event_kind: string; finished_at: string | null }>(
-    `SELECT id, hire_episode_id, event_kind, finished_at FROM vehicle_handovers WHERE id = ? AND claim_id = ?`,
+  const row = get<{ id: string; hire_episode_id: string | null; event_kind: string; finished_at: string | null; shot_set: string | null }>(
+    `SELECT id, hire_episode_id, event_kind, finished_at, shot_set FROM vehicle_handovers WHERE id = ? AND claim_id = ?`,
     [input.handoverId, input.claimId],
   );
   if (!row) throw new Error("That handover record was not found on this file.");
   const staff = get<{ id: string; name: string; role: string }>(`SELECT id, name, role FROM staff WHERE id = ?`, [input.actorId]);
   if (!staff) throw new Error("The signed-in staff member could not be recorded.");
   assertCanRecordHandover(staff, input.claimId, row.hire_episode_id);
-  const missing = missingStandardShots(slotsFor(row.id));
+  const missing = missingStandardShots(slotsFor(row.id), row.shot_set);
   if (missing.length > 0) {
     throw new Error(`Take ${missing.map((shot) => shot.label).join(", ")} before finishing. Damage photographs are optional.`);
   }
   if (row.finished_at) return { finishedAt: row.finished_at };
   const finishedAt = nowUtcIso();
   const event = handoverEvent(row.event_kind);
+  const photoCount = shotsForSet(row.shot_set).length === STANDARD_SHOTS.length ? "seven" : "five";
   run(`UPDATE vehicle_handovers SET finished_at = ? WHERE id = ?`, [finishedAt, row.id]);
   recordClaimEvent({
     claimId: input.claimId,
     eventType: "vehicle_handover_finished",
     occurredAt: finishedAt,
     actorId: staff.id,
-    details: `${event?.label || "Handover"} finished by ${staff.name}. The five standard photographs are saved.`,
+    details: `${event?.label || "Handover"} finished by ${staff.name}. The ${photoCount} standard photographs are saved.`,
     source: "staff",
   });
   return { finishedAt };
@@ -591,6 +615,7 @@ type HandoverRow = {
   warning_lights_off: string;
   tyres_legal: string;
   condition_note: string;
+  shot_set: string | null;
   finished_at: string | null;
   booking_make: string | null;
   booking_model: string | null;
@@ -628,7 +653,8 @@ function toRecord(row: HandoverRow, photos: HandoverPhoto[], scans: HandoverScan
     bookingLabel: booking || (event?.needsBooking ? "Hire car" : "Customer's vehicle"),
     photos,
     scans,
-    incomplete: handoverIncomplete(photos.map((photo) => photo.slot)),
+    shotSet: row.shot_set === SHOT_SET_SEVEN ? SHOT_SET_SEVEN : SHOT_SET_FIVE,
+    incomplete: handoverIncomplete(photos.map((photo) => photo.slot), row.shot_set),
     finishedAt: row.finished_at || null,
   };
 }

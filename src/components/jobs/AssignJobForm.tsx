@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
-import { roleLabel } from "@/lib/auth/roles";
+import { canDoFieldJob, roleLabel } from "@/lib/auth/roles";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-3 text-base";
 
@@ -43,10 +43,10 @@ export function AssignJobForm({
   const valuesRef = useRef({ jobKind, assigneeId, claimId, hireEpisodeId });
   valuesRef.current = { jobKind, assigneeId, claimId, hireEpisodeId };
   const ignoreSpuriousSelect = useRef(false);
-  const drivers = people.filter((person) => person.role === "driver");
+  const fieldPeople = people.filter((person) => canDoFieldJob(person.role));
   const needsHire = jobKind === "hire_delivery" || jobKind === "hire_collection";
   const canComplete = jobKind !== "repair" && workDate <= today;
-  const assignees = jobKind === "repair" ? people : drivers;
+  const assignees = jobKind === "repair" ? people : fieldPeople;
   const assigneeStillListed = assignees.some((person) => person.id === assigneeId);
 
   function keepSelect(event: ChangeEvent<HTMLSelectElement>, current: string, apply: (value: string) => void) {
@@ -112,8 +112,7 @@ export function AssignJobForm({
           </option>
           {assignees.map((person) => (
             <option key={person.id} value={person.id}>
-              {person.name}
-              {jobKind === "repair" ? ` · ${roleLabel(person.role)}` : ""}
+              {person.name} · {roleLabel(person.role)}
             </option>
           ))}
         </select>
@@ -189,9 +188,9 @@ export function AssignJobForm({
               Driver who did this
               <select name="actualDriverId" className={field} required={completed} disabled={!completed} defaultValue="">
                 <option value="">Choose the driver</option>
-                {drivers.map((person) => (
+                {fieldPeople.map((person) => (
                   <option key={person.id} value={person.id}>
-                    {person.name}
+                    {person.name} · {roleLabel(person.role)}
                   </option>
                 ))}
               </select>

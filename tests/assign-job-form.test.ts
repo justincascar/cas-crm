@@ -20,6 +20,17 @@ function field(name: string) {
   return element;
 }
 
+function optionValues(name: string) {
+  return [...field(name).querySelectorAll("option")].map((option) => option.value);
+}
+
+const people = [
+  { id: "staff-driver", name: "Demo Driver", role: "driver" },
+  { id: "staff-justin", name: "Justin Roberts", role: "administrator" },
+  { id: "staff-sian", name: "Sian", role: "staff" },
+  { id: "staff-mechanic", name: "Demo Mechanic", role: "mechanic" },
+];
+
 describe("assign a job form", () => {
   it("keeps the job, driver and file after Already completed is ticked and filled in", async () => {
     const { createElement, act } = await import("react");
@@ -40,16 +51,15 @@ describe("assign a job form", () => {
         createElement(AssignJobForm, {
           action: "/jobs/assign",
           today: "2026-09-22",
-          people: [
-            { id: "staff-driver", name: "Demo Driver", role: "driver" },
-            { id: "staff-justin", name: "Justin Roberts", role: "administrator" },
-          ],
+          people,
           bookings: [{ episode_id: "h-c3", file_reference: "TEST-0003", make: "Volkswagen", model: "Golf", registration: "CAS 2" }],
           claims: [{ id: "c3", file_reference: "TEST-0003", registration: "SA12 CWA" }],
         }),
       );
     });
 
+    assert.deepEqual(optionValues("assigneeId").filter(Boolean).sort(), ["staff-driver", "staff-justin", "staff-sian"]);
+    assert.deepEqual(optionValues("actualDriverId").filter(Boolean).sort(), ["staff-driver", "staff-justin", "staff-sian"]);
     assert.ok(document.querySelector('[name="actualDriverId"]'));
     await setField("jobKind", "client_return");
     await setField("assigneeId", "staff-driver");
@@ -91,10 +101,7 @@ describe("assign a job form", () => {
           action: "/jobs/assign",
           saved: true,
           today: "2026-09-22",
-          people: [
-            { id: "staff-driver", name: "Demo Driver", role: "driver" },
-            { id: "staff-justin", name: "Justin Roberts", role: "administrator" },
-          ],
+          people,
           bookings: [{ episode_id: "h-c3", file_reference: "TEST-0003", make: "Volkswagen", model: "Golf", registration: "CAS 2" }],
           claims: [{ id: "c3", file_reference: "TEST-0003", registration: "SA12 CWA" }],
         }),

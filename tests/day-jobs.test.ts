@@ -209,6 +209,54 @@ describe("assigning a driver and a date", () => {
     db.close();
   });
 
+  it("lets a member of staff be recorded as the person who did the handover", () => {
+    const db = prepared();
+    withDatabase(db, () => {
+      const mechanic = createStaffAccount({
+        name: "Bay Mechanic",
+        username: "baymechhandover",
+        email: "baymechhandover@example.test",
+        password: "password1",
+        role: "mechanic",
+        actorId: "staff-justin",
+      });
+      if (!mechanic.ok) throw new Error(mechanic.error);
+      const saved = recordVehicleHandover({
+        claimId: "c3",
+        eventKind: "hire_delivered",
+        hireEpisodeId: "h-c3",
+        mileage: "12000",
+        fuelLevel: "full",
+        conditionNote: "Justin delivered it.",
+        actorId: "staff-sian",
+        photos: [],
+        actualDriverId: "staff-justin",
+        actualOccurredAt: "2026-09-22T09:15",
+      });
+      const row = listVehicleHandovers("c3").find((item) => item.id === saved.id);
+      assert.equal(row?.actualDriverId, "staff-justin");
+      assert.equal(row?.actualDriverName, "Justin Roberts");
+      assert.equal(row?.recordedBy, "staff-sian");
+      assert.throws(
+        () =>
+          recordVehicleHandover({
+            claimId: "c3",
+            eventKind: "hire_delivered",
+            hireEpisodeId: "h-c3",
+            mileage: "12001",
+            fuelLevel: "full",
+            conditionNote: "",
+            actorId: "staff-sian",
+            photos: [],
+            actualDriverId: mechanic.id,
+            actualOccurredAt: "2026-09-22T09:20",
+          }),
+        /Choose the person who did this job/,
+      );
+    });
+    db.close();
+  });
+
   it("lets a driver assigned only a client's-vehicle job record that recovery", () => {
     const db = prepared();
     withDatabase(db, () => {
@@ -249,6 +297,48 @@ describe("assigning a driver and a date", () => {
             actualOccurredAt: `${londonTodayIso()}T11:05`,
           }),
         /not assigned to you today/,
+      );
+    });
+    db.close();
+  });
+
+  it("lets a member of staff be assigned a recovery and be named as the person who did it", () => {
+    const db = prepared();
+    withDatabase(db, () => {
+      const mechanic = createStaffAccount({
+        name: "Bay Mechanic",
+        username: "baymechanic",
+        email: "baymechanic@example.test",
+        password: "password1",
+        role: "mechanic",
+        actorId: "staff-justin",
+      });
+      if (!mechanic.ok) throw new Error(mechanic.error);
+      const saved = assignDayJob({
+        assigneeId: "staff-justin",
+        jobKind: "client_recovery",
+        claimId: "c3",
+        hireEpisodeId: "",
+        actorId: "staff-sian",
+        workDate: londonTodayIso(),
+        completed: true,
+        actualDriverId: "staff-sian",
+        actualOccurredAt: `${londonTodayIso()}T09:15`,
+      });
+      const job = listMyJobs("staff-justin").find((row) => row.id === saved.id);
+      assert.ok(job);
+      assert.equal(job.actualDriverId, "staff-sian");
+      assert.throws(
+        () =>
+          assignDayJob({
+            assigneeId: mechanic.id,
+            jobKind: "hire_delivery",
+            claimId: "",
+            hireEpisodeId: "h-c3",
+            actorId: "staff-justin",
+            workDate: londonTodayIso(),
+          }),
+        /Choose a driver, or a member of staff/,
       );
     });
     db.close();

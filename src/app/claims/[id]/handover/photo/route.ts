@@ -47,7 +47,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       ],
     });
     const record = listVehicleHandovers(claimId).find((item) => item.id === handoverId);
-    const focus = focusAfterShot(slot, (record?.photos || []).map((photo) => photo.slot));
+    const focus = focusAfterShot(slot, (record?.photos || []).map((photo) => photo.slot), record?.shotSet);
     const url = new URL(`/claims/${claimId}/handover`, origin);
     url.searchParams.set("saved", "photo");
     url.hash = `shot-${focus}`;

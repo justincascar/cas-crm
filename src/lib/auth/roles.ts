@@ -24,6 +24,11 @@ export function isMechanicRole(role: string | null | undefined): boolean {
   return role === MECHANIC_ROLE;
 }
 
+/** Recoveries, deliveries and collections are done by drivers and by office staff, not only the restricted driver login. */
+export function canDoFieldJob(role: string | null | undefined): boolean {
+  return role === DRIVER_ROLE || isOfficeRole(role);
+}
+
 export function roleLabel(role: string | null | undefined): string {
   if (role === ADMINISTRATOR_ROLE) return "Administrator";
   if (role === STAFF_ROLE) return "Staff";

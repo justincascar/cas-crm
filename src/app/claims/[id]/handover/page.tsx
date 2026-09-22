@@ -6,7 +6,7 @@ import { HandoverStartForm } from "@/components/handover/HandoverStartForm";
 import { ShotCamera } from "@/components/handover/ShotCamera";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { formatUkDateTime, londonDateTimeLocal, toLondonDateTimeLocal } from "@/lib/dates";
-import { isOfficeRole } from "@/lib/auth/roles";
+import { canDoFieldJob, isOfficeRole, roleLabel } from "@/lib/auth/roles";
 import { requireSignedIn } from "@/lib/auth/session";
 import {
   DAMAGE_SHOT,
@@ -16,7 +16,7 @@ import {
   MAX_DAMAGE_PHOTOS,
   missingStandardShots,
   SCAN_SLOTS,
-  STANDARD_SHOTS,
+  shotsForSet,
   type HandoverPhoto,
   type HandoverScan,
 } from "@/lib/db/handover";
@@ -65,13 +65,15 @@ function latestShot(photos: HandoverPhoto[], slot: string) {
   return [...photos].reverse().find((photo) => photo.slot === slot) || null;
 }
 
-function guidedShots(claimId: string, handoverId: string, photos: HandoverPhoto[]) {
+function guidedShots(claimId: string, handoverId: string, photos: HandoverPhoto[], shotSet: string) {
   const post = `/claims/${claimId}/handover/photo`;
   const damage = photos.filter((photo) => photo.slot === DAMAGE_SHOT);
-  const firstMissing = missingStandardShots(photos.map((photo) => photo.slot))[0]?.slot;
+  const required = shotsForSet(shotSet);
+  const firstMissing = missingStandardShots(photos.map((photo) => photo.slot), shotSet)[0]?.slot;
+  const savedWord = required.length === 7 ? "seven" : "five";
   return (
     <div className="space-y-4">
-      {STANDARD_SHOTS.map((shot) => {
+      {required.map((shot) => {
         const taken = latestShot(photos, shot.slot);
         return (
           <div key={shot.slot} id={`shot-${shot.slot}`} className="scroll-mt-4 rounded-md border border-line p-3">
@@ -118,7 +120,7 @@ function guidedShots(claimId: string, handoverId: string, photos: HandoverPhoto[
       </div>
       {firstMissing ? null : (
         <div id="shot-finish" className="scroll-mt-4 rounded-md border border-ok/40 bg-[#eef6ee] p-3">
-          <p className="text-sm">The five photographs are saved. Damage photographs are optional.</p>
+          <p className="text-sm">The {savedWord} photographs are saved. Damage photographs are optional.</p>
           <form method="post" action={`/claims/${claimId}/handover/finish`} className="mt-3">
             <input type="hidden" name="claimId" value={claimId} />
             <input type="hidden" name="handoverId" value={handoverId} />
@@ -164,8 +166,8 @@ export default async function HandoverPage({
     : todayJobs.find((job) => job.id === jobId) || todayJobs[0];
   const suggestion = focus ? handoverSuggestion(focus.jobKind) : null;
   const drivers = listAssignablePeople()
-    .filter((person) => person.role === "driver")
-    .map((person) => ({ id: person.id, label: person.name }));
+    .filter((person) => canDoFieldJob(person.role))
+    .map((person) => ({ id: person.id, label: `${person.name} · ${roleLabel(person.role)}` }));
   const fromCompletedJob = Boolean(focus?.completed && focus.actualOccurredAt && focus.actualDriverId);
   const defaultDriverId = fromCompletedJob ? focus?.actualDriverId || "" : staffUser.role === "driver" ? staffUser.id : "";
   const defaultWhen = fromCompletedJob && focus?.actualOccurredAt
@@ -254,10 +256,12 @@ export default async function HandoverPage({
                 <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-3 py-2">Handover finished.</p>
               ) : record.incomplete ? (
                 <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2">
-                  Incomplete — still needed: {missingStandardShots(record.photos.map((photo) => photo.slot)).map((shot) => shot.label).join(", ")}.
+                  Incomplete — still needed: {missingStandardShots(record.photos.map((photo) => photo.slot), record.shotSet).map((shot) => shot.label).join(", ")}.
                 </p>
               ) : (
-                <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-3 py-2">Five standard photographs are on this record.</p>
+                <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-3 py-2">
+                  {shotsForSet(record.shotSet).length === 7 ? "Seven" : "Five"} standard photographs are on this record.
+                </p>
               )}
             </div>
             <p className="mt-3">
@@ -266,7 +270,7 @@ export default async function HandoverPage({
             {record.conditionNote ? <p className="mt-2">{record.conditionNote}</p> : null}
             <div className="mt-4 space-y-3">
               <p className="text-sm font-medium">Photographs</p>
-              {guidedShots(id, record.id, record.photos)}
+              {guidedShots(id, record.id, record.photos, record.shotSet)}
               <p className="text-xs text-slate">Taking a photograph stores it at once. It does not change the mileage or fuel already saved.</p>
             </div>
             {office ? <div className="mt-4 space-y-3 border-t border-line pt-4">

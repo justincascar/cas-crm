@@ -1,5 +1,5 @@
 import { londonTodayIso, nowUtcIso, requireLondonDateTime } from "../dates";
-import { DRIVER_ROLE, MECHANIC_ROLE, isMechanicRole, isOfficeRole } from "../auth/roles";
+import { DRIVER_ROLE, MECHANIC_ROLE, canDoFieldJob, isMechanicRole, isOfficeRole } from "../auth/roles";
 import { storeFileCopy } from "../storage/files";
 import { all, get, newId, run } from "./connection";
 import { insertStoredDocument } from "./documents-store";
@@ -146,8 +146,8 @@ export function assignDayJob(input: {
   if (!assignee) throw new Error("Choose the person this job is for.");
   const kind = input.jobKind.trim();
   if (kind !== "repair" && !HANDOVER_JOB_KINDS.has(kind)) throw new Error("Choose a job.");
-  if ((CLIENT_JOB_KINDS.has(kind) || (HIRE_JOB_KINDS.has(kind) && kind !== "handover")) && assignee.role !== DRIVER_ROLE) {
-    throw new Error("Choose a driver.");
+  if ((CLIENT_JOB_KINDS.has(kind) || (HIRE_JOB_KINDS.has(kind) && kind !== "handover")) && !canDoFieldJob(assignee.role)) {
+    throw new Error("Choose a driver, or a member of staff.");
   }
   let claimId = input.claimId.trim();
   let hireEpisodeId: string | null = null;
@@ -172,7 +172,7 @@ export function assignDayJob(input: {
       "SELECT id, role FROM staff WHERE id = ? AND active = 1",
       [(input.actualDriverId || "").trim()],
     );
-    if (!driver || driver.role !== DRIVER_ROLE) throw new Error("Choose the driver who did this job.");
+    if (!driver || !canDoFieldJob(driver.role)) throw new Error("Choose the person who did this job.");
     actualDriverId = driver.id;
     actualOccurredAt = requireLondonDateTime(input.actualOccurredAt);
     completedAt = nowUtcIso();

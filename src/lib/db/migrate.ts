@@ -205,7 +205,8 @@ export function migrate(db: DatabaseSync) {
       condition_note TEXT NOT NULL DEFAULT '',
       created_at TEXT NOT NULL,
       finished_at TEXT,
-      actual_driver_id TEXT
+      actual_driver_id TEXT,
+      shot_set TEXT NOT NULL DEFAULT 'five'
     );
     CREATE INDEX IF NOT EXISTS idx_vehicle_handovers_claim ON vehicle_handovers(claim_id, occurred_at);
     CREATE TABLE IF NOT EXISTS vehicle_handover_photos (
@@ -223,6 +224,9 @@ export function migrate(db: DatabaseSync) {
   }
   if (handoverColumns.length > 0 && !handoverColumns.some((column) => column.name === "actual_driver_id")) {
     db.exec(`ALTER TABLE vehicle_handovers ADD COLUMN actual_driver_id TEXT`);
+  }
+  if (handoverColumns.length > 0 && !handoverColumns.some((column) => column.name === "shot_set")) {
+    db.exec(`ALTER TABLE vehicle_handovers ADD COLUMN shot_set TEXT NOT NULL DEFAULT 'five'`);
   }
   const photoColumns = db.prepare(`PRAGMA table_info(vehicle_handover_photos)`).all() as Array<{ name: string }>;
   if (photoColumns.length > 0 && !photoColumns.some((column) => column.name === "slot")) {

@@ -282,7 +282,8 @@ CREATE TABLE IF NOT EXISTS vehicle_handovers (
   condition_note TEXT NOT NULL DEFAULT '',
   created_at TEXT NOT NULL,
   finished_at TEXT,
-  actual_driver_id TEXT
+  actual_driver_id TEXT,
+  shot_set TEXT NOT NULL DEFAULT 'five'
 );
 
 CREATE INDEX IF NOT EXISTS idx_vehicle_handovers_claim ON vehicle_handovers(claim_id, occurred_at);

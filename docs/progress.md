@@ -136,6 +136,16 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+22 September 2026 — Handover photographs now include the dash and the chassis number:
+
+- A new handover, whether it is a hire car or the customer's own vehicle, needs seven photographs before Finish handover appears: Front, Rear, Driver's side, Passenger's side, Interior, Dash, then Chassis number. Dash shows the mileage and any warning lights. Chassis number shows the plate that identifies the vehicle. Each one opens the camera and moves on to the next, the same as the earlier shots. Damage photographs stay optional.
+- A handover already saved before this change keeps the original five photographs. It is not marked incomplete for want of Dash or Chassis number, and those two shots are not added to it.
+
+22 September 2026 — Assign a job lists staff as well as driver logins:
+
+- The Driver list on Assign a job was only accounts with the restricted driver login. Justin, Sian, Tom and Megan were missing, although they also do recoveries, deliveries and collections. That list, and the “driver who did this” list when a job is logged afterwards, now includes administrator and staff accounts as well as driver logins. A bodyshop / mechanic login is still only offered for Repair evidence. The save accepts those same people.
+- The handover record’s own Driver who did this list was still driver logins only. It now includes the same administrator and staff accounts, so a handover can name the member of staff who did it. A bodyshop / mechanic login is not offered there.
+
 22 September 2026 — Assign a job keeps the choices already made, and confirms beside the button:
 
 - Ticking Already completed was adding a new dropdown into the form. The browser then put Job and Driver back to the first choice, and that reset was saved into the form, so Assign job stopped with “Please select an item in the list.” Those extra fields are now on the form from the start and only shown when the box is ticked. A change the user did not make on Job or Driver is put back.
