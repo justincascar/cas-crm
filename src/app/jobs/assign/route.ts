@@ -34,6 +34,7 @@ export async function POST(request: Request) {
     const url = jobsUrl(origin);
     if (assigned.storageDateReview) url.searchParams.set("review", "1");
     if (assigned.storageEndReview) url.searchParams.set("reviewEnd", "1");
+    if (assigned.hireEndReview) url.searchParams.set("reviewHire", "1");
     return NextResponse.redirect(url, 303);
   } catch (error) {
     const message = error instanceof Error ? error.message : "The job could not be assigned.";

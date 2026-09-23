@@ -3,6 +3,7 @@ import { DRIVER_ROLE, MECHANIC_ROLE, canDoFieldJob, isMechanicRole, isOfficeRole
 import { storeFileCopy } from "../storage/files";
 import { all, get, newId, run } from "./connection";
 import { insertStoredDocument } from "./documents-store";
+import { applyHireCollectionActualDate } from "./hire-collection-date";
 import { applyClientRecoveryActualDate, applyClientReturnActualDate } from "./storage-recovery-date";
 
 export const REPAIR_KINDS = [
@@ -136,7 +137,7 @@ export function assignDayJob(input: {
   completed?: boolean;
   actualDriverId?: string;
   actualOccurredAt?: string;
-}): { id: string; storageDateReview: boolean; storageEndReview: boolean } {
+}): { id: string; storageDateReview: boolean; storageEndReview: boolean; hireEndReview: boolean } {
   const actor = get<{ id: string; role: string }>("SELECT id, role FROM staff WHERE id = ?", [input.actorId]);
   if (!actor || !isOfficeRole(actor.role)) throw new Error("Only administrator or staff can assign a job.");
   const assignee = get<{ id: string; name: string; role: string }>(
@@ -183,21 +184,34 @@ export function assignDayJob(input: {
        AND ((hire_episode_id IS NULL AND ? IS NULL) OR hire_episode_id = ?)`,
     [assignee.id, kind, claimId, workDate, hireEpisodeId, hireEpisodeId],
   );
-  const noteStorageDate = (storedAt: string | null) => {
-    if (!storedAt) return { storageDateReview: false, storageEndReview: false };
+  const noteLinkedDates = (storedAt: string | null) => {
+    const none = { storageDateReview: false, storageEndReview: false, hireEndReview: false };
+    if (!storedAt) return none;
     if (kind === "client_recovery") {
       return {
+        ...none,
         storageDateReview: applyClientRecoveryActualDate({ claimId, actualOccurredAt: storedAt, actorId: actor.id }).status === "review",
-        storageEndReview: false,
       };
     }
     if (kind === "client_return") {
       return {
-        storageDateReview: false,
+        ...none,
         storageEndReview: applyClientReturnActualDate({ claimId, actualOccurredAt: storedAt, actorId: actor.id }).status === "review",
       };
     }
-    return { storageDateReview: false, storageEndReview: false };
+    if (kind === "hire_collection") {
+      return {
+        ...none,
+        hireEndReview:
+          applyHireCollectionActualDate({
+            claimId,
+            hireEpisodeId,
+            actualOccurredAt: storedAt,
+            actorId: actor.id,
+          }).status === "review",
+      };
+    }
+    return none;
   };
   if (existing) {
     let storedAt: string | null = null;
@@ -208,7 +222,7 @@ export function assignDayJob(input: {
       );
       storedAt = actualOccurredAt;
     }
-    return { id: existing.id, ...noteStorageDate(storedAt) };
+    return { id: existing.id, ...noteLinkedDates(storedAt) };
   }
   const id = newId("job");
   const at = nowUtcIso();
@@ -219,7 +233,7 @@ export function assignDayJob(input: {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [id, assignee.id, kind, claimId, hireEpisodeId, workDate, actor.id, at, completedAt, actualDriverId, actualOccurredAt],
   );
-  return { id, ...noteStorageDate(actualOccurredAt) };
+  return { id, ...noteLinkedDates(actualOccurredAt) };
 }
 
 function assignedToday(assigneeId: string, jobKind: "handover" | "repair", claimId: string, workDate = londonTodayIso()) {

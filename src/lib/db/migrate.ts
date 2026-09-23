@@ -47,6 +47,7 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["byte_size", "INTEGER"],
     ["created_by", "TEXT"],
   ],
+  hire_episodes: [["hire_end_review_on", "TEXT"]],
   claims: [
     ["client_role", "TEXT"],
     ["damage_description", "TEXT"],

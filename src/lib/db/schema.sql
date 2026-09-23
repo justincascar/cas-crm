@@ -233,6 +233,7 @@ CREATE TABLE IF NOT EXISTS hire_episodes (
   fleet_vehicle_id TEXT REFERENCES fleet_vehicles(id),
   started_at TEXT,
   billing_end_at TEXT,
+  hire_end_review_on TEXT,
   collection_at TEXT,
   like_for_like INTEGER NOT NULL DEFAULT 0,
   suitability_reason TEXT,

@@ -33,6 +33,8 @@ export const CLAIM_EVENT_TYPES = [
   { key: "vehicle_returned", label: "Repaired vehicle returned to customer" },
   { key: "hire_started", label: "Hire / courtesy started" },
   { key: "hire_ended", label: "Hire ended" },
+  { key: "hire_end_date_review", label: "Hire end date needs a check" },
+  { key: "hire_end_date_confirmed", label: "Hire end date confirmed" },
   { key: "hire_agreement_renewed", label: "Hire agreement renewed" },
   { key: "hire_agreement_renewal_cleared", label: "Hire agreement renewal — cleared (correction)" },
   { key: "hire_agreement_renewal_chase_sent", label: "Hire agreement renewal chase marked as sent" },

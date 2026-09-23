@@ -12,8 +12,10 @@ import { findPreparedEngineerInstruction, listActiveEngineers } from "@/lib/db/e
 import { findPreparedChase, listChasesForClaim } from "@/lib/db/chase";
 import { listHireAgreements } from "@/lib/db/chronology";
 import { seedScreenDefaults } from "@/lib/db/screens";
+import { HireEndDateReview } from "@/components/claims/HireEndDateReview";
 import { StorageDateReview } from "@/components/claims/StorageDateReview";
 import { StorageEndDateReview } from "@/components/claims/StorageEndDateReview";
+import { getHireEndDateReviews } from "@/lib/db/hire-collection-date";
 import { getStorageDateReview, getStorageEndDateReview } from "@/lib/db/storage-recovery-date";
 
 export default async function ClaimWorkScreenPage({
@@ -81,6 +83,13 @@ export default async function ClaimWorkScreenPage({
           claimId={String(data.claim.id)}
           review={getStorageEndDateReview(String(data.claim.id))}
           returnTo={`/claims/${data.claim.id}/work/storage`}
+        />
+      ) : null}
+      {screen === "delivery-collection" ? (
+        <HireEndDateReview
+          claimId={String(data.claim.id)}
+          reviews={getHireEndDateReviews(String(data.claim.id))}
+          returnTo={`/claims/${data.claim.id}/work/delivery-collection`}
         />
       ) : null}
       {whatsapp === "1" ? (

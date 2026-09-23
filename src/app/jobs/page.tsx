@@ -9,10 +9,10 @@ import { listAssignableBookings, listAssignableClaims, listAssignablePeople, lis
 export default async function MyJobsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string; finished?: string; review?: string; reviewEnd?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; finished?: string; review?: string; reviewEnd?: string; reviewHire?: string }>;
 }) {
   const staff = await requireSignedIn();
-  const { error, saved, finished, review, reviewEnd } = await searchParams;
+  const { error, saved, finished, review, reviewEnd, reviewHire } = await searchParams;
   const jobs = listMyJobs(staff.id);
   const office = isOfficeRole(staff.role);
   const people = office ? listAssignablePeople() : [];
@@ -35,6 +35,11 @@ export default async function MyJobsPage({
       {reviewEnd ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">
           The storage end date already on the file is different from this return. It has not been changed. Open the file and choose which day storage should stop.
+        </p>
+      ) : null}
+      {reviewHire ? (
+        <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">
+          The hire end date already on the file is different from this collection. It has not been changed. Open the file and choose which day hire should stop.
         </p>
       ) : null}
       {jobs.length === 0 ? (

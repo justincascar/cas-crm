@@ -136,6 +136,14 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+23 September 2026 — Hire ends on the day the hire car is collected:
+
+- Completing a Hire car collection job, including one written up later with a real date and time, now sets that booking’s hire end to that calendar day when the booking has no hire end yet. The date used is the day the collection happened, not the day the job was assigned. The daily rate, storage dates and the scheduled off-hire date are not changed.
+- If a hire end date is already on that booking and it falls on a different day, it is left as it is. The file shows a check: use the date from the collection job, or keep the date already on the file. Nothing is overwritten until a person chooses. That choice is a CAS charging check, not a legal conclusion.
+- A file with no hire booking is left alone. A total-loss file is left alone. The seven-day rule already exists as a calculation (`totalLossOffHireDate`: seven days after a handler-confirmed qualifying payment) and is covered by the existing tests. Nothing on a file calls it, so recording a payment still does not fill the scheduled off-hire date. That wiring is still outstanding. This change does not call it.
+- Two people resolving the same check at once is not locked. The storage date check is the same. The last save stands. That is noted, not changed.
+- Recording a hire-car handover on its own does not set the hire end. The collection job has to be marked Done.
+
 22 September 2026 — My jobs today stays a list of jobs assigned for today:
 
 - The list was already only the jobs assigned to the signed-in person for today. Dates such as 18/09, 14/09 and 21/09 on that page were the time the work happened, typed in when a job was written up afterwards. They were not the day the job is listed for. Each job now says the day it is assigned for, and Done or Not done.
@@ -177,7 +185,7 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - Completing a Return client's vehicle after repair job, including one written up later with a real date and time, now sets the file's storage end to that calendar day when the file has no storage end date yet. The daily rate, recovery charges, VAT and the hire end date are not recalculated or moved.
 - If a storage end date is already on the file and it falls on a different day, it is left as it is. The file shows a check: use the date from the return job, or keep the date already there. Nothing is overwritten until a person chooses. That choice is a CAS charging check, not a legal conclusion.
 - Typing the storage end on the Storage screen, with no return job, still works as before.
-- This is the storage-end step noted when the recovery date was linked. Hire car collection is still not linked to the hire end date. That hire end is the replacement vehicle coming back to CAS, including the total-loss rule of seven days after a qualifying payment, and it is a sensible next stage. It is not done here.
+- This is the storage-end step noted when the recovery date was linked. Hire car collection now sets the hire end on a repairable booking. That is the later entry. The total-loss rule of seven days after a qualifying payment is still not calculated.
 
 22 September 2026 — Storage is charged from the day the vehicle was actually recovered:
 
