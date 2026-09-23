@@ -24,11 +24,11 @@ export default async function ClaimWorkScreenPage({
   searchParams,
 }: {
   params: Promise<{ id: string; screen: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; field?: string; whatsapp?: string; tlError?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; field?: string; whatsapp?: string; tlError?: string; tlMail?: string }>;
 }) {
   const { id, screen } = await params;
   await requireStaff();
-  const { saved, error, field, whatsapp, tlError } = await searchParams;
+  const { saved, error, field, whatsapp, tlError, tlMail } = await searchParams;
   const def = getClaimScreen(screen);
   if (!def) notFound();
   const data = getClaim(id);
@@ -92,6 +92,7 @@ export default async function ClaimWorkScreenPage({
           totalLoss={Number(data.claim.total_loss) === 1}
           returnTo={`/claims/${data.claim.id}/work/assessed-damage`}
           error={tlError}
+          openMailId={tlMail}
         />
       ) : null}
       {screen === "delivery-collection" ? (

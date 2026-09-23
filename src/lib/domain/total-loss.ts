@@ -2,6 +2,27 @@
 
 export type InsurerSalvageInterest = "no_interest" | "takes_interest";
 export type SalvageDisposal = "sold" | "returned" | "bought_by_cas";
+export type CasSalvageRequest = "full_pav" | "net_cas";
+
+export const SALVAGE_REQUEST_MISMATCH_NOTE =
+  "Insurer's answer differs from what was requested — review storage/recovery position";
+
+export function salvageRequestLabel(request: CasSalvageRequest): string {
+  if (request === "full_pav") return "Full pre-accident value — insurer to collect the salvage";
+  return "Net figure — CAS retains/disposes of the salvage";
+}
+
+/** A note only when both the request and the insurer's answer are recorded and they differ. */
+export function salvageRequestMismatch(
+  request: CasSalvageRequest | null,
+  interest: InsurerSalvageInterest | null,
+): string | null {
+  if (!request || !interest) return null;
+  const askedInsurerToCollect = request === "full_pav";
+  const insurerIsTaking = interest === "takes_interest";
+  if (askedInsurerToCollect === insurerIsTaking) return null;
+  return SALVAGE_REQUEST_MISMATCH_NOTE;
+}
 
 export type TotalLossFigures = {
   pavPence: number | null;
@@ -13,6 +34,7 @@ export type TotalLossFigures = {
   returnedOn: string | null;
   customerChargePence: number | null;
   casPurchasePence: number | null;
+  casRequest: CasSalvageRequest | null;
 };
 
 export type TotalLossSuggestion =

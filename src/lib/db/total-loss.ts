@@ -1,14 +1,21 @@
+import { CAS_CLAIMS_MAILBOX } from "../constants";
 import { nowUtcIso } from "../dates";
+import { buildMailtoHref } from "../email/mailto";
+import { formatGbp } from "../money";
 import {
   disposalApplies,
+  salvageRequestLabel,
+  salvageRequestMismatch,
   salvageSaleVariance,
   totalLossSuggestion,
+  type CasSalvageRequest,
   type InsurerSalvageInterest,
   type SalvageDisposal,
   type TotalLossFigures,
 } from "../domain/total-loss";
+import { ENGINEER_INSTRUCTION_MARKED_SENT, ENGINEER_INSTRUCTION_PREPARED } from "./engineers";
 import { recordClaimEvent } from "./chronology";
-import { get, run } from "./connection";
+import { get, newId, run } from "./connection";
 
 export type { TotalLossFigures };
 
@@ -22,6 +29,7 @@ type ReportRow = {
   returned_on: string | null;
   customer_charge_pence: number | null;
   cas_purchase_pence: number | null;
+  cas_request: string | null;
 };
 
 const EMPTY: TotalLossFigures = {
@@ -34,6 +42,7 @@ const EMPTY: TotalLossFigures = {
   returnedOn: null,
   customerChargePence: null,
   casPurchasePence: null,
+  casRequest: null,
 };
 
 function asInterest(value: string | null): InsurerSalvageInterest | null {
@@ -43,6 +52,11 @@ function asInterest(value: string | null): InsurerSalvageInterest | null {
 
 function asDisposal(value: string | null): SalvageDisposal | null {
   if (value === "sold" || value === "returned" || value === "bought_by_cas") return value;
+  return null;
+}
+
+function asRequest(value: string | null): CasSalvageRequest | null {
+  if (value === "full_pav" || value === "net_cas") return value;
   return null;
 }
 
@@ -58,6 +72,7 @@ function mapRow(row: ReportRow | undefined): TotalLossFigures {
     returnedOn: row.returned_on,
     customerChargePence: row.customer_charge_pence,
     casPurchasePence: row.cas_purchase_pence,
+    casRequest: asRequest(row.cas_request),
   };
 }
 
@@ -73,7 +88,7 @@ function assertTotalLoss(claimId: string) {
 export function getTotalLossReport(claimId: string): TotalLossFigures {
   const row = get<ReportRow>(
     `SELECT pav_pence, salvage_pence, insurer_salvage_interest, insurer_offered_pence, disposal,
-            sale_proceeds_pence, returned_on, customer_charge_pence, cas_purchase_pence
+            sale_proceeds_pence, returned_on, customer_charge_pence, cas_purchase_pence, cas_request
      FROM total_loss_reports WHERE claim_id = ?`,
     [claimId],
   );
@@ -154,6 +169,8 @@ export function saveTotalLossReport(input: {
   returnedOn?: string | null;
   customerChargePence?: number | null;
   casPurchasePence?: number | null;
+  /** Undefined leaves the recorded request unchanged. Null clears it. */
+  casRequest?: CasSalvageRequest | null;
 }): TotalLossFigures {
   assertTotalLoss(input.claimId);
   const current = getTotalLossReport(input.claimId);
@@ -169,13 +186,14 @@ export function saveTotalLossReport(input: {
     customerChargePence:
       !applyDisposal || input.customerChargePence === undefined ? current.customerChargePence : input.customerChargePence,
     casPurchasePence: !applyDisposal || input.casPurchasePence === undefined ? current.casPurchasePence : input.casPurchasePence,
+    casRequest: input.casRequest === undefined ? current.casRequest : input.casRequest,
   };
   const at = nowUtcIso();
   run(
     `INSERT INTO total_loss_reports(
       claim_id, pav_pence, salvage_pence, insurer_salvage_interest, insurer_offered_pence, disposal,
-      sale_proceeds_pence, returned_on, customer_charge_pence, cas_purchase_pence, updated_at, updated_by
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      sale_proceeds_pence, returned_on, customer_charge_pence, cas_purchase_pence, cas_request, updated_at, updated_by
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(claim_id) DO UPDATE SET
       pav_pence = excluded.pav_pence,
       salvage_pence = excluded.salvage_pence,
@@ -186,6 +204,7 @@ export function saveTotalLossReport(input: {
       returned_on = excluded.returned_on,
       customer_charge_pence = excluded.customer_charge_pence,
       cas_purchase_pence = excluded.cas_purchase_pence,
+      cas_request = excluded.cas_request,
       updated_at = excluded.updated_at,
       updated_by = excluded.updated_by`,
     [
@@ -199,6 +218,7 @@ export function saveTotalLossReport(input: {
       next.returnedOn,
       next.customerChargePence,
       next.casPurchasePence,
+      next.casRequest,
       at,
       input.actorId,
     ],
@@ -209,12 +229,14 @@ export function saveTotalLossReport(input: {
     variance == null || variance === 0
       ? ""
       : ` Sale proceeds differ from the engineer's salvage value by ${(variance / 100).toFixed(2)} pounds. That difference is flagged and has not been added to the agreed or paid vehicle-damage amount.`;
+  const mismatch = salvageRequestMismatch(next.casRequest, next.interest);
+  const mismatchNote = mismatch ? ` ${mismatch} Storage and recovery figures were not changed.` : "";
   recordClaimEvent({
     claimId: input.claimId,
     eventType: "total_loss_figures_recorded",
     occurredAt: at,
     actorId: input.actorId,
-    details: `Engineer's total-loss figures saved. Agreed and paid amounts were not changed.${varianceNote}`,
+    details: `Engineer's total-loss figures saved. Agreed and paid amounts were not changed.${varianceNote}${mismatchNote}`,
     source: "staff",
   });
   return next;
@@ -255,6 +277,168 @@ export function confirmTypedVehicleDamageAgreed(input: { claimId: string; actorI
     occurredAt: nowUtcIso(),
     actorId: input.actorId,
     details: `Staff recorded ${(input.agreedPence / 100).toFixed(2)} pounds as the agreed vehicle-damage amount. This is separate from the engineer's figures. The amount paid was not changed.`,
+    source: "staff",
+  });
+}
+
+export const TOTAL_LOSS_NOTICE_TEMPLATE = "total_loss_salvage_request";
+
+export type PreparedTotalLossNotice = {
+  id: string;
+  subject: string | null;
+  toAddress: string | null;
+  body: string | null;
+  createdAt: string;
+  mailto: string | null;
+};
+
+function insurerEmail(claimId: string) {
+  return get<{ insurer_name: string | null; insurer_email: string | null; handler_email: string | null; file_reference: string }>(
+    `SELECT c.file_reference, tp.insurer_name, tp.insurer_email, tp.handler_email
+     FROM claims c
+     LEFT JOIN claim_third_parties tp ON tp.claim_id = c.id
+     WHERE c.id = ?
+     ORDER BY tp.sequence, tp.id
+     LIMIT 1`,
+    [claimId],
+  );
+}
+
+function figureOrMissing(pence: number | null) {
+  return pence == null ? "not yet on file" : formatGbp(pence);
+}
+
+export function totalLossNoticeBody(input: { fileReference: string; report: TotalLossFigures }): { subject: string; body: string } {
+  if (!input.report.casRequest) throw new Error("Record what CAS is asking the insurer for, then prepare the email.");
+  const request = salvageRequestLabel(input.report.casRequest);
+  const subject = `Our ref: ${input.fileReference} — total loss salvage`;
+  const lines = [
+    `Our ref: ${input.fileReference}`,
+    "",
+    "We write about the total loss of our client's vehicle.",
+    "",
+    `Engineer's pre-accident value: ${figureOrMissing(input.report.pavPence)}.`,
+    `Engineer's salvage value: ${figureOrMissing(input.report.salvagePence)}.`,
+    "",
+    `CAS asks for: ${request}.`,
+  ];
+  if (input.report.casRequest === "full_pav") {
+    lines.push(
+      "",
+      "Please pay the full pre-accident value and arrange collection of the salvage. Recovery and storage charges continue until the salvage is collected.",
+    );
+  } else {
+    const suggestion = totalLossSuggestion({
+      pavPence: input.report.pavPence,
+      salvagePence: input.report.salvagePence,
+      interest: "no_interest",
+    });
+    lines.push(
+      "",
+      suggestion.kind === "suggestion"
+        ? `Please pay the net figure of ${formatGbp(suggestion.pence)} (pre-accident value less the engineer's salvage value). CAS will retain and dispose of the salvage.`
+        : "Please pay the net figure (pre-accident value less the engineer's salvage value). A figure is still missing from the engineer's report, so the net amount is not stated here. CAS will retain and dispose of the salvage.",
+    );
+  }
+  lines.push("", `Prepared for the handler to send from their own email client. Not sent automatically from ${CAS_CLAIMS_MAILBOX}.`);
+  return { subject, body: lines.join("\n") };
+}
+
+export function prepareTotalLossInsurerEmail(input: { claimId: string; actorId: string }): PreparedTotalLossNotice {
+  assertTotalLoss(input.claimId);
+  const report = getTotalLossReport(input.claimId);
+  const claim = insurerEmail(input.claimId);
+  if (!claim) throw new Error("File not found.");
+  const { subject, body } = totalLossNoticeBody({ fileReference: claim.file_reference, report });
+  const to = String(claim.insurer_email || claim.handler_email || "").trim();
+  if (!to) throw new Error("No insurer email on file. Add it on Third party 1. Nothing was sent.");
+  const correspondenceId = newId("corr");
+  const when = nowUtcIso();
+  run(
+    `INSERT INTO correspondence(id, claim_id, direction, channel, subject, preview, body, to_address, from_address, unread, sent_status, template_key, created_at)
+     VALUES (?, ?, 'outgoing', 'email', ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
+    [
+      correspondenceId,
+      input.claimId,
+      subject,
+      body.slice(0, 180),
+      body,
+      to,
+      CAS_CLAIMS_MAILBOX,
+      ENGINEER_INSTRUCTION_PREPARED,
+      TOTAL_LOSS_NOTICE_TEMPLATE,
+      when,
+    ],
+  );
+  return {
+    id: correspondenceId,
+    subject,
+    toAddress: to,
+    body,
+    createdAt: when,
+    mailto: buildMailtoHref(to, subject, body),
+  };
+}
+
+export function getPreparedTotalLossNotice(claimId: string): PreparedTotalLossNotice | null {
+  const row = get<{
+    id: string;
+    subject: string | null;
+    to_address: string | null;
+    body: string | null;
+    created_at: string;
+  }>(
+    `SELECT id, subject, to_address, body, created_at FROM correspondence
+     WHERE claim_id = ? AND template_key = ? AND sent_status = ?
+     ORDER BY created_at DESC LIMIT 1`,
+    [claimId, TOTAL_LOSS_NOTICE_TEMPLATE, ENGINEER_INSTRUCTION_PREPARED],
+  );
+  if (!row) return null;
+  const to = String(row.to_address || "").trim();
+  const body = String(row.body || "");
+  const subject = String(row.subject || "Total loss salvage");
+  return {
+    id: row.id,
+    subject: row.subject,
+    toAddress: row.to_address,
+    body: row.body,
+    createdAt: String(row.created_at),
+    mailto: to && body ? buildMailtoHref(to, subject, body) : null,
+  };
+}
+
+export function markTotalLossNoticeSent(input: { claimId: string; correspondenceId: string; actorId: string }) {
+  const row = get<{
+    id: string;
+    claim_id: string;
+    subject: string | null;
+    to_address: string | null;
+    sent_status: string | null;
+    template_key: string | null;
+  }>(`SELECT id, claim_id, subject, to_address, sent_status, template_key FROM correspondence WHERE id = ?`, [
+    input.correspondenceId,
+  ]);
+  if (!row || row.claim_id !== input.claimId || row.template_key !== TOTAL_LOSS_NOTICE_TEMPLATE) {
+    throw new Error("Prepared total-loss email not found on this file.");
+  }
+  if (row.sent_status === ENGINEER_INSTRUCTION_MARKED_SENT) throw new Error("This email is already marked as sent.");
+  if (row.sent_status !== ENGINEER_INSTRUCTION_PREPARED) {
+    throw new Error("This item is not a prepared total-loss email waiting to be marked as sent.");
+  }
+  const when = nowUtcIso();
+  const handler = get<{ name: string }>(`SELECT name FROM staff WHERE id = ?`, [input.actorId]);
+  const handlerName = handler?.name || "Unknown handler";
+  run(`UPDATE correspondence SET sent_status = ? WHERE id = ?`, [ENGINEER_INSTRUCTION_MARKED_SENT, input.correspondenceId]);
+  const subject = String(row.subject || "Total loss salvage");
+  const to = String(row.to_address || "");
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "outgoing_email",
+    occurredAt: when,
+    details: `${subject} prepared for ${to}. Marked as sent by ${handlerName} after opening their own email client. Not auto-sent — live sending from ${CAS_CLAIMS_MAILBOX} is not connected.`,
+    actorId: input.actorId,
+    channel: "email",
+    correspondenceId: input.correspondenceId,
     source: "staff",
   });
 }

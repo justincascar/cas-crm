@@ -48,6 +48,7 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["created_by", "TEXT"],
   ],
   hire_episodes: [["hire_end_review_on", "TEXT"]],
+  total_loss_reports: [["cas_request", "TEXT"]],
   claims: [
     ["client_role", "TEXT"],
     ["damage_description", "TEXT"],
@@ -286,6 +287,7 @@ export function migrate(db: DatabaseSync) {
       returned_on TEXT,
       customer_charge_pence INTEGER,
       cas_purchase_pence INTEGER,
+      cas_request TEXT,
       updated_at TEXT NOT NULL,
       updated_by TEXT
     );

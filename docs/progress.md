@@ -136,6 +136,13 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+23 September 2026 — Total-loss files record what CAS asked the insurer for, as well as the insurer's answer:
+
+- Staff can record the request as either the full pre-accident value, with the insurer collecting the salvage, or the net figure, with CAS retaining and disposing of it. That request is separate from the insurer's answer already on the file.
+- Prepare notification email opens a pre-filled message in the handler's own email client, in the same way as Instruct Engineer. Mark as sent records it on the file history. Nothing is sent from claims@cascar.co.uk.
+- If the insurer's answer is not the same as the request, the file shows a note to review the storage and recovery position. The note does not change any storage, recovery or hire date or amount. If either the request or the answer is still blank, there is no note.
+- The pre-accident value, salvage value, suggested payment and disposal boxes from earlier today are unchanged.
+
 23 September 2026 — Total-loss files record the engineer's figures and what happened to the salvage:
 
 - On a file already marked total loss, staff can enter the pre-accident value and the salvage value from the engineer's report. Both boxes start empty. An empty box is not treated as zero, and no payment is suggested until both figures are there.

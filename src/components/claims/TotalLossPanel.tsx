@@ -1,6 +1,14 @@
-import { formatUkDate } from "@/lib/dates";
-import { getTotalLossReport, getVehicleDamageMoney } from "@/lib/db/total-loss";
-import { disposalApplies, figuresIncomplete, salvageSaleVariance, totalLossSuggestion } from "@/lib/domain/total-loss";
+import { OpenPreparedMailto } from "@/components/claims/OpenPreparedMailto";
+import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
+import { formatUkDate, formatUkDateTime } from "@/lib/dates";
+import { getPreparedTotalLossNotice, getTotalLossReport, getVehicleDamageMoney } from "@/lib/db/total-loss";
+import {
+  disposalApplies,
+  figuresIncomplete,
+  salvageRequestMismatch,
+  salvageSaleVariance,
+  totalLossSuggestion,
+} from "@/lib/domain/total-loss";
 import { formatGbp } from "@/lib/money";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
@@ -20,11 +28,13 @@ export function TotalLossPanel({
   totalLoss,
   returnTo,
   error,
+  openMailId,
 }: {
   claimId: string;
   totalLoss: boolean;
   returnTo: string;
   error?: string;
+  openMailId?: string;
 }) {
   if (!totalLoss) return null;
   const report = getTotalLossReport(claimId);
@@ -33,6 +43,8 @@ export function TotalLossPanel({
   const incomplete = figuresIncomplete(report);
   const showDisposal = disposalApplies(report.interest);
   const variance = report.disposal === "sold" ? salvageSaleVariance(report.salvagePence, report.saleProceedsPence) : null;
+  const mismatch = salvageRequestMismatch(report.casRequest, report.interest);
+  const prepared = getPreparedTotalLossNotice(claimId);
 
   return (
     <section className="rounded-xl border border-line bg-card p-5">
@@ -62,6 +74,29 @@ export function TotalLossPanel({
         </div>
 
         <fieldset className="text-sm">
+          <legend className="font-semibold">What is CAS asking the insurer for?</legend>
+          <p className="mt-1 text-slate">This is CAS&apos;s request. It is not the insurer&apos;s answer, and it does not change storage or recovery.</p>
+          <label className="mt-2 flex items-center gap-2">
+            <input type="radio" name="casRequest" value="" defaultChecked={report.casRequest == null} />
+            Not recorded yet
+          </label>
+          <label className="mt-2 flex items-center gap-2">
+            <input type="radio" name="casRequest" value="full_pav" defaultChecked={report.casRequest === "full_pav"} />
+            Full pre-accident value — insurer to collect the salvage
+          </label>
+          <label className="mt-2 flex items-center gap-2">
+            <input type="radio" name="casRequest" value="net_cas" defaultChecked={report.casRequest === "net_cas"} />
+            Net figure — CAS retains/disposes of the salvage
+          </label>
+          <button name="intent" value="prepare_email" className="mt-3 min-h-11 rounded-md bg-teal px-3 py-2 text-sm font-semibold text-white" type="submit">
+            Prepare notification email
+          </button>
+          <p className="mt-2 text-slate">
+            This opens a pre-filled email in your own email client. It is prepared, not sent. Nothing is sent from {CAS_CLAIMS_MAILBOX}.
+          </p>
+        </fieldset>
+
+        <fieldset className="text-sm">
           <legend className="font-semibold">Has the insurer taken an interest in the salvage?</legend>
           <label className="mt-2 flex items-center gap-2">
             <input type="radio" name="interest" value="" defaultChecked={report.interest == null} />
@@ -76,6 +111,12 @@ export function TotalLossPanel({
             Yes — the insurer is taking the salvage
           </label>
         </fieldset>
+
+        {mismatch ? (
+          <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm">
+            {mismatch}. Storage and recovery figures have not been changed.
+          </p>
+        ) : null}
 
         {report.interest === "takes_interest" ? (
           <p className="text-sm">
@@ -175,6 +216,26 @@ export function TotalLossPanel({
           Save these figures
         </button>
       </form>
+
+      {prepared?.mailto ? (
+        <div className="mt-4 rounded-md border border-line bg-white px-4 py-3 text-sm">
+          <p>
+            A notification email was prepared {formatUkDateTime(prepared.createdAt)} for {prepared.toAddress}. It has not been sent from{" "}
+            {CAS_CLAIMS_MAILBOX}.
+          </p>
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+            <OpenPreparedMailto href={prepared.mailto} autoOpen={openMailId === prepared.id} />
+            <form method="post" action={`/claims/${claimId}/total-loss`}>
+              <input type="hidden" name="intent" value="mark_sent" />
+              <input type="hidden" name="correspondenceId" value={prepared.id} />
+              <input type="hidden" name="returnTo" value={returnTo} />
+              <button className="min-h-11 rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white" type="submit">
+                Mark as sent
+              </button>
+            </form>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

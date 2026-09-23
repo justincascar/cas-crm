@@ -38,10 +38,10 @@ export default async function ClaimDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tlError?: string }>;
+  searchParams: Promise<{ tlError?: string; tlMail?: string }>;
 }) {
   const { id } = await params;
-  const { tlError } = await searchParams;
+  const { tlError, tlMail } = await searchParams;
   await requireStaff();
   const data = getClaim(id);
   if (!data) notFound();
@@ -473,6 +473,7 @@ export default async function ClaimDetailPage({
         totalLoss={Number(claim.total_loss) === 1}
         returnTo={`/claims/${claim.id}`}
         error={tlError}
+        openMailId={tlMail}
       />
 
       <section className="grid gap-6 lg:grid-cols-2">
