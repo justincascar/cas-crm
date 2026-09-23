@@ -13,6 +13,7 @@ import { findPreparedChase, listChasesForClaim } from "@/lib/db/chase";
 import { listHireAgreements } from "@/lib/db/chronology";
 import { seedScreenDefaults } from "@/lib/db/screens";
 import { HireEndDateReview } from "@/components/claims/HireEndDateReview";
+import { TotalLossPanel } from "@/components/claims/TotalLossPanel";
 import { StorageDateReview } from "@/components/claims/StorageDateReview";
 import { StorageEndDateReview } from "@/components/claims/StorageEndDateReview";
 import { getHireEndDateReviews } from "@/lib/db/hire-collection-date";
@@ -23,11 +24,11 @@ export default async function ClaimWorkScreenPage({
   searchParams,
 }: {
   params: Promise<{ id: string; screen: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; field?: string; whatsapp?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; field?: string; whatsapp?: string; tlError?: string }>;
 }) {
   const { id, screen } = await params;
   await requireStaff();
-  const { saved, error, field, whatsapp } = await searchParams;
+  const { saved, error, field, whatsapp, tlError } = await searchParams;
   const def = getClaimScreen(screen);
   if (!def) notFound();
   const data = getClaim(id);
@@ -83,6 +84,14 @@ export default async function ClaimWorkScreenPage({
           claimId={String(data.claim.id)}
           review={getStorageEndDateReview(String(data.claim.id))}
           returnTo={`/claims/${data.claim.id}/work/storage`}
+        />
+      ) : null}
+      {screen === "assessed-damage" ? (
+        <TotalLossPanel
+          claimId={String(data.claim.id)}
+          totalLoss={Number(data.claim.total_loss) === 1}
+          returnTo={`/claims/${data.claim.id}/work/assessed-damage`}
+          error={tlError}
         />
       ) : null}
       {screen === "delivery-collection" ? (

@@ -20,6 +20,7 @@ import { googleMapsSearchUrl } from "@/lib/lookups/maps";
 import { liabilityStatusLabel, roadworthinessLabel } from "@/lib/domain/claim-status";
 import { describeHireAgreementParts } from "@/lib/documents/hire-agreement-parts";
 import { HireEndDateReview } from "@/components/claims/HireEndDateReview";
+import { TotalLossPanel } from "@/components/claims/TotalLossPanel";
 import { StorageDateReview } from "@/components/claims/StorageDateReview";
 import { StorageEndDateReview } from "@/components/claims/StorageEndDateReview";
 import { getHireEndDateReviews } from "@/lib/db/hire-collection-date";
@@ -32,8 +33,15 @@ function pretty(value: string | number | null | undefined) {
   return String(value).replaceAll("_", " ");
 }
 
-export default async function ClaimDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ClaimDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tlError?: string }>;
+}) {
   const { id } = await params;
+  const { tlError } = await searchParams;
   await requireStaff();
   const data = getClaim(id);
   if (!data) notFound();
@@ -459,6 +467,13 @@ export default async function ClaimDetailPage({ params }: { params: Promise<{ id
           </table>
         </div>
       </section>
+
+      <TotalLossPanel
+        claimId={String(claim.id)}
+        totalLoss={Number(claim.total_loss) === 1}
+        returnTo={`/claims/${claim.id}`}
+        error={tlError}
+      />
 
       <section className="grid gap-6 lg:grid-cols-2">
         <div className="rounded-xl border border-line bg-card p-5">

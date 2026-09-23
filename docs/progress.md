@@ -136,6 +136,15 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+23 September 2026 — Total-loss files record the engineer's figures and what happened to the salvage:
+
+- On a file already marked total loss, staff can enter the pre-accident value and the salvage value from the engineer's report. Both boxes start empty. An empty box is not treated as zero, and no payment is suggested until both figures are there.
+- Staff record whether the insurer is taking the salvage. If not, the file shows pre-accident value minus salvage value as a suggestion. It becomes the agreed vehicle-damage amount only when a person presses the button. The amount already paid is not changed. Hire and storage lines are not changed.
+- If the insurer is taking the salvage, that suggestion is not shown and the disposal boxes are hidden. The insurer is expected to pay the full pre-accident value. Staff can still type a different offer or a different agreed amount. Those stay separate from the engineer's figures.
+- Where CAS disposes of the salvage, staff record a sale to a third party (with the actual proceeds), a return to the customer (with the date, and a charge only if one was made), or a purchase by CAS. A difference between the sale proceeds and the engineer's salvage value is flagged. It is not added into the agreed or paid vehicle-damage amount. Disposal can be saved before the insurer's payment is agreed.
+- These figures are typed in from the report. Reading them out of the report automatically is a later stage, and it is not built here.
+- The seven-day off-hire calculation is still not wired to a payment on the file. This change does not call it.
+
 23 September 2026 — Hire ends on the day the hire car is collected:
 
 - Completing a Hire car collection job, including one written up later with a real date and time, now sets that booking’s hire end to that calendar day when the booking has no hire end yet. The date used is the day the collection happened, not the day the job was assigned. The daily rate, storage dates and the scheduled off-hire date are not changed.

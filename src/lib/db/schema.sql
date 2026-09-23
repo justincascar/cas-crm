@@ -531,6 +531,21 @@ CREATE TABLE IF NOT EXISTS known_agents (
   updated_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS total_loss_reports (
+  claim_id TEXT PRIMARY KEY REFERENCES claims(id) ON DELETE CASCADE,
+  pav_pence INTEGER,
+  salvage_pence INTEGER,
+  insurer_salvage_interest TEXT,
+  insurer_offered_pence INTEGER,
+  disposal TEXT,
+  sale_proceeds_pence INTEGER,
+  returned_on TEXT,
+  customer_charge_pence INTEGER,
+  cas_purchase_pence INTEGER,
+  updated_at TEXT NOT NULL,
+  updated_by TEXT
+);
+
 CREATE TABLE IF NOT EXISTS audit_log (
   id TEXT PRIMARY KEY,
   at TEXT NOT NULL,

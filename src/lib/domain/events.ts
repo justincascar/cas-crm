@@ -13,6 +13,8 @@ export const CLAIM_EVENT_TYPES = [
   { key: "liability_response_chase_cancelled", label: "Liability response chase cancelled" },
   { key: "engineer_instructed", label: "Engineer instructed" },
   { key: "engineer_report_received", label: "Engineer report received" },
+  { key: "total_loss_figures_recorded", label: "Total-loss engineer's figures recorded" },
+  { key: "total_loss_agreed_confirmed", label: "Total-loss agreed amount confirmed" },
   { key: "engineer_report_received_cleared", label: "Engineer report received — cleared (correction)" },
   { key: "engineer_report_chase_sent", label: "Engineer report chase marked as sent" },
   { key: "engineer_chase_paused", label: "Engineer report chase paused" },

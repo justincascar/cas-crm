@@ -275,6 +275,20 @@ export function migrate(db: DatabaseSync) {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_repair_evidence_claim ON repair_evidence(claim_id, created_at);
+    CREATE TABLE IF NOT EXISTS total_loss_reports (
+      claim_id TEXT PRIMARY KEY REFERENCES claims(id) ON DELETE CASCADE,
+      pav_pence INTEGER,
+      salvage_pence INTEGER,
+      insurer_salvage_interest TEXT,
+      insurer_offered_pence INTEGER,
+      disposal TEXT,
+      sale_proceeds_pence INTEGER,
+      returned_on TEXT,
+      customer_charge_pence INTEGER,
+      cas_purchase_pence INTEGER,
+      updated_at TEXT NOT NULL,
+      updated_by TEXT
+    );
   `);
   db.exec(`
     CREATE TABLE IF NOT EXISTS claim_events (
