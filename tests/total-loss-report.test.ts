@@ -4,6 +4,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, it } from "node:test";
 import { withDatabase } from "../src/lib/db/connection.ts";
+import { saveScreenData } from "../src/lib/db/screens.ts";
 import { migrate } from "../src/lib/db/migrate.ts";
 import { seed } from "../src/lib/db/seed.ts";
 import {
@@ -270,8 +271,15 @@ describe("total-loss engineer's figures", () => {
       }
       const before = money(db, "c10");
       const preparedNotice = prepareTotalLossInsurerEmail({ claimId: "c10", actorId: "staff-sian" });
-      assert.match(preparedNotice.body || "", /Net figure — CAS retains/);
-      assert.match(preparedNotice.body || "", /£6,700\.00/);
+      assert.match(preparedNotice.body || "", /^Dear Sir \/ Madam,/);
+      assert.match(preparedNotice.body || "", /Our ref: TEST-0010/);
+      assert.match(preparedNotice.body || "", /Your claim \/ policy reference: \[not yet on file\]/);
+      assert.match(preparedNotice.body || "", /Engineer's pre-accident value: £8,200\.00/);
+      assert.match(preparedNotice.body || "", /Engineer's salvage value: £1,500\.00/);
+      assert.match(preparedNotice.body || "", /Please pay the net figure of £6,700\.00/);
+      assert.doesNotMatch(preparedNotice.body || "", /CAS asks for/);
+      assert.doesNotMatch(preparedNotice.body || "", /Prepared for the handler/);
+      assert.doesNotMatch(preparedNotice.body || "", /claims@cascar\.co\.uk/);
       assert.match(preparedNotice.mailto || "", /^mailto:claims@insurer\.example\.test/);
       const row = db.prepare(`SELECT sent_status, template_key FROM correspondence WHERE id = ?`).get(preparedNotice.id) as {
         sent_status: string;
@@ -294,6 +302,40 @@ describe("total-loss engineer's figures", () => {
       ).get() as { n: number };
       assert.equal(instructed.n, 0);
       assert.equal(money(db, "c10").claim.storage_started_on, before.claim.storage_started_on);
+    });
+    db.close();
+  });
+
+  it("recognises a Third party 1 email saved immediately before preparing the notification", () => {
+    const db = prepared();
+    withDatabase(db, () => {
+      saveTotalLossReport({
+        claimId: "c10",
+        actorId: "staff-sian",
+        pavPence: pence(8200),
+        salvagePence: pence(1500),
+        interest: null,
+        disposal: null,
+        casRequest: "net_cas",
+      });
+      const before = db.prepare(`SELECT COUNT(*) AS n FROM claim_third_parties WHERE claim_id = 'c10'`).get() as { n: number };
+      assert.equal(before.n, 0);
+      saveScreenData(
+        "c10",
+        "tp1",
+        { insurerEmail: "saved-now@insurer.example.test", insurerReference: "TP-REF-100" },
+        "staff-sian",
+      );
+      const stored = db.prepare(`SELECT insurer_email FROM claim_third_parties WHERE claim_id = 'c10' AND sequence = 1`).get() as {
+        insurer_email: string;
+      };
+      assert.equal(stored.insurer_email, "saved-now@insurer.example.test");
+      const notice = prepareTotalLossInsurerEmail({ claimId: "c10", actorId: "staff-sian" });
+      assert.match(notice.body || "", /Your claim \/ policy reference: TP-REF-100/);
+      assert.equal(notice.toAddress, "saved-now@insurer.example.test");
+      assert.match(notice.mailto || "", /^mailto:saved-now@insurer\.example\.test/);
+      const row = db.prepare(`SELECT sent_status FROM correspondence WHERE id = ?`).get(notice.id) as { sent_status: string };
+      assert.equal(row.sent_status, "prepared_not_sent");
     });
     db.close();
   });

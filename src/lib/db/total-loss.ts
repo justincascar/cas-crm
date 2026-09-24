@@ -4,7 +4,6 @@ import { buildMailtoHref } from "../email/mailto";
 import { formatGbp } from "../money";
 import {
   disposalApplies,
-  salvageRequestLabel,
   salvageRequestMismatch,
   salvageSaleVariance,
   totalLossSuggestion,
@@ -292,9 +291,44 @@ export type PreparedTotalLossNotice = {
   mailto: string | null;
 };
 
+function savedThirdPartyInsurerEmail(claimId: string): string {
+  const row = get<{ data_json: string }>(
+    `SELECT data_json FROM claim_screen_data WHERE claim_id = ? AND screen_key = 'tp1'`,
+    [claimId],
+  );
+  if (!row?.data_json) return "";
+  try {
+    const data = JSON.parse(row.data_json) as { insurerEmail?: string };
+    return String(data.insurerEmail || "").trim();
+  } catch {
+    return "";
+  }
+}
+
+function savedThirdPartyReference(claimId: string): string {
+  const row = get<{ data_json: string }>(
+    `SELECT data_json FROM claim_screen_data WHERE claim_id = ? AND screen_key = 'tp1'`,
+    [claimId],
+  );
+  if (!row?.data_json) return "";
+  try {
+    const data = JSON.parse(row.data_json) as { insurerReference?: string; policyNumber?: string };
+    return String(data.insurerReference || data.policyNumber || "").trim();
+  } catch {
+    return "";
+  }
+}
+
 function insurerEmail(claimId: string) {
-  return get<{ insurer_name: string | null; insurer_email: string | null; handler_email: string | null; file_reference: string }>(
-    `SELECT c.file_reference, tp.insurer_name, tp.insurer_email, tp.handler_email
+  return get<{
+    insurer_name: string | null;
+    insurer_email: string | null;
+    handler_email: string | null;
+    insurer_ref: string | null;
+    policy_number: string | null;
+    file_reference: string;
+  }>(
+    `SELECT c.file_reference, tp.insurer_name, tp.insurer_email, tp.handler_email, tp.insurer_ref, tp.policy_number
      FROM claims c
      LEFT JOIN claim_third_parties tp ON tp.claim_id = c.id
      WHERE c.id = ?
@@ -308,19 +342,24 @@ function figureOrMissing(pence: number | null) {
   return pence == null ? "not yet on file" : formatGbp(pence);
 }
 
-export function totalLossNoticeBody(input: { fileReference: string; report: TotalLossFigures }): { subject: string; body: string } {
+export function totalLossNoticeBody(input: {
+  fileReference: string;
+  insurerReference: string | null;
+  report: TotalLossFigures;
+}): { subject: string; body: string } {
   if (!input.report.casRequest) throw new Error("Record what CAS is asking the insurer for, then prepare the email.");
-  const request = salvageRequestLabel(input.report.casRequest);
+  const theirReference = (input.insurerReference || "").trim() || "[not yet on file]";
   const subject = `Our ref: ${input.fileReference} — total loss salvage`;
   const lines = [
+    "Dear Sir / Madam,",
+    "",
     `Our ref: ${input.fileReference}`,
+    `Your claim / policy reference: ${theirReference}`,
     "",
     "We write about the total loss of our client's vehicle.",
     "",
     `Engineer's pre-accident value: ${figureOrMissing(input.report.pavPence)}.`,
     `Engineer's salvage value: ${figureOrMissing(input.report.salvagePence)}.`,
-    "",
-    `CAS asks for: ${request}.`,
   ];
   if (input.report.casRequest === "full_pav") {
     lines.push(
@@ -340,7 +379,6 @@ export function totalLossNoticeBody(input: { fileReference: string; report: Tota
         : "Please pay the net figure (pre-accident value less the engineer's salvage value). A figure is still missing from the engineer's report, so the net amount is not stated here. CAS will retain and dispose of the salvage.",
     );
   }
-  lines.push("", `Prepared for the handler to send from their own email client. Not sent automatically from ${CAS_CLAIMS_MAILBOX}.`);
   return { subject, body: lines.join("\n") };
 }
 
@@ -349,8 +387,13 @@ export function prepareTotalLossInsurerEmail(input: { claimId: string; actorId: 
   const report = getTotalLossReport(input.claimId);
   const claim = insurerEmail(input.claimId);
   if (!claim) throw new Error("File not found.");
-  const { subject, body } = totalLossNoticeBody({ fileReference: claim.file_reference, report });
-  const to = String(claim.insurer_email || claim.handler_email || "").trim();
+  const insurerReference = String(claim.insurer_ref || claim.policy_number || savedThirdPartyReference(input.claimId) || "").trim();
+  const { subject, body } = totalLossNoticeBody({
+    fileReference: claim.file_reference,
+    insurerReference: insurerReference || null,
+    report,
+  });
+  const to = String(claim.insurer_email || claim.handler_email || savedThirdPartyInsurerEmail(input.claimId) || "").trim();
   if (!to) throw new Error("No insurer email on file. Add it on Third party 1. Nothing was sent.");
   const correspondenceId = newId("corr");
   const when = nowUtcIso();

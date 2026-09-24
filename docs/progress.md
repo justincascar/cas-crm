@@ -136,6 +136,13 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+24 September 2026 — Total-loss notification uses the insurer email saved on Third party 1, and the letter is only what the insurer should see:
+
+- Saving an email on Third party 1 now writes it onto the third-party record, including when that file did not have a third party yet. Prepare notification email reads that address straight away, and also the address already stored on the Third party 1 screen. TEST-0010 had the address only on the screen, which is why the button previously said no insurer email was on file.
+- The drafted letter opens with Dear Sir / Madam, keeps the CAS reference, the two engineer's figures and the payment request, and includes the insurer's own claim or policy reference. If none is on the file, the line says [not yet on file]. It does not invent one.
+- Notes for staff stay on the screen, above the prepare button. They are not in the letter. The same check was made for Instruct Engineer (draft notices are removed before the message is opened) and for the engineer-report, liability and repair-authorisation chasers. Those chasers no longer include the line that the reminder came from the CRM and had not been sent automatically. The screen still says the CRM has not sent it.
+- The engineer's report is not attached to this email. That waits for the document storage and tagging stage, which is not built yet.
+
 23 September 2026 — Total-loss files record what CAS asked the insurer for, as well as the insurer's answer:
 
 - Staff can record the request as either the full pre-accident value, with the insurer collecting the salvage, or the net figure, with CAS retaining and disposing of it. That request is separate from the insurer's answer already on the file.

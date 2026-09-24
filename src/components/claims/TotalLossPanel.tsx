@@ -88,12 +88,12 @@ export function TotalLossPanel({
             <input type="radio" name="casRequest" value="net_cas" defaultChecked={report.casRequest === "net_cas"} />
             Net figure — CAS retains/disposes of the salvage
           </label>
+          <p className="mt-3 text-slate">
+            Prepared for the handler to send from their own email client. Not sent automatically from {CAS_CLAIMS_MAILBOX}.
+          </p>
           <button name="intent" value="prepare_email" className="mt-3 min-h-11 rounded-md bg-teal px-3 py-2 text-sm font-semibold text-white" type="submit">
             Prepare notification email
           </button>
-          <p className="mt-2 text-slate">
-            This opens a pre-filled email in your own email client. It is prepared, not sent. Nothing is sent from {CAS_CLAIMS_MAILBOX}.
-          </p>
         </fieldset>
 
         <fieldset className="text-sm">

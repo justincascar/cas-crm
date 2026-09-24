@@ -4,7 +4,7 @@ import { CLAIM_SCREENS, getClaimScreen } from "../claim-screens";
 import { dobConfirmName, dobKindForField, dobSaveError, isDobFieldName } from "../age";
 import { isMobileFieldName, mobileNumberError } from "../phone-number";
 import { formatTypedValue } from "../text";
-import { get, all, getDb, run } from "./connection";
+import { get, all, getDb, newId, run } from "./connection";
 import { recordClaimEvent } from "./chronology";
 import { normaliseGtaGroup } from "../documents/gta";
 import { poundsToPence } from "./intake";
@@ -314,11 +314,41 @@ function applySideEffects(claimId: string, screenKey: string, values: ScreenValu
 }
 
 function updateThirdParty(claimId: string, sequence: number, values: ScreenValues) {
-  const tp = get<{ id: string; person_id: string; vehicle_id: string | null }>(
+  let tp = get<{ id: string; person_id: string; vehicle_id: string | null }>(
     `SELECT id, person_id, vehicle_id FROM claim_third_parties WHERE claim_id = ? AND sequence = ?`,
     [claimId, sequence],
   );
-  if (!tp) return;
+  if (!tp) {
+    const insurerEmail = (values.insurerEmail || "").trim();
+    const named = [values.title, values.forename, values.surname, values.insurerName].some((part) => (part || "").trim());
+    if (!insurerEmail && !named) return;
+    const personId = newId("person");
+    const fullName = [values.title, values.forename, values.surname].filter((part) => (part || "").trim()).join(" ") || "Unknown";
+    const now = nowUtcIso();
+    run(
+      `INSERT INTO people(id, kind, full_name, title, forename, surname, address_line1, postcode, telephone, email, created_at)
+       VALUES (?, 'individual', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        personId,
+        fullName,
+        values.title || null,
+        values.forename || null,
+        values.surname || null,
+        values.address || null,
+        values.postcode || null,
+        values.telMain || null,
+        values.email || null,
+        now,
+      ],
+    );
+    const tpId = newId("tp");
+    run(
+      `INSERT INTO claim_third_parties(id, claim_id, person_id, sequence, insurer_email)
+       VALUES (?, ?, ?, ?, ?)`,
+      [tpId, claimId, personId, sequence, insurerEmail || null],
+    );
+    tp = { id: tpId, person_id: personId, vehicle_id: null };
+  }
   const fullName = [values.title, values.forename, values.surname].filter(Boolean).join(" ");
   if (fullName) {
     run(
