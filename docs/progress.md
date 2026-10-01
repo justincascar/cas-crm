@@ -136,6 +136,12 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+1 October 2026 — My jobs today also lists the next 6 days:
+
+- Below today and overdue, Upcoming this week shows hire delivery, hire collection, client recovery and client return assigned to the signed-in person from tomorrow through six days ahead, grouped by date. Each of those six days is shown. A day with no job says nothing is assigned.
+- A job for today stays in the today list and is not repeated below. A job more than 6 days ahead is not shown. Marking a job Done removes it from the week list. The list reads the assigned date on the job, so a date change shows on the new day.
+- The driver and mechanic demonstration jobs are still created for today only, and they are not one of these four types, so they do not appear as future placeholders. The dashboard and the chase reminders are unchanged.
+
 1 October 2026 — An unfinished job stays on My jobs today until it is marked Done:
 
 - A hire delivery, hire collection, client recovery or client return assigned for an earlier day, and not marked Done, stays on that person's My jobs today list. It is shown in red as Overdue, with the original assigned date. It keeps showing however many days have passed.

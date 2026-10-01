@@ -1,4 +1,4 @@
-import { londonTodayIso, nowUtcIso, requireLondonDateTime } from "../dates";
+import { isoDateFromNow, londonTodayIso, nowUtcIso, requireLondonDateTime } from "../dates";
 import { DRIVER_ROLE, MECHANIC_ROLE, canDoFieldJob, isMechanicRole, isOfficeRole } from "../auth/roles";
 import { storeFileCopy } from "../storage/files";
 import { all, get, newId, run } from "./connection";
@@ -139,6 +139,32 @@ export function listMyJobs(assigneeId: string, workDate = londonTodayIso()): Day
     const carried = (CARRY_FORWARD_JOB_KINDS as readonly string[]).includes(job.jobKind);
     return { ...job, overdue: carried && !job.completed && job.workDate < day };
   });
+}
+
+export type UpcomingDay = { date: string; jobs: DayJob[] };
+
+/** Tomorrow through six days ahead. Today and overdue jobs stay on listMyJobs. */
+export function listMyUpcomingJobs(assigneeId: string): UpcomingDay[] {
+  const from = isoDateFromNow(1);
+  const to = isoDateFromNow(6);
+  const carry = CARRY_FORWARD_JOB_KINDS.map(() => "?").join(", ");
+  const rows = all<JobRow>(
+    `${JOB_SELECT}
+     WHERE a.assignee_id = ?
+       AND a.completed_at IS NULL
+       AND a.job_kind IN (${carry})
+       AND a.work_date >= ?
+       AND a.work_date <= ?
+     ORDER BY a.work_date, a.job_kind, c.file_reference`,
+    [assigneeId, ...CARRY_FORWARD_JOB_KINDS, from, to],
+  );
+  const jobs = rows.map(mapJob);
+  const days: UpcomingDay[] = [];
+  for (let offset = 1; offset <= 6; offset += 1) {
+    const date = isoDateFromNow(offset);
+    days.push({ date, jobs: jobs.filter((job) => job.workDate === date) });
+  }
+  return days;
 }
 
 export function getDayAssignment(id: string): DayJob | undefined {

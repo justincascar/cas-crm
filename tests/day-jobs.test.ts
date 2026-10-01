@@ -8,7 +8,7 @@ import { createStaffAccount } from "../src/lib/db/staff-admin.ts";
 import { withDatabase } from "../src/lib/db/connection.ts";
 import { ensureDemoDayJobs } from "../src/lib/db/demo-jobs.ts";
 import { listVehicleHandovers, recordVehicleHandover } from "../src/lib/db/handover.ts";
-import { assignDayJob, listMyJobs } from "../src/lib/db/jobs.ts";
+import { assignDayJob, listMyJobs, listMyUpcomingJobs } from "../src/lib/db/jobs.ts";
 import { migrate } from "../src/lib/db/migrate.ts";
 import { seed } from "../src/lib/db/seed.ts";
 import { formatUkDateTime, isoDateFromNow, londonTodayIso } from "../src/lib/dates.ts";
@@ -243,6 +243,61 @@ describe("assigning a driver and a date", () => {
     db.close();
   });
 
+  it("lists the next 6 days without repeating today or showing a job a week ahead", () => {
+    const db = prepared();
+    withDatabase(db, () => {
+      const assignee = driver("Week Driver", "weekdriver");
+      const today = londonTodayIso();
+      const tomorrow = isoDateFromNow(1);
+      const dayThree = isoDateFromNow(3);
+      const daySeven = isoDateFromNow(7);
+      const dueToday = assignDayJob({
+        assigneeId: assignee,
+        jobKind: "hire_collection",
+        claimId: "",
+        hireEpisodeId: "h-c4",
+        actorId: "staff-justin",
+        workDate: today,
+      });
+      const soon = assignDayJob({
+        assigneeId: assignee,
+        jobKind: "hire_delivery",
+        claimId: "",
+        hireEpisodeId: "h-c3",
+        actorId: "staff-justin",
+        workDate: tomorrow,
+      });
+      assignDayJob({
+        assigneeId: assignee,
+        jobKind: "hire_collection",
+        claimId: "",
+        hireEpisodeId: "h-c7",
+        actorId: "staff-justin",
+        workDate: daySeven,
+      });
+      const week = listMyUpcomingJobs(assignee);
+      assert.equal(week.length, 6);
+      assert.equal(week[0].date, tomorrow);
+      assert.equal(week[5].date, isoDateFromNow(6));
+      assert.equal(week.some((day) => day.jobs.some((job) => job.id === dueToday.id)), false);
+      assert.equal(listMyJobs(assignee).some((job) => job.id === dueToday.id), true);
+      assert.equal(week[0].jobs.some((job) => job.id === soon.id), true);
+      assert.equal(week.some((day) => day.date === daySeven), false);
+      assert.equal(week.some((day) => day.jobs.some((job) => job.workDate === daySeven)), false);
+      db.prepare(`UPDATE day_assignments SET work_date = ? WHERE id = ?`).run(dayThree, soon.id);
+      const moved = listMyUpcomingJobs(assignee);
+      assert.equal(moved[0].jobs.some((job) => job.id === soon.id), false);
+      assert.equal(moved.find((day) => day.date === dayThree)?.jobs.some((job) => job.id === soon.id), true);
+      db.prepare(`UPDATE day_assignments SET completed_at = ? WHERE id = ?`).run("2026-10-01T12:00:00.000Z", soon.id);
+      assert.equal(listMyUpcomingJobs(assignee).some((day) => day.jobs.some((job) => job.id === soon.id)), false);
+      ensureStaffAuth(db);
+      ensureDemoDayJobs(db);
+      assert.equal(listMyUpcomingJobs("staff-driver").every((day) => day.jobs.length === 0), true);
+      assert.equal(listMyUpcomingJobs("staff-mechanic").every((day) => day.jobs.length === 0), true);
+    });
+    db.close();
+  });
+
   it("stores the handover's actual driver and time separately from the person who typed it and from the save time", () => {
     const db = prepared();
     withDatabase(db, () => {
@@ -436,6 +491,7 @@ describe("assigning a driver and a date", () => {
     assert.match(form, /action=\{action\}/);
     assert.match(page, /Assigned for/);
     assert.match(page, /Not done/);
+    assert.match(page, /Upcoming this week/);
     assert.match(page, /still not done from an earlier day/);
     assert.match(page, /Overdue/);
     assert.match(page, /AssignJobForm/);

@@ -128,7 +128,7 @@ export function AssignJobForm({
           onChange={(event) => setWorkDate(event.target.value)}
         />
       </label>
-      <p className="text-sm text-slate">Today is filled in. Change it to any earlier or later day. A future date stays off the list until that day. A past date that is not marked Done stays on the list, in red, as overdue.</p>
+      <p className="text-sm text-slate">Today is filled in. Change it to any earlier or later day. The next 6 days show under Upcoming this week. A later date stays off until it falls inside that week. A past date that is not marked Done stays on the list, in red, as overdue.</p>
       <label className={needsHire ? "block text-sm" : "hidden"}>
           Hire booking
           <select

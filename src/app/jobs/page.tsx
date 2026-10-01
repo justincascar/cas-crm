@@ -4,7 +4,7 @@ import { AssignJobForm } from "@/components/jobs/AssignJobForm";
 import { isOfficeRole } from "@/lib/auth/roles";
 import { requireSignedIn } from "@/lib/auth/session";
 import { formatUkDate, formatUkDateTime, londonTodayIso } from "@/lib/dates";
-import { listAssignableBookings, listAssignableClaims, listAssignablePeople, listMyJobs } from "@/lib/db/jobs";
+import { listAssignableBookings, listAssignableClaims, listAssignablePeople, listMyJobs, listMyUpcomingJobs } from "@/lib/db/jobs";
 
 export default async function MyJobsPage({
   searchParams,
@@ -14,6 +14,7 @@ export default async function MyJobsPage({
   const staff = await requireSignedIn();
   const { error, saved, finished, review, reviewEnd, reviewHire } = await searchParams;
   const jobs = listMyJobs(staff.id);
+  const upcoming = listMyUpcomingJobs(staff.id);
   const office = isOfficeRole(staff.role);
   const people = office ? listAssignablePeople() : [];
   const bookings = office ? listAssignableBookings() : [];
@@ -73,6 +74,35 @@ export default async function MyJobsPage({
           ))}
         </ul>
       )}
+
+      <section className="space-y-4">
+        <h2 className="font-serif text-xl text-navy-deep">Upcoming this week</h2>
+        <p className="text-sm text-slate">The next 6 days, for you only. A job further ahead is not shown yet.</p>
+        {upcoming.map((day) => (
+          <div key={day.date}>
+            <h3 className="text-sm font-semibold text-navy-deep">{formatUkDate(day.date)}</h3>
+            {day.jobs.length === 0 ? (
+              <p className="mt-2 text-sm text-slate">Nothing assigned.</p>
+            ) : (
+              <ul className="mt-2 space-y-3">
+                {day.jobs.map((job) => (
+                  <li key={job.id} className="rounded-xl border border-line bg-card p-4">
+                    <p className="font-mono text-sm text-teal-dark">{job.fileReference}</p>
+                    <p className="mt-1 text-base">{job.vehicleLabel}</p>
+                    <p className="text-sm text-slate">
+                      {job.jobLabel} · Not done
+                    </p>
+                    <p className="text-sm text-slate">Assigned for {formatUkDate(job.workDate)}.</p>
+                    <Link href={job.href} className="mt-3 block min-h-11 rounded-md bg-navy px-3 py-2 text-center text-base font-semibold text-white">
+                      Open handover
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
+      </section>
 
       {office ? (
         <AssignJobForm
