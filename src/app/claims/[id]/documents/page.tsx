@@ -48,72 +48,8 @@ export default async function ClaimDocumentsPage({
         <p className="rounded-md border border-teal/40 bg-[#eef8f6] px-4 py-3 text-sm">Document stored on this file.</p>
       ) : null}
 
-      <section className="rounded-xl border border-line bg-card p-4">
-        <h2 className="font-serif text-xl text-navy-deep">Store a document</h2>
-        <form action={`/claims/${id}/documents/upload`} method="post" encType="multipart/form-data" className="mt-3 grid gap-3">
-          <label className="text-sm">
-            Type
-            <select name="documentType" required className={field} defaultValue="">
-              <option value="" disabled>
-                Choose a type
-              </option>
-              {CLAIM_DOCUMENT_TYPES.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm">
-            Vehicle, where the type needs one
-            <select name="vehicleChoice" className={field} defaultValue="">
-              <option value="">Not linked to one vehicle</option>
-              {vehicles.client ? <option value="client">Client&apos;s vehicle — {vehicles.client.label}</option> : null}
-              {vehicles.fleet.map((vehicle) => (
-                <option key={vehicle.id} value={`fleet:${vehicle.id}`}>
-                  CAS vehicle — {vehicle.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm">
-            File
-            <input
-              name="document"
-              type="file"
-              required
-              accept="application/pdf,image/jpeg,image/png,image/webp,image/gif,.pdf,.jpg,.jpeg,.png,.webp,.gif"
-              className={field}
-            />
-          </label>
-          <p className="text-xs text-slate">PDF or photograph, 12 MB or smaller. The type is required.</p>
-          <button type="submit" className="w-fit rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
-            Store on this file
-          </button>
-        </form>
-      </section>
-
-      <section className="rounded-xl border border-line bg-card p-4">
-        <h2 className="font-serif text-xl text-navy-deep">Still needed for known purposes</h2>
-        <p className="mt-1 text-sm text-slate">These lists are a reminder only. Storing a document does not send it.</p>
-        <div className="mt-3 grid gap-4 md:grid-cols-2">
-          {gaps.map((purpose) => (
-            <div key={purpose.id}>
-              <h3 className="text-sm font-semibold text-navy">{purpose.label}</h3>
-              <p className="mt-1 text-xs text-slate">{purpose.detail}</p>
-              <ul className="mt-2 space-y-1 text-sm">
-                {purpose.items.map((item) => (
-                  <li key={item.type}>
-                    {item.onFile ? "On file" : "Missing"} — {item.label}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="rounded-xl border border-line bg-card p-4">
+      <div className="grid items-start gap-6 md:grid-cols-[minmax(0,1fr)_20rem]">
+      <section className="order-2 rounded-xl border border-line bg-card p-4 md:order-1">
         <h2 className="font-serif text-xl text-navy-deep">On file</h2>
         {documents.length === 0 ? <p className="mt-2 text-sm text-slate">No tagged documents stored on this file yet.</p> : null}
         <ul className="mt-3 space-y-4">
@@ -169,6 +105,72 @@ export default async function ClaimDocumentsPage({
             </li>
           ))}
         </ul>
+      </section>
+
+      <section className="order-1 rounded-xl border border-line bg-card p-4 md:order-2">
+        <h2 className="font-serif text-xl text-navy-deep">Missing papers</h2>
+        <p className="mt-1 text-sm text-slate">Still needed for known purposes. These lists are a reminder only. Storing a document does not send it.</p>
+        <div className="mt-3 grid gap-4">
+          {gaps.map((purpose) => (
+            <div key={purpose.id}>
+              <h3 className="text-sm font-semibold text-navy">{purpose.label}</h3>
+              <p className="mt-1 text-xs text-slate">{purpose.detail}</p>
+              <ul className="mt-2 space-y-1 text-sm">
+                {purpose.items.map((item) => (
+                  <li key={item.type}>
+                    {item.onFile ? "On file" : "Missing"} — {item.label}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ))}
+        </div>
+      </section>
+      </div>
+
+      <section className="rounded-xl border border-line bg-card p-4">
+        <h2 className="font-serif text-xl text-navy-deep">Store a document</h2>
+        <form action={`/claims/${id}/documents/upload`} method="post" encType="multipart/form-data" className="mt-3 grid gap-3">
+          <label className="text-sm">
+            Type
+            <select name="documentType" required className={field} defaultValue="">
+              <option value="" disabled>
+                Choose a type
+              </option>
+              {CLAIM_DOCUMENT_TYPES.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm">
+            Vehicle, where the type needs one
+            <select name="vehicleChoice" className={field} defaultValue="">
+              <option value="">Not linked to one vehicle</option>
+              {vehicles.client ? <option value="client">Client&apos;s vehicle — {vehicles.client.label}</option> : null}
+              {vehicles.fleet.map((vehicle) => (
+                <option key={vehicle.id} value={`fleet:${vehicle.id}`}>
+                  CAS vehicle — {vehicle.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm">
+            File
+            <input
+              name="document"
+              type="file"
+              required
+              accept="application/pdf,image/jpeg,image/png,image/webp,image/gif,.pdf,.jpg,.jpeg,.png,.webp,.gif"
+              className={field}
+            />
+          </label>
+          <p className="text-xs text-slate">PDF or photograph, 12 MB or smaller. The type is required.</p>
+          <button type="submit" className="w-fit rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
+            Store on this file
+          </button>
+        </form>
       </section>
     </div>
   );

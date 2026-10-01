@@ -19,8 +19,14 @@ export default async function ClaimLayout({
   const { id } = await params;
   const pathname = (await headers()).get("x-cas-pathname") || "";
   if (pathname && !pathAllowedForRole(staffUser.role, pathname)) redirect("/jobs");
+  const claimPath = `/claims/${id}`;
   const onHandover = pathname.endsWith("/handover");
+  const onDocuments = pathname === `${claimPath}/documents` || pathname.startsWith(`${claimPath}/documents/`);
   const office = isOfficeRole(staffUser.role);
+  const tabClass = (active: boolean) =>
+    `inline-flex min-h-11 items-center rounded-md px-3 py-2 text-sm font-semibold ${
+      active ? "bg-navy text-white" : "border border-line bg-white text-navy"
+    }`;
   const data = getClaim(id);
   if (!data) notFound();
   const saved = listScreenSummaries(String(data.claim.id)).map((r) => r.screen_key);
@@ -40,7 +46,7 @@ export default async function ClaimLayout({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-card px-4 py-3">
+      <div className="rounded-xl border border-line bg-card px-4 py-3">
         <div>
           <p className="font-mono text-sm text-teal-dark">{String(data.claim.file_reference)}</p>
           <p className="text-sm text-slate">
@@ -51,32 +57,32 @@ export default async function ClaimLayout({
             roadworthiness={String(data.claim.roadworthiness || "")}
           />
         </div>
-        <div className="flex flex-wrap gap-3 text-sm">
-          <Link href={`/claims/${data.claim.id}`} className="text-teal-dark underline">
-            Overview
-          </Link>
-          <Link href={`/claims/${data.claim.id}/work/comms`} className="rounded-md bg-navy px-3 py-1.5 font-semibold text-white">
-            Email / WhatsApp / Calls
-          </Link>
-          <Link href={`/claims/${data.claim.id}/work/general`} className="text-teal-dark underline">
-            File screens
-          </Link>
-          <Link href={`/claims/${data.claim.id}/handover`} className="min-h-11 rounded-md bg-navy px-3 py-2 font-semibold text-white">
-            Handover
-          </Link>
-          <Link href={`/claims/${data.claim.id}/documents`} className="text-teal-dark underline">
-            Documents
-          </Link>
-          <Link href={`/claims/${data.claim.id}/repair`} className="text-teal-dark underline">
-            Repair evidence
-          </Link>
-          <Link href={`/claims/${data.claim.id}/hire-pack`} className="rounded-md bg-teal px-3 py-1.5 font-semibold text-white">
-            Hire Pack
-          </Link>
-        </div>
       </div>
-      <div className={onHandover ? "" : "grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]"}>
-        {onHandover ? null : <ScreenNav claimId={String(data.claim.id)} savedKeys={saved} />}
+      <nav aria-label="Claim sections" className="flex flex-wrap gap-2 rounded-xl border border-line bg-card px-4 py-3">
+        <Link href={claimPath} className={tabClass(pathname === claimPath)}>
+          Overview
+        </Link>
+        <Link href={`${claimPath}/work/comms`} className={tabClass(pathname.startsWith(`${claimPath}/work/comms`))}>
+          Email / WhatsApp / Calls
+        </Link>
+        <Link href={`${claimPath}/work/general`} className={tabClass(pathname.startsWith(`${claimPath}/work/`) && !pathname.startsWith(`${claimPath}/work/comms`))}>
+          File screens
+        </Link>
+        <Link href={`${claimPath}/handover`} className={tabClass(onHandover)}>
+          Handover
+        </Link>
+        <Link href={`${claimPath}/documents`} className={tabClass(onDocuments)}>
+          Documents
+        </Link>
+        <Link href={`${claimPath}/repair`} className={tabClass(pathname.startsWith(`${claimPath}/repair`))}>
+          Repair evidence
+        </Link>
+        <Link href={`${claimPath}/hire-pack`} className={tabClass(pathname.startsWith(`${claimPath}/hire-pack`))}>
+          Hire Pack
+        </Link>
+      </nav>
+      <div className={onHandover || onDocuments ? "" : "grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]"}>
+        {onHandover || onDocuments ? null : <ScreenNav claimId={String(data.claim.id)} savedKeys={saved} />}
         <div className="min-w-0">{children}</div>
       </div>
     </div>
