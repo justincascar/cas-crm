@@ -83,7 +83,7 @@ describe("vehicles tab", () => {
   it("keeps Audatex on the Vehicles tab, shortens Overview, and blocks a driver", () => {
     const overview = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/page.tsx"), "utf8");
     const vehicles = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/vehicles/page.tsx"), "utf8");
-    const layout = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/layout.tsx"), "utf8");
+    const layout = fs.readFileSync(path.join(process.cwd(), "src/components/claim-file/ClaimSectionFrame.tsx"), "utf8");
     const repair = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/repair/page.tsx"), "utf8");
     assert.doesNotMatch(overview, /ClaimAudatexFields/);
     assert.match(overview, /\/vehicles/);

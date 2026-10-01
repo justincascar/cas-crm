@@ -136,6 +136,10 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+1 October 2026 — Opening a claim from the list shows Overview:
+
+- The file reference on the Claims list already opened `/claims/{id}`, which is the Overview page. The File screens list was drawn on that page as well, so it was the first thing on screen. That list now appears only after File screens is opened, and on the other sections that already used it. Overview, Handover, Documents and Vehicles stay full width. The File screens themselves are unchanged.
+
 1 October 2026 — Each claim has a Vehicles tab:
 
 - The claim section row now includes Vehicles, in the same style as Overview, Handover, Documents, Repair evidence and Hire Pack. It is on every page of that claim.
