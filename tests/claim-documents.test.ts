@@ -107,10 +107,12 @@ describe("claim document storage", () => {
           /cannot store documents/,
         );
         const event = db
-          .prepare(`SELECT event_type, details FROM claim_events WHERE document_id = ?`)
-          .get(saved.id) as { event_type: string; details: string };
+          .prepare(`SELECT event_type, details, occurred_at FROM claim_events WHERE document_id = ?`)
+          .get(saved.id) as { event_type: string; details: string; occurred_at: string };
+        const stored = db.prepare(`SELECT created_at FROM documents WHERE id = ?`).get(saved.id) as { created_at: string };
         assert.equal(event.event_type, "document_filed");
         assert.match(event.details, /Nothing was attached to an email/);
+        assert.ok(Math.abs(new Date(event.occurred_at).getTime() - new Date(stored.created_at).getTime()) < 2000);
       });
     });
   });

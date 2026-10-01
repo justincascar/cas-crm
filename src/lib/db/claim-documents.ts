@@ -1,4 +1,3 @@
-import { nowUtcIso } from "../dates";
 import { isOfficeRole } from "../auth/roles";
 import {
   CLAIM_DOCUMENT_TYPES,
@@ -297,7 +296,7 @@ export function storeClaimDocument(input: {
     recordClaimEvent({
       claimId: input.claimId,
       eventType: "document_filed",
-      occurredAt: nowUtcIso(),
+      occurredAt: "", // empty means now; a UTC timestamp would be read as London wall time
       actorId: input.actorId,
       documentId: id,
       details: replacesDocumentId
