@@ -73,7 +73,7 @@ export function FileHistory({
             </p>
             {event.document_id ? (
               <Link className="text-xs text-teal-dark underline" href={`/documents/${event.document_id}`}>
-                Open generated document
+                Open document
               </Link>
             ) : null}
           </li>
@@ -142,7 +142,7 @@ export function FileHistory({
           <ul className="mt-2 space-y-1 text-sm">
             {documents.map((d) => (
               <li key={String(d.id)}>
-                {d.body_html ? (
+                {d.body_html || d.stored_relpath ? (
                   <Link className="text-teal-dark underline" href={`/documents/${d.id}`}>
                     {String(d.title)} v{String(d.version)}
                   </Link>

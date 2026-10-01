@@ -3,10 +3,16 @@ export function documentHasGeneratedBody(bodyHtml: string | number | null | unde
   return Boolean(String(bodyHtml || "").trim());
 }
 
+export function documentIsStoredFile(doc: { stored_relpath?: string | number | null }): boolean {
+  return Boolean(String(doc.stored_relpath || "").trim());
+}
+
 export function documentListSignedLabel(doc: {
   body_html?: string | number | null;
   signed?: string | number | null;
+  stored_relpath?: string | number | null;
 }): string {
+  if (documentIsStoredFile(doc)) return "Stored file";
   if (documentHasGeneratedBody(doc.body_html)) {
     return Number(doc.signed) ? "Signed copy on file" : "Unsigned";
   }

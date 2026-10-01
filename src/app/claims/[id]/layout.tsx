@@ -64,6 +64,9 @@ export default async function ClaimLayout({
           <Link href={`/claims/${data.claim.id}/handover`} className="min-h-11 rounded-md bg-navy px-3 py-2 font-semibold text-white">
             Handover
           </Link>
+          <Link href={`/claims/${data.claim.id}/documents`} className="text-teal-dark underline">
+            Documents
+          </Link>
           <Link href={`/claims/${data.claim.id}/repair`} className="text-teal-dark underline">
             Repair evidence
           </Link>

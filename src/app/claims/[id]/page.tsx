@@ -551,9 +551,14 @@ export default async function ClaimDetailPage({
           ))}
         </Box>
         <Box title="Documents">
+          <p className="mb-2 text-sm">
+            <Link className="text-teal-dark underline" href={`/claims/${data.claim.id}/documents`}>
+              Store and tag documents
+            </Link>
+          </p>
           {data.documents.map((d) => (
             <p key={String(d.id)} className="text-sm">
-              {d.body_html ? (
+              {d.body_html || d.stored_relpath ? (
                 <Link className="text-teal-dark underline" href={`/documents/${d.id}`}>
                   {String(d.title)} v{String(d.version)}
                 </Link>
@@ -562,7 +567,8 @@ export default async function ClaimDetailPage({
                   {String(d.title)} v{String(d.version)}
                 </>
               )}{" "}
-              {Number(d.signed) ? "signed" : "unsigned"} {Number(d.simulated) ? "(simulated file)" : ""}
+              {d.stored_relpath ? "stored file" : Number(d.signed) ? "signed" : "unsigned"}{" "}
+              {Number(d.simulated) && !d.stored_relpath ? "(simulated file)" : ""}
             </p>
           ))}
         </Box>

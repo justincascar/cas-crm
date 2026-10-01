@@ -2,7 +2,8 @@ import Link from "next/link";
 import { PageHeader } from "@/components/ClaimTable";
 import { requireStaff } from "@/lib/auth/session";
 import { listDocuments } from "@/lib/db/queries";
-import { documentHasGeneratedBody, documentListSignedLabel, DOCUMENT_PLACEHOLDER_NOTE } from "@/lib/documents/list-display";
+import { claimDocumentTypeLabel } from "@/lib/domain/claim-documents";
+import { documentHasGeneratedBody, documentIsStoredFile, documentListSignedLabel, DOCUMENT_PLACEHOLDER_NOTE } from "@/lib/documents/list-display";
 
 export default async function DocumentsPage() {
   await requireStaff();
@@ -25,7 +26,9 @@ export default async function DocumentsPage() {
           </thead>
           <tbody>
             {docs.map((d) => {
-              const onFile = documentHasGeneratedBody(d.body_html);
+              const stored = documentIsStoredFile(d);
+              const onFile = documentHasGeneratedBody(d.body_html) || stored;
+              const typeLabel = claimDocumentTypeLabel(String(d.document_type || ""));
               return (
                 <tr key={String(d.id)}>
                   <td>
@@ -45,7 +48,7 @@ export default async function DocumentsPage() {
                       </span>
                     )}
                   </td>
-                  <td>{String(d.kind)}</td>
+                  <td>{typeLabel || String(d.kind)}</td>
                   <td>{documentListSignedLabel(d)}</td>
                 </tr>
               );

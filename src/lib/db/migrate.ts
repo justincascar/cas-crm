@@ -156,6 +156,7 @@ function rebuildDocumentsTable(db: DatabaseSync) {
     "mime_type",
     "byte_size",
     "created_by",
+    "replaces_document_id",
   ].filter((name) => existingNames.has(name));
 
   db.exec("PRAGMA foreign_keys = OFF");
@@ -179,7 +180,8 @@ function rebuildDocumentsTable(db: DatabaseSync) {
       mime_type TEXT,
       byte_size INTEGER,
       created_by TEXT,
-      created_at TEXT NOT NULL
+      created_at TEXT NOT NULL,
+      replaces_document_id TEXT
     );
   `);
   db.exec(`INSERT INTO documents_migrated (${copy.join(", ")}) SELECT ${copy.join(", ")} FROM documents`);
@@ -452,6 +454,10 @@ export function migrate(db: DatabaseSync) {
     }
   }
 
+  const documentColumns = db.prepare(`PRAGMA table_info(documents)`).all() as Array<{ name: string }>;
+  if (documentColumns.length > 0 && !documentColumns.some((column) => column.name === "replaces_document_id")) {
+    db.exec(`ALTER TABLE documents ADD COLUMN replaces_document_id TEXT`);
+  }
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_documents_claim ON documents(claim_id);
     CREATE INDEX IF NOT EXISTS idx_documents_fleet ON documents(fleet_vehicle_id);

@@ -136,6 +136,14 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+1 October 2026 — A claim can store tagged documents:
+
+- Staff can upload a PDF or photograph onto a file, choose its type (V5C for the client's vehicle, V5C for a CAS vehicle, driving licence, insurance certificate, signed hire agreement, engineer's report, satisfaction note, correspondence, or other), and see what is on file. A type is required. The list also shows what is still missing for the papers named in the welcome letter, and for a later payment-request pack (signed hire agreement and engineer's report).
+- A newer copy, such as a renewed insurance certificate, is stored as the next version. The earlier file stays on the claim and can still be opened. Two different documents of type Other are not treated as versions of each other.
+- The same documents table and stored-file folder already used for fleet V5Cs are used here. A fleet V5C imported against a yard vehicle is unchanged. Nothing on this screen is attached to an email, generated, or signed.
+- Office staff can open these documents. A driver or mechanic cannot, including by a direct link. There is still no client login.
+- Known limitation: repair invoice and basic hire-rate evidence are named in the workflow map and are not separate types yet. Store those as Other. A file that is not a PDF or a photograph, or is over 12 MB, is refused.
+
 1 October 2026 — Two development warnings on the handover phone page are cleared:
 
 - The pre-scan and post-scan forms were marked with a form encoding as well as a server action. React warned that it would ignore that encoding. Those forms no longer set it. The signature form and the photograph forms remain ordinary posts to an address, with their own encoding. That warning did not drop or corrupt a signature or a photograph.

@@ -68,6 +68,7 @@ export const CLAIM_EVENT_TYPES = [
   { key: "handed_to_solicitors", label: "Handed to solicitors" },
   { key: "case_closed", label: "Case closed" },
   { key: "document_generated", label: "Document generated" },
+  { key: "document_filed", label: "Document filed" },
   { key: "hire_group_charged_override", label: "Group Charged set above the client's own vehicle group" },
   { key: "vehicle_handover_recorded", label: "Vehicle handover recorded" },
   { key: "vehicle_handover_finished", label: "Vehicle handover finished" },

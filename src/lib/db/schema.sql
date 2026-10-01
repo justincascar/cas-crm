@@ -395,7 +395,8 @@ CREATE TABLE IF NOT EXISTS documents (
   mime_type TEXT,
   byte_size INTEGER,
   created_by TEXT,
-  created_at TEXT NOT NULL
+  created_at TEXT NOT NULL,
+  replaces_document_id TEXT
 );
 
 CREATE TABLE IF NOT EXISTS claim_events (

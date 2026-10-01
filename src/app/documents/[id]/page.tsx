@@ -6,6 +6,7 @@ import { formatUkDateTime } from "@/lib/dates";
 import { requireSignedIn } from "@/lib/auth/session";
 import { canReadDocument } from "@/lib/db/jobs";
 import { getDocument } from "@/lib/db/chronology";
+import { claimDocumentTypeLabel } from "@/lib/domain/claim-documents";
 import { specForTemplate } from "@/lib/documents/catalog";
 import { CAS_LEGAL_SIGNOFF_NOTICE, CAS_TEMPLATE_NOTICE } from "@/lib/documents/correspondence";
 
@@ -33,13 +34,18 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
           <p className="text-sm text-slate">
             Version {String(doc.version)} · {formatUkDateTime(String(doc.created_at))}
             {doc.client_name ? ` · ${String(doc.client_name)}` : ""}
-            {doc.document_type ? ` · ${String(doc.document_type)}` : ""}
+            {doc.document_type ? ` · ${claimDocumentTypeLabel(String(doc.document_type)) || String(doc.document_type)}` : ""}
           </p>
         </div>
         <div className="flex gap-3">
           {claimId ? (
             <Link className="text-sm text-teal-dark underline" href={`/claims/${claimId}`}>
               Back to file
+            </Link>
+          ) : null}
+          {claimId && claimDocumentTypeLabel(String(doc.document_type || "")) ? (
+            <Link className="text-sm text-teal-dark underline" href={`/claims/${claimId}/documents`}>
+              Documents on this file
             </Link>
           ) : null}
           {fleetId ? (
