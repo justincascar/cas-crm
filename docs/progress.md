@@ -136,6 +136,12 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+1 October 2026 — An unfinished job stays on My jobs today until it is marked Done:
+
+- A hire delivery, hire collection, client recovery or client return assigned for an earlier day, and not marked Done, stays on that person's My jobs today list. It is shown in red as Overdue, with the original assigned date. It keeps showing however many days have passed.
+- A job for today is listed as before, and is not marked overdue. A job for a future date stays off the list until that day. Marking a job Done removes it from later days, the same as before.
+- The demonstration jobs for the driver and mechanic logins are a vehicle handover and a repair for today only. They are not one of the four job types, so an old copy does not stay on the list as overdue. Engineer, liability and repair-authorisation chases are unchanged.
+
 24 September 2026 — Total-loss notification uses the insurer email saved on Third party 1, and the letter is only what the insurer should see:
 
 - Saving an email on Third party 1 now writes it onto the third-party record, including when that file did not have a third party yet. Prepare notification email reads that address straight away, and also the address already stored on the Third party 1 screen. TEST-0010 had the address only on the screen, which is why the button previously said no insurer email was on file.

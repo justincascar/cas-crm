@@ -23,7 +23,7 @@ export default async function MyJobsPage({
     <div className="mx-auto max-w-3xl space-y-6">
       <PageHeader
         title="My jobs today"
-        subtitle={`${formatUkDate(londonTodayIso())}. Only jobs assigned to you for this day are listed.${office ? " This is a shortcut. Your usual screens are unchanged." : ""}`}
+        subtitle={`${formatUkDate(londonTodayIso())}. Jobs assigned to you for today, plus any delivery, collection, recovery or return still not done from an earlier day.${office ? " This is a shortcut. Your usual screens are unchanged." : ""}`}
       />
       {error ? <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p> : null}
       {finished ? <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm">Handover finished.</p> : null}
@@ -43,17 +43,26 @@ export default async function MyJobsPage({
         </p>
       ) : null}
       {jobs.length === 0 ? (
-        <p className="rounded-xl border border-line bg-card px-4 py-6 text-base">Nothing assigned today.</p>
+        <p className="rounded-xl border border-line bg-card px-4 py-6 text-base">Nothing assigned today, and nothing overdue.</p>
       ) : (
         <ul className="space-y-3">
           {jobs.map((job) => (
-            <li key={job.id} className="rounded-xl border border-line bg-card p-4">
+            <li
+              key={job.id}
+              className={
+                job.overdue
+                  ? "rounded-xl border border-overdue/40 bg-[#f8ecec] p-4"
+                  : "rounded-xl border border-line bg-card p-4"
+              }
+            >
               <p className="font-mono text-sm text-teal-dark">{job.fileReference}</p>
               <p className="mt-1 text-base">{job.vehicleLabel}</p>
-              <p className="text-sm text-slate">
-                {job.jobLabel} · {job.completed ? "Done" : "Not done"}
+              <p className={job.overdue ? "text-sm font-semibold text-overdue" : "text-sm text-slate"}>
+                {job.jobLabel} · {job.overdue ? "Overdue" : job.completed ? "Done" : "Not done"}
               </p>
-              <p className="text-sm text-slate">Assigned for {formatUkDate(job.workDate)}.</p>
+              <p className={job.overdue ? "text-sm font-semibold text-overdue" : "text-sm text-slate"}>
+                Assigned for {formatUkDate(job.workDate)}.
+              </p>
               {job.actualOccurredAt ? (
                 <p className="text-sm text-slate">Happened {formatUkDateTime(job.actualOccurredAt)}.</p>
               ) : null}

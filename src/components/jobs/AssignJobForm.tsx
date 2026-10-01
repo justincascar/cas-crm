@@ -80,7 +80,7 @@ export function AssignJobForm({
     <form method="post" action={action} className="space-y-3 rounded-xl border border-line bg-card p-5" onSubmit={onSubmit}>
       <h2 className="font-serif text-xl text-navy-deep">Assign a job</h2>
       <p className="text-sm text-slate">
-        Choose the driver and the date yourself. Nothing here is assigned automatically. The driver sees the job on My jobs today only when that date is today.
+        Choose the driver and the date yourself. Nothing here is assigned automatically. A job for today appears on My jobs today. One left not done stays on that list, marked overdue, until it is marked Done.
       </p>
       <label className="block text-sm">
         Job
@@ -128,7 +128,7 @@ export function AssignJobForm({
           onChange={(event) => setWorkDate(event.target.value)}
         />
       </label>
-      <p className="text-sm text-slate">Today is filled in. Change it to any earlier or later day. A past date does not appear on My jobs today.</p>
+      <p className="text-sm text-slate">Today is filled in. Change it to any earlier or later day. A future date stays off the list until that day. A past date that is not marked Done stays on the list, in red, as overdue.</p>
       <label className={needsHire ? "block text-sm" : "hidden"}>
           Hire booking
           <select

@@ -120,7 +120,10 @@ describe("assigning a driver and a date", () => {
         workDate: past,
       });
       assert.equal(listMyJobs(assignee, past).some((job) => job.jobKind === "client_return"), true);
-      assert.equal(listMyJobs(assignee).some((job) => job.jobKind === "client_return"), false);
+      const carried = listMyJobs(assignee).find((job) => job.jobKind === "client_return");
+      assert.ok(carried);
+      assert.equal(carried.overdue, true);
+      assert.equal(carried.workDate, past);
     });
     db.close();
   });
@@ -160,6 +163,82 @@ describe("assigning a driver and a date", () => {
         /Enter the date and time this happened/,
       );
       assert.equal(listMyJobs(assignee).length, 0);
+    });
+    db.close();
+  });
+
+  it("keeps an unfinished job on the list as overdue, and leaves today's and future jobs unmarked", () => {
+    const db = prepared();
+    withDatabase(db, () => {
+      const assignee = driver("Overdue Driver", "overduedriver");
+      const yesterday = isoDateFromNow(-1);
+      const older = isoDateFromNow(-12);
+      const today = londonTodayIso();
+      const future = isoDateFromNow(4);
+      const late = assignDayJob({
+        assigneeId: assignee,
+        jobKind: "hire_delivery",
+        claimId: "",
+        hireEpisodeId: "h-c3",
+        actorId: "staff-justin",
+        workDate: yesterday,
+      });
+      const stillOpen = assignDayJob({
+        assigneeId: assignee,
+        jobKind: "client_recovery",
+        claimId: "c4",
+        hireEpisodeId: "",
+        actorId: "staff-justin",
+        workDate: older,
+      });
+      const dueToday = assignDayJob({
+        assigneeId: assignee,
+        jobKind: "hire_collection",
+        claimId: "",
+        hireEpisodeId: "h-c4",
+        actorId: "staff-justin",
+        workDate: today,
+      });
+      assignDayJob({
+        assigneeId: assignee,
+        jobKind: "client_return",
+        claimId: "c4",
+        hireEpisodeId: "",
+        actorId: "staff-justin",
+        workDate: future,
+      });
+      const finished = assignDayJob({
+        assigneeId: assignee,
+        jobKind: "hire_collection",
+        claimId: "",
+        hireEpisodeId: "h-c7",
+        actorId: "staff-justin",
+        workDate: yesterday,
+        completed: true,
+        actualDriverId: assignee,
+        actualOccurredAt: `${yesterday}T16:00`,
+      });
+      const listed = listMyJobs(assignee);
+      const overdue = listed.find((job) => job.id === late.id);
+      const olderJob = listed.find((job) => job.id === stillOpen.id);
+      const todays = listed.find((job) => job.id === dueToday.id);
+      assert.ok(overdue);
+      assert.equal(overdue.overdue, true);
+      assert.equal(overdue.workDate, yesterday);
+      assert.equal(overdue.completed, false);
+      assert.ok(olderJob);
+      assert.equal(olderJob.overdue, true);
+      assert.equal(olderJob.workDate, older);
+      assert.ok(todays);
+      assert.equal(todays.overdue, false);
+      assert.equal(todays.completed, false);
+      assert.equal(listed.some((job) => job.workDate === future), false);
+      assert.equal(listed.some((job) => job.id === finished.id), false);
+      ensureStaffAuth(db);
+      ensureDemoDayJobs(db);
+      assert.equal(listMyJobs("staff-driver").some((job) => job.jobKind === "handover" && job.workDate === today), true);
+      assert.equal(listMyJobs("staff-driver").some((job) => job.overdue), false);
+      assert.equal(listMyJobs("staff-mechanic").some((job) => job.jobKind === "repair" && job.overdue), false);
     });
     db.close();
   });
@@ -357,7 +436,8 @@ describe("assigning a driver and a date", () => {
     assert.match(form, /action=\{action\}/);
     assert.match(page, /Assigned for/);
     assert.match(page, /Not done/);
-    assert.match(page, /Only jobs assigned to you for this day are listed/);
+    assert.match(page, /still not done from an earlier day/);
+    assert.match(page, /Overdue/);
     assert.match(page, /AssignJobForm/);
     assert.doesNotMatch(page, /Assign a job for today/);
     const handover = fs.readFileSync(path.join(process.cwd(), "src/components/handover/HandoverStartForm.tsx"), "utf8");

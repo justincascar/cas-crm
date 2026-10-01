@@ -148,10 +148,11 @@ describe("vehicle handover records", () => {
   it("puts the latest handover mileage and fuel on the hire agreement and storage page", () => {
     const db = prepared();
     withDatabase(db, () => {
+      const laterStart = new Date(Date.now() + 86_400_000).toISOString();
       db.prepare(
         `INSERT INTO hire_episodes(id, claim_id, fleet_vehicle_id, started_at, like_for_like, credit_hire)
-         VALUES ('h-c3-swap', 'c3', 'fv-1', '2026-09-20T10:00:00.000Z', 1, 1)`,
-      ).run();
+         VALUES ('h-c3-swap', 'c3', 'fv-1', ?, 1, 1)`,
+      ).run(laterStart);
       recordVehicleHandover(handover({ hireEpisodeId: "h-c3", mileage: "11111", fuelLevel: "empty" }));
       recordVehicleHandover(handover({ hireEpisodeId: "h-c3-swap", mileage: "22222", fuelLevel: "half" }));
       recordVehicleHandover(

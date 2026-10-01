@@ -16,6 +16,8 @@ export const REPAIR_KINDS = [
 
 export type RepairKind = (typeof REPAIR_KINDS)[number]["kind"];
 
+const CARRY_FORWARD_JOB_KINDS = ["hire_delivery", "hire_collection", "client_recovery", "client_return"] as const;
+
 const HIRE_JOB_KINDS = new Set(["handover", "hire_delivery", "hire_collection"]);
 const CLIENT_JOB_KINDS = new Set(["client_recovery", "client_return"]);
 const HANDOVER_JOB_KINDS = new Set(["handover", "hire_delivery", "hire_collection", "client_recovery", "client_return"]);
@@ -55,6 +57,7 @@ export type DayJob = {
   workDate: string;
   href: string;
   completed: boolean;
+  overdue: boolean;
   actualDriverId: string | null;
   actualOccurredAt: string | null;
 };
@@ -99,6 +102,7 @@ function mapJob(row: JobRow): DayJob {
     workDate: row.work_date,
     href: repair ? `/claims/${row.claim_id}/repair` : `/claims/${row.claim_id}/handover?job=${row.id}`,
     completed: Boolean(row.completed_at),
+    overdue: false,
     actualDriverId: row.actual_driver_id,
     actualOccurredAt: row.actual_occurred_at,
   };
@@ -113,13 +117,28 @@ function today(workDate?: string): string {
 }
 
 export function listMyJobs(assigneeId: string, workDate = londonTodayIso()): DayJob[] {
+  const day = today(workDate);
+  const carry = CARRY_FORWARD_JOB_KINDS.map(() => "?").join(", ");
   const rows = all<JobRow>(
     `${JOB_SELECT}
-     WHERE a.assignee_id = ? AND a.work_date = ?
-     ORDER BY a.job_kind, c.file_reference`,
-    [assigneeId, workDate],
+     WHERE a.assignee_id = ?
+       AND (
+         a.work_date = ?
+         OR (
+           a.work_date < ?
+           AND a.completed_at IS NULL
+           AND a.job_kind IN (${carry})
+         )
+       )
+     ORDER BY CASE WHEN a.work_date < ? AND a.completed_at IS NULL THEN 0 ELSE 1 END,
+              a.work_date, a.job_kind, c.file_reference`,
+    [assigneeId, day, day, ...CARRY_FORWARD_JOB_KINDS, day],
   );
-  return rows.map(mapJob);
+  return rows.map((row) => {
+    const job = mapJob(row);
+    const carried = (CARRY_FORWARD_JOB_KINDS as readonly string[]).includes(job.jobKind);
+    return { ...job, overdue: carried && !job.completed && job.workDate < day };
+  });
 }
 
 export function getDayAssignment(id: string): DayJob | undefined {
@@ -238,12 +257,17 @@ export function assignDayJob(input: {
 
 function assignedToday(assigneeId: string, jobKind: "handover" | "repair", claimId: string, workDate = londonTodayIso()) {
   if (jobKind === "handover") {
+    const carry = CARRY_FORWARD_JOB_KINDS.map(() => "?").join(", ");
     return get<{ id: string; hire_episode_id: string | null }>(
       `SELECT id, hire_episode_id FROM day_assignments
-       WHERE assignee_id = ? AND claim_id = ? AND work_date = ?
+       WHERE assignee_id = ? AND claim_id = ?
          AND job_kind IN ('handover', 'hire_delivery', 'hire_collection', 'client_recovery', 'client_return')
-       ORDER BY created_at DESC LIMIT 1`,
-      [assigneeId, claimId, workDate],
+         AND (
+           work_date = ?
+           OR (work_date < ? AND completed_at IS NULL AND job_kind IN (${carry}))
+         )
+       ORDER BY work_date DESC, created_at DESC LIMIT 1`,
+      [assigneeId, claimId, workDate, workDate, ...CARRY_FORWARD_JOB_KINDS],
     );
   }
   return get<{ id: string; hire_episode_id: string | null }>(
@@ -259,11 +283,17 @@ export function assertCanRecordHandover(actor: Actor, claimId: string, hireEpiso
   if (actor.role !== DRIVER_ROLE) throw new Error("You cannot record a handover.");
   if (!assignedToday(actor.id, "handover", claimId)) throw new Error("That file is not assigned to you today.");
   if (!hireEpisodeId) return;
+  const carry = CARRY_FORWARD_JOB_KINDS.map(() => "?").join(", ");
+  const day = londonTodayIso();
   const job = get<{ id: string }>(
     `SELECT id FROM day_assignments
-     WHERE assignee_id = ? AND claim_id = ? AND work_date = ? AND hire_episode_id = ?
-       AND job_kind IN ('handover', 'hire_delivery', 'hire_collection')`,
-    [actor.id, claimId, londonTodayIso(), hireEpisodeId],
+     WHERE assignee_id = ? AND claim_id = ? AND hire_episode_id = ?
+       AND job_kind IN ('handover', 'hire_delivery', 'hire_collection')
+       AND (
+         work_date = ?
+         OR (work_date < ? AND completed_at IS NULL AND job_kind IN (${carry}))
+       )`,
+    [actor.id, claimId, hireEpisodeId, day, day, ...CARRY_FORWARD_JOB_KINDS],
   );
   if (!job) throw new Error("That booking is not assigned to you today.");
 }
