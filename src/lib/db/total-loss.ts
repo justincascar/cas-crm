@@ -542,8 +542,9 @@ export function recordTotalLossPaymentReceived(input: { claimId: string; actorId
     throw new Error("Enter the amount that has arrived. It is not marked received until you do.");
   }
   const existing = getVehicleDamageMoney(input.claimId);
+  const totalReceived = (existing.receivedPence || 0) + input.receivedPence;
   if (existing.id) {
-    run(`UPDATE financial_lines SET received_pence = ? WHERE id = ?`, [input.receivedPence, existing.id]);
+    run(`UPDATE financial_lines SET received_pence = ? WHERE id = ?`, [totalReceived, existing.id]);
   } else {
     run(
       `INSERT INTO financial_lines(
@@ -559,7 +560,7 @@ export function recordTotalLossPaymentReceived(input: { claimId: string; actorId
     eventType: TOTAL_LOSS_PAYMENT_RECEIVED_EVENT,
     occurredAt: when,
     actorId: input.actorId,
-    details: `Staff recorded ${(input.receivedPence / 100).toFixed(2)} pounds received for vehicle damage. This is the amount that arrived. It does not by itself start the off-hire countdown.`,
+    details: `Staff added ${(input.receivedPence / 100).toFixed(2)} pounds to the vehicle-damage amount received. The hire end date was not changed.`,
     source: "staff",
   });
 }

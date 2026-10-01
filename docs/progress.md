@@ -136,6 +136,12 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+1 October 2026 — A total-loss payment can suggest the hire end, and a person confirms it:
+
+- When the vehicle-damage amount received equals the agreed settlement, and there is no salvage mismatch still flagged, the file suggests a hire end seven days after the payment that completed that total. It is a CAS working default, not a legal rule, and nothing is written until a person confirms it. Confirming sets the hire billing end on the hire booking, the same field a collection date would set, and records that confirmation on the file history.
+- A partial payment, a missing agreed figure, a salvage sale that does not match the engineer's salvage figure, or an insurer answer that differs from what CAS asked, shows “Review before setting an off-hire date” and does not offer a date. Each later payment is added to the amount already received. The suggestion appears once the total matches and the salvage flag has gone, without typing the payment in again.
+- If a hire end is already on the file and it is a different day, that date is left as it is and the two days are shown for a person to choose. Storage, the storage end date, the daily rate and the scheduled off-hire field are not changed.
+
 1 October 2026 — Overview lists what is outstanding for a person:
 
 - Each claim Overview has an Outstanding box. It lists open tasks that are due today or overdue, chases that are already due (liability response, engineer's report, repair authorisation, hire renewal), and three first steps that have not been marked sent: the liability notification, the engineer instruction, and the repair authorisation request. Several can show at once. If none apply, it says nothing is outstanding.

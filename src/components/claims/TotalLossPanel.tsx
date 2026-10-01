@@ -5,6 +5,8 @@ import { buildMailtoHref } from "@/lib/email/mailto";
 import { getPreparedFollowUpEmail, listFollowUpChases, totalLossPaymentChaseTemplateKey } from "@/lib/db/follow-up-chases";
 import { TOTAL_LOSS_PAYMENT_CHASE_KIND } from "@/lib/domain/follow-up-chases";
 import { getInsurerPaymentPromisedAt, getPreparedTotalLossNotice, getTotalLossReport, getVehicleDamageMoney } from "@/lib/db/total-loss";
+import { totalLossOffHireForClaim } from "@/lib/db/total-loss-off-hire";
+import { OFF_HIRE_REVIEW_HEADING } from "@/lib/domain/total-loss-off-hire";
 import {
   disposalApplies,
   figuresIncomplete,
@@ -19,6 +21,14 @@ const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text
 function poundsInput(pence: number | null) {
   if (pence == null) return "";
   return (pence / 100).toFixed(2);
+}
+
+function ukDay(value: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const [year, month, day] = value.split("-");
+    return `${day}/${month}/${year}`;
+  }
+  return formatUkDate(value);
 }
 
 function moneyLabel(pence: number | null) {
@@ -50,6 +60,7 @@ export function TotalLossPanel({
   const prepared = getPreparedTotalLossNotice(claimId);
   const promisedAt = getInsurerPaymentPromisedAt(claimId);
   const paymentChase = listFollowUpChases(nowUtcIso(), claimId).find((row) => row.kind === TOTAL_LOSS_PAYMENT_CHASE_KIND);
+  const offHire = totalLossOffHireForClaim(claimId);
   const preparedChase = getPreparedFollowUpEmail(claimId, totalLossPaymentChaseTemplateKey());
   const chaseMailto =
     preparedChase?.to_address && preparedChase.body
@@ -272,19 +283,18 @@ export function TotalLossPanel({
               </button>
             </form>
           ) : null}
-          {damage.receivedPence <= 0 ? (
-            <form method="post" action={`/claims/${claimId}/total-loss`} className="flex flex-wrap items-end gap-3">
+          <form method="post" action={`/claims/${claimId}/total-loss`} className="flex flex-wrap items-end gap-3">
               <input type="hidden" name="intent" value="record_payment" />
               <input type="hidden" name="returnTo" value={returnTo} />
               <label>
-                Amount that has arrived (£)
+                Add a payment that has arrived (£)
                 <input name="received" inputMode="decimal" className={field} />
+                <span className="mt-1 block text-slate">Added to the amount already recorded as paid. Enter this payment only.</span>
               </label>
               <button className="min-h-11 rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white" type="submit">
                 Record payment received
               </button>
             </form>
-          ) : null}
           {paymentChase?.due ? (
             <form method="post" action={`/claims/${claimId}/total-loss`}>
               <input type="hidden" name="intent" value="prepare_payment_chase" />
@@ -312,6 +322,64 @@ export function TotalLossPanel({
                 </form>
               </div>
             </div>
+          ) : null}
+          {offHire?.kind === "review" ? (
+            <div className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3">
+              <p className="font-semibold">{OFF_HIRE_REVIEW_HEADING}</p>
+              <ul className="mt-2 list-disc pl-5">
+                {offHire.reasons.map((reason) => (
+                  <li key={reason}>{reason}</li>
+                ))}
+              </ul>
+              <p className="mt-2 text-slate">No hire end date is suggested until this is resolved. Storage is not affected.</p>
+            </div>
+          ) : null}
+          {offHire?.kind === "suggest" ? (
+            <div className="rounded-md border border-line bg-white px-4 py-3">
+              <p className="font-semibold">Suggested hire end: {ukDay(offHire.date)}</p>
+              <p className="mt-1">
+                Seven days after the payment that brought the amount received up to the agreed settlement. This is a CAS working default, not a legal
+                rule. It is not applied until you confirm it. Storage is not changed.
+              </p>
+              <form method="post" action={`/claims/${claimId}/total-loss`} className="mt-3">
+                <input type="hidden" name="intent" value="confirm_off_hire" />
+                <input type="hidden" name="choice" value="suggested" />
+                <input type="hidden" name="returnTo" value={returnTo} />
+                <button className="min-h-11 rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white" type="submit">
+                  Use this as the hire end date
+                </button>
+              </form>
+            </div>
+          ) : null}
+          {offHire?.kind === "conflict" ? (
+            <div className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3">
+              <p className="font-semibold">Check which day hire should stop.</p>
+              <p className="mt-1">
+                Hire end on the file is {ukDay(offHire.existingDate)}. The payment would suggest {ukDay(offHire.suggestedDate)}. The date already on the
+                file has not been changed. Storage is not affected.
+              </p>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <form method="post" action={`/claims/${claimId}/total-loss`}>
+                  <input type="hidden" name="intent" value="confirm_off_hire" />
+                  <input type="hidden" name="choice" value="suggested" />
+                  <input type="hidden" name="returnTo" value={returnTo} />
+                  <button className="min-h-11 rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white" type="submit">
+                    Use the suggested date
+                  </button>
+                </form>
+                <form method="post" action={`/claims/${claimId}/total-loss`}>
+                  <input type="hidden" name="intent" value="confirm_off_hire" />
+                  <input type="hidden" name="choice" value="keep" />
+                  <input type="hidden" name="returnTo" value={returnTo} />
+                  <button className="min-h-11 rounded-md border border-line bg-white px-3 py-2 text-sm font-semibold" type="submit">
+                    Keep the date already on the file
+                  </button>
+                </form>
+              </div>
+            </div>
+          ) : null}
+          {offHire?.kind === "matches" ? (
+            <p>Hire end is already {ukDay(offHire.date)}, the suggested day. Storage was not changed.</p>
           ) : null}
         </div>
       </div>

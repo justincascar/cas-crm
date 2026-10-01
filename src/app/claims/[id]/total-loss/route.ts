@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { isOfficeRole } from "@/lib/auth/roles";
 import { getRequestStaff } from "@/lib/auth/session";
 import { markTotalLossPaymentChaseSent, prepareTotalLossPaymentChaseEmail } from "@/lib/db/follow-up-chases";
+import { confirmTotalLossOffHire } from "@/lib/db/total-loss-off-hire";
 import {
   confirmInsurerSendingPayment,
   confirmTotalLossSuggestion,
@@ -64,6 +65,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
     if (intent === "promise_payment") {
       confirmInsurerSendingPayment({ claimId: id, actorId: staff.id });
+      return back();
+    }
+    if (intent === "confirm_off_hire") {
+      const choice = String(form.get("choice") || "");
+      if (choice !== "suggested" && choice !== "keep") throw new Error("Choose whether to use the suggested hire end or keep the date already on the file.");
+      confirmTotalLossOffHire({ claimId: id, actorId: staff.id, choice });
       return back();
     }
     if (intent === "record_payment") {
