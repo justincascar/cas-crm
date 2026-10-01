@@ -8,6 +8,7 @@ import { dbLocation, getSettings, listStaff } from "@/lib/db/queries";
 import { getDefaultVehicleLocation } from "@/lib/db/vehicle-location";
 import { getAgreementApproachingDay, getAgreementMaxDays, getChaseIntervalDays } from "@/lib/db/chase";
 import { getGtaMarkupPercent } from "@/lib/db/hire-agreement";
+import { getInsurerPaymentDetails } from "@/lib/db/payment-details";
 import { GTA_RATE_PERIOD_LABEL } from "@/lib/documents/gta";
 import { CAS_CLAIMS_MAILBOX, INDICATIVE_DEFAULTS } from "@/lib/constants";
 import { formatGbp } from "@/lib/money";
@@ -30,6 +31,7 @@ export default async function SettingsPage({
   const agreementRenewalApproachingDay = getAgreementApproachingDay();
   const agreementMaxDays = getAgreementMaxDays();
   const gtaMarkupPercent = getGtaMarkupPercent();
+  const paymentDetails = getInsurerPaymentDetails();
   return (
     <div className="max-w-3xl space-y-6">
       <PageHeader
@@ -92,6 +94,47 @@ export default async function SettingsPage({
             Save agreement day limits
           </button>
         </ValidatedForm>
+      </section>
+      <section className="rounded-xl border border-line bg-card p-5">
+        <h2 className="font-serif text-xl text-navy-deep">Payment details for insurers</h2>
+        <p className="mt-1 text-sm text-slate">
+          The account insurers should use when paying CAS. Leave all three blank until the details are entered here. They are not invented, and a
+          total-loss notification says they are not yet on file until all three are saved. Nothing is sent automatically.
+        </p>
+        <form method="post" action="/settings/payment-details" className="mt-4 grid gap-3 sm:grid-cols-3 sm:items-end">
+          <label className="text-sm">
+            Account name
+            <input
+              name="accountName"
+              className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
+              defaultValue={paymentDetails.accountName}
+              autoComplete="off"
+            />
+          </label>
+          <label className="text-sm">
+            Sort code
+            <input
+              name="sortCode"
+              inputMode="numeric"
+              className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
+              defaultValue={paymentDetails.sortCode}
+              autoComplete="off"
+            />
+          </label>
+          <label className="text-sm">
+            Account number
+            <input
+              name="accountNumber"
+              inputMode="numeric"
+              className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
+              defaultValue={paymentDetails.accountNumber}
+              autoComplete="off"
+            />
+          </label>
+          <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white sm:col-span-3">
+            Save payment details
+          </button>
+        </form>
       </section>
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Environment</h2>

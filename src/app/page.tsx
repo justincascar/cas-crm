@@ -112,6 +112,16 @@ export default async function DashboardPage() {
         rows={data.chasesDueByKind.repair_authorisation}
       />
       <ChaseDueTable
+        title="Client paper chases due"
+        hint="Driving licence, insurance certificate, logbook (V5C) and bank statements. Due 24 hours after the client welcome was marked as sent, then again 24 hours after each reminder is marked sent. Clears as soon as the paper is on file. Reminder only — no email is sent automatically."
+        rows={data.chasesDue.filter((row) => String(row.kind).startsWith("document_"))}
+      />
+      <ChaseDueTable
+        title="Total-loss payment chases due"
+        hint="After the total-loss notification is marked sent: every 3 days until the insurer confirms they are sending payment, then every 7 days until the money arrives. Clears when the payment is recorded. Reminder only — no email is sent automatically."
+        rows={data.chasesDue.filter((row) => row.kind === "total_loss_payment")}
+      />
+      <ChaseDueTable
         title="Hire agreement renewals"
         hint="Counted from the current signed hire agreement start date, not the fleet booking dates. Amber from day 70 (approaching), red from day 80 (due), red overdue from day 88 if still not renewed. Courtesy cars are excluded unless a hire agreement is on the file. Clears only when a renewal is logged — it does not disappear just because time passes. Reminder only — no email is sent automatically."
         rows={data.chasesDueByKind.hire_agreement_renewal}

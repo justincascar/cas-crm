@@ -548,6 +548,7 @@ CREATE TABLE IF NOT EXISTS total_loss_reports (
   customer_charge_pence INTEGER,
   cas_purchase_pence INTEGER,
   cas_request TEXT,
+  insurer_payment_promised_at TEXT,
   updated_at TEXT NOT NULL,
   updated_by TEXT
 );

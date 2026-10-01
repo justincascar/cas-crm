@@ -1,5 +1,6 @@
 import { FILE_REFERENCE_PREFIX_DEFAULT, HEAD_LABELS, type HeadOfLoss } from "../constants";
 import { listDueChases, type ChaseView } from "./chase";
+import { dueFollowUpChases } from "./follow-up-chases";
 import { accidentDateError, isBeforeLondonDay, isSameLondonDay, londonDateIso, nowUtcIso } from "../dates";
 import { formatGbp, sumDistinctHeads } from "../money";
 import { all, dbPath, get, getDb, newId, resetSqlStatementCount, run, sqlStatementCount } from "./connection";
@@ -100,10 +101,14 @@ export function countClaims(queue?: string): number {
   return Number(row?.c || 0);
 }
 
+function everyDueChase(): ChaseView[] {
+  return [...listDueChases(), ...dueFollowUpChases()];
+}
+
 function overlayDueChaseNextAction(rows: ClaimListRow[], dueChases?: ChaseView[]): ClaimListRow[] {
   if (rows.length === 0) return rows;
   const dueByClaim = new Map<string, { labels: string[]; dueAt: string | null }>();
-  for (const chase of dueChases ?? listDueChases()) {
+  for (const chase of dueChases ?? everyDueChase()) {
     const current = dueByClaim.get(chase.claimId);
     const label = chase.label || chase.dueLabel;
     if (!current) {
@@ -164,7 +169,7 @@ function queueWhere(queue: string): { sql: string; params: unknown[] } {
 export function getDashboard() {
   resetSqlStatementCount();
   const started = Date.now();
-  const chasesDue = listDueChases();
+  const chasesDue = everyDueChase();
   const claims = listClaims({ dueChases: chasesDue });
   const tasks = all<{
     id: string;

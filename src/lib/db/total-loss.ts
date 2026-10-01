@@ -12,9 +12,12 @@ import {
   type SalvageDisposal,
   type TotalLossFigures,
 } from "../domain/total-loss";
+import { TOTAL_LOSS_NOTICE_SENT_EVENT, TOTAL_LOSS_PAYMENT_PROMISED_EVENT, TOTAL_LOSS_PAYMENT_RECEIVED_EVENT } from "../domain/follow-up-chases";
+import { paymentDetailsLetterLine, type InsurerPaymentDetails } from "../domain/payment-details";
 import { ENGINEER_INSTRUCTION_MARKED_SENT, ENGINEER_INSTRUCTION_PREPARED } from "./engineers";
 import { recordClaimEvent } from "./chronology";
 import { get, newId, run } from "./connection";
+import { getInsurerPaymentDetails } from "./payment-details";
 
 export type { TotalLossFigures };
 
@@ -82,6 +85,15 @@ function assertTotalLoss(claimId: string) {
   );
   if (!claim) throw new Error("File not found.");
   if (Number(claim.total_loss) !== 1) throw new Error("These figures are only for a file marked total loss.");
+}
+
+export function getInsurerPaymentPromisedAt(claimId: string): string | null {
+  const row = get<{ insurer_payment_promised_at: string | null }>(
+    `SELECT insurer_payment_promised_at FROM total_loss_reports WHERE claim_id = ?`,
+    [claimId],
+  );
+  const value = String(row?.insurer_payment_promised_at || "").trim();
+  return value || null;
 }
 
 export function getTotalLossReport(claimId: string): TotalLossFigures {
@@ -346,6 +358,7 @@ export function totalLossNoticeBody(input: {
   fileReference: string;
   insurerReference: string | null;
   report: TotalLossFigures;
+  paymentDetails?: InsurerPaymentDetails;
 }): { subject: string; body: string } {
   if (!input.report.casRequest) throw new Error("Record what CAS is asking the insurer for, then prepare the email.");
   const theirReference = (input.insurerReference || "").trim() || "[not yet on file]";
@@ -379,6 +392,7 @@ export function totalLossNoticeBody(input: {
         : "Please pay the net figure (pre-accident value less the engineer's salvage value). A figure is still missing from the engineer's report, so the net amount is not stated here. CAS will retain and dispose of the salvage.",
     );
   }
+  lines.push("", paymentDetailsLetterLine(input.paymentDetails || getInsurerPaymentDetails()));
   return { subject, body: lines.join("\n") };
 }
 
@@ -392,6 +406,7 @@ export function prepareTotalLossInsurerEmail(input: { claimId: string; actorId: 
     fileReference: claim.file_reference,
     insurerReference: insurerReference || null,
     report,
+    paymentDetails: getInsurerPaymentDetails(),
   });
   const to = String(claim.insurer_email || claim.handler_email || savedThirdPartyInsurerEmail(input.claimId) || "").trim();
   if (!to) throw new Error("No insurer email on file. Add it on Third party 1. Nothing was sent.");
@@ -482,6 +497,69 @@ export function markTotalLossNoticeSent(input: { claimId: string; correspondence
     actorId: input.actorId,
     channel: "email",
     correspondenceId: input.correspondenceId,
+    source: "staff",
+  });
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: TOTAL_LOSS_NOTICE_SENT_EVENT,
+    occurredAt: when,
+    details: "Total-loss notification marked as sent. The payment chase starts from this time. Not auto-sent.",
+    actorId: input.actorId,
+    channel: "email",
+    correspondenceId: input.correspondenceId,
+    source: "staff",
+  });
+}
+
+export function confirmInsurerSendingPayment(input: { claimId: string; actorId: string }) {
+  assertTotalLoss(input.claimId);
+  const when = nowUtcIso();
+  const existing = get<{ claim_id: string }>(`SELECT claim_id FROM total_loss_reports WHERE claim_id = ?`, [input.claimId]);
+  if (existing) {
+    run(
+      `UPDATE total_loss_reports SET insurer_payment_promised_at = ?, updated_at = ?, updated_by = ? WHERE claim_id = ?`,
+      [when, when, input.actorId, input.claimId],
+    );
+  } else {
+    run(
+      `INSERT INTO total_loss_reports(claim_id, insurer_payment_promised_at, updated_at, updated_by) VALUES (?, ?, ?, ?)`,
+      [input.claimId, when, when, input.actorId],
+    );
+  }
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: TOTAL_LOSS_PAYMENT_PROMISED_EVENT,
+    occurredAt: when,
+    actorId: input.actorId,
+    details: "The insurer has confirmed they are sending the total-loss payment. The amount paid on this file was not changed.",
+    source: "staff",
+  });
+}
+
+export function recordTotalLossPaymentReceived(input: { claimId: string; actorId: string; receivedPence: number }) {
+  assertTotalLoss(input.claimId);
+  if (!Number.isInteger(input.receivedPence) || input.receivedPence <= 0) {
+    throw new Error("Enter the amount that has arrived. It is not marked received until you do.");
+  }
+  const existing = getVehicleDamageMoney(input.claimId);
+  if (existing.id) {
+    run(`UPDATE financial_lines SET received_pence = ? WHERE id = ?`, [input.receivedPence, existing.id]);
+  } else {
+    run(
+      `INSERT INTO financial_lines(
+        id, claim_id, head_of_loss, description, quantity, unit, rate_pence, net_pence, vat_pence, gross_pence,
+        claimed_pence, offered_pence, agreed_pence, received_pence, offer_status
+      ) VALUES (?, ?, 'vehicle_damage', 'Vehicle damage — total loss', 1, 'item', 0, 0, 0, 0, 0, 0, 0, ?, NULL)`,
+      [`vd-${input.claimId}`, input.claimId, input.receivedPence],
+    );
+  }
+  const when = nowUtcIso();
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: TOTAL_LOSS_PAYMENT_RECEIVED_EVENT,
+    occurredAt: when,
+    actorId: input.actorId,
+    details: `Staff recorded ${(input.receivedPence / 100).toFixed(2)} pounds received for vehicle damage. This is the amount that arrived. It does not by itself start the off-hire countdown.`,
     source: "staff",
   });
 }

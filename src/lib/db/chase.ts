@@ -14,6 +14,7 @@ import {
   chaseDefinition,
   chaseKindForRuleKey,
   effectiveChaseIntervalDays,
+  isChaseKind,
   hireAgreementRenewalDecision,
   laterIso,
   laterIsoAll,
@@ -24,6 +25,7 @@ import {
   type ChaseKind,
   type ChaseSeverity,
 } from "../domain/chase";
+import type { SupplementaryChaseKind } from "../domain/follow-up-chases";
 import { SEEDED_ENGINEER } from "./engineers";
 import { all, get, newId, run } from "./connection";
 
@@ -38,7 +40,7 @@ export type ChaseRow = {
 };
 
 export type ChaseView = {
-  kind: ChaseKind;
+  kind: ChaseKind | SupplementaryChaseKind;
   claimId: string;
   fileReference?: string;
   clientName?: string | null;
@@ -601,6 +603,7 @@ export function listDueChasesByKind(asAt: string = nowUtcIso()): Record<ChaseKin
   const grouped = {} as Record<ChaseKind, ChaseView[]>;
   for (const kind of CHASE_KINDS) grouped[kind] = [];
   for (const row of listDueChases(asAt)) {
+    if (!isChaseKind(row.kind)) continue;
     grouped[row.kind].push(row);
   }
   return grouped;

@@ -23,6 +23,8 @@ import { HireEndDateReview } from "@/components/claims/HireEndDateReview";
 import { TotalLossPanel } from "@/components/claims/TotalLossPanel";
 import { StorageDateReview } from "@/components/claims/StorageDateReview";
 import { StorageEndDateReview } from "@/components/claims/StorageEndDateReview";
+import { OutstandingSummary } from "@/components/claims/OutstandingSummary";
+import { outstandingForClaim } from "@/lib/db/outstanding";
 import { getHireEndDateReviews } from "@/lib/db/hire-collection-date";
 import { getStorageDateReview, getStorageEndDateReview } from "@/lib/db/storage-recovery-date";
 
@@ -95,6 +97,8 @@ export default async function ClaimDetailPage({
         liabilityStatus={String(claim.claim_type || "")}
         roadworthiness={String(claim.roadworthiness || "")}
       />
+
+      <OutstandingSummary items={outstandingForClaim(String(claim.id))} />
 
       {chases.map((chase) => (
         <ChasePanel

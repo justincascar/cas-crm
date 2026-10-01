@@ -1,8 +1,11 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ClaimTable";
-import { formatUkDateTime } from "@/lib/dates";
+import { formatUkDateTime, nowUtcIso } from "@/lib/dates";
 import { requireStaff } from "@/lib/auth/session";
+import { documentChaseTemplateKey, getPreparedFollowUpEmail, listFollowUpChases } from "@/lib/db/follow-up-chases";
+import { buildMailtoHref } from "@/lib/email/mailto";
+import { DOCUMENT_CHASES } from "@/lib/domain/follow-up-chases";
 import {
   claimDocumentGaps,
   claimDocumentVehicleChoices,
@@ -34,6 +37,7 @@ export default async function ClaimDocumentsPage({
   const documents = listClaimFileDocuments(id);
   const gaps = claimDocumentGaps(id);
   const vehicles = claimDocumentVehicleChoices(id);
+  const paperChases = listFollowUpChases(nowUtcIso(), id).filter((row) => DOCUMENT_CHASES.some((paper) => paper.kind === row.kind));
 
   return (
     <div className="space-y-6">
@@ -45,8 +49,63 @@ export default async function ClaimDocumentsPage({
         <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.error}</p>
       ) : null}
       {query.saved ? (
-        <p className="rounded-md border border-teal/40 bg-[#eef8f6] px-4 py-3 text-sm">Document stored on this file.</p>
+        <p className="rounded-md border border-teal/40 bg-[#eef8f6] px-4 py-3 text-sm">
+          {query.saved === "chase" ? "Chase email updated. Nothing was sent automatically." : "Document stored on this file."}
+        </p>
       ) : null}
+
+      <section className="rounded-xl border border-line bg-card p-4">
+        <h2 className="font-serif text-xl text-navy-deep">Papers to chase</h2>
+        <p className="mt-1 text-sm text-slate">
+          Driving licence, insurance certificate, the client&apos;s logbook (V5C) and bank statements are chased every 24 hours after the client
+          welcome is marked as sent. That letter is the request — there is no separate requested-on date. Uploading the paper clears the chase
+          straight away. A reminder is prepared for you to send. Nothing is sent automatically.
+        </p>
+        {paperChases.length === 0 ? (
+          <p className="mt-3 text-sm">The client welcome has not been marked as sent, so these chases have not started.</p>
+        ) : (
+          <ul className="mt-3 space-y-3">
+            {paperChases.map((chase) => {
+              const prepared = getPreparedFollowUpEmail(id, documentChaseTemplateKey(chase.kind));
+              const mailto = prepared?.to_address && prepared.body ? buildMailtoHref(prepared.to_address, prepared.subject || chase.title, prepared.body) : null;
+              return (
+                <li key={chase.kind} className="rounded-lg border border-line px-3 py-3 text-sm">
+                  <p className="font-semibold">{chase.title}</p>
+                  <p className="text-slate">
+                    {chase.outcomeOnFile ? "On file. The chase has cleared." : chase.due ? chase.label : "Requested. Not due yet."}
+                  </p>
+                  {chase.due ? (
+                    <form method="post" action={`/claims/${id}/follow-up`} className="mt-2">
+                      <input type="hidden" name="intent" value="prepare" />
+                      <input type="hidden" name="kind" value={chase.kind} />
+                      <input type="hidden" name="returnTo" value={`/claims/${id}/documents`} />
+                      <button className="min-h-11 rounded-md bg-teal px-3 py-2 text-sm font-semibold text-white" type="submit">
+                        Prepare chase email
+                      </button>
+                    </form>
+                  ) : null}
+                  {mailto && prepared ? (
+                    <div className="mt-2">
+                      <a className="text-teal-dark underline" href={mailto}>
+                        Open the prepared email
+                      </a>
+                      <form method="post" action={`/claims/${id}/follow-up`} className="mt-2">
+                        <input type="hidden" name="intent" value="mark_sent" />
+                        <input type="hidden" name="kind" value={chase.kind} />
+                        <input type="hidden" name="correspondenceId" value={prepared.id} />
+                        <input type="hidden" name="returnTo" value={`/claims/${id}/documents`} />
+                        <button className="min-h-11 rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white" type="submit">
+                          Mark chase as sent
+                        </button>
+                      </form>
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
 
       <div className="grid items-start gap-6 md:grid-cols-[minmax(0,1fr)_20rem]">
       <section className="order-2 rounded-xl border border-line bg-card p-4 md:order-1">

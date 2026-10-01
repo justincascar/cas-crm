@@ -1,7 +1,10 @@
 import { OpenPreparedMailto } from "@/components/claims/OpenPreparedMailto";
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
-import { formatUkDate, formatUkDateTime } from "@/lib/dates";
-import { getPreparedTotalLossNotice, getTotalLossReport, getVehicleDamageMoney } from "@/lib/db/total-loss";
+import { formatUkDate, formatUkDateTime, nowUtcIso } from "@/lib/dates";
+import { buildMailtoHref } from "@/lib/email/mailto";
+import { getPreparedFollowUpEmail, listFollowUpChases, totalLossPaymentChaseTemplateKey } from "@/lib/db/follow-up-chases";
+import { TOTAL_LOSS_PAYMENT_CHASE_KIND } from "@/lib/domain/follow-up-chases";
+import { getInsurerPaymentPromisedAt, getPreparedTotalLossNotice, getTotalLossReport, getVehicleDamageMoney } from "@/lib/db/total-loss";
 import {
   disposalApplies,
   figuresIncomplete,
@@ -45,6 +48,13 @@ export function TotalLossPanel({
   const variance = report.disposal === "sold" ? salvageSaleVariance(report.salvagePence, report.saleProceedsPence) : null;
   const mismatch = salvageRequestMismatch(report.casRequest, report.interest);
   const prepared = getPreparedTotalLossNotice(claimId);
+  const promisedAt = getInsurerPaymentPromisedAt(claimId);
+  const paymentChase = listFollowUpChases(nowUtcIso(), claimId).find((row) => row.kind === TOTAL_LOSS_PAYMENT_CHASE_KIND);
+  const preparedChase = getPreparedFollowUpEmail(claimId, totalLossPaymentChaseTemplateKey());
+  const chaseMailto =
+    preparedChase?.to_address && preparedChase.body
+      ? buildMailtoHref(preparedChase.to_address, preparedChase.subject || "Total loss payment", preparedChase.body)
+      : null;
 
   return (
     <section className="rounded-xl border border-line bg-card p-5">
@@ -236,6 +246,75 @@ export function TotalLossPanel({
           </div>
         </div>
       ) : null}
+
+      <div className="mt-6 border-t border-line pt-4 text-sm">
+        <h3 className="font-semibold text-navy">Insurer payment</h3>
+        <p className="mt-1 text-slate">
+          Confirmation that the insurer is sending the money is separate from the money actually arriving. Neither is filled in for you.
+          A chase is prepared here for you to send. Nothing is sent automatically.
+        </p>
+        <p className="mt-2">
+          Insurer confirmed they are sending payment: {promisedAt ? formatUkDateTime(promisedAt) : "Not confirmed"}. Paid:{" "}
+          {damage.id ? formatGbp(damage.receivedPence) : "Not set"}.
+        </p>
+        {paymentChase?.due ? <p className="mt-2 font-semibold">{paymentChase.label}</p> : null}
+        {paymentChase && !paymentChase.due && !paymentChase.outcomeOnFile ? (
+          <p className="mt-2 text-slate">{paymentChase.reason} Not due yet.</p>
+        ) : null}
+        {paymentChase?.outcomeOnFile ? <p className="mt-2">Payment is on file. The chase is cleared.</p> : null}
+        <div className="mt-3 flex flex-col gap-3">
+          {!promisedAt && damage.receivedPence <= 0 ? (
+            <form method="post" action={`/claims/${claimId}/total-loss`}>
+              <input type="hidden" name="intent" value="promise_payment" />
+              <input type="hidden" name="returnTo" value={returnTo} />
+              <button className="min-h-11 rounded-md border border-line bg-white px-3 py-2 text-sm font-semibold" type="submit">
+                Insurer has confirmed they are sending payment
+              </button>
+            </form>
+          ) : null}
+          {damage.receivedPence <= 0 ? (
+            <form method="post" action={`/claims/${claimId}/total-loss`} className="flex flex-wrap items-end gap-3">
+              <input type="hidden" name="intent" value="record_payment" />
+              <input type="hidden" name="returnTo" value={returnTo} />
+              <label>
+                Amount that has arrived (£)
+                <input name="received" inputMode="decimal" className={field} />
+              </label>
+              <button className="min-h-11 rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white" type="submit">
+                Record payment received
+              </button>
+            </form>
+          ) : null}
+          {paymentChase?.due ? (
+            <form method="post" action={`/claims/${claimId}/total-loss`}>
+              <input type="hidden" name="intent" value="prepare_payment_chase" />
+              <input type="hidden" name="returnTo" value={returnTo} />
+              <button className="min-h-11 rounded-md bg-teal px-3 py-2 text-sm font-semibold text-white" type="submit">
+                Prepare payment chase email
+              </button>
+            </form>
+          ) : null}
+          {chaseMailto && preparedChase ? (
+            <div className="rounded-md border border-line bg-white px-4 py-3">
+              <p>
+                A payment chase was prepared {formatUkDateTime(preparedChase.created_at)} for {preparedChase.to_address}. It has not been sent from{" "}
+                {CAS_CLAIMS_MAILBOX}.
+              </p>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <OpenPreparedMailto href={chaseMailto} autoOpen={openMailId === preparedChase.id} />
+                <form method="post" action={`/claims/${claimId}/total-loss`}>
+                  <input type="hidden" name="intent" value="mark_payment_chase_sent" />
+                  <input type="hidden" name="correspondenceId" value={preparedChase.id} />
+                  <input type="hidden" name="returnTo" value={returnTo} />
+                  <button className="min-h-11 rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white" type="submit">
+                    Mark chase as sent
+                  </button>
+                </form>
+              </div>
+            </div>
+          ) : null}
+        </div>
+      </div>
     </section>
   );
 }

@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { isOfficeRole } from "@/lib/auth/roles";
 import { getRequestStaff } from "@/lib/auth/session";
+import { markTotalLossPaymentChaseSent, prepareTotalLossPaymentChaseEmail } from "@/lib/db/follow-up-chases";
 import {
+  confirmInsurerSendingPayment,
   confirmTotalLossSuggestion,
   confirmTypedVehicleDamageAgreed,
   markTotalLossNoticeSent,
   prepareTotalLossInsurerEmail,
+  recordTotalLossPaymentReceived,
   saveTotalLossReport,
 } from "@/lib/db/total-loss";
 import { optionalPoundsToPence, type CasSalvageRequest, type InsurerSalvageInterest, type SalvageDisposal } from "@/lib/domain/total-loss";
@@ -53,6 +56,28 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const intent = String(form.get("intent") || "save");
     if (intent === "mark_sent") {
       markTotalLossNoticeSent({
+        claimId: id,
+        correspondenceId: String(form.get("correspondenceId") || ""),
+        actorId: staff.id,
+      });
+      return back();
+    }
+    if (intent === "promise_payment") {
+      confirmInsurerSendingPayment({ claimId: id, actorId: staff.id });
+      return back();
+    }
+    if (intent === "record_payment") {
+      const received = optionalPoundsToPence(String(form.get("received") || ""));
+      if (received == null || received <= 0) throw new Error("Enter the amount that has arrived.");
+      recordTotalLossPaymentReceived({ claimId: id, actorId: staff.id, receivedPence: received });
+      return back();
+    }
+    if (intent === "prepare_payment_chase") {
+      const prepared = prepareTotalLossPaymentChaseEmail({ claimId: id, actorId: staff.id });
+      return back(undefined, prepared.id);
+    }
+    if (intent === "mark_payment_chase_sent") {
+      markTotalLossPaymentChaseSent({
         claimId: id,
         correspondenceId: String(form.get("correspondenceId") || ""),
         actorId: staff.id,
