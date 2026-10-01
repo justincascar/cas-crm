@@ -18,8 +18,14 @@ export const DOCUMENT_PURPOSES = [
   {
     id: "client_papers",
     label: "Papers named in the client welcome letter",
-    detail: "V5C for the client's vehicle, insurance certificate, driving licence, and bank statements.",
-    types: ["v5c_client", "insurance_certificate", "driving_licence", "bank_statements"] as const,
+    detail: "V5C for the client's vehicle, insurance certificate and driving licence.",
+    types: ["v5c_client", "insurance_certificate", "driving_licence"] as const,
+  },
+  {
+    id: "bank_statements",
+    label: "Asked for with the hire agreement",
+    detail: "A short statement of means and the last three months' bank statements. The hire agreement asks for these before the replacement vehicle goes out.",
+    types: ["bank_statements"] as const,
   },
   {
     id: "payment_request",

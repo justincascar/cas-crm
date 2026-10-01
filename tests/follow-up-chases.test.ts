@@ -50,6 +50,18 @@ function event(db: DatabaseSync, id: string, claimId: string, type: string, at: 
   ).run(id, claimId, type, type, details, at, at);
 }
 
+function hireAgreement(db: DatabaseSync, claimId: string, at: string) {
+  const documentId = `ha-${claimId}`;
+  db.prepare(
+    `INSERT INTO documents(id, claim_id, title, kind, document_type, template_key, created_at)
+     VALUES (?, ?, 'Hire Agreement', 'agreement', 'hire_agreement', 'hire_agreement', ?)`,
+  ).run(documentId, claimId, at);
+  db.prepare(
+    `INSERT INTO claim_events(id, claim_id, event_type, title, details, occurred_at, recorded_at, actor_id, document_id, source)
+     VALUES (?, ?, 'document_generated', 'Hire Agreement', 'Hire Agreement filed', ?, ?, 'staff-justin', ?, 'system')`,
+  ).run(`ev-${documentId}`, claimId, at, at, documentId);
+}
+
 function labelsAt(claimId: string, asAt: string) {
   return outstandingForClaim(claimId, new Date(asAt)).map((item) => item.label);
 }
@@ -69,7 +81,10 @@ describe("client paper and total-loss payment chases", () => {
       assert.equal(labelsAt("c4", under).includes("Driving licence chase due"), false);
       assert.equal(labelsAt("c4", under).includes("Logbook (V5C) chase due"), false);
       const due = labelsAt("c4", over);
-      for (const paper of DOCUMENT_CHASES) assert.ok(due.includes(paper.label), paper.label);
+      for (const paper of DOCUMENT_CHASES.filter((item) => item.trigger === "welcome")) {
+        assert.ok(due.includes(paper.label), paper.label);
+      }
+      assert.equal(due.includes("Bank statements chase due"), false);
       assert.equal(due.includes("Engineer's report chase due"), false);
       db.prepare(
         `INSERT INTO documents(id, claim_id, title, document_type, created_at) VALUES ('doc-lic', 'c4', 'Licence', 'driving_licence', ?)`,
@@ -79,7 +94,7 @@ describe("client paper and total-loss payment chases", () => {
       assert.ok(afterUpload.includes("Insurance certificate chase due"));
       const listed = dueFollowUpChases(over).filter((row) => row.claimId === "c4").map((row) => row.label);
       assert.equal(listed.includes("Driving licence chase due"), false);
-      assert.ok(listed.includes("Bank statements chase due"));
+      assert.equal(listed.includes("Bank statements chase due"), false);
       const recent = new Date(Date.now() - 30 * 60 * 60 * 1000).toISOString();
       db.prepare(`UPDATE claim_events SET occurred_at = ? WHERE id = 'welcome-c4'`).run(recent);
       const onList = listClaims().find((row) => row.id === "c4");
@@ -95,10 +110,41 @@ describe("client paper and total-loss payment chases", () => {
       const requested = "2026-10-01T12:00:00.000Z";
       const over = "2026-10-02T13:00:00.000Z";
       event(db, "welcome-c2", "c2", "client_welcome_sent", requested);
+      hireAgreement(db, "c2", requested);
       db.prepare(`INSERT INTO hire_pack_data(claim_id, means_documents_on_file) VALUES ('c2', 1)`).run();
       const due = labelsAt("c2", over);
       assert.equal(due.includes("Bank statements chase due"), false);
       assert.ok(due.includes("Driving licence chase due"));
+    });
+  });
+
+  it("starts bank statements from the hire agreement, not the welcome letter", () => {
+    const welcome = "2026-09-01T12:00:00.000Z";
+    const agreement = "2026-10-01T12:00:00.000Z";
+    const under = "2026-10-02T11:59:00.000Z";
+    const over = "2026-10-02T12:01:00.000Z";
+    const db = prepared();
+    withDatabase(db, () => {
+      event(db, "welcome-c3", "c3", "client_welcome_sent", welcome);
+      const beforeAgreement = labelsAt("c3", over);
+      assert.equal(beforeAgreement.includes("Bank statements chase due"), false);
+      assert.ok(beforeAgreement.includes("Driving licence chase due"));
+      assert.ok(beforeAgreement.includes("Insurance certificate chase due"));
+      assert.ok(beforeAgreement.includes("Logbook (V5C) chase due"));
+
+      hireAgreement(db, "c3", agreement);
+      assert.equal(labelsAt("c3", under).includes("Bank statements chase due"), false);
+      assert.ok(labelsAt("c3", over).includes("Bank statements chase due"));
+      db.prepare(
+        `INSERT INTO documents(id, claim_id, title, kind, document_type, template_key, created_at)
+         VALUES ('ha-c3-again', 'c3', 'Hire Agreement', 'agreement', 'hire_agreement', 'hire_agreement', ?)`,
+      ).run(over);
+      assert.ok(labelsAt("c3", over).includes("Bank statements chase due"));
+      db.prepare(
+        `INSERT INTO documents(id, claim_id, title, document_type, created_at) VALUES ('doc-bank', 'c3', 'Statements', 'bank_statements', ?)`,
+      ).run(over);
+      assert.equal(labelsAt("c3", over).includes("Bank statements chase due"), false);
+      assert.ok(labelsAt("c3", over).includes("Driving licence chase due"));
     });
   });
 
@@ -148,7 +194,9 @@ describe("client paper and total-loss payment chases", () => {
     const db = prepared();
     withDatabase(db, () => {
       event(db, "tl-notice-paid", "c9", "total_loss_notice_sent", "2026-10-01T12:00:00.000Z");
-      db.prepare(`UPDATE financial_lines SET received_pence = 820000 WHERE id = 'f-c9-vd'`).run();
+      db.prepare(`UPDATE financial_lines SET agreed_pence = 1000000, received_pence = 400000 WHERE id = 'f-c9-vd'`).run();
+      assert.ok(labelsAt("c9", "2026-10-20T12:00:00.000Z").includes("Total-loss payment chase due"));
+      db.prepare(`UPDATE financial_lines SET received_pence = 1000000 WHERE id = 'f-c9-vd'`).run();
       assert.equal(labelsAt("c9", "2026-10-20T12:00:00.000Z").includes("Total-loss payment chase due"), false);
 
       db.prepare(`UPDATE financial_lines SET received_pence = 0 WHERE id = 'f-c9-vd'`).run();
@@ -157,8 +205,10 @@ describe("client paper and total-loss payment chases", () => {
          VALUES ('c9', '2026-10-10T12:00:00.000Z', '2026-10-10T12:00:00.000Z', 'staff-justin')`,
       ).run();
       db.prepare(`UPDATE financial_lines SET received_pence = 500000 WHERE id = 'f-c9-vd'`).run();
-      assert.equal(labelsAt("c9", "2026-10-15T12:00:00.000Z").includes("Total-loss payment chase due"), false);
-      assert.equal(dueFollowUpChases("2026-10-15T12:00:00.000Z").some((row) => row.claimId === "c9" && row.kind === "total_loss_payment"), false);
+      assert.ok(labelsAt("c9", "2026-10-20T12:00:00.000Z").includes("Total-loss payment chase due"));
+      db.prepare(`UPDATE financial_lines SET received_pence = 1000000 WHERE id = 'f-c9-vd'`).run();
+      assert.equal(labelsAt("c9", "2026-10-20T12:00:00.000Z").includes("Total-loss payment chase due"), false);
+      assert.equal(dueFollowUpChases("2026-10-20T12:00:00.000Z").some((row) => row.claimId === "c9" && row.kind === "total_loss_payment"), false);
     });
   });
 

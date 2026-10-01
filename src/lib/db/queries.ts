@@ -148,9 +148,35 @@ function queueWhere(queue: string): { sql: string; params: unknown[] } {
     case "ready_return":
       return { sql: "c.repair_status = 'awaiting_return'", params: [] };
     case "tl_payment":
-      return { sql: "c.total_loss = 1 AND c.payment_qualifies_off_hire = 0", params: [] };
+      return {
+        sql: `c.total_loss = 1 AND NOT EXISTS (
+            SELECT 1 FROM financial_lines fl
+            WHERE fl.claim_id = c.id AND fl.head_of_loss = 'vehicle_damage'
+              AND fl.agreed_pence > 0 AND fl.received_pence = fl.agreed_pence
+              AND fl.id = (
+                SELECT fl2.id FROM financial_lines fl2
+                WHERE fl2.claim_id = fl.claim_id AND fl2.head_of_loss = 'vehicle_damage'
+                ORDER BY fl2.id LIMIT 1
+              )
+          )`,
+        params: [],
+      };
     case "off_hire":
-      return { sql: "c.hire_status = 'approaching_off_hire' OR (c.off_hire_scheduled_on IS NOT NULL AND c.hire_status != 'ended')", params: [] };
+      return {
+        sql: `(c.hire_status = 'approaching_off_hire' OR (c.off_hire_scheduled_on IS NOT NULL AND c.hire_status != 'ended'))
+          AND NOT EXISTS (
+            SELECT 1 FROM hire_episodes he
+            WHERE he.claim_id = c.id
+              AND he.billing_end_at IS NOT NULL AND trim(he.billing_end_at) != ''
+              AND he.id = (
+                SELECT he2.id FROM hire_episodes he2
+                WHERE he2.claim_id = c.id
+                ORDER BY he2.started_at DESC
+                LIMIT 1
+              )
+          )`,
+        params: [],
+      };
     case "salvage":
       return { sql: "c.salvage_status IN ('awaiting_collection', 'awaiting_disposal')", params: [] };
     case "renewals":

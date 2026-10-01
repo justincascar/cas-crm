@@ -302,7 +302,7 @@ export default async function HirePackPage({
         <fieldset className="space-y-3 rounded-xl border border-line bg-card p-5">
           <legend className="font-serif text-xl text-navy-deep">Financial means (impecuniosity)</legend>
           <p className="text-sm text-slate">
-            Ability to pay is a separate test from need. Intake already asks for a statement of means and three months&apos; bank statements. Record that disclosure here rather than treating it as a disconnected step.
+            Ability to pay is a separate test from need. The hire agreement asks for a statement of means and three months&apos; bank statements before the replacement vehicle goes out. Record that request here.
           </p>
           <label className="flex gap-2 text-sm">
             <input name="means_documents_requested" type="checkbox" defaultChecked={Number(s.means_documents_requested) === 1} />

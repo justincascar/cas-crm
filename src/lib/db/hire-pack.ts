@@ -391,7 +391,7 @@ ${missingBanner}
 <p>${Number(s.own_vehicle_unusable) ? "☑" : "☐"} I believe my own vehicle is unroadworthy and/or unusable and I understand temporary repairs are impractical or uneconomic.</p>
 <p>${Number(s.no_other_vehicle) ? "☑" : "☐"} I do not have another suitable vehicle available to me, either being my own or through my immediate family.</p>
 <h3>Financial means</h3>
-<p>Need for a vehicle is separate from whether I could reasonably have paid for a replacement myself. Intake already asks for a statement of means and three months' bank statements. This declaration refers to that disclosure; it does not replace it.</p>
+<p>Need for a vehicle is separate from whether I could reasonably have paid for a replacement myself. The hire agreement asks for a statement of means and three months' bank statements before the replacement vehicle goes out. This declaration refers to that request; it does not replace it.</p>
 <p>${Number(s.means_documents_requested) ? "☑" : "☐"} A statement of means and bank statements have been requested</p>
 <p>${Number(s.means_documents_on_file) ? "☑" : "☐"} A statement of means and/or bank statements are on this file</p>
 <p>${Number(s.cannot_fund_hire) ? "☑" : "☐"} I could not reasonably have funded a replacement vehicle from my own resources</p>

@@ -1,32 +1,43 @@
 import { addCalendarDaysIso, daysBetweenLondon } from "../dates";
 
-/** Papers a client can usually produce from their phone. The 24-hour interval applies to these only. */
+/**
+ * Papers a client can usually produce from their phone. The 24-hour interval applies to these only.
+ * Licence, insurance and logbook start when the client welcome is marked sent.
+ * Bank statements start when the hire agreement is generated (the document filed by Generate Hire Agreement).
+ */
 export const DOCUMENT_CHASES = [
   {
     kind: "document_driving_licence",
     documentType: "driving_licence",
     label: "Driving licence chase due",
     title: "Driving licence",
+    trigger: "welcome",
   },
   {
     kind: "document_insurance_certificate",
     documentType: "insurance_certificate",
     label: "Insurance certificate chase due",
     title: "Insurance certificate",
+    trigger: "welcome",
   },
   {
     kind: "document_v5c",
     documentType: "v5c_client",
     label: "Logbook (V5C) chase due",
     title: "Logbook (V5C)",
+    trigger: "welcome",
   },
   {
     kind: "document_bank_statements",
     documentType: "bank_statements",
     label: "Bank statements chase due",
     title: "Bank statements",
+    trigger: "hire_agreement",
   },
 ] as const;
+
+/** Same key as the Hire Agreement document filed by Generate Hire Agreement. */
+export const HIRE_AGREEMENT_PREPARED_TEMPLATE = "hire_agreement";
 
 export type DocumentChaseKind = (typeof DOCUMENT_CHASES)[number]["kind"];
 export type DocumentChaseType = (typeof DOCUMENT_CHASES)[number]["documentType"];
@@ -65,8 +76,9 @@ export function isDocumentChaseKind(value: string): value is DocumentChaseKind {
 }
 
 /**
- * There is no separate "requested on" column. The client welcome is the request for these four papers.
- * The clock starts at that event. Uploading the paper (or, for bank statements, recording them on the hire pack) clears it at once.
+ * There is no separate "requested on" column.
+ * Licence, insurance and the logbook start at the client welcome. Bank statements start when the hire agreement is generated.
+ * Uploading the paper (or, for bank statements, recording them on the hire pack) clears it at once.
  * A chase marked as sent restarts another 24 hours. 24 hours is elapsed time, not a calendar day.
  */
 export function documentChaseDecision(input: {

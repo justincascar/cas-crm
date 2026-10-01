@@ -222,10 +222,22 @@ function letterContext(claimId: string, letterDate: string = nowUtcIso(), engine
   const received = lines.reduce((sum, line) => sum + (line.received_pence || 0), 0);
   const claimed = lines.reduce((sum, line) => sum + (line.claimed_pence || 0), 0);
   const outstanding = Math.max(0, claimed - received);
+  const confirmedHireEnd = hire?.billing_end_at ? String(hire.billing_end_at) : null;
+  const scheduledOffHire = claim.off_hire_scheduled_on ? String(claim.off_hire_scheduled_on) : null;
+  const cessationSource = dates.total_loss_cessation_sent || confirmedHireEnd || scheduledOffHire || null;
   const cessation = hireChargesAccrualEnd({
     vehicleReturnedAt: dates.vehicle_returned || null,
-    totalLossCessationAt: dates.total_loss_cessation_sent || (claim.off_hire_scheduled_on ? String(claim.off_hire_scheduled_on) : null),
+    totalLossCessationAt: cessationSource,
   });
+  const cessationBasis = !cessation
+    ? ""
+    : dates.vehicle_returned && (!cessationSource || String(dates.vehicle_returned) <= cessationSource)
+      ? "the earlier of vehicle return and the recorded total-loss cessation date"
+      : dates.total_loss_cessation_sent
+        ? "the recorded total-loss cessation date"
+        : confirmedHireEnd
+          ? "the confirmed hire end date"
+          : "the scheduled off-hire date";
   const handlerId = String(claim.handler_id || claim.handler_staff_id || "");
   const selectedEngineerId = (engineerId || String(claim.engineer_id || "")).trim();
   const engineer = selectedEngineerId ? getEngineer(selectedEngineerId) : undefined;
@@ -304,7 +316,7 @@ function letterContext(claimId: string, letterDate: string = nowUtcIso(), engine
     outstandingBalancePence: outstanding || null,
     settlementAmountPence: received || null,
     finalSettlementAmountPence: received || null,
-    cessationBasis: cessation ? "the earlier of vehicle return and the recorded total-loss cessation date" : "",
+    cessationBasis,
     clientDriverName: namesDiffer(clientDriverName, String(claim.client_name || "")) ? clientDriverName : "",
     tpVehicleMake: String(tp?.tp_make || ""),
     tpVehicleModel: String(tp?.tp_model || ""),

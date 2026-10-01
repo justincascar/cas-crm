@@ -11,6 +11,11 @@ export type TotalLossOffHireDecision =
   | { kind: "matches"; date: string }
   | { kind: "kept"; date: string; suggestedDate: string };
 
+/** True when an agreed vehicle-damage figure is on the file and the amount received equals it. */
+export function vehicleDamageSettledInFull(agreedPence: number, receivedPence: number): boolean {
+  return agreedPence > 0 && receivedPence === agreedPence;
+}
+
 /** Seven London calendar days after the day the completing payment was recorded. */
 export function suggestedHireEndDay(paymentAt: string): string | null {
   const parsed = new Date(paymentAt);
@@ -36,10 +41,12 @@ export function totalLossOffHireDecision(input: {
 }): TotalLossOffHireDecision {
   if (input.receivedPence <= 0) return { kind: "waiting" };
   const reasons: string[] = [];
-  if (input.agreedPence <= 0) {
-    reasons.push("The agreed settlement is not on the file.");
-  } else if (input.receivedPence !== input.agreedPence) {
-    reasons.push("The amount received does not match the agreed settlement.");
+  if (!vehicleDamageSettledInFull(input.agreedPence, input.receivedPence)) {
+    reasons.push(
+      input.agreedPence <= 0
+        ? "The agreed settlement is not on the file."
+        : "The amount received does not match the agreed settlement.",
+    );
   }
   if (input.salvageVariancePence != null && input.salvageVariancePence !== 0) {
     reasons.push("The salvage sale does not match the engineer's salvage figure.");

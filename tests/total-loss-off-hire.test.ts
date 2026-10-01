@@ -6,6 +6,9 @@ import { describe, it } from "node:test";
 import { withDatabase } from "../src/lib/db/connection.ts";
 import { migrate } from "../src/lib/db/migrate.ts";
 import { seed } from "../src/lib/db/seed.ts";
+import { letterPreview } from "../src/lib/db/chronology.ts";
+import { dueFollowUpChases } from "../src/lib/db/follow-up-chases.ts";
+import { countClaims, listClaims } from "../src/lib/db/queries.ts";
 import { recordTotalLossPaymentReceived } from "../src/lib/db/total-loss.ts";
 import { confirmTotalLossOffHire, totalLossOffHireForClaim } from "../src/lib/db/total-loss-off-hire.ts";
 import { suggestedHireEndDay, totalLossOffHireDecision } from "../src/lib/domain/total-loss-off-hire.ts";
@@ -152,6 +155,59 @@ describe("total-loss hire end suggestion", () => {
       assert.equal(kept.billing_end_at, "2026-09-20");
       assert.equal(totalLossOffHireForClaim("c9")?.kind, "kept");
       assert.deepEqual(untouched(db), before);
+    });
+  });
+
+  it("uses that one payment to clear the chase and the awaited card, without a second entry", () => {
+    const db = prepared();
+    withDatabase(db, () => {
+      db.prepare(
+        `INSERT INTO claim_events(id, claim_id, event_type, title, details, occurred_at, recorded_at, actor_id, source)
+         VALUES ('tl-notice-card', 'c9', 'total_loss_notice_sent', 'Notice', '', '2026-09-20T12:00:00.000Z', '2026-09-20T12:00:00.000Z', 'staff-justin', 'staff')`,
+      ).run();
+      const asAt = "2026-10-01T18:00:00.000Z";
+      const chaseDue = () => dueFollowUpChases(asAt).some((row) => row.claimId === "c9" && row.kind === "total_loss_payment");
+      const onCard = () => listClaims({ queue: "tl_payment" }).some((row) => row.id === "c9");
+      assert.equal(chaseDue(), true);
+      assert.equal(onCard(), true);
+      const awaitingBefore = countClaims("tl_payment");
+      db.prepare(`UPDATE financial_lines SET agreed_pence = 1000000 WHERE id = 'f-c9-vd'`).run();
+      recordTotalLossPaymentReceived({ claimId: "c9", actorId: "staff-justin", receivedPence: 400_000 });
+      assert.equal(chaseDue(), true);
+      assert.equal(onCard(), true);
+      assert.equal(countClaims("tl_payment"), awaitingBefore);
+      assert.equal(totalLossOffHireForClaim("c9")?.kind, "review");
+
+      recordTotalLossPaymentReceived({ claimId: "c9", actorId: "staff-justin", receivedPence: 600_000 });
+      assert.equal(chaseDue(), false);
+      assert.equal(totalLossOffHireForClaim("c9")?.kind, "suggest");
+      assert.equal(onCard(), false);
+      assert.equal(countClaims("tl_payment"), awaitingBefore - 1);
+      const flags = db
+        .prepare(`SELECT payment_qualifies_off_hire, off_hire_scheduled_on FROM claims WHERE id = 'c9'`)
+        .get() as { payment_qualifies_off_hire: number; off_hire_scheduled_on: string | null };
+      assert.equal(flags.payment_qualifies_off_hire, 0);
+      assert.equal(flags.off_hire_scheduled_on, null);
+    });
+  });
+
+  it("uses the confirmed hire end on the cessation letter, and takes a confirmed hire end off the approaching list", () => {
+    const db = prepared();
+    withDatabase(db, () => {
+      db.prepare(`UPDATE claims SET off_hire_scheduled_on = '2026-09-01', hire_status = 'approaching_off_hire' WHERE id = 'c9'`).run();
+      const scheduledOnly = letterPreview("c9", "total_loss_cessation");
+      assert.match(scheduledOnly.text, /01\/09\/2026/);
+      assert.match(scheduledOnly.text, /scheduled off-hire date/);
+      assert.equal(listClaims({ queue: "off_hire" }).some((row) => row.id === "c9"), true);
+
+      db.prepare(`UPDATE hire_episodes SET billing_end_at = '2026-10-08' WHERE id = 'h-c9'`).run();
+      const confirmed = letterPreview("c9", "total_loss_cessation");
+      assert.match(confirmed.text, /08\/10\/2026/);
+      assert.match(confirmed.text, /confirmed hire end date/);
+      assert.doesNotMatch(confirmed.text, /01\/09\/2026/);
+      assert.equal(listClaims({ queue: "off_hire" }).some((row) => row.id === "c9"), false);
+      const scheduled = db.prepare(`SELECT off_hire_scheduled_on FROM claims WHERE id = 'c9'`).get() as { off_hire_scheduled_on: string };
+      assert.equal(scheduled.off_hire_scheduled_on, "2026-09-01");
     });
   });
 });

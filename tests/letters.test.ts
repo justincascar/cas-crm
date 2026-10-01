@@ -216,7 +216,8 @@ describe("CAS email templates", () => {
     assert.equal(email.message.to, "aled@example.test");
     assert.match(email.message.subject, /TEST-0001/);
     assert.match(email.message.body, /Aled Morgan/);
-    assert.match(email.message.body, /statement of means/);
+    assert.match(email.message.body, /logbook/);
+    assert.doesNotMatch(email.message.body, /bank statements/i);
   });
 
   it("exposes every supplied CAS template in the create-document list", () => {

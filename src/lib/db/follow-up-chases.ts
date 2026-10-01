@@ -4,16 +4,17 @@ import { buildMailtoHref } from "../email/mailto";
 import {
   DOCUMENT_CHASES,
   DOCUMENT_CHASE_SENT_EVENT,
+  HIRE_AGREEMENT_PREPARED_TEMPLATE,
   TOTAL_LOSS_NOTICE_SENT_EVENT,
   TOTAL_LOSS_PAYMENT_CHASE_KIND,
   TOTAL_LOSS_PAYMENT_CHASE_SENT_EVENT,
-  TOTAL_LOSS_PAYMENT_RECEIVED_EVENT,
   documentChaseByKind,
   documentChaseDecision,
   isDocumentChaseKind,
   totalLossPaymentChaseDecision,
   type SupplementaryChaseKind,
 } from "../domain/follow-up-chases";
+import { vehicleDamageSettledInFull } from "../domain/total-loss-off-hire";
 import { paymentDetailsLetterLine, type InsurerPaymentDetails } from "../domain/payment-details";
 import type { ChaseView } from "./chase";
 import { recordClaimEvent } from "./chronology";
@@ -121,6 +122,20 @@ export function listFollowUpChases(asAt: string = nowUtcIso(), claimId?: string)
       eventClaim.params,
     ),
   );
+  const hireAgreements = latestByKey([
+    ...all<{ key: string; at: string }>(
+      `SELECT d.claim_id AS key, e.occurred_at AS at
+       FROM claim_events e
+       JOIN documents d ON d.id = e.document_id
+       WHERE e.event_type = 'document_generated' AND d.template_key = ?${eventClaim.sql.replaceAll("claim_id", "d.claim_id")}`,
+      [HIRE_AGREEMENT_PREPARED_TEMPLATE, ...eventClaim.params],
+    ),
+    ...all<{ key: string; at: string }>(
+      `SELECT claim_id AS key, created_at AS at FROM documents
+       WHERE template_key = ? AND created_at IS NOT NULL AND created_at != ''${docClaim.sql}`,
+      [HIRE_AGREEMENT_PREPARED_TEMPLATE, ...docClaim.params],
+    ),
+  ]);
   const onFile = new Set(
     all<{ claim_id: string; document_type: string }>(
       `SELECT claim_id, document_type FROM documents
@@ -143,9 +158,10 @@ export function listFollowUpChases(asAt: string = nowUtcIso(), claimId?: string)
   );
 
   const views: ChaseView[] = [];
-  for (const [id, requestedAt] of welcomes) {
-    const meta = metaById.get(id);
-    for (const paper of DOCUMENT_CHASES) {
+  for (const paper of DOCUMENT_CHASES) {
+    const clocks = paper.trigger === "hire_agreement" ? hireAgreements : welcomes;
+    for (const [id, requestedAt] of clocks) {
+      const meta = metaById.get(id);
       const received = onFile.has(`${id}:${paper.documentType}`) || (paper.documentType === "bank_statements" && bankTick.has(id));
       const decision = documentChaseDecision({
         requestedAt,
@@ -168,7 +184,9 @@ export function listFollowUpChases(asAt: string = nowUtcIso(), claimId?: string)
             ? "The document is on file."
             : decision.due
               ? paper.label
-              : "Requested. The 24-hour chase is not due yet.",
+              : paper.trigger === "hire_agreement"
+                ? "The hire agreement has been generated. The 24-hour chase is not due yet."
+                : "Requested. The 24-hour chase is not due yet.",
           intervalDays: 1,
           meta,
         }),
@@ -202,24 +220,18 @@ export function listFollowUpChases(asAt: string = nowUtcIso(), claimId?: string)
     docClaim.params,
   );
   const promised = new Map(promisedRows.map((row) => [row.claim_id, String(row.insurer_payment_promised_at)]));
-  const receivedMoney = new Set(
-    all<{ claim_id: string }>(
-      `SELECT claim_id FROM financial_lines WHERE head_of_loss = 'vehicle_damage' AND received_pence > 0${docClaim.sql}`,
-      docClaim.params,
-    ).map((row) => row.claim_id),
-  );
-  const qualifying = new Set(
-    all<{ id: string }>(
-      `SELECT id FROM claims WHERE payment_qualifies_off_hire = 1${claim.sql.replaceAll("c.id", "id")}`,
-      claim.params,
-    ).map((row) => row.id),
-  );
-  const receivedEvent = new Set(
-    all<{ claim_id: string }>(
-      `SELECT DISTINCT claim_id FROM claim_events WHERE event_type = ?${eventClaim.sql}`,
-      [TOTAL_LOSS_PAYMENT_RECEIVED_EVENT, ...eventClaim.params],
-    ).map((row) => row.claim_id),
-  );
+  const settled = new Set<string>();
+  const seenDamage = new Set<string>();
+  for (const row of all<{ claim_id: string; agreed_pence: number; received_pence: number }>(
+    `SELECT claim_id, agreed_pence, received_pence FROM financial_lines
+     WHERE head_of_loss = 'vehicle_damage'${docClaim.sql}
+     ORDER BY id`,
+    docClaim.params,
+  )) {
+    if (seenDamage.has(row.claim_id)) continue;
+    seenDamage.add(row.claim_id);
+    if (vehicleDamageSettledInFull(row.agreed_pence || 0, row.received_pence || 0)) settled.add(row.claim_id);
+  }
   const paymentSent = latestAfter(
     all<{ key: string; at: string }>(
       `SELECT claim_id AS key, occurred_at AS at FROM claim_events WHERE event_type = ?${eventClaim.sql}`,
@@ -228,7 +240,7 @@ export function listFollowUpChases(asAt: string = nowUtcIso(), claimId?: string)
   );
 
   for (const [id, noticeSentAt] of notices) {
-    const paymentReceived = receivedMoney.has(id) || qualifying.has(id) || receivedEvent.has(id);
+    const paymentReceived = settled.has(id);
     const decision = totalLossPaymentChaseDecision({
       noticeSentAt,
       insurerPromisedAt: promised.get(id) || null,

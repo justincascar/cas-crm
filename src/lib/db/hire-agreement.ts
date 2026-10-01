@@ -173,6 +173,7 @@ export function renderHireAgreement(view: HireAgreementView): string {
 ${missingBanner}
 ${view.includeHire ? warningBanner : ""}
 <p>${escape(view.hireReason)} ${escape(view.storageReason)} ${escape(view.termsReason)}</p>
+<p>Before the replacement vehicle goes out, please provide a short statement of means and your last three months' bank statements. This is the evidence that supports your entitlement to a replacement vehicle on credit.</p>
 ${view.includeHire ? `<section>
 <h2>Hire Agreement — ${pageLabel(hirePage)}</h2>
 <p>${CAS_HIRE_AGREEMENT_BANNER}</p>

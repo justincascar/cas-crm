@@ -136,6 +136,23 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+1 October 2026 — A part-payment does not clear the total-loss payment chase:
+
+- The payment chase and the dashboard card “Total-loss payments awaited” stay on the file until the vehicle-damage amount received equals the agreed figure. That is the same test as the hire-end suggestion. A smaller payment leaves both showing. A later payment that brings the total up to the agreed figure clears both.
+- The total-loss cessation letter uses the hire end on the booking when one has been confirmed, and uses Scheduled off-hire only when that hire end is still blank.
+- Off-hire dates approaching no longer includes a file once that hire end is on the booking. It had been using hire status and Scheduled off-hire. TEST-0010 already has a hire end on the booking, so it leaves that card.
+
+1 October 2026 — Bank statements are chased from the hire agreement:
+
+- Driving licence, insurance certificate and the client's logbook still start their 24-hour chase when the client welcome is marked sent.
+- Bank statements start when the hire agreement is generated (Generate Hire Agreement on the hire pack). That is the existing step that files the agreement. There is no separate “sent for signing” marker. If that agreement has not been generated, the bank-statement chase has not started. A welcome letter sent earlier does not make it overdue. Uploading the statements, or ticking them on the hire pack, still clears it. Generating the agreement again does not restart the 24 hours.
+- The client welcome no longer asks for bank statements. The generated hire agreement asks for a short statement of means and the last three months' bank statements before the replacement vehicle goes out. That is the same document that starts the bank-statement chase.
+
+1 October 2026 — The total-loss payment is entered once:
+
+- The amount under Insurer payment on the total-loss screen is the only place staff record that money has arrived. That same running total feeds the hire-end suggestion. The payment chase and the “Total-loss payments awaited” card clear only when that total equals the agreed figure.
+- The older “Qualifying payment for off-hire” line is not that entry. Nothing on screen sets it. It stays as it was. Scheduled off-hire is a separate date and was not changed.
+
 1 October 2026 — A total-loss payment can suggest the hire end, and a person confirms it:
 
 - When the vehicle-damage amount received equals the agreed settlement, and there is no salvage mismatch still flagged, the file suggests a hire end seven days after the payment that completed that total. It is a CAS working default, not a legal rule, and nothing is written until a person confirms it. Confirming sets the hire billing end on the hire booking, the same field a collection date would set, and records that confirmation on the file history.

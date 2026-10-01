@@ -28,10 +28,6 @@ What we need from you:
 - Confirmation of how the accident happened (a short written account is fine)
 - Any photos, dashcam footage, or contact details you have for witnesses or the other driver
 - Your vehicle logbook (V5C), insurance certificate and driving licence
-- A short statement of means and your last three months' bank statements — we ask for this now,
-  before your replacement vehicle goes out, rather than later. It's the evidence that supports
-  your entitlement to a replacement vehicle on credit, and it's much easier for everyone to sort
-  out at the start than to chase once your claim has settled.
 - To let us know straight away if you're contacted directly by the other driver's insurer
 
 If anything changes — new contact details, a change in how you're using the replacement

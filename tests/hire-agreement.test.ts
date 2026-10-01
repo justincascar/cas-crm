@@ -214,6 +214,7 @@ describe("hire agreement rating and the four-page document", () => {
         dailyRatePence: null,
       }),
     );
+    assert.match(html, /last three months' bank statements/);
     assert.match(html, /Hire Agreement — 3 of 4/);
     assert.match(html, /Storage &amp; Recovery Agreement/);
     assert.match(html, /This Storage &amp; Recovery page is incomplete/);

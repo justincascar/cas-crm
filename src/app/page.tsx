@@ -113,12 +113,12 @@ export default async function DashboardPage() {
       />
       <ChaseDueTable
         title="Client paper chases due"
-        hint="Driving licence, insurance certificate, logbook (V5C) and bank statements. Due 24 hours after the client welcome was marked as sent, then again 24 hours after each reminder is marked sent. Clears as soon as the paper is on file. Reminder only — no email is sent automatically."
+        hint="Driving licence, insurance certificate and logbook (V5C) are due 24 hours after the client welcome was marked as sent. Bank statements are due 24 hours after the hire agreement is generated. Each repeats 24 hours after a reminder is marked sent, and clears as soon as the paper is on file. Reminder only — no email is sent automatically."
         rows={data.chasesDue.filter((row) => String(row.kind).startsWith("document_"))}
       />
       <ChaseDueTable
         title="Total-loss payment chases due"
-        hint="After the total-loss notification is marked sent: every 3 days until the insurer confirms they are sending payment, then every 7 days until the money arrives. Clears when the payment is recorded. Reminder only — no email is sent automatically."
+        hint="After the total-loss notification is marked sent: every 3 days until the insurer confirms they are sending payment, then every 7 days until the amount received matches the agreed vehicle-damage figure. A part-payment does not clear it. Reminder only — no email is sent automatically."
         rows={data.chasesDue.filter((row) => row.kind === "total_loss_payment")}
       />
       <ChaseDueTable

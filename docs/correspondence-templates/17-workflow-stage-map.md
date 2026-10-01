@@ -6,13 +6,12 @@ match how CAS actually works if any stage doesn't match reality.
 
 ## Stages
 
-1. **Intake** — case created in CRM → send `01-client-intake-welcome`, which now requests
-   logbook, insurance certificate, driving licence **and financial disclosure (statement of
-   means + 3 months' bank statements)** all at once, before the replacement vehicle is handed
-   over. Do this now, not reactively later: once a claim has settled, clients are far less
-   responsive, so this evidence needs to be on file before hire starts, not chased after hire
-   ends. Treat it as a soft gate — strongly push to get it before/at the point the replacement
-   vehicle goes out, without necessarily blocking a vehicle a client urgently needs.
+1. **Intake** — case created in CRM → send `01-client-intake-welcome`, which requests the
+   logbook, insurance certificate and driving licence. Bank statements are not asked for in
+   that email. When the hire agreement is generated, that document asks for a short statement of
+   means and the last three months' bank statements, before the replacement vehicle goes out.
+   That is the point the bank-statement chase starts. Treat it as a soft gate — push to get
+   the statements before the vehicle goes out, without blocking a vehicle a client urgently needs.
 2. **Recovery & storage** — vehicle recovered/stored. No template; a CRM status update.
 3. **Liability notice** — as soon as the at-fault party/insurer is identified → send
    `03-insurer-notification-of-claim`. Doesn't need to wait for repair to complete.
@@ -34,7 +33,7 @@ match how CAS actually works if any stage doesn't match reality.
    - Need disputed → `08-rebuttal-need`
    - Duration disputed → `09-rebuttal-duration`
    - Financial disclosure requested → `10-impecuniosity-disclosure-response` (in most cases this
-     should now just confirm what was already collected at intake, rather than starting from
+     should now just confirm what was already asked for on the hire agreement, rather than starting from
      scratch)
    - After sending a rebuttal, restart the chase clock rather than resuming the old one.
 9. **Total loss branch** (replaces steps 5–6 if the engineer flags total loss at any point):

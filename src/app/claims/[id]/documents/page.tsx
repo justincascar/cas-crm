@@ -57,13 +57,17 @@ export default async function ClaimDocumentsPage({
       <section className="rounded-xl border border-line bg-card p-4">
         <h2 className="font-serif text-xl text-navy-deep">Papers to chase</h2>
         <p className="mt-1 text-sm text-slate">
-          Driving licence, insurance certificate, the client&apos;s logbook (V5C) and bank statements are chased every 24 hours after the client
-          welcome is marked as sent. That letter is the request — there is no separate requested-on date. Uploading the paper clears the chase
-          straight away. A reminder is prepared for you to send. Nothing is sent automatically.
+          Driving licence, insurance certificate and the client&apos;s logbook (V5C) are chased every 24 hours after the client welcome is marked as
+          sent. Bank statements start when the hire agreement is generated, then the same 24 hours. Uploading the paper clears the chase straight
+          away. A reminder is prepared for you to send. Nothing is sent automatically.
         </p>
-        {paperChases.length === 0 ? (
-          <p className="mt-3 text-sm">The client welcome has not been marked as sent, so these chases have not started.</p>
-        ) : (
+        {DOCUMENT_CHASES.some((paper) => paper.trigger === "welcome" && !paperChases.some((chase) => chase.kind === paper.kind)) ? (
+          <p className="mt-3 text-sm">Driving licence, insurance certificate and logbook have not started. The client welcome has not been marked as sent.</p>
+        ) : null}
+        {paperChases.some((chase) => chase.kind === "document_bank_statements") ? null : (
+          <p className="mt-3 text-sm">Bank statements have not started. The hire agreement has not been generated yet.</p>
+        )}
+        {paperChases.length === 0 ? null : (
           <ul className="mt-3 space-y-3">
             {paperChases.map((chase) => {
               const prepared = getPreparedFollowUpEmail(id, documentChaseTemplateKey(chase.kind));
@@ -72,7 +76,7 @@ export default async function ClaimDocumentsPage({
                 <li key={chase.kind} className="rounded-lg border border-line px-3 py-3 text-sm">
                   <p className="font-semibold">{chase.title}</p>
                   <p className="text-slate">
-                    {chase.outcomeOnFile ? "On file. The chase has cleared." : chase.due ? chase.label : "Requested. Not due yet."}
+                    {chase.outcomeOnFile ? "On file. The chase has cleared." : chase.due ? chase.label : chase.reason}
                   </p>
                   {chase.due ? (
                     <form method="post" action={`/claims/${id}/follow-up`} className="mt-2">
