@@ -163,10 +163,10 @@ export function HandoverStartForm({
             ))}
           </select>
         </label>
-        <label className="block text-sm">
-          Signature
+        <div className="text-sm">
+          <p>Signature</p>
           <SignaturePad />
-        </label>
+        </div>
         <label className="flex items-center gap-2 text-sm">
           <input
             type="checkbox"

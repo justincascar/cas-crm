@@ -284,7 +284,7 @@ export default async function HandoverPage({
                         <span className="text-slate"> · {formatUkDateTime(scan.attachedAt)}</span>
                       </p>
                     ) : (
-                      <ValidatedForm action={actionAttachHandoverScan} encType="multipart/form-data" className="space-y-3">
+                      <ValidatedForm action={actionAttachHandoverScan} className="space-y-3">
                         <input type="hidden" name="claimId" value={id} />
                         <input type="hidden" name="handoverId" value={record.id} />
                         <input type="hidden" name="slot" value={slot.slot} />

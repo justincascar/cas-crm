@@ -26,6 +26,9 @@ export function ValidatedForm({
   onInput,
   onChange,
   noValidate = true,
+  action,
+  method,
+  encType,
   ...rest
 }: ValidatedFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
@@ -63,9 +66,13 @@ export function ValidatedForm({
     onSubmit?.(event);
   }
 
+  // A server action is a function. React then sets method and encoding itself, and warns if we set them too.
+  const functionAction = typeof action === "function";
   return (
     <form
       {...rest}
+      action={action}
+      {...(functionAction ? {} : { method, encType })}
       ref={(node) => {
         formRef.current = node;
       }}

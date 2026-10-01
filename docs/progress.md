@@ -136,6 +136,11 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+1 October 2026 — Two development warnings on the handover phone page are cleared:
+
+- The pre-scan and post-scan forms were marked with a form encoding as well as a server action. React warned that it would ignore that encoding. Those forms no longer set it. The signature form and the photograph forms remain ordinary posts to an address, with their own encoding. That warning did not drop or corrupt a signature or a photograph.
+- For a short time the server still sent the older handover form, without the signature section, while the phone script had the new section. React rebuilt the form in the browser. The drawing pad is also no longer placed inside a label, which the browser would have rearranged. A fresh load now sends the same form from the server and the phone. The mismatch did not save a wrong time, a damaged signature, or a damaged photograph.
+
 1 October 2026 — A handover can record a signature drawn on the CAS phone:
 
 - At delivery, collection, recovery or return, the person handing the vehicle over can capture a signature on the driver’s or staff member’s own phone. It stores the printed name, how that person is connected to the claim (client, owner, hirer, driver, or other authorised person), the drawing, and the same “date and time this happened” already on the handover. That time is not a second clock, and it is not changed after save.

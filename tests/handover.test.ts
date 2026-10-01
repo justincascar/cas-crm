@@ -767,6 +767,18 @@ describe("vehicle handover records", () => {
     assert.match(page, /record\.incomplete/);
     assert.doesNotMatch(page, /signaturePng[\s\S]{0,120}Incomplete/);
   });
+
+  it("keeps signature and photograph posts as ordinary form posts, and does not set encoding on the scan action", () => {
+    const page = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/handover/page.tsx"), "utf8");
+    const start = fs.readFileSync(path.join(process.cwd(), "src/components/handover/HandoverStartForm.tsx"), "utf8");
+    const camera = fs.readFileSync(path.join(process.cwd(), "src/components/handover/ShotCamera.tsx"), "utf8");
+    const validated = fs.readFileSync(path.join(process.cwd(), "src/components/ValidatedForm.tsx"), "utf8");
+    assert.match(start, /<form method="post" action=\{action\} encType="multipart\/form-data"/);
+    assert.doesNotMatch(start, /<label[^>]*>\s*Signature/);
+    assert.match(camera, /<form method="post" action=\{action\} encType="multipart\/form-data"/);
+    assert.doesNotMatch(page, /actionAttachHandoverScan[\s\S]{0,120}encType/);
+    assert.match(validated, /typeof action === "function"/);
+  });
 });
 
 const TINY_PNG =
