@@ -37,6 +37,16 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       photos: [],
       actualDriverId: String(form.get("actualDriverId") || ""),
       actualOccurredAt: String(form.get("actualOccurredAt") || ""),
+      signature: (() => {
+        const skipped = form.get("signatureSkipped") === "yes";
+        return {
+          name: skipped ? "" : String(form.get("signatureName") || ""),
+          relationship: skipped ? "" : String(form.get("signatureRelationship") || ""),
+          png: skipped ? "" : String(form.get("signaturePng") || ""),
+          skipReason: skipped ? String(form.get("signatureSkipReason") || "") : "",
+          skipped,
+        };
+      })(),
     });
     const url = new URL(`/claims/${claimId}/handover`, origin);
     url.searchParams.set("saved", "details");

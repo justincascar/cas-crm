@@ -230,6 +230,11 @@ export function migrate(db: DatabaseSync) {
   if (handoverColumns.length > 0 && !handoverColumns.some((column) => column.name === "shot_set")) {
     db.exec(`ALTER TABLE vehicle_handovers ADD COLUMN shot_set TEXT NOT NULL DEFAULT 'five'`);
   }
+  for (const column of ["signature_name", "signature_relationship", "signature_png", "signature_skip_reason"]) {
+    if (handoverColumns.length > 0 && !handoverColumns.some((existing) => existing.name === column)) {
+      db.exec(`ALTER TABLE vehicle_handovers ADD COLUMN ${column} TEXT`);
+    }
+  }
   const photoColumns = db.prepare(`PRAGMA table_info(vehicle_handover_photos)`).all() as Array<{ name: string }>;
   if (photoColumns.length > 0 && !photoColumns.some((column) => column.name === "slot")) {
     db.exec(`ALTER TABLE vehicle_handover_photos ADD COLUMN slot TEXT NOT NULL DEFAULT 'damage'`);

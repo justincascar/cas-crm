@@ -21,6 +21,8 @@ import {
   SHOT_SET_FIVE,
   STANDARD_SHOTS,
 } from "../src/lib/db/handover.ts";
+import { SIGNATURE_HONESTY } from "../src/lib/domain/handover-signature.ts";
+import { utcFromLondonDateTime } from "../src/lib/dates.ts";
 import { readStoredFile } from "../src/lib/storage/files.ts";
 import { migrate } from "../src/lib/db/migrate.ts";
 import { seed } from "../src/lib/db/seed.ts";
@@ -597,4 +599,175 @@ describe("vehicle handover records", () => {
       fs.rmSync(dir, { recursive: true, force: true });
     }
   });
+
+  it("stores a signature against the handover time, and a skip does not mark the record incomplete", () => {
+    const previous = process.env.CAS_FILES_DIR;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cas-handover-sign-store-"));
+    process.env.CAS_FILES_DIR = dir;
+    const db = prepared();
+    try {
+    withDatabase(db, () => {
+      const when = "2026-10-01T14:30";
+      const happened = utcFromLondonDateTime(when);
+      for (const kind of ["hire_delivered", "hire_collected", "client_recovered", "client_returned"] as const) {
+        const saved = recordVehicleHandover({
+          ...handover({ mileage: "4100" }),
+          claimId: "c4",
+          eventKind: kind,
+          hireEpisodeId: kind.startsWith("hire") ? "h-c4" : "",
+          actorId: "staff-justin",
+          actualDriverId: "staff-driver",
+          actualOccurredAt: when,
+          signature: { name: "Dafydd Jones", relationship: "hirer", png: TINY_PNG },
+        });
+        const row = listVehicleHandovers("c4").find((item) => item.id === saved.id);
+        assert.equal(row?.signatureName, "Dafydd Jones");
+        assert.equal(row?.signatureRelationship, "hirer");
+        assert.equal(row?.signatureRelationshipLabel, "Hirer");
+        assert.equal(row?.signaturePng, TINY_PNG);
+        assert.equal(row?.signatureSkipReason, null);
+        assert.equal(row?.occurredAt, happened);
+        assert.equal(row?.incomplete, true);
+      }
+      const noted = db
+        .prepare(`SELECT details FROM claim_events WHERE claim_id = ? AND event_type = 'vehicle_handover_recorded' ORDER BY recorded_at DESC LIMIT 1`)
+        .get("c4") as { details: string };
+      assert.match(noted.details, /Signed by Dafydd Jones \(Hirer\)/);
+      assert.match(noted.details, new RegExp(SIGNATURE_HONESTY.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+
+      const skipped = recordVehicleHandover({
+        ...handover({ mileage: "4101" }),
+        claimId: "c4",
+        hireEpisodeId: "h-c4",
+        actorId: "staff-sian",
+        photos: requiredShots(),
+        signature: { skipped: true, skipReason: "client not present", png: TINY_PNG, name: "Should be ignored" },
+      });
+      assert.equal(skipped.incomplete, false);
+      const unsigned = listVehicleHandovers("c4").find((item) => item.id === skipped.id);
+      assert.equal(unsigned?.incomplete, false);
+      assert.equal(unsigned?.signaturePng, null);
+      assert.equal(unsigned?.signatureName, null);
+      assert.equal(unsigned?.signatureSkipReason, "client not present");
+
+      const omitted = recordVehicleHandover({
+        ...handover({ mileage: "4102" }),
+        claimId: "c4",
+        hireEpisodeId: "h-c4",
+        photos: requiredShots(),
+      });
+      const blank = listVehicleHandovers("c4").find((item) => item.id === omitted.id);
+      assert.equal(omitted.incomplete, false);
+      assert.equal(blank?.signaturePng, null);
+      assert.equal(blank?.signatureName, null);
+      assert.equal(blank?.signatureSkipReason, null);
+
+      assert.throws(
+        () =>
+          recordVehicleHandover({
+            ...handover({ mileage: "4103" }),
+            claimId: "c4",
+            hireEpisodeId: "h-c4",
+            signature: {},
+          }),
+        /Capture a signature, or say why there is no signature/,
+      );
+      assert.throws(
+        () =>
+          recordVehicleHandover({
+            ...handover({ mileage: "4104" }),
+            claimId: "c4",
+            hireEpisodeId: "h-c4",
+            signature: { skipped: true, skipReason: "   " },
+          }),
+        /Say why there is no signature/,
+      );
+      assert.throws(
+        () =>
+          recordVehicleHandover({
+            ...handover({ mileage: "4105" }),
+            claimId: "c4",
+            hireEpisodeId: "h-c4",
+            signature: { name: "Dafydd Jones", relationship: "client", png: TINY_PNG, skipReason: "client not present" },
+          }),
+        /Either capture a signature or say why it was not signed/,
+      );
+    });
+    } finally {
+      db.close();
+      if (previous === undefined) delete process.env.CAS_FILES_DIR;
+      else process.env.CAS_FILES_DIR = previous;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("leaves a saved signature unchanged when photographs are added or a later handover is recorded", () => {
+    const previous = process.env.CAS_FILES_DIR;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "cas-handover-sign-"));
+    process.env.CAS_FILES_DIR = dir;
+    const db = prepared();
+    try {
+      withDatabase(db, () => {
+        const first = recordVehicleHandover({
+          ...handover({ mileage: "4200" }),
+          claimId: "c4",
+          hireEpisodeId: "h-c4",
+          actorId: "staff-justin",
+          signature: { name: "Dafydd Jones", relationship: "client", png: TINY_PNG },
+        });
+        addHandoverPhotographs({
+          claimId: "c4",
+          handoverId: first.id,
+          actorId: "staff-justin",
+          photos: requiredShots(),
+        });
+        const afterPhotos = listVehicleHandovers("c4").find((item) => item.id === first.id);
+        assert.equal(afterPhotos?.signaturePng, TINY_PNG);
+        assert.equal(afterPhotos?.signatureName, "Dafydd Jones");
+        assert.equal(afterPhotos?.incomplete, false);
+
+        const driverSaved = recordVehicleHandover({
+          ...handover(),
+          actorId: "staff-driver",
+          signature: { name: "Owner waiting", relationship: "owner", png: TINY_PNG },
+        });
+        assert.equal(listVehicleHandovers("c3").find((item) => item.id === driverSaved.id)?.signatureRelationship, "owner");
+
+        const correction = recordVehicleHandover({
+          ...handover({ mileage: "4201", conditionNote: "Correction: the first signature name was misheard." }),
+          claimId: "c4",
+          hireEpisodeId: "h-c4",
+          actorId: "staff-justin",
+          signature: { skipped: true, skipReason: "client not present" },
+        });
+        assert.notEqual(correction.id, first.id);
+        const original = listVehicleHandovers("c4").find((item) => item.id === first.id);
+        const later = listVehicleHandovers("c4").find((item) => item.id === correction.id);
+        assert.equal(original?.signaturePng, TINY_PNG);
+        assert.equal(original?.signatureName, "Dafydd Jones");
+        assert.equal(later?.signaturePng, null);
+        assert.equal(later?.signatureSkipReason, "client not present");
+      });
+    } finally {
+      db.close();
+      if (previous === undefined) delete process.env.CAS_FILES_DIR;
+      else process.env.CAS_FILES_DIR = previous;
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it("says on the handover screen that this is not a verified electronic signature", () => {
+    const wording = fs.readFileSync(path.join(process.cwd(), "src/lib/domain/handover-signature.ts"), "utf8");
+    const form = fs.readFileSync(path.join(process.cwd(), "src/components/handover/HandoverStartForm.tsx"), "utf8");
+    const page = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/handover/page.tsx"), "utf8");
+    assert.match(wording, new RegExp(SIGNATURE_HONESTY.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.match(form, /SIGNATURE_HONESTY/);
+    assert.match(page, /SIGNATURE_HONESTY/);
+    assert.match(page, /Not signed\./);
+    assert.match(page, /record\.incomplete/);
+    assert.doesNotMatch(page, /signaturePng[\s\S]{0,120}Incomplete/);
+  });
 });
+
+const TINY_PNG =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==";

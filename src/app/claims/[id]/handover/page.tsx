@@ -23,6 +23,7 @@ import {
   type HandoverScan,
 } from "@/lib/db/handover";
 import { getDayAssignment, handoverSuggestion, isHandoverAssignment, listAssignablePeople, listMyJobs } from "@/lib/db/jobs";
+import { SIGNATURE_HONESTY } from "@/lib/domain/handover-signature";
 import { getClaim } from "@/lib/db/queries";
 
 const field = "mt-1 w-full max-w-full rounded-md border border-line bg-white px-3 py-3 text-base";
@@ -249,6 +250,19 @@ export default async function HandoverPage({
             <p className="mt-3">
               Mileage {record.mileage.toLocaleString("en-GB")} · Fuel {record.fuelLabel}
             </p>
+            {record.signaturePng ? (
+              <div className="mt-3">
+                <p>
+                  Signed by {record.signatureName} ({record.signatureRelationshipLabel}) · {formatUkDateTime(record.occurredAt)}
+                </p>
+                <p className="text-slate">{SIGNATURE_HONESTY}</p>
+                {/* The stored value is checked to be a PNG data URL before it reaches this page. */}
+                <img src={record.signaturePng} alt="Signature" className="mt-2 max-h-40 rounded-md border border-line bg-white" />
+              </div>
+            ) : (
+              <p className="mt-3">Not signed.{record.signatureSkipReason ? ` ${record.signatureSkipReason}` : ""}</p>
+            )}
+            {/* A missing signature stays on this line. It does not use the Incomplete badge. */}
             {record.conditionNote ? <p className="mt-2">{record.conditionNote}</p> : null}
             <div className="mt-4 space-y-3">
               <p className="text-sm font-medium">Photographs</p>

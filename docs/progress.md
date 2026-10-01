@@ -136,6 +136,13 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+1 October 2026 — A handover can record a signature drawn on the CAS phone:
+
+- At delivery, collection, recovery or return, the person handing the vehicle over can capture a signature on the driver’s or staff member’s own phone. It stores the printed name, how that person is connected to the claim (client, owner, hirer, driver, or other authorised person), the drawing, and the same “date and time this happened” already on the handover. That time is not a second clock, and it is not changed after save.
+- Signing is optional. If the client is not there, or will not sign, the handover still saves, with a short reason such as “client not present”. The saved record then says Not signed. A missing signature does not mark the handover Incomplete. Incomplete is still only the missing condition photographs.
+- A saved signature is locked with the rest of that handover. A correction is a new handover record. There is no edit of the original drawing.
+- Known limitation: this is an operational confirmation captured on a CAS device. It is not an independently verified electronic signature, and the screen says so. It does not produce a satisfaction-note PDF, and it is not sent to the client’s own phone for them to sign there.
+
 1 October 2026 — The handover page no longer shows a development error on the phone:
 
 - Taking a photograph still sends itself as soon as the camera returns. That behaviour was a small script on the handover page. It was written as a raw script tag inside the page, which React does not run, and the phone showed an error overlay. The same script is now loaded with Next.js's own script component, so it runs and the overlay is gone.

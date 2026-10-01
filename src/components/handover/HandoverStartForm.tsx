@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { SIGNATORY_RELATIONSHIPS, SIGNATURE_HONESTY } from "@/lib/domain/handover-signature";
+import { SignaturePad } from "@/components/handover/SignaturePad";
 
 const field = "mt-1 w-full max-w-full rounded-md border border-line bg-white px-3 py-3 text-base";
 
@@ -140,6 +142,49 @@ export function HandoverStartForm({
       <p className="text-sm text-slate">
         These are the driver and the time it happened. They stay as you enter them when someone else types this up later. They are not taken from the sign-in, and they are not the moment you press save.
       </p>
+      <fieldset className="space-y-3 rounded-md border border-line p-3">
+        <legend className="px-1 text-sm font-semibold">Client confirmation</legend>
+        <p className="text-sm text-slate">{SIGNATURE_HONESTY}</p>
+        <p className="text-sm text-slate">
+          The time kept with the signature is the date and time this handover happened, above. It is not a separate clock, and it cannot be changed later. A correction is a new handover.
+        </p>
+        <label className="block text-sm">
+          Printed name
+          <input name="signatureName" className={field} autoComplete="name" />
+        </label>
+        <label className="block text-sm">
+          Relationship to the claim
+          <select name="signatureRelationship" className={field} defaultValue="">
+            <option value="">Choose one</option>
+            {SIGNATORY_RELATIONSHIPS.map((item) => (
+              <option key={item.value} value={item.value}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-sm">
+          Signature
+          <SignaturePad />
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            name="signatureSkipped"
+            value="yes"
+            onChange={(event) => {
+              if (!event.target.checked || !event.target.form) return;
+              const png = event.target.form.elements.namedItem("signaturePng");
+              if (png instanceof HTMLInputElement) png.value = "";
+            }}
+          />
+          No signature — client not available or not willing to sign
+        </label>
+        <label className="block text-sm">
+          Reason, if there is no signature
+          <input name="signatureSkipReason" className={field} placeholder="For example: client not present" />
+        </label>
+      </fieldset>
       <label className="block text-sm">
         Damage and condition
         <textarea name="conditionNote" rows={3} className={field} placeholder="What you can see. If this corrects an earlier record, say what was wrong." />

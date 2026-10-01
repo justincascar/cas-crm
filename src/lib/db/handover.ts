@@ -6,6 +6,14 @@ import { all, get, getDb, newId, run } from "./connection";
 import { recordClaimEvent } from "./chronology";
 import { applyClientRecoveryActualDate, applyClientReturnActualDate } from "./storage-recovery-date";
 import { insertStoredDocument } from "./documents-store";
+import {
+  SIGNATURE_HONESTY,
+  signatoryRelationshipLabel,
+  storedSignature,
+  type HandoverSignatureInput,
+} from "../domain/handover-signature";
+
+export { SIGNATURE_HONESTY, signatoryRelationshipLabel, type HandoverSignatureInput };
 
 export const HANDOVER_EVENTS = [
   { kind: "hire_delivered", label: "Hire car — handed to the customer", needsBooking: true },
@@ -106,6 +114,8 @@ export type HandoverInput = {
   /** When set, even as an empty string, the actual driver and time are required and are not taken from the signed-in person or from now. */
   actualDriverId?: string;
   actualOccurredAt?: string;
+  /** Omit for older callers. When present, a drawing or a skip reason is required. */
+  signature?: HandoverSignatureInput;
 };
 
 export type HandoverReading = {
@@ -158,6 +168,11 @@ export type HandoverRecord = {
   shotSet: typeof SHOT_SET_FIVE | typeof SHOT_SET_SEVEN;
   incomplete: boolean;
   finishedAt: string | null;
+  signatureName: string | null;
+  signatureRelationship: string | null;
+  signatureRelationshipLabel: string;
+  signaturePng: string | null;
+  signatureSkipReason: string | null;
 };
 
 export function handoverEvent(kind: string) {
@@ -444,6 +459,7 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
   const actual = actualHandover(input, staff, enteredAt);
   const occurredAt = actual.occurredAt;
   const shotSet = shotSetForKind(event.kind);
+  const signature = storedSignature(input.signature);
   const id = newId("vh");
   const db = getDb();
   db.exec("BEGIN");
@@ -452,8 +468,8 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
       `INSERT INTO vehicle_handovers(
         id, claim_id, hire_episode_id, event_kind, occurred_at, recorded_by, mileage, fuel_level,
         spare_wheel, tools_present, warning_lights_off, tyres_legal, condition_note, created_at, actual_driver_id,
-        shot_set
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        shot_set, signature_name, signature_relationship, signature_png, signature_skip_reason
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         input.claimId,
@@ -471,6 +487,10 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
         enteredAt,
         actual.driverId,
         shotSet,
+        signature.name,
+        signature.relationship,
+        signature.png,
+        signature.skipReason,
       ],
     );
     storePhotos(input.claimId, id, staff.id, input.photos, occurredAt);
@@ -488,7 +508,7 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
       eventType: "vehicle_handover_recorded",
       occurredAt,
       actorId: staff.id,
-      details: `${event.label} (${bookingLabel}). Mileage ${formatHandoverMileage(mileage)}. Fuel ${fuelLevelLabel(fuel)}. Happened ${formatUkDateTime(occurredAt)}. Driver ${actual.driverName}. Entered by ${staff.name}. ${photoProgress(input.photos.map((photo) => photo.slot), shotSet)}${attachedScans.length ? ` Diagnostic ${attachedScans.join(" and ")} attached.` : ""}${note ? ` Note: ${note}` : ""}`,
+      details: `${event.label} (${bookingLabel}). Mileage ${formatHandoverMileage(mileage)}. Fuel ${fuelLevelLabel(fuel)}. Happened ${formatUkDateTime(occurredAt)}. Driver ${actual.driverName}. Entered by ${staff.name}. ${signature.png ? `Signed by ${signature.name} (${signatoryRelationshipLabel(signature.relationship)}). ${SIGNATURE_HONESTY}` : signature.skipReason ? `Not signed. ${signature.skipReason}` : "Not signed."} ${photoProgress(input.photos.map((photo) => photo.slot), shotSet)}${attachedScans.length ? ` Diagnostic ${attachedScans.join(" and ")} attached.` : ""}${note ? ` Note: ${note}` : ""}`,
       source: "staff",
     });
     if (event.kind === "client_recovered" && input.actualOccurredAt !== undefined) {
@@ -637,6 +657,10 @@ type HandoverRow = {
   condition_note: string;
   shot_set: string | null;
   finished_at: string | null;
+  signature_name: string | null;
+  signature_relationship: string | null;
+  signature_png: string | null;
+  signature_skip_reason: string | null;
   booking_make: string | null;
   booking_model: string | null;
   booking_reg: string | null;
@@ -676,6 +700,11 @@ function toRecord(row: HandoverRow, photos: HandoverPhoto[], scans: HandoverScan
     shotSet: row.shot_set === SHOT_SET_SEVEN ? SHOT_SET_SEVEN : SHOT_SET_FIVE,
     incomplete: handoverIncomplete(photos.map((photo) => photo.slot), row.shot_set),
     finishedAt: row.finished_at || null,
+    signatureName: row.signature_name || null,
+    signatureRelationship: row.signature_relationship || null,
+    signatureRelationshipLabel: signatoryRelationshipLabel(row.signature_relationship),
+    signaturePng: row.signature_png && row.signature_png.startsWith("data:image/png;base64,") ? row.signature_png : null,
+    signatureSkipReason: row.signature_skip_reason || null,
   };
 }
 
