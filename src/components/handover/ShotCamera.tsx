@@ -12,7 +12,7 @@ function hiddenFields({ claimId, handoverId, slot }: { claimId: string; handover
   );
 }
 
-/** A normal form post. The page script sends it when the camera returns. A React listener is missed after the phone camera closes. */
+/** A normal form post. next/script on the handover page sends it when the camera returns. A React listener is missed after the phone camera closes. */
 export function ShotCamera({
   action,
   claimId,

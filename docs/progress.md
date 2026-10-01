@@ -136,6 +136,10 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+1 October 2026 — The handover page no longer shows a development error on the phone:
+
+- Taking a photograph still sends itself as soon as the camera returns. That behaviour was a small script on the handover page. It was written as a raw script tag inside the page, which React does not run, and the phone showed an error overlay. The same script is now loaded with Next.js's own script component, so it runs and the overlay is gone.
+
 1 October 2026 — My jobs today also lists the next 6 days:
 
 - Below today and overdue, Upcoming this week shows hire delivery, hire collection, client recovery and client return assigned to the signed-in person from tomorrow through six days ahead, grouped by date. Each of those six days is shown. A day with no job says nothing is assigned.

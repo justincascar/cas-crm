@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Script from "next/script";
 import { notFound, redirect } from "next/navigation";
 import { actionAttachHandoverScan } from "@/app/handover-actions";
 import { PageHeader } from "@/components/ClaimTable";
@@ -170,9 +171,8 @@ export default async function HandoverPage({
 
   return (
     <div className="max-w-4xl space-y-6">
-      <script
-        dangerouslySetInnerHTML={{
-          __html: `(function () {
+      <Script id="cas-handover-photo" strategy="afterInteractive">
+        {`(function () {
             if (window.__casHandoverPhoto) return;
             window.__casHandoverPhoto = true;
             document.addEventListener("change", function (event) {
@@ -184,9 +184,8 @@ export default async function HandoverPage({
               if (!file || file.size < 1) return;
               window.setTimeout(function () { input.form.submit(); }, 0);
             }, true);
-          })();`,
-        }}
-      />
+          })();`}
+      </Script>
       <PageHeader
         title={`Handover — ${fileRef}`}
         subtitle="Condition of the hire car, or of the customer's own vehicle, when it is handed over or collected. A saved record is locked. To correct it, record a new handover and explain the correction in the note."
