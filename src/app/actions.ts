@@ -144,6 +144,7 @@ export async function actionUpdateAudatexCodes(formData: FormData) {
     updateClaimAudatexCodes(id, { audatexWorkProviderCode: String(formData.get("audatexWorkProviderCode") || "") }, staff.id);
   }
   revalidatePath(`/claims/${id}`);
+  revalidatePath(`/claims/${id}/vehicles`);
   revalidatePath(`/claims/${id}/work/insurer`);
   revalidatePath(`/claims/${id}`, "layout");
   revalidatePath("/");

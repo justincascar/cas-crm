@@ -49,6 +49,13 @@ export default async function RepairEvidencePage({
           )
         }
       />
+      {office ? (
+        <p className="text-sm">
+          <Link className="text-teal-dark underline" href={`/claims/${id}/vehicles`}>
+            Audatex codes are on the Vehicles tab.
+          </Link>
+        </p>
+      ) : null}
       {error ? <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p> : null}
       {saved ? <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm">File saved.</p> : null}
       <ValidatedForm action={actionAddRepairEvidence} encType="multipart/form-data" className="space-y-3 rounded-xl border border-line bg-card p-5">

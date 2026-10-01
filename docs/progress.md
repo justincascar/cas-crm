@@ -136,6 +136,13 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 - GTA group is staff-set on the fleet vehicle and on the client's own vehicle, blank until classified. Group Charged defaults to the client's group. The daily rate is that group's GTA ceiling plus the markup in Settings (30% to start). The supplied vehicle's group is shown and is not used for the rate. A higher Group Charged warns and is logged. It is not blocked.
 - The rate table stored is the supplied ceilings for 1 July 2026 – 30 June 2027. The July 2025 – June 2026 workbook is not used. That older file also listed SP11–SP13, which are not in the current table.
 
+1 October 2026 — Each claim has a Vehicles tab:
+
+- The claim section row now includes Vehicles, in the same style as Overview, Handover, Documents, Repair evidence and Hire Pack. It is on every page of that claim.
+- The client's own vehicle is on the left and each third-party vehicle is on the right, using the details already stored on the file. A file with no third-party vehicle says Not recorded. A file with no client vehicle yet says Not yet recorded. More than one third party is listed separately. Editing still happens on the existing vehicle and third-party screens.
+- The Audatex network code and work provider code have moved off the Overview page onto this tab, under the client's vehicle. The same fields and suggestions are used. Repair evidence has a link to that tab. Overview now shows only the registration and make/model, with a link to Vehicles.
+- A driver or mechanic cannot open the tab.
+
 1 October 2026 — A claim can store tagged documents:
 
 - Staff can upload a PDF or photograph onto a file, choose its type (V5C for the client's vehicle, V5C for a CAS vehicle, driving licence, insurance certificate, signed hire agreement, engineer's report, satisfaction note, correspondence, or other), and see what is on file. A type is required. The list also shows what is still missing for the papers named in the welcome letter, and for a later payment-request pack (signed hire agreement and engineer's report).

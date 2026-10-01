@@ -277,6 +277,7 @@ export function getClaim(idOrRef: string) {
             p.address_line1, p.town, p.postcode, p.telephone, p.email, p.preferred_channel, p.date_of_birth,
             p.licence_number, p.mobile_tel, p.home_tel,
             v.registration, v.make, v.model, v.transmission, v.fuel, v.body_type, v.seats, v.colour,
+            v.engine_cc, v.vehicle_class, v.gta_group,
             v.lookup_source, v.lookup_incomplete, v.provenance, v.tax_status, v.mot_status, v.insurance_recorded,
             v.details_match_client
      FROM claims c
@@ -297,7 +298,9 @@ export function getClaim(idOrRef: string) {
     `SELECT tp.*, pe.full_name, pe.title, pe.forename, pe.surname, pe.address_line1, pe.town, pe.postcode, pe.telephone,
             pe.mobile_tel, pe.email,
             v.registration AS tp_registration, v.make AS tp_make, v.model AS tp_model, v.transmission AS tp_transmission,
-            v.colour AS tp_colour, v.fuel AS tp_fuel, v.tax_status AS tp_tax_status, v.mot_status AS tp_mot_status
+            v.colour AS tp_colour, v.fuel AS tp_fuel, v.body_type AS tp_body_type, v.seats AS tp_seats,
+            v.engine_cc AS tp_engine_cc, v.vehicle_class AS tp_vehicle_class,
+            v.tax_status AS tp_tax_status, v.mot_status AS tp_mot_status
      FROM claim_third_parties tp
      JOIN people pe ON pe.id = tp.person_id
      LEFT JOIN vehicles v ON v.id = tp.vehicle_id

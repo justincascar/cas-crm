@@ -44,6 +44,7 @@ describe("driver and mechanic access", () => {
       assert.equal(pathAllowedForRole(role, "/claims/c3"), false);
       assert.equal(pathAllowedForRole(role, "/claims/c3/work/general"), false);
       assert.equal(pathAllowedForRole(role, "/claims/c3/hire-pack"), false);
+      assert.equal(pathAllowedForRole(role, "/claims/c3/vehicles"), false);
       assert.equal(pathAllowedForRole(role, "/settings"), false);
       assert.equal(pathAllowedForRole(role, "/communications"), false);
     }

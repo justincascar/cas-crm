@@ -3,14 +3,14 @@ import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { actionAddNote, actionAddTask, actionCompleteTask, actionUpdateClaim } from "@/app/actions";
 import { FileHistory } from "@/components/FileHistory";
-import { ClaimAudatexFields } from "@/components/ClaimAudatexFields";
 import { ClaimWorkflowStatus } from "@/components/ClaimWorkflowStatus";
 import { ChasePanel } from "@/components/ChasePanel";
 import { PageHeader } from "@/components/ClaimTable";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import { requireStaff } from "@/lib/auth/session";
-import { getClaim, listStaff, suggestAudatexCodesForClaim } from "@/lib/db/queries";
+import { getClaim, listStaff } from "@/lib/db/queries";
+import { THIRD_PARTY_VEHICLE_EMPTY, vehicleIsRecorded, vehicleSummary } from "@/lib/domain/vehicle-display";
 import { findPreparedChase, listChasesForClaim } from "@/lib/db/chase";
 import { listHireAgreements } from "@/lib/db/chronology";
 import { formatGbp } from "@/lib/money";
@@ -47,7 +47,6 @@ export default async function ClaimDetailPage({
   if (!data) notFound();
   const { claim } = data;
   const staff = listStaff();
-  const audatexSuggestion = suggestAudatexCodesForClaim(String(claim.id));
   const chases = listChasesForClaim(String(claim.id));
   const hireAgreements = listHireAgreements(String(claim.id));
   const preparedByKind = Object.fromEntries(
@@ -106,15 +105,6 @@ export default async function ClaimDetailPage({
           agreements={chase.kind === "hire_agreement_renewal" ? hireAgreements : undefined}
         />
       ))}
-
-      <ClaimAudatexFields
-        claimId={String(claim.id)}
-        insurerName={audatexSuggestion.insurerName}
-        networkCode={String(claim.audatex_network_code || "")}
-        workProviderCode={String(claim.audatex_work_provider_code || "")}
-        suggestedNetwork={audatexSuggestion.network}
-        suggestedWorkProvider={audatexSuggestion.workProvider}
-      />
 
       <div className="grid gap-3 md:grid-cols-3">
         <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border-2 border-navy bg-[#e8eef4] px-5 py-4">
@@ -312,17 +302,14 @@ export default async function ClaimDetailPage({
           <div className="rounded-xl border border-line bg-card p-5">
             <h2 className="font-serif text-xl text-navy-deep">Client vehicle</h2>
             <p className="mt-2 text-sm">
-              {claim.registration ? formatVehicleRegistration(String(claim.registration)) : "Unknown"} · {pretty(claim.make)} {pretty(claim.model)} · {pretty(claim.colour)}
-              <br />
-              Gearbox: {pretty(claim.transmission)} · Fuel: {pretty(claim.fuel)} · Seats: {String(claim.seats ?? "Unknown")}
-              <br />
-              Tax: {pretty(claim.tax_status)} · MOT: {pretty(claim.mot_status)}
-              <br />
-              Insurance recorded: {pretty(claim.insurance_recorded)} · Details match client: {Number(claim.details_match_client) ? "Yes" : "Not confirmed"}
-              <br />
-              Source: {pretty(claim.lookup_source)} {Number(claim.lookup_incomplete) === 1 ? "(incomplete — do not infer missing fields)" : ""}
+              {vehicleIsRecorded(claim)
+                ? vehicleSummary(claim)
+                : "Not yet recorded"}
+              {" · "}
+              <Link className="text-teal-dark underline" href={`/claims/${claim.id}/vehicles`}>
+                Vehicles
+              </Link>
             </p>
-            {claim.damage_description ? <p className="mt-3 text-sm">Damage: {String(claim.damage_description)}</p> : null}
           </div>
         </div>
       </section>
@@ -349,8 +336,14 @@ export default async function ClaimDetailPage({
                 {String(tp.address_line1 || "Unknown")}, {String(tp.town || "")} {String(tp.postcode || "")} · {String(tp.telephone || "Unknown")}
               </div>
               <div className="text-slate">
-                Vehicle {tp.tp_registration ? formatVehicleRegistration(String(tp.tp_registration)) : "Unknown"} {pretty(tp.tp_make)} {pretty(tp.tp_model)} {pretty(tp.tp_colour)} ·
-                Tax {pretty(tp.tp_tax_status)} · MOT {pretty(tp.tp_mot_status)}
+                Vehicle{" "}
+                {vehicleIsRecorded({ registration: tp.tp_registration, make: tp.tp_make, model: tp.tp_model })
+                  ? vehicleSummary({ registration: tp.tp_registration, make: tp.tp_make, model: tp.tp_model })
+                  : THIRD_PARTY_VEHICLE_EMPTY}
+                {" · "}
+                <Link className="text-teal-dark underline" href={`/claims/${claim.id}/vehicles`}>
+                  Vehicles
+                </Link>
               </div>
               <div>
                 Insurer {String(tp.insurer_name || "Unknown")} policy {String(tp.policy_number || "Unknown")} claim {String(tp.insurer_ref || "Unknown")}
