@@ -1,6 +1,7 @@
 import { CAS_CLAIMS_MAILBOX } from "../constants";
 import { nowUtcIso } from "../dates";
 import { buildMailtoHref } from "../email/mailto";
+import { mailboxSentDetails } from "../email/sent-wording";
 import { formatGbp } from "../money";
 import {
   disposalApplies,
@@ -14,7 +15,7 @@ import {
 } from "../domain/total-loss";
 import { TOTAL_LOSS_NOTICE_SENT_EVENT, TOTAL_LOSS_PAYMENT_PROMISED_EVENT, TOTAL_LOSS_PAYMENT_RECEIVED_EVENT } from "../domain/follow-up-chases";
 import { paymentDetailsLetterLine, type InsurerPaymentDetails } from "../domain/payment-details";
-import { ENGINEER_INSTRUCTION_MARKED_SENT, ENGINEER_INSTRUCTION_PREPARED } from "./engineers";
+import { correspondenceCanBeMarkedSent, ENGINEER_INSTRUCTION_MARKED_SENT, ENGINEER_INSTRUCTION_PREPARED } from "./engineers";
 import { recordClaimEvent } from "./chronology";
 import { get, newId, run } from "./connection";
 import { getInsurerPaymentDetails } from "./payment-details";
@@ -465,7 +466,12 @@ export function getPreparedTotalLossNotice(claimId: string): PreparedTotalLossNo
   };
 }
 
-export function markTotalLossNoticeSent(input: { claimId: string; correspondenceId: string; actorId: string }) {
+export function markTotalLossNoticeSent(input: {
+  claimId: string;
+  correspondenceId: string;
+  actorId: string;
+  deliveredByMailbox?: boolean;
+}) {
   const row = get<{
     id: string;
     claim_id: string;
@@ -480,7 +486,7 @@ export function markTotalLossNoticeSent(input: { claimId: string; correspondence
     throw new Error("Prepared total-loss email not found on this file.");
   }
   if (row.sent_status === ENGINEER_INSTRUCTION_MARKED_SENT) throw new Error("This email is already marked as sent.");
-  if (row.sent_status !== ENGINEER_INSTRUCTION_PREPARED) {
+  if (!correspondenceCanBeMarkedSent(row.sent_status, input.deliveredByMailbox)) {
     throw new Error("This item is not a prepared total-loss email waiting to be marked as sent.");
   }
   const when = nowUtcIso();
@@ -489,11 +495,14 @@ export function markTotalLossNoticeSent(input: { claimId: string; correspondence
   run(`UPDATE correspondence SET sent_status = ? WHERE id = ?`, [ENGINEER_INSTRUCTION_MARKED_SENT, input.correspondenceId]);
   const subject = String(row.subject || "Total loss salvage");
   const to = String(row.to_address || "");
+  const mailbox = Boolean(input.deliveredByMailbox);
   recordClaimEvent({
     claimId: input.claimId,
     eventType: "outgoing_email",
     occurredAt: when,
-    details: `${subject} prepared for ${to}. Marked as sent by ${handlerName} after opening their own email client. Not auto-sent — live sending from ${CAS_CLAIMS_MAILBOX} is not connected.`,
+    details: mailbox
+      ? mailboxSentDetails(subject, to, handlerName)
+      : `${subject} prepared for ${to}. Marked as sent by ${handlerName} after opening their own email client. Not auto-sent — live sending from ${CAS_CLAIMS_MAILBOX} is not connected.`,
     actorId: input.actorId,
     channel: "email",
     correspondenceId: input.correspondenceId,
@@ -503,7 +512,9 @@ export function markTotalLossNoticeSent(input: { claimId: string; correspondence
     claimId: input.claimId,
     eventType: TOTAL_LOSS_NOTICE_SENT_EVENT,
     occurredAt: when,
-    details: "Total-loss notification marked as sent. The payment chase starts from this time. Not auto-sent.",
+    details: mailbox
+      ? `Total-loss notification sent from ${CAS_CLAIMS_MAILBOX} by ${handlerName}. The payment chase starts from this time.`
+      : "Total-loss notification marked as sent. The payment chase starts from this time. Not auto-sent.",
     actorId: input.actorId,
     channel: "email",
     correspondenceId: input.correspondenceId,

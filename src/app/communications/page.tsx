@@ -3,6 +3,8 @@ import { PageHeader } from "@/components/ClaimTable";
 import { formatUkDateTime } from "@/lib/dates";
 import { requireStaff } from "@/lib/auth/session";
 import { listCorrespondence } from "@/lib/db/queries";
+import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
+import { mailboxIsConnected } from "@/lib/email/microsoft-graph";
 
 function channelLabel(channel: string, direction: string) {
   if (channel === "whatsapp") return `${direction} WhatsApp`;
@@ -18,7 +20,11 @@ export default async function CommunicationsPage() {
     <div>
       <PageHeader
         title="Communications"
-        subtitle="Email, WhatsApp and telephone are recorded against the claim file. Live mailbox, WhatsApp Business and telephony still need connecting before anything leaves the office. Open a file to send, receive or generate a document."
+        subtitle={
+          mailboxIsConnected()
+            ? `Email sends from ${CAS_CLAIMS_MAILBOX} when a person clicks Send on a file. WhatsApp Business and telephony are not connected. Incoming email is not read.`
+            : `Microsoft 365 not yet connected. Email, WhatsApp and telephone are recorded against the claim file. Nothing is sent from ${CAS_CLAIMS_MAILBOX} until the mailbox credentials are set. Open a file to prepare an email.`
+        }
       />
       <div className="overflow-x-auto rounded-xl border border-line bg-card">
         <table className="ledger-table">

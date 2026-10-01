@@ -19,6 +19,12 @@ export const SEEDED_ENGINEER = {
 
 export const ENGINEER_INSTRUCTION_PREPARED = "prepared_not_sent";
 export const ENGINEER_INSTRUCTION_MARKED_SENT = "handler_marked_sent";
+export const CORRESPONDENCE_SENDING = "sending";
+
+export function correspondenceCanBeMarkedSent(status: string | null, deliveredByMailbox = false): boolean {
+  if (status === ENGINEER_INSTRUCTION_PREPARED) return true;
+  return deliveredByMailbox && status === CORRESPONDENCE_SENDING;
+}
 
 function mapEngineer(row: {
   id: string;

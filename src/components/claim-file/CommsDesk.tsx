@@ -15,6 +15,7 @@ import { InstructEngineerPanel } from "@/components/InstructEngineerPanel";
 import { ChasePanel, type HireAgreementHistoryRow } from "@/components/ChasePanel";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { EMAIL_TEMPLATES } from "@/lib/documents/email-templates";
+import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
 import { formatUkDateTime } from "@/lib/dates";
 import type { ChaseView } from "@/lib/db/chase";
 import Link from "next/link";
@@ -48,6 +49,7 @@ export function CommsDesk({
   chases,
   hireAgreements,
   preparedByKind,
+  mailboxConnected = false,
 }: {
   claimId: string;
   handlerId: string;
@@ -76,6 +78,7 @@ export function CommsDesk({
       created_at: string;
     } | null
   >;
+  mailboxConnected?: boolean;
 }) {
   const router = useRouter();
   const defaultSubject = `Our ref: ${defaults.fileReference}  Your policy: ${defaults.policyRef || "…"}`;
@@ -91,7 +94,9 @@ export function CommsDesk({
   return (
     <div className="space-y-6">
       <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">
-        Email, WhatsApp and calls are recorded on this file. They do not leave this computer until CAS's mailbox, WhatsApp Business account and telephone system are connected. A click is not proof of delivery. Instruct Engineer prepares a letter and a mailto email for you to send yourself — it is not auto-sent from claims@cascar.co.uk.
+        {mailboxConnected
+          ? `Email sends from ${CAS_CLAIMS_MAILBOX} when you click Send. A failure is shown here and is not recorded as sent. WhatsApp and calls are still recorded on this file and do not leave this computer. Nothing sends itself.`
+          : `Microsoft 365 not yet connected. Email, WhatsApp and calls are recorded on this file. They do not leave this computer until CAS's mailbox, WhatsApp Business account and telephone system are connected. A click is not proof of delivery. Instruct Engineer prepares a letter and opens it in your own email client — it is not auto-sent from ${CAS_CLAIMS_MAILBOX}.`}
       </p>
 
       <InstructEngineerPanel
@@ -99,6 +104,8 @@ export function CommsDesk({
         engineers={engineers}
         selectedEngineerId={selectedEngineerId}
         prepared={preparedEngineerInstruction}
+        mailboxConnected={mailboxConnected}
+        returnTo={`/claims/${claimId}/work/comms`}
       />
 
       {chases.map((chase) => (
@@ -108,6 +115,8 @@ export function CommsDesk({
           chase={chase}
           prepared={preparedByKind[chase.kind] || null}
           agreements={chase.kind === "hire_agreement_renewal" ? hireAgreements : undefined}
+          mailboxConnected={mailboxConnected}
+          returnTo={`/claims/${claimId}/work/comms`}
         />
       ))}
 
@@ -144,7 +153,9 @@ export function CommsDesk({
       >
         <h2 className="font-serif text-xl text-navy-deep md:col-span-2">Send email</h2>
         <p className="text-sm text-slate md:col-span-2">
-          Pick a CAS email template to fill from this file, then record the simulated send. Nothing leaves this computer.
+          {mailboxConnected
+            ? `Fill the message, then click Send. It goes from ${CAS_CLAIMS_MAILBOX}. It is not sent until then. Hire pack cover letters are sent from here in the same way.`
+            : "Microsoft 365 not yet connected. Pick a CAS email template to fill from this file, then record the simulated send. Nothing leaves this computer."}
         </p>
         <input type="hidden" name="claimId" value={claimId} />
         <input type="hidden" name="actorId" value={handlerId} />
@@ -232,7 +243,7 @@ export function CommsDesk({
           />
         </label>
         <button className="rounded-md bg-navy px-4 py-2 text-sm text-white" type="submit">
-          Record outgoing email
+          {mailboxConnected ? `Send from ${CAS_CLAIMS_MAILBOX}` : "Record outgoing email"}
         </button>
         {emailMsg ? <p className="text-sm text-copper md:col-span-2">{emailMsg}</p> : null}
       </ValidatedForm>

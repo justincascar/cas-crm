@@ -13,6 +13,7 @@ import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
 import { formatUkDateTime } from "@/lib/dates";
 import type { Engineer } from "@/lib/db/engineers";
 import { buildMailtoHref } from "@/lib/email/mailto";
+import { SendPreparedEmailForm } from "@/components/claims/SendPreparedEmailForm";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
@@ -29,13 +30,18 @@ export function InstructEngineerPanel({
   engineers,
   selectedEngineerId,
   prepared,
+  mailboxConnected = false,
+  returnTo,
 }: {
   claimId: string;
   engineers: Engineer[];
   selectedEngineerId: string;
   prepared: PreparedInstruction | null;
+  mailboxConnected?: boolean;
+  returnTo?: string;
 }) {
   const router = useRouter();
+  const sendBack = returnTo || `/claims/${claimId}/work/comms`;
   const [engineerId, setEngineerId] = useState(selectedEngineerId);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -95,7 +101,7 @@ export function InstructEngineerPanel({
     setPreparedId(result.correspondenceId);
     setToAddress(result.to);
     setPreview({ html: result.letter.html, missing: result.letter.missing, subject: result.subject });
-    window.location.href = result.mailto;
+    if (!mailboxConnected) window.location.href = result.mailto;
     router.refresh();
   }
 
@@ -124,9 +130,17 @@ export function InstructEngineerPanel({
     <section className="rounded-xl border-2 border-teal bg-[#e8f4f2] p-5">
       <h2 className="font-serif text-xl text-navy-deep">Instruct engineer</h2>
       <p className="mt-2 text-sm text-slate">
-        Pick a saved engineer. Instruct Engineer generates the letter and opens a ready-to-send email in your own
-        email client. It is <strong>prepared, not auto-sent</strong>. Genuine sending from {CAS_CLAIMS_MAILBOX} is not
-        connected yet.
+        Pick a saved engineer. Instruct Engineer generates the letter.{" "}
+        {mailboxConnected ? (
+          <>
+            Send sends it from {CAS_CLAIMS_MAILBOX}. It is not sent until you click Send.
+          </>
+        ) : (
+          <>
+            Microsoft 365 not yet connected. It opens a ready-to-send email in your own email client. It is{" "}
+            <strong>prepared, not auto-sent</strong>.
+          </>
+        )}
       </p>
 
       {engineers.length === 0 ? (
@@ -201,26 +215,33 @@ export function InstructEngineerPanel({
         >
           Instruct Engineer
         </button>
-        {mailto ? (
+        {mailto && !mailboxConnected ? (
           <a className="rounded-md border border-teal bg-white px-4 py-2 text-sm font-semibold text-teal-dark" href={mailto}>
             Open pre-filled email
           </a>
         ) : null}
+        {mailboxConnected && preparedId ? (
+          <SendPreparedEmailForm claimId={claimId} correspondenceId={preparedId} returnTo={sendBack} />
+        ) : null}
       </div>
 
-      {mailto ? (
+      {mailboxConnected && preparedId ? (
         <p className="mt-3 rounded-md border border-ok/40 bg-[#eef6ef] px-4 py-3 text-sm">
-          A pre-filled email to <strong>{toAddress}</strong> is ready in your email client. After you click send there,
-          mark it as sent on this file. The CRM has not sent it from {CAS_CLAIMS_MAILBOX}.
+          The instruction to <strong>{toAddress}</strong> is ready. It has not been sent. Send uses {CAS_CLAIMS_MAILBOX}.
+        </p>
+      ) : mailto ? (
+        <p className="mt-3 rounded-md border border-ok/40 bg-[#eef6ef] px-4 py-3 text-sm">
+          Microsoft 365 not yet connected. A pre-filled email to <strong>{toAddress}</strong> is ready in your email client. After you click send
+          there, mark it as sent on this file. The CRM has not sent it from {CAS_CLAIMS_MAILBOX}.
         </p>
       ) : prepared && preparedId ? (
         <p className="mt-3 rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">
-          An instruction was prepared {formatUkDateTime(prepared.created_at)} for {prepared.to_address}. Open the email
-          from your client if you still need to send it, then mark it as sent.
+          Microsoft 365 not yet connected. An instruction was prepared {formatUkDateTime(prepared.created_at)} for {prepared.to_address}. Open the
+          email from your client if you still need to send it, then mark it as sent.
         </p>
       ) : null}
 
-      {preparedId ? (
+      {preparedId && !mailboxConnected ? (
         <div className="mt-3">
           <button
             type="button"

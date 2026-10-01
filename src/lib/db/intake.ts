@@ -3,7 +3,9 @@ import { accidentDateError, nowUtcIso, occurredFromForm, londonDateIso } from ".
 import { mobileNumberError } from "../phone-number";
 import { clientDobKind, counterpartDobKind, dobSaveError } from "../age";
 import { storageStartFromRecovery, recoveryChargeTotalPence } from "../domain/rules";
-import { emailGateway } from "../email/gateway";
+import { SimulatedEmailGateway } from "../email/gateway";
+
+const prototypeMailbox = new SimulatedEmailGateway();
 import { formatGbp, grossFromNet } from "../money";
 import { whatsappGateway } from "../whatsapp/gateway";
 import { readFormText } from "../text";
@@ -765,7 +767,7 @@ export async function createClaimFromIntake(input: IntakeInput) {
     const channel = input.recovery.sendAgreementChannel;
     const body = `Please read and sign the credit recovery and storage agreement for file ${ref}. Prototype: not a live send. Unsigned copies stay unsigned.`;
     if (channel === "email" || channel === "both") {
-      const send = await emailGateway.send({
+      const send = await prototypeMailbox.send({
         to: input.client.email || "unknown@example.invalid",
         subject: `Our ref: ${ref}  Recovery and storage agreement`,
         body,

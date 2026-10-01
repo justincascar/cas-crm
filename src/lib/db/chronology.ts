@@ -1,4 +1,6 @@
 import { emailGateway } from "../email/gateway";
+import { mailboxIsConnected } from "../email/microsoft-graph";
+import { mailboxSentDetails } from "../email/sent-wording";
 import { phoneGateway } from "../phone/gateway";
 import { whatsappGateway } from "../whatsapp/gateway";
 import { scenePhotosWhatsAppBody, scenePhotosWhatsAppSubject } from "../whatsapp/scene-photos";
@@ -19,7 +21,14 @@ import { generateLetter, isLetterTemplateKey, type LetterTemplateKey } from "../
 import { addCalendarDaysIso, formatUkDate, londonDateIso, nowUtcIso, occurredFromForm } from "../dates";
 import { blankInsurerField } from "../insurers";
 import { all, get, getDb, newId, run } from "./connection";
-import { ENGINEER_INSTRUCTION_MARKED_SENT, ENGINEER_INSTRUCTION_PREPARED, getEngineer, setClaimEngineer, SEEDED_ENGINEER } from "./engineers";
+import {
+  correspondenceCanBeMarkedSent,
+  ENGINEER_INSTRUCTION_MARKED_SENT,
+  ENGINEER_INSTRUCTION_PREPARED,
+  getEngineer,
+  setClaimEngineer,
+  SEEDED_ENGINEER,
+} from "./engineers";
 import {
   findPreparedEngineerReportChase,
   restartEngineerInstructionChaseClock,
@@ -401,6 +410,8 @@ export function getDocument(id: string) {
   );
 }
 
+const sendingFingerprints = new Set<string>();
+
 export async function sendClaimEmail(input: {
   claimId: string;
   actorId: string;
@@ -410,12 +421,39 @@ export async function sendClaimEmail(input: {
   templateKey?: DocumentTemplateKey;
   occurredAt?: string;
 }) {
+  const fingerprint = [input.claimId, input.to.trim(), input.subject.trim(), input.body.trim()].join("\n");
+  if (sendingFingerprints.has(fingerprint)) {
+    return {
+      ok: false as const,
+      status: "failed" as const,
+      error: "This email is already being sent. It was not sent again.",
+    };
+  }
+  sendingFingerprints.add(fingerprint);
+  try {
+    return await deliverClaimEmail(input);
+  } finally {
+    sendingFingerprints.delete(fingerprint);
+  }
+}
+
+async function deliverClaimEmail(input: {
+  claimId: string;
+  actorId: string;
+  to: string;
+  subject: string;
+  body: string;
+  templateKey?: DocumentTemplateKey;
+  occurredAt?: string;
+}) {
   const when = occurredFromForm(input.occurredAt);
+  const live = mailboxIsConnected();
   const result = await emailGateway.send({ to: input.to, subject: input.subject, body: input.body });
   const correspondenceId = newId("corr");
+  const fromAddress = result.ok && result.status === "sent" ? CAS_CLAIMS_MAILBOX : "cas-prototype@local";
   run(
     `INSERT INTO correspondence(id, claim_id, direction, channel, subject, preview, body, to_address, from_address, unread, sent_status, created_at)
-     VALUES (?, ?, 'outgoing', 'email', ?, ?, ?, ?, 'cas-prototype@local', 0, ?, ?)`,
+     VALUES (?, ?, 'outgoing', 'email', ?, ?, ?, ?, ?, 0, ?, ?)`,
     [
       correspondenceId,
       input.claimId,
@@ -423,23 +461,28 @@ export async function sendClaimEmail(input: {
       input.body.slice(0, 180),
       input.body,
       input.to,
+      fromAddress,
       result.status,
       when,
     ],
   );
+  const sentDetails =
+    result.ok && result.status === "sent"
+      ? `${input.subject} sent to ${input.to} from ${CAS_CLAIMS_MAILBOX}. ${result.warning}`
+      : result.ok
+        ? `${input.subject} — ${result.warning}`
+        : `Send failed: ${result.error}`;
   recordClaimEvent({
     claimId: input.claimId,
-    eventType: "outgoing_email",
+    eventType: result.ok || !live ? "outgoing_email" : "email_send_failed",
     occurredAt: when,
-    details: result.ok
-      ? `${input.subject} — ${result.warning}`
-      : `Send failed: ${result.error}`,
+    details: sentDetails,
     actorId: input.actorId,
     channel: "email",
     correspondenceId,
     source: "staff",
   });
-  if (input.templateKey && isDocumentTemplateKey(input.templateKey)) {
+  if (result.ok && input.templateKey && isDocumentTemplateKey(input.templateKey)) {
     const specific = eventTypeForTemplate(input.templateKey);
     if (specific !== "document_generated") {
       recordClaimEvent({
@@ -703,6 +746,7 @@ export function markEngineerInstructionSent(input: {
   correspondenceId: string;
   actorId: string;
   occurredAt?: string;
+  deliveredByMailbox?: boolean;
 }) {
   const row = get<{
     id: string;
@@ -718,7 +762,7 @@ export function markEngineerInstructionSent(input: {
   if (row.sent_status === ENGINEER_INSTRUCTION_MARKED_SENT) {
     throw new Error("This engineer instruction is already marked as sent.");
   }
-  if (row.sent_status !== ENGINEER_INSTRUCTION_PREPARED) {
+  if (!correspondenceCanBeMarkedSent(row.sent_status, input.deliveredByMailbox)) {
     throw new Error("This item is not a prepared engineer instruction waiting to be marked as sent.");
   }
   const when = occurredFromForm(input.occurredAt);
@@ -727,11 +771,14 @@ export function markEngineerInstructionSent(input: {
   run(`UPDATE correspondence SET sent_status = ? WHERE id = ?`, [ENGINEER_INSTRUCTION_MARKED_SENT, input.correspondenceId]);
   const subject = String(row.subject || "Engineer instruction");
   const to = String(row.to_address || "");
+  const mailbox = Boolean(input.deliveredByMailbox);
   recordClaimEvent({
     claimId: input.claimId,
     eventType: "outgoing_email",
     occurredAt: when,
-    details: `${subject} prepared for ${to}. Marked as sent by ${handlerName} after opening their own email client. Not auto-sent — live sending from ${CAS_CLAIMS_MAILBOX} is not connected.`,
+    details: mailbox
+      ? mailboxSentDetails(subject, to, handlerName)
+      : `${subject} prepared for ${to}. Marked as sent by ${handlerName} after opening their own email client. Not auto-sent — live sending from ${CAS_CLAIMS_MAILBOX} is not connected.`,
     actorId: input.actorId,
     channel: "email",
     correspondenceId: input.correspondenceId,
@@ -741,7 +788,9 @@ export function markEngineerInstructionSent(input: {
     claimId: input.claimId,
     eventType: "engineer_instructed",
     occurredAt: when,
-    details: `Engineer instructed (${subject}). Marked as sent by ${handlerName}. Prepared, not auto-sent from ${CAS_CLAIMS_MAILBOX}.`,
+    details: mailbox
+      ? `Engineer instructed (${subject}). Sent from ${CAS_CLAIMS_MAILBOX} by ${handlerName}.`
+      : `Engineer instructed (${subject}). Marked as sent by ${handlerName}. Prepared, not auto-sent from ${CAS_CLAIMS_MAILBOX}.`,
     actorId: input.actorId,
     channel: "email",
     correspondenceId: input.correspondenceId,
@@ -896,6 +945,7 @@ export function markEngineerReportChaseSent(input: {
   correspondenceId: string;
   actorId: string;
   occurredAt?: string;
+  deliveredByMailbox?: boolean;
 }) {
   const row = get<{
     id: string;
@@ -914,7 +964,7 @@ export function markEngineerReportChaseSent(input: {
   if (row.sent_status === ENGINEER_INSTRUCTION_MARKED_SENT) {
     throw new Error("This chase is already marked as sent.");
   }
-  if (row.sent_status !== ENGINEER_INSTRUCTION_PREPARED) {
+  if (!correspondenceCanBeMarkedSent(row.sent_status, input.deliveredByMailbox)) {
     throw new Error("This item is not a prepared chase waiting to be marked as sent.");
   }
   const when = occurredFromForm(input.occurredAt);
@@ -923,11 +973,14 @@ export function markEngineerReportChaseSent(input: {
   run(`UPDATE correspondence SET sent_status = ? WHERE id = ?`, [ENGINEER_INSTRUCTION_MARKED_SENT, input.correspondenceId]);
   const subject = String(row.subject || "Engineer report chase");
   const to = String(row.to_address || "");
+  const mailbox = Boolean(input.deliveredByMailbox);
   recordClaimEvent({
     claimId: input.claimId,
     eventType: "outgoing_email",
     occurredAt: when,
-    details: `${subject} prepared for ${to}. Marked as sent by ${handlerName} after opening their own email client. Not auto-sent — live sending from ${CAS_CLAIMS_MAILBOX} is not connected.`,
+    details: mailbox
+      ? mailboxSentDetails(subject, to, handlerName)
+      : `${subject} prepared for ${to}. Marked as sent by ${handlerName} after opening their own email client. Not auto-sent — live sending from ${CAS_CLAIMS_MAILBOX} is not connected.`,
     actorId: input.actorId,
     channel: "email",
     correspondenceId: input.correspondenceId,
@@ -937,7 +990,9 @@ export function markEngineerReportChaseSent(input: {
     claimId: input.claimId,
     eventType: "engineer_report_chase_sent",
     occurredAt: when,
-    details: `Engineer report chase marked as sent by ${handlerName}. Interval restarted. Prepared, not auto-sent from ${CAS_CLAIMS_MAILBOX}.`,
+    details: mailbox
+      ? `Engineer report chase sent from ${CAS_CLAIMS_MAILBOX} by ${handlerName}. Interval restarted.`
+      : `Engineer report chase marked as sent by ${handlerName}. Interval restarted. Prepared, not auto-sent from ${CAS_CLAIMS_MAILBOX}.`,
     actorId: input.actorId,
     channel: "email",
     correspondenceId: input.correspondenceId,
@@ -1052,6 +1107,7 @@ export function markOutstandingChaseSent(input: {
   actorId: string;
   kind: ChaseKind;
   occurredAt?: string;
+  deliveredByMailbox?: boolean;
 }) {
   if (input.kind === "engineer_report") {
     return markEngineerReportChaseSent({
@@ -1059,6 +1115,7 @@ export function markOutstandingChaseSent(input: {
       correspondenceId: input.correspondenceId,
       actorId: input.actorId,
       occurredAt: input.occurredAt,
+      deliveredByMailbox: input.deliveredByMailbox,
     });
   }
   const def = chaseDefinition(input.kind);
@@ -1075,7 +1132,7 @@ export function markOutstandingChaseSent(input: {
   if (!row || row.claim_id !== input.claimId) throw new Error("Prepared chase not found on this file.");
   if (row.template_key !== def.templateKey) throw new Error(`This item is not a ${def.title.toLowerCase()}.`);
   if (row.sent_status === ENGINEER_INSTRUCTION_MARKED_SENT) throw new Error("This chase is already marked as sent.");
-  if (row.sent_status !== ENGINEER_INSTRUCTION_PREPARED) {
+  if (!correspondenceCanBeMarkedSent(row.sent_status, input.deliveredByMailbox)) {
     throw new Error("This item is not a prepared chase waiting to be marked as sent.");
   }
   const when = occurredFromForm(input.occurredAt);
@@ -1084,11 +1141,14 @@ export function markOutstandingChaseSent(input: {
   run(`UPDATE correspondence SET sent_status = ? WHERE id = ?`, [ENGINEER_INSTRUCTION_MARKED_SENT, input.correspondenceId]);
   const subject = String(row.subject || def.title);
   const to = String(row.to_address || "");
+  const mailbox = Boolean(input.deliveredByMailbox);
   recordClaimEvent({
     claimId: input.claimId,
     eventType: "outgoing_email",
     occurredAt: when,
-    details: `${subject} prepared for ${to}. Marked as sent by ${handlerName} after opening their own email client. Not auto-sent — live sending from ${CAS_CLAIMS_MAILBOX} is not connected.`,
+    details: mailbox
+      ? mailboxSentDetails(subject, to, handlerName)
+      : `${subject} prepared for ${to}. Marked as sent by ${handlerName} after opening their own email client. Not auto-sent — live sending from ${CAS_CLAIMS_MAILBOX} is not connected.`,
     actorId: input.actorId,
     channel: "email",
     correspondenceId: input.correspondenceId,
@@ -1098,7 +1158,9 @@ export function markOutstandingChaseSent(input: {
     claimId: input.claimId,
     eventType: def.chaseSentEventType as ClaimEventType,
     occurredAt: when,
-    details: `${def.title} marked as sent by ${handlerName}. Interval restarted. Prepared, not auto-sent from ${CAS_CLAIMS_MAILBOX}.`,
+    details: mailbox
+      ? `${def.title} sent from ${CAS_CLAIMS_MAILBOX} by ${handlerName}. Interval restarted.`
+      : `${def.title} marked as sent by ${handlerName}. Interval restarted. Prepared, not auto-sent from ${CAS_CLAIMS_MAILBOX}.`,
     actorId: input.actorId,
     channel: "email",
     correspondenceId: input.correspondenceId,

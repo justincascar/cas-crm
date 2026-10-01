@@ -18,17 +18,19 @@ import { StorageDateReview } from "@/components/claims/StorageDateReview";
 import { StorageEndDateReview } from "@/components/claims/StorageEndDateReview";
 import { getHireEndDateReviews } from "@/lib/db/hire-collection-date";
 import { getStorageDateReview, getStorageEndDateReview } from "@/lib/db/storage-recovery-date";
+import { MailboxSendNotice } from "@/components/claims/SendPreparedEmailForm";
+import { mailboxIsConnected } from "@/lib/email/microsoft-graph";
 
 export default async function ClaimWorkScreenPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string; screen: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; field?: string; whatsapp?: string; tlError?: string; tlMail?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; field?: string; whatsapp?: string; tlError?: string; tlMail?: string; mailboxError?: string; mailboxSent?: string }>;
 }) {
   const { id, screen } = await params;
   await requireStaff();
-  const { saved, error, field, whatsapp, tlError, tlMail } = await searchParams;
+  const { saved, error, field, whatsapp, tlError, tlMail, mailboxError, mailboxSent } = await searchParams;
   const def = getClaimScreen(screen);
   if (!def) notFound();
   const data = getClaim(id);
@@ -72,6 +74,7 @@ export default async function ClaimWorkScreenPage({
       {error ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
       ) : null}
+      <MailboxSendNotice sent={mailboxSent} error={mailboxError} />
       {screen === "storage" || screen === "recovery" ? (
         <StorageDateReview
           claimId={String(data.claim.id)}
@@ -131,6 +134,7 @@ export default async function ClaimWorkScreenPage({
           chases={chases}
           hireAgreements={hireAgreements}
           preparedByKind={preparedByKind}
+          mailboxConnected={mailboxIsConnected()}
         />
       ) : null}
 

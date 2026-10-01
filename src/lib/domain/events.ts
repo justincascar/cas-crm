@@ -63,6 +63,7 @@ export const CLAIM_EVENT_TYPES = [
   { key: "storage_end_date_confirmed", label: "Storage end date confirmed" },
   { key: "storage_ended", label: "Storage ended" },
   { key: "outgoing_email", label: "Email sent" },
+  { key: "email_send_failed", label: "Email send failed" },
   { key: "incoming_email", label: "Email received" },
   { key: "outgoing_whatsapp", label: "WhatsApp sent" },
   { key: "incoming_whatsapp", label: "WhatsApp received" },

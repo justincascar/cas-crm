@@ -1,5 +1,7 @@
 import { OpenPreparedMailto } from "@/components/claims/OpenPreparedMailto";
+import { SendPreparedEmailForm } from "@/components/claims/SendPreparedEmailForm";
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
+import { mailboxIsConnected } from "@/lib/email/microsoft-graph";
 import { formatUkDate, formatUkDateTime, nowUtcIso } from "@/lib/dates";
 import { buildMailtoHref } from "@/lib/email/mailto";
 import { getPreparedFollowUpEmail, listFollowUpChases, totalLossPaymentChaseTemplateKey } from "@/lib/db/follow-up-chases";
@@ -50,6 +52,7 @@ export function TotalLossPanel({
   openMailId?: string;
 }) {
   if (!totalLoss) return null;
+  const connected = mailboxIsConnected();
   const report = getTotalLossReport(claimId);
   const damage = getVehicleDamageMoney(claimId);
   const suggestion = totalLossSuggestion(report);
@@ -110,7 +113,9 @@ export function TotalLossPanel({
             Net figure — CAS retains/disposes of the salvage
           </label>
           <p className="mt-3 text-slate">
-            Prepared for the handler to send from their own email client. Not sent automatically from {CAS_CLAIMS_MAILBOX}.
+            {connected
+              ? `Prepared on this file. Send sends it from ${CAS_CLAIMS_MAILBOX}. It is not sent until you click Send.`
+              : `Microsoft 365 not yet connected. Prepared for the handler to send from their own email client. Not sent automatically from ${CAS_CLAIMS_MAILBOX}.`}
           </p>
           <button name="intent" value="prepare_email" className="mt-3 min-h-11 rounded-md bg-teal px-3 py-2 text-sm font-semibold text-white" type="submit">
             Prepare notification email
@@ -238,11 +243,20 @@ export function TotalLossPanel({
         </button>
       </form>
 
-      {prepared?.mailto ? (
+      {prepared && connected ? (
         <div className="mt-4 rounded-md border border-line bg-white px-4 py-3 text-sm">
           <p>
-            A notification email was prepared {formatUkDateTime(prepared.createdAt)} for {prepared.toAddress}. It has not been sent from{" "}
-            {CAS_CLAIMS_MAILBOX}.
+            A notification email was prepared {formatUkDateTime(prepared.createdAt)} for {prepared.toAddress}. It has not been sent.
+          </p>
+          <div className="mt-3">
+            <SendPreparedEmailForm claimId={claimId} correspondenceId={prepared.id} returnTo={returnTo} />
+          </div>
+        </div>
+      ) : prepared?.mailto ? (
+        <div className="mt-4 rounded-md border border-line bg-white px-4 py-3 text-sm">
+          <p>
+            Microsoft 365 not yet connected. A notification email was prepared {formatUkDateTime(prepared.createdAt)} for {prepared.toAddress}. It
+            has not been sent from {CAS_CLAIMS_MAILBOX}.
           </p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <OpenPreparedMailto href={prepared.mailto} autoOpen={openMailId === prepared.id} />
@@ -304,11 +318,20 @@ export function TotalLossPanel({
               </button>
             </form>
           ) : null}
-          {chaseMailto && preparedChase ? (
+          {chaseMailto && preparedChase && connected ? (
             <div className="rounded-md border border-line bg-white px-4 py-3">
               <p>
-                A payment chase was prepared {formatUkDateTime(preparedChase.created_at)} for {preparedChase.to_address}. It has not been sent from{" "}
-                {CAS_CLAIMS_MAILBOX}.
+                A payment chase was prepared {formatUkDateTime(preparedChase.created_at)} for {preparedChase.to_address}. It has not been sent.
+              </p>
+              <div className="mt-3">
+                <SendPreparedEmailForm claimId={claimId} correspondenceId={preparedChase.id} returnTo={returnTo} />
+              </div>
+            </div>
+          ) : chaseMailto && preparedChase ? (
+            <div className="rounded-md border border-line bg-white px-4 py-3">
+              <p>
+                Microsoft 365 not yet connected. A payment chase was prepared {formatUkDateTime(preparedChase.created_at)} for{" "}
+                {preparedChase.to_address}. It has not been sent from {CAS_CLAIMS_MAILBOX}.
               </p>
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                 <OpenPreparedMailto href={chaseMailto} autoOpen={openMailId === preparedChase.id} />

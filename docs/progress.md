@@ -12,7 +12,7 @@ Implemented:
 
 - Persistent SQLite store with 12 fictional TEST claims spanning new enquiry, roadworthy reservation without charges, undriveable recovery/hire, fault courtesy, liability/engineer waits, repair auth, repairs in progress, ready for return, total-loss payment/salvage, qualifying off-hire countdown, day-80 unsigned renewal, litigation/offer review.
 - Dashboard counts that open filtered lists; search; claim create/edit; notes; tasks; fleet availability and overlap-blocked reservations.
-- File history with dated steps (initial TP insurer letter, engineer instructed, repairs started, hire pack, rebuttals, total-loss cessation, case closed, and related events). Letters and emails are generated from those dates using CAS's supplied templates in `docs/correspondence-templates/`. Missing fields are listed, not invented. Rebuttal wording includes supplied case-law citations and is flagged for solicitor sign-off before live use. Email compose/incoming logging is recorded on the file. Sending is simulated or, for engineer instructions, **prepared in the handler's own email client (mailto) — not auto-sent**. Genuine automatic sending is still pending connection of the Microsoft 365 mailbox `claims@cascar.co.uk` (decision made; not live).
+- File history with dated steps (initial TP insurer letter, engineer instructed, repairs started, hire pack, rebuttals, total-loss cessation, case closed, and related events). Letters and emails are generated from those dates using CAS's supplied templates in `docs/correspondence-templates/`. Missing fields are listed, not invented. Rebuttal wording includes supplied case-law citations and is flagged for solicitor sign-off before live use. Email compose is recorded on the file. When `CAS_M365_TENANT_ID`, `CAS_M365_CLIENT_ID` and `CAS_M365_CLIENT_SECRET` are all set, Send delivers from `claims@cascar.co.uk`. Until then, prepared emails open in the handler's own email client and the screen says Microsoft 365 is not yet connected. A person still clicks Send. Incoming mail is not read.
 - Hire Pack data collection and generation from the CAS Hire Pack.doc structure (hirer, additional driver, hire vehicle vs own vehicle, charges, mitigation including financial means, handover, cancellation notice). Storage & Recovery is generated as a standalone document, not as a hire-agreement page. Signatures are not fabricated. The 89-day pack wording versus 88-day CRM alerts is flagged for Justin; neither figure has been changed.
 - Staff intake form covering client (owner/driver/owner/driver split), vehicle lookup, tax/MOT/insurance recording, damage, accident (maps link, police, witnesses, speeds, photographs taken at the scene with a simulated WhatsApp send-in), recovery charges, storage starting the same day as recovery, and up to three third parties with insurer autocomplete (generic telephone/email/address only) and TPI agent fields.
 - Claim file screens matching the current CRM viewing pane (client, hire, damage diagram, fleet reserve, recovery, storage, loss of use dates, financial summary). Values persist in SQLite. Opening a file or reserving a vehicle still does not start charges.
@@ -360,7 +360,21 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 
 - Opening a stored V5C no longer embeds the raw PDF in the page (Chrome's plugin froze the CRM). Pages are drawn as images; the original can be downloaded. The rest of the screen stays usable if a page cannot be drawn.
 
-Blocked: provider accounts, per-file permissions, shared hosting, live DVLA, live mailbox send.
+Blocked: the Microsoft 365 app registration is not supplied yet (`CAS_M365_TENANT_ID`, `CAS_M365_CLIENT_ID`, `CAS_M365_CLIENT_SECRET`), per-file permissions, shared hosting, live DVLA. Incoming mail is not built. Automatic no-click chasers are a later decision.
+
+## Microsoft 365 outbound send (1 October 2026)
+
+- A person still reviews each email and clicks Send. Nothing sends itself. Reading replies is not part of this stage.
+- The mailbox is `claims@cascar.co.uk`. Credentials are environment variables only. They are not on the Settings screen, not in source code, and must not be committed.
+- Set all three, or leave all three unset. If any one is missing, every prepared email behaves as before: open it in your own email client, then mark it as sent. The screen says Microsoft 365 is not yet connected.
+  - `CAS_M365_TENANT_ID` — Directory (tenant) ID from the Microsoft 365 app registration
+  - `CAS_M365_CLIENT_ID` — Application (client) ID
+  - `CAS_M365_CLIENT_SECRET` — client secret value
+- Put them in the process environment, or in a local `.env` file (git already ignores `.env`). `.env.example` lists the names with no values.
+- The app registration needs Microsoft Graph application permission **Mail.Send**, admin consent, and permission to send as `claims@cascar.co.uk` only. That registration does not exist yet. Tests use a mocked mailbox, not a live one.
+- A failed send stays prepared, is shown as a failure, and can be tried again. Invalid or expired credentials are reported as a configuration error. A second click while a send is in progress does not send a second copy. A successful send is logged on the file history with who sent it, when, and to whom.
+- Hire pack cover letters are sent from the communications screen (fill the template, then Send). The hire pack document itself is still a file on the claim, not an email.
+- Creating a new claim does not send mail by itself. The recovery-agreement note on a new file stays the existing simulated record.
 
 ## Not yet claimed
 

@@ -16,6 +16,7 @@ import {
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import { buildMailtoHref } from "@/lib/email/mailto";
+import { SendPreparedEmailForm } from "@/components/claims/SendPreparedEmailForm";
 import { LIABILITY_DECISIONS, REPAIR_OUTCOMES, chaseStageShortLabel, chaseStageTextClass } from "@/lib/domain/chase";
 import type { ChaseView } from "@/lib/db/chase";
 import type { EngineerChaseView } from "@/lib/db/engineer-chase";
@@ -81,13 +82,18 @@ export function ChasePanel({
   chase,
   prepared,
   agreements,
+  mailboxConnected = false,
+  returnTo,
 }: {
   claimId: string;
   chase: ChaseView;
   prepared: PreparedChase | null;
   agreements?: HireAgreementHistoryRow[];
+  mailboxConnected?: boolean;
+  returnTo?: string;
 }) {
   const router = useRouter();
+  const sendBack = returnTo || `/claims/${claimId}`;
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [mailto, setMailto] = useState<string | null>(() =>
@@ -133,7 +139,7 @@ export function ChasePanel({
     setMailto(prepared.mailto);
     setPreparedId(String(prepared.correspondenceId || ""));
     setToAddress(String(prepared.to || chase.contactEmail));
-    window.location.href = prepared.mailto;
+    if (!mailboxConnected) window.location.href = prepared.mailto;
   }
 
   async function markSent() {
@@ -258,10 +264,13 @@ export function ChasePanel({
               >
                 Prepare chase email
               </button>
-              {mailto ? (
+              {mailto && !mailboxConnected ? (
                 <a className="rounded-md border border-teal bg-white px-4 py-2 text-sm font-semibold text-teal-dark" href={mailto}>
                   Open pre-filled email
                 </a>
+              ) : null}
+              {mailboxConnected && preparedId ? (
+                <SendPreparedEmailForm claimId={claimId} correspondenceId={preparedId} returnTo={sendBack} />
               ) : null}
             </>
           ) : null}
@@ -295,19 +304,25 @@ export function ChasePanel({
         </div>
       ) : null}
 
-      {mailto && chase.due ? (
+      {mailboxConnected && preparedId && chase.due ? (
         <p className="mt-3 rounded-md border border-ok/40 bg-white px-4 py-3 text-sm">
-          A pre-filled email to <strong>{toAddress}</strong> is ready in your email client. After you click send there,
-          mark it as sent on this file. The CRM has not sent it from {CAS_CLAIMS_MAILBOX}.
+          A chase email to <strong>{toAddress}</strong> is ready. It has not been sent. Send uses {CAS_CLAIMS_MAILBOX}. Nothing is sent until you
+          click Send.
+        </p>
+      ) : mailto && chase.due ? (
+        <p className="mt-3 rounded-md border border-ok/40 bg-white px-4 py-3 text-sm">
+          Microsoft 365 not yet connected. A pre-filled email to <strong>{toAddress}</strong> is ready in your email client. After you click send
+          there, mark it as sent on this file. The CRM has not sent it from {CAS_CLAIMS_MAILBOX}.
         </p>
       ) : prepared && preparedId && chase.due ? (
         <p className="mt-3 rounded-md border border-warn/40 bg-white px-4 py-3 text-sm">
-          A chase email was prepared {formatUkDateTime(prepared.created_at)} for {prepared.to_address}. Open it from your
-          client if you still need to send it, then mark it as sent.
+          {mailboxConnected
+            ? `A chase email was prepared ${formatUkDateTime(prepared.created_at)} for ${prepared.to_address}. It has not been sent.`
+            : `Microsoft 365 not yet connected. A chase email was prepared ${formatUkDateTime(prepared.created_at)} for ${prepared.to_address}. Open it from your client if you still need to send it, then mark it as sent.`}
         </p>
       ) : null}
 
-      {preparedId && chase.due && !chase.contactMissing ? (
+      {preparedId && chase.due && !chase.contactMissing && !mailboxConnected ? (
         <div className="mt-3">
           <button
             type="button"

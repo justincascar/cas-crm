@@ -121,6 +121,10 @@ export function isoDateFromNow(days: number): string {
 export function occurredFromForm(value: string | null | undefined): string {
   if (!value) return nowUtcIso();
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return utcFromLondonDateTime(`${value}T09:00`);
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value) || /(?:[zZ]|[+-]\d{2}:\d{2})$/.test(value)) {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  }
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(value)) return utcFromLondonDateTime(value.slice(0, 16));
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return nowUtcIso();

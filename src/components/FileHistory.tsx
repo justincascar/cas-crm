@@ -4,6 +4,8 @@ import {
 import { DocumentGenerateForm } from "@/components/DocumentGenerateForm";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { CLAIM_EVENT_TYPES } from "@/lib/domain/events";
+import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
+import { mailboxIsConnected } from "@/lib/email/microsoft-graph";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import Link from "next/link";
 
@@ -45,7 +47,10 @@ export function FileHistory({
         <h2 className="font-serif text-2xl text-navy-deep">File history</h2>
         <p className="text-sm text-slate">
           Dated steps on this file — when the initial letter went, when the engineer was instructed, when repairs started, and so on.
-          Letters and emails are built from these dates. Email is logged here. Instruct Engineer is prepared, not auto-sent; live sending from claims@cascar.co.uk is not connected yet.
+          Letters and emails are built from these dates. Email is logged here.{" "}
+          {mailboxIsConnected()
+            ? `Send uses ${CAS_CLAIMS_MAILBOX}. Nothing is sent until a person clicks Send. A failed send is not recorded as sent.`
+            : `Microsoft 365 not yet connected. Instruct Engineer is prepared in your own email client, then marked as sent. It is not sent from ${CAS_CLAIMS_MAILBOX}.`}
         </p>
       </div>
 

@@ -24,6 +24,8 @@ import { TotalLossPanel } from "@/components/claims/TotalLossPanel";
 import { StorageDateReview } from "@/components/claims/StorageDateReview";
 import { StorageEndDateReview } from "@/components/claims/StorageEndDateReview";
 import { OutstandingSummary } from "@/components/claims/OutstandingSummary";
+import { MailboxSendNotice } from "@/components/claims/SendPreparedEmailForm";
+import { mailboxIsConnected } from "@/lib/email/microsoft-graph";
 import { outstandingForClaim } from "@/lib/db/outstanding";
 import { getHireEndDateReviews } from "@/lib/db/hire-collection-date";
 import { getStorageDateReview, getStorageEndDateReview } from "@/lib/db/storage-recovery-date";
@@ -40,10 +42,10 @@ export default async function ClaimDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tlError?: string; tlMail?: string }>;
+  searchParams: Promise<{ tlError?: string; tlMail?: string; mailboxError?: string; mailboxSent?: string }>;
 }) {
   const { id } = await params;
-  const { tlError, tlMail } = await searchParams;
+  const { tlError, tlMail, mailboxError, mailboxSent } = await searchParams;
   await requireStaff();
   const data = getClaim(id);
   if (!data) notFound();
@@ -98,6 +100,8 @@ export default async function ClaimDetailPage({
         roadworthiness={String(claim.roadworthiness || "")}
       />
 
+      <MailboxSendNotice sent={mailboxSent} error={mailboxError} />
+
       <OutstandingSummary items={outstandingForClaim(String(claim.id))} />
 
       {chases.map((chase) => (
@@ -107,6 +111,8 @@ export default async function ClaimDetailPage({
           chase={chase}
           prepared={preparedByKind[chase.kind] || null}
           agreements={chase.kind === "hire_agreement_renewal" ? hireAgreements : undefined}
+          mailboxConnected={mailboxIsConnected()}
+          returnTo={`/claims/${claim.id}`}
         />
       ))}
 

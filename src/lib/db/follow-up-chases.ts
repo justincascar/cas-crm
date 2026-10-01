@@ -1,6 +1,7 @@
 import { CAS_CLAIMS_MAILBOX } from "../constants";
 import { nowUtcIso } from "../dates";
 import { buildMailtoHref } from "../email/mailto";
+import { mailboxSentDetails } from "../email/sent-wording";
 import {
   DOCUMENT_CHASES,
   DOCUMENT_CHASE_SENT_EVENT,
@@ -19,7 +20,7 @@ import { paymentDetailsLetterLine, type InsurerPaymentDetails } from "../domain/
 import type { ChaseView } from "./chase";
 import { recordClaimEvent } from "./chronology";
 import { all, get, newId, run } from "./connection";
-import { ENGINEER_INSTRUCTION_MARKED_SENT, ENGINEER_INSTRUCTION_PREPARED } from "./engineers";
+import { correspondenceCanBeMarkedSent, ENGINEER_INSTRUCTION_MARKED_SENT, ENGINEER_INSTRUCTION_PREPARED } from "./engineers";
 import { getInsurerPaymentDetails } from "./payment-details";
 import { TOTAL_LOSS_NOTICE_TEMPLATE } from "./total-loss";
 
@@ -402,10 +403,18 @@ export function getPreparedFollowUpEmail(claimId: string, templateKey: string) {
   );
 }
 
-export function markDocumentChaseSent(input: { claimId: string; kind: string; correspondenceId: string; actorId: string }) {
+export function markDocumentChaseSent(input: {
+  claimId: string;
+  kind: string;
+  correspondenceId: string;
+  actorId: string;
+  deliveredByMailbox?: boolean;
+}) {
   if (!isDocumentChaseKind(input.kind)) throw new Error("Unknown document chase.");
-  const row = preparedRow(input.correspondenceId, input.claimId, `${DOCUMENT_TEMPLATE_PREFIX}${input.kind}`);
+  const row = preparedRow(input.correspondenceId, input.claimId, `${DOCUMENT_TEMPLATE_PREFIX}${input.kind}`, input.deliveredByMailbox);
   const when = nowUtcIso();
+  const handler = get<{ name: string }>(`SELECT name FROM staff WHERE id = ?`, [input.actorId]);
+  const handlerName = handler?.name || "Unknown handler";
   run(`UPDATE correspondence SET sent_status = ? WHERE id = ?`, [ENGINEER_INSTRUCTION_MARKED_SENT, row.id]);
   recordClaimEvent({
     claimId: input.claimId,
@@ -417,34 +426,73 @@ export function markDocumentChaseSent(input: { claimId: string; kind: string; co
     correspondenceId: row.id,
     source: "staff",
   });
+  if (input.deliveredByMailbox) {
+    recordClaimEvent({
+      claimId: input.claimId,
+      eventType: "outgoing_email",
+      occurredAt: when,
+      actorId: input.actorId,
+      details: mailboxSentDetails(String(row.subject || "Document chase"), String(row.to_address || ""), handlerName),
+      channel: "email",
+      correspondenceId: row.id,
+      source: "staff",
+    });
+  }
 }
 
-export function markTotalLossPaymentChaseSent(input: { claimId: string; correspondenceId: string; actorId: string }) {
-  const row = preparedRow(input.correspondenceId, input.claimId, TOTAL_LOSS_PAYMENT_CHASE_TEMPLATE);
+export function markTotalLossPaymentChaseSent(input: {
+  claimId: string;
+  correspondenceId: string;
+  actorId: string;
+  deliveredByMailbox?: boolean;
+}) {
+  const row = preparedRow(input.correspondenceId, input.claimId, TOTAL_LOSS_PAYMENT_CHASE_TEMPLATE, input.deliveredByMailbox);
   const when = nowUtcIso();
+  const handler = get<{ name: string }>(`SELECT name FROM staff WHERE id = ?`, [input.actorId]);
+  const handlerName = handler?.name || "Unknown handler";
   run(`UPDATE correspondence SET sent_status = ? WHERE id = ?`, [ENGINEER_INSTRUCTION_MARKED_SENT, row.id]);
+  const subject = String(row.subject || "Total-loss payment chase");
+  const to = String(row.to_address || "");
   recordClaimEvent({
     claimId: input.claimId,
     eventType: TOTAL_LOSS_PAYMENT_CHASE_SENT_EVENT,
     occurredAt: when,
     actorId: input.actorId,
-    details: "Total-loss payment chase marked as sent after the handler opened their own email client. Not auto-sent.",
+    details: input.deliveredByMailbox
+      ? mailboxSentDetails(subject, to, handlerName)
+      : "Total-loss payment chase marked as sent after the handler opened their own email client. Not auto-sent.",
     channel: "email",
     correspondenceId: row.id,
     source: "staff",
   });
+  if (input.deliveredByMailbox) {
+    recordClaimEvent({
+      claimId: input.claimId,
+      eventType: "outgoing_email",
+      occurredAt: when,
+      actorId: input.actorId,
+      details: mailboxSentDetails(subject, to, handlerName),
+      channel: "email",
+      correspondenceId: row.id,
+      source: "staff",
+    });
+  }
 }
 
-function preparedRow(id: string, claimId: string, templateKey: string) {
-  const row = get<{ id: string; claim_id: string; sent_status: string | null; template_key: string | null }>(
-    `SELECT id, claim_id, sent_status, template_key FROM correspondence WHERE id = ?`,
-    [id],
-  );
+function preparedRow(id: string, claimId: string, templateKey: string, deliveredByMailbox = false) {
+  const row = get<{
+    id: string;
+    claim_id: string;
+    sent_status: string | null;
+    template_key: string | null;
+    subject: string | null;
+    to_address: string | null;
+  }>(`SELECT id, claim_id, sent_status, template_key, subject, to_address FROM correspondence WHERE id = ?`, [id]);
   if (!row || row.claim_id !== claimId || row.template_key !== templateKey) {
     throw new Error("Prepared chase email not found on this file.");
   }
   if (row.sent_status === ENGINEER_INSTRUCTION_MARKED_SENT) throw new Error("This email is already marked as sent.");
-  if (row.sent_status !== ENGINEER_INSTRUCTION_PREPARED) {
+  if (!correspondenceCanBeMarkedSent(row.sent_status, deliveredByMailbox)) {
     throw new Error("This item is not a prepared chase email waiting to be marked as sent.");
   }
   return row;

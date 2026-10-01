@@ -5,6 +5,9 @@ import { formatUkDateTime, nowUtcIso } from "@/lib/dates";
 import { requireStaff } from "@/lib/auth/session";
 import { documentChaseTemplateKey, getPreparedFollowUpEmail, listFollowUpChases } from "@/lib/db/follow-up-chases";
 import { buildMailtoHref } from "@/lib/email/mailto";
+import { mailboxIsConnected } from "@/lib/email/microsoft-graph";
+import { MailboxSendNotice, SendPreparedEmailForm } from "@/components/claims/SendPreparedEmailForm";
+import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
 import { DOCUMENT_CHASES } from "@/lib/domain/follow-up-chases";
 import {
   claimDocumentGaps,
@@ -27,7 +30,7 @@ export default async function ClaimDocumentsPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; mailboxError?: string; mailboxSent?: string }>;
 }) {
   await requireStaff();
   const { id } = await params;
@@ -38,6 +41,7 @@ export default async function ClaimDocumentsPage({
   const gaps = claimDocumentGaps(id);
   const vehicles = claimDocumentVehicleChoices(id);
   const paperChases = listFollowUpChases(nowUtcIso(), id).filter((row) => DOCUMENT_CHASES.some((paper) => paper.kind === row.kind));
+  const connected = mailboxIsConnected();
 
   return (
     <div className="space-y-6">
@@ -48,6 +52,7 @@ export default async function ClaimDocumentsPage({
       {query.error ? (
         <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.error}</p>
       ) : null}
+      <MailboxSendNotice sent={query.mailboxSent} error={query.mailboxError} />
       {query.saved ? (
         <p className="rounded-md border border-teal/40 bg-[#eef8f6] px-4 py-3 text-sm">
           {query.saved === "chase" ? "Chase email updated. Nothing was sent automatically." : "Document stored on this file."}
@@ -60,6 +65,7 @@ export default async function ClaimDocumentsPage({
           Driving licence, insurance certificate and the client&apos;s logbook (V5C) are chased every 24 hours after the client welcome is marked as
           sent. Bank statements start when the hire agreement is generated, then the same 24 hours. Uploading the paper clears the chase straight
           away. A reminder is prepared for you to send. Nothing is sent automatically.
+          {connected ? ` Send uses ${CAS_CLAIMS_MAILBOX}.` : " Microsoft 365 not yet connected."}
         </p>
         {DOCUMENT_CHASES.some((paper) => paper.trigger === "welcome" && !paperChases.some((chase) => chase.kind === paper.kind)) ? (
           <p className="mt-3 text-sm">Driving licence, insurance certificate and logbook have not started. The client welcome has not been marked as sent.</p>
@@ -88,8 +94,13 @@ export default async function ClaimDocumentsPage({
                       </button>
                     </form>
                   ) : null}
-                  {mailto && prepared ? (
+                  {mailto && prepared && connected ? (
                     <div className="mt-2">
+                      <SendPreparedEmailForm claimId={id} correspondenceId={prepared.id} returnTo={`/claims/${id}/documents`} />
+                    </div>
+                  ) : mailto && prepared ? (
+                    <div className="mt-2">
+                      <p className="text-sm">Microsoft 365 not yet connected.</p>
                       <a className="text-teal-dark underline" href={mailto}>
                         Open the prepared email
                       </a>

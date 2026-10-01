@@ -47,7 +47,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
     key: "comms",
     label: "Email, WhatsApp, calls and documents",
     group: "comms",
-    hint: "Send and file email, WhatsApp and calls on this file. Generate letters from the dates already recorded. Live mailbox, WhatsApp Business and telephony are not connected yet.",
+    hint: "Send and file email, WhatsApp and calls on this file. Generate letters from the dates already recorded. WhatsApp Business and telephony are not connected. Email is sent from claims@cascar.co.uk only when Microsoft 365 is connected, and only when a person clicks Send.",
     sections: [],
   },
   {

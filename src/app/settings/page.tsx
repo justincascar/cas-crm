@@ -11,6 +11,7 @@ import { getGtaMarkupPercent } from "@/lib/db/hire-agreement";
 import { getInsurerPaymentDetails } from "@/lib/db/payment-details";
 import { GTA_RATE_PERIOD_LABEL } from "@/lib/documents/gta";
 import { CAS_CLAIMS_MAILBOX, INDICATIVE_DEFAULTS } from "@/lib/constants";
+import { mailboxIsConnected } from "@/lib/email/microsoft-graph";
 import { formatGbp } from "@/lib/money";
 
 export default async function SettingsPage({
@@ -144,7 +145,14 @@ export default async function SettingsPage({
           <Row label="Agreement maximum days" value={settings.agreement_max_days} />
           <Row label="Renewal approaching (amber) day" value={settings.agreement_renewal_approaching_day} />
           <Row label="Renewal due (red) day" value={settings.agreement_renewal_alert_day} />
-          <Row label="Claims mailbox" value={`${CAS_CLAIMS_MAILBOX} (decided; live send not connected)`} />
+          <Row
+            label="Claims mailbox"
+            value={
+              mailboxIsConnected()
+                ? `${CAS_CLAIMS_MAILBOX} (Microsoft 365 credentials are set. A person still clicks Send. A failed send is shown and is not treated as sent.)`
+                : `${CAS_CLAIMS_MAILBOX} (Microsoft 365 not yet connected)`
+            }
+          />
           <Row label="Database file" value={dbLocation()} />
         </dl>
       </section>
