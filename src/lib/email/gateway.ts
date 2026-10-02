@@ -1,10 +1,17 @@
 import { CAS_CLAIMS_MAILBOX } from "../constants";
 import { mailboxIsConnected, sendMailboxMessage } from "./microsoft-graph";
 
+export type OutgoingAttachment = {
+  name: string;
+  contentType: string;
+  content: Buffer;
+};
+
 export type OutgoingMessage = {
   to: string;
   subject: string;
   body: string;
+  attachments?: OutgoingAttachment[];
 };
 
 export type SendResult =
@@ -50,7 +57,12 @@ class RoutingEmailGateway implements EmailGateway {
   async send(message: OutgoingMessage): Promise<SendResult> {
     if (!mailboxIsConnected()) return this.simulated.send(message);
     try {
-      await sendMailboxMessage(message);
+      await sendMailboxMessage({
+        to: message.to,
+        subject: message.subject,
+        body: message.body,
+        attachments: message.attachments,
+      });
       return { ok: true, status: "sent", warning: `Sent from ${CAS_CLAIMS_MAILBOX}.` };
     } catch (error) {
       const messageText = error instanceof Error ? error.message : "Microsoft 365 did not send this email. Nothing was sent.";

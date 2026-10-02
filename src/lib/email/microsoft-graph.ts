@@ -52,7 +52,18 @@ const PERMISSION_ERROR =
   "Microsoft 365 refused permission to send as claims@cascar.co.uk. Check the app is allowed to send mail for that mailbox. Nothing was sent.";
 const REJECTED_ERROR = "Microsoft 365 refused this email. Nothing was sent. The prepared email is still here.";
 
-export async function sendMailboxMessage(message: { to: string; subject: string; body: string }): Promise<void> {
+export type MailboxAttachment = {
+  name: string;
+  contentType: string;
+  content: Buffer;
+};
+
+export async function sendMailboxMessage(message: {
+  to: string;
+  subject: string;
+  body: string;
+  attachments?: MailboxAttachment[];
+}): Promise<void> {
   const credentials = mailboxCredentials();
   if (!credentials) {
     throw new MailboxSendError(
@@ -88,6 +99,16 @@ export async function sendMailboxMessage(message: { to: string; subject: string;
           subject,
           body: { contentType: "Text", content: body },
           toRecipients: [{ emailAddress: { address: to } }],
+          ...(message.attachments && message.attachments.length
+            ? {
+                attachments: message.attachments.map((item) => ({
+                  "@odata.type": "#microsoft.graph.fileAttachment",
+                  name: item.name,
+                  contentType: item.contentType,
+                  contentBytes: item.content.toString("base64"),
+                })),
+              }
+            : {}),
         },
         saveToSentItems: true,
       }),

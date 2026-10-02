@@ -6,6 +6,7 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["to_address", "TEXT"],
     ["from_address", "TEXT"],
     ["template_key", "TEXT"],
+    ["attachments_json", "TEXT"],
   ],
   people: [
     ["title", "TEXT"],

@@ -1,4 +1,5 @@
 import { emailGateway } from "../email/gateway";
+import { loadClaimEmailAttachments } from "./email-attachments";
 import { mailboxIsConnected } from "../email/microsoft-graph";
 import { mailboxSentDetails } from "../email/sent-wording";
 import { phoneGateway } from "../phone/gateway";
@@ -420,8 +421,9 @@ export async function sendClaimEmail(input: {
   body: string;
   templateKey?: DocumentTemplateKey;
   occurredAt?: string;
+  attachmentIds?: string[];
 }) {
-  const fingerprint = [input.claimId, input.to.trim(), input.subject.trim(), input.body.trim()].join("\n");
+  const fingerprint = [input.claimId, input.to.trim(), input.subject.trim(), input.body.trim(), ...(input.attachmentIds || []).slice().sort()].join("\n");
   if (sendingFingerprints.has(fingerprint)) {
     return {
       ok: false as const,
@@ -445,15 +447,24 @@ async function deliverClaimEmail(input: {
   body: string;
   templateKey?: DocumentTemplateKey;
   occurredAt?: string;
+  attachmentIds?: string[];
 }) {
   const when = occurredFromForm(input.occurredAt);
+  const loaded = loadClaimEmailAttachments(input.claimId, input.attachmentIds || []);
+  if (!loaded.ok) return { ok: false as const, status: "failed" as const, error: loaded.error };
   const live = mailboxIsConnected();
-  const result = await emailGateway.send({ to: input.to, subject: input.subject, body: input.body });
+  const result = await emailGateway.send({
+    to: input.to,
+    subject: input.subject,
+    body: input.body,
+    attachments: loaded.attachments.map((item) => ({ name: item.name, contentType: item.contentType, content: item.content })),
+  });
   const correspondenceId = newId("corr");
   const fromAddress = result.ok && result.status === "sent" ? CAS_CLAIMS_MAILBOX : "cas-prototype@local";
+  const attachmentNote = loaded.attachments.map((item) => item.label);
   run(
-    `INSERT INTO correspondence(id, claim_id, direction, channel, subject, preview, body, to_address, from_address, unread, sent_status, created_at)
-     VALUES (?, ?, 'outgoing', 'email', ?, ?, ?, ?, ?, 0, ?, ?)`,
+    `INSERT INTO correspondence(id, claim_id, direction, channel, subject, preview, body, to_address, from_address, unread, sent_status, attachments_json, created_at)
+     VALUES (?, ?, 'outgoing', 'email', ?, ?, ?, ?, ?, 0, ?, ?, ?)`,
     [
       correspondenceId,
       input.claimId,
@@ -463,15 +474,17 @@ async function deliverClaimEmail(input: {
       input.to,
       fromAddress,
       result.status,
+      attachmentNote.length ? JSON.stringify(attachmentNote) : null,
       when,
     ],
   );
+  const attachedText = attachmentNote.length ? ` Attached: ${attachmentNote.join("; ")}.` : "";
   const sentDetails =
     result.ok && result.status === "sent"
-      ? `${input.subject} sent to ${input.to} from ${CAS_CLAIMS_MAILBOX}. ${result.warning}`
+      ? `${input.subject} sent to ${input.to} from ${CAS_CLAIMS_MAILBOX}. ${result.warning}${attachedText}`
       : result.ok
-        ? `${input.subject} — ${result.warning}`
-        : `Send failed: ${result.error}`;
+        ? `${input.subject} — ${result.warning}${attachedText}`
+        : `Send failed: ${result.error}${attachedText}`;
   recordClaimEvent({
     claimId: input.claimId,
     eventType: result.ok || !live ? "outgoing_email" : "email_send_failed",

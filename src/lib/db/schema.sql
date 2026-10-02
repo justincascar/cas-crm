@@ -373,6 +373,7 @@ CREATE TABLE IF NOT EXISTS correspondence (
   unread INTEGER NOT NULL DEFAULT 0,
   sent_status TEXT,
   template_key TEXT,
+  attachments_json TEXT,
   created_at TEXT NOT NULL
 );
 

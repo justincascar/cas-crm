@@ -380,6 +380,7 @@ export async function actionSendEmail(formData: FormData) {
     body: String(formData.get("body") || "").trim(),
     templateKey: isDocumentTemplateKey(templateKey) ? templateKey : undefined,
     occurredAt: String(formData.get("occurredAt") || "") || undefined,
+    attachmentIds: formData.getAll("attachmentId").map((value) => String(value)),
   });
   revalidatePath(`/claims/${claimId}`);
   revalidatePath(`/claims/${claimId}/work/comms`);

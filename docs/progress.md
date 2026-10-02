@@ -387,6 +387,15 @@ Blocked: per-file permissions, shared hosting, live DVLA. Incoming mail is not b
 - Tests: `tests/send-to.test.ts` (five cases). Full suite: 247 passing, 0 failing.
 - Next: reading incoming mail and matching replies to the right file. Automatic no-click chasers remain a separate decision.
 
+## Documents on an outgoing email (2 October 2026)
+
+- The general Send email box lists documents already stored on that claim. Each one starts unticked. Nothing is attached unless a person ticks it.
+- A generated letter or hire agreement (the saved page) goes out as that page. An uploaded file, such as a V5C, licence, insurance certificate or handover photograph, goes out as the stored file. A document that is not on this claim cannot be attached.
+- If the claim has no stored document, the box says so and the email can still be sent as text.
+- Microsoft's simple send, which this CRM uses, refuses attachments over 3 MB in total. The screen says so and does not send. A larger upload, up to the mailbox's wider limit, is not built. A failed send is not marked as sent, and the ticked documents stay ticked.
+- The sent email on this file, and the file history, name the documents that went with it.
+- Tests: `tests/email-attachments.test.ts` (four cases). Full suite: 251 passing, 0 failing.
+
 ## Not yet claimed
 
 Stages 2–5 (finer permissions, live integrations, payment packs from CAS templates, litigation issue, backups/restore/deploy). Working dashboard is not production readiness.
