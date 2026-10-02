@@ -398,6 +398,12 @@ Blocked: per-file permissions, shared hosting, live DVLA. Incoming mail is not b
 - The sent email on this file, and the file history, name the documents that went with it.
 - Tests: `tests/email-attachments.test.ts` (six cases). Full suite: 253 passing, 0 failing.
 
+## Claims mailbox only (2 October 2026)
+
+- The CAS CRM app registration (application ID `6979ea43-e90c-4dba-a3d0-92d0047d9b6a`) is limited to `claims@cascar.co.uk`. Exchange Online application access policy, access right **RestrictAccess**, description “Restrict CAS CRM app to claims@cascar.co.uk only”.
+- `claims@cascar.co.uk` is a shared mailbox, so Microsoft will not take that address as the policy scope on its own. The scope is the mail-enabled security group **CAS CRM claims mailbox** (`cas-crm-claims-mailbox@cascar.co.uk`), whose only member is the claims mailbox. Do not add other mailboxes to that group. Do not delete the group. Do not remove the policy to get a send working on another mailbox.
+- Checked the same day: `Test-ApplicationAccessPolicy` returned **Granted** for `claims@cascar.co.uk` and **Denied** for `justin@cascar.co.uk`. Microsoft says the restriction can take up to 30 minutes to apply to live mail. The test already showed the denial.
+
 ## Not yet claimed
 
 Stages 2–5 (finer permissions, live integrations, payment packs from CAS templates, litigation issue, backups/restore/deploy). Working dashboard is not production readiness.

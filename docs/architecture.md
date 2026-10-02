@@ -36,4 +36,6 @@ Driving licence numbers are labelled restricted in the UI; that is not yet a sep
 
 Do not put live client data into this prototype until backups and permission levels are agreed.
 
+Microsoft 365 mail for this app is limited to `claims@cascar.co.uk` (2 October 2026). The app registration `6979ea43-e90c-4dba-a3d0-92d0047d9b6a` has an Exchange Online application access policy, RestrictAccess, scoped to the mail-enabled security group **CAS CRM claims mailbox**. That group exists only because the claims address is a shared mailbox, which cannot be the policy scope by itself. Its only member is `claims@cascar.co.uk`. A send or read failure on another mailbox is the restriction working. Do not remove the policy, and do not add other mailboxes to the group, to widen it.
+
 Demonstration usernames and passwords: `docs/AUTH-NOTES.md`.
