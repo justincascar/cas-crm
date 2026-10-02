@@ -8,7 +8,8 @@ import { PageHeader } from "@/components/ClaimTable";
 import { CLAIM_SCREENS, getClaimScreen, screensByGroup } from "@/lib/claim-screens";
 import { requireStaff } from "@/lib/auth/session";
 import { getClaim, listFleet, listKnownAgents, listKnownInsurers, listReservations } from "@/lib/db/queries";
-import { findPreparedEngineerInstruction, listActiveEngineers } from "@/lib/db/engineers";
+import { findPreparedEngineerInstruction, getEngineer, listActiveEngineers } from "@/lib/db/engineers";
+import { representativeIsRecorded, savedText } from "@/lib/email/send-to";
 import { findPreparedChase, listChasesForClaim } from "@/lib/db/chase";
 import { listHireAgreements } from "@/lib/db/chronology";
 import { seedScreenDefaults } from "@/lib/db/screens";
@@ -122,6 +123,10 @@ export default async function ClaimWorkScreenPage({
             tpInsurer: String(data.thirdParties[0]?.insurer_name || ""),
             tpEmail: String(data.thirdParties[0]?.insurer_email || data.thirdParties[0]?.handler_email || ""),
             tpPhone: String(data.thirdParties[0]?.insurer_tel || data.thirdParties[0]?.handler_tel || ""),
+            representativeRecorded: representativeIsRecorded(data.thirdParties[0]),
+            representativeEmail: savedText(String(data.thirdParties[0]?.agent_email || "")) || savedText(String(data.thirdParties[0]?.agent_handler_email || "")),
+            engineerInstructed: Boolean(String(data.claim.engineer_id || "").trim()),
+            engineerEmail: savedText(getEngineer(String(data.claim.engineer_id || ""))?.email),
             fileReference: String(data.claim.file_reference),
             policyRef: String(data.thirdParties[0]?.insurer_ref || data.thirdParties[0]?.policy_number || data.claim.own_policy_ref || ""),
           }}

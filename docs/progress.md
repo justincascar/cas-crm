@@ -360,7 +360,7 @@ Staff sign-in (17 September 2026): username/password for the four demonstration 
 
 - Opening a stored V5C no longer embeds the raw PDF in the page (Chrome's plugin froze the CRM). Pages are drawn as images; the original can be downloaded. The rest of the screen stays usable if a page cannot be drawn.
 
-Blocked: the Microsoft 365 app registration is not supplied yet (`CAS_M365_TENANT_ID`, `CAS_M365_CLIENT_ID`, `CAS_M365_CLIENT_SECRET`), per-file permissions, shared hosting, live DVLA. Incoming mail is not built. Automatic no-click chasers are a later decision.
+Blocked: per-file permissions, shared hosting, live DVLA. Incoming mail is not built. Automatic no-click chasers are a later decision. Microsoft 365 send, where configured, lives only in this computer's local environment and is not stored in the project.
 
 ## Microsoft 365 outbound send (1 October 2026)
 
@@ -371,10 +371,19 @@ Blocked: the Microsoft 365 app registration is not supplied yet (`CAS_M365_TENAN
   - `CAS_M365_CLIENT_ID` — Application (client) ID
   - `CAS_M365_CLIENT_SECRET` — client secret value
 - Put them in the process environment, or in a local `.env` file (git already ignores `.env`). `.env.example` lists the names with no values.
-- The app registration needs Microsoft Graph application permission **Mail.Send**, admin consent, and permission to send as `claims@cascar.co.uk` only. That registration does not exist yet. Tests use a mocked mailbox, not a live one.
+- The app registration needs Microsoft Graph application permission **Mail.Send**, admin consent, and permission to send as `claims@cascar.co.uk` only. Tests use a mocked mailbox, not a live one.
 - A failed send stays prepared, is shown as a failure, and can be tried again. Invalid or expired credentials are reported as a configuration error. A second click while a send is in progress does not send a second copy. A successful send is logged on the file history with who sent it, when, and to whom.
 - Hire pack cover letters are sent from the communications screen (fill the template, then Send). The hire pack document itself is still a file on the claim, not an email.
 - Creating a new claim does not send mail by itself. The recovery-agreement note on a new file stays the existing simulated record.
+
+## Send to, on the general email (2 October 2026)
+
+- On Email / WhatsApp / Calls, the general Send email box now starts with **Send to**. Staff choose Client, Third party (insurer), Third party representative (only when one is recorded), Engineer (only when one has been instructed on the file), or Other / type manually.
+- Choosing a role fills that contact's saved email. If the role has no email, the box stays empty and the screen says there is no email on file. Nothing is invented. The address can still be typed or changed. A typed address is not replaced by another role until the person confirms.
+- Third party representative uses the name already stored as the representative, or the third-party insurer's agent on Third party 1. The email is the agent's saved email, then the agent handler's email. A representative name on its own has no address, so the option appears and says no email is on file.
+- Instruct Engineer and the chase screens are unchanged. Sending itself is unchanged.
+- Tests: `tests/send-to.test.ts` (four cases). Full suite: 246 passing, 0 failing.
+- Next: reading incoming mail and matching replies to the right file. Automatic no-click chasers remain a separate decision.
 
 ## Not yet claimed
 

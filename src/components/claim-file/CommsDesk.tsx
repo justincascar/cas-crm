@@ -17,6 +17,7 @@ import { ValidatedForm } from "@/components/ValidatedForm";
 import { EMAIL_TEMPLATES } from "@/lib/documents/email-templates";
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
 import { formatUkDateTime } from "@/lib/dates";
+import { applySendToChoice, buildSendToOptions, type SendToRole } from "@/lib/email/send-to";
 import type { ChaseView } from "@/lib/db/chase";
 import Link from "next/link";
 
@@ -29,6 +30,10 @@ export type CommsContactDefaults = {
   tpInsurer: string;
   tpEmail: string;
   tpPhone: string;
+  representativeRecorded: boolean;
+  representativeEmail: string;
+  engineerInstructed: boolean;
+  engineerEmail: string;
   fileReference: string;
   policyRef: string;
 };
@@ -83,13 +88,46 @@ export function CommsDesk({
   const router = useRouter();
   const defaultSubject = `Our ref: ${defaults.fileReference}  Your policy: ${defaults.policyRef || "…"}`;
   const [emailMsg, setEmailMsg] = useState<string | null>(null);
-  const [emailTo, setEmailTo] = useState(defaults.tpEmail);
+  const [emailTo, setEmailTo] = useState("");
+  const [sendTo, setSendTo] = useState("");
+  const [filledAddress, setFilledAddress] = useState("");
+  const [sendToNote, setSendToNote] = useState<string | null>(null);
   const [emailSubject, setEmailSubject] = useState(defaultSubject);
   const [emailBody, setEmailBody] = useState("Dear Sir / Madam\n\n");
   const [emailTemplate, setEmailTemplate] = useState<string>(EMAIL_TEMPLATES[0].key);
   const [fillMsg, setFillMsg] = useState<string | null>(null);
   const [waMsg, setWaMsg] = useState<string | null>(null);
   const [callMsg, setCallMsg] = useState<string | null>(null);
+  const sendToOptions = buildSendToOptions({
+    clientEmail: defaults.clientEmail,
+    thirdPartyEmail: defaults.tpEmail,
+    representativeRecorded: defaults.representativeRecorded,
+    representativeEmail: defaults.representativeEmail,
+    engineerInstructed: defaults.engineerInstructed,
+    engineerEmail: defaults.engineerEmail,
+  });
+
+  function chooseRecipient(role: string) {
+    const apply = (confirmed: boolean) =>
+      applySendToChoice({
+        role: role as SendToRole,
+        options: sendToOptions,
+        currentAddress: emailTo,
+        filledAddress,
+        confirmed,
+      });
+    let decision = apply(false);
+    if (decision.needsConfirm) {
+      const ok = window.confirm("Replace the address already typed in To?");
+      if (!ok) return;
+      decision = apply(true);
+    }
+    if (decision.needsConfirm) return;
+    setSendTo(role);
+    setEmailTo(decision.address);
+    setFilledAddress(decision.filledAddress);
+    setSendToNote(decision.missingMessage);
+  }
 
   return (
     <div className="space-y-6">
@@ -189,9 +227,27 @@ export function CommsDesk({
             const to = "to" in preview && typeof preview.to === "string" ? preview.to : "";
             const subject = "subject" in preview && typeof preview.subject === "string" ? preview.subject : "";
             const body = "body" in preview && typeof preview.body === "string" ? preview.body : "";
-            if (to) setEmailTo(to);
-            setEmailSubject(subject);
-            setEmailBody(body);
+            if (to && to.trim() !== emailTo.trim()) {
+              const typed = emailTo.trim() !== "" && emailTo.trim() !== filledAddress.trim();
+              if (typed && !window.confirm("Replace the address already typed in To?")) {
+                setEmailSubject(subject);
+                setEmailBody(body);
+              } else {
+                setEmailTo(to);
+                setFilledAddress(to);
+                setSendTo("");
+                setSendToNote(null);
+                setEmailSubject(subject);
+                setEmailBody(body);
+              }
+            } else {
+              if (to) {
+                setEmailTo(to);
+                setFilledAddress(to);
+              }
+              setEmailSubject(subject);
+              setEmailBody(body);
+            }
             const missing = "missing" in preview && Array.isArray(preview.missing) ? preview.missing : [];
             const legalSignOffRequired =
               "legalSignOffRequired" in preview && Boolean(preview.legalSignOffRequired);
@@ -206,6 +262,17 @@ export function CommsDesk({
           Fill from this file
         </button>
         {fillMsg ? <p className="text-sm text-slate md:col-span-2">{fillMsg}</p> : null}
+        <label className="text-sm md:col-span-2">
+          Send to
+          <select className={field} value={sendTo} onChange={(event) => chooseRecipient(event.target.value)}>
+            <option value="">Choose who this is going to</option>
+            {sendToOptions.map((option) => (
+              <option key={option.role} value={option.role}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
         <label className="text-sm">
           To
           <input
@@ -213,10 +280,11 @@ export function CommsDesk({
             required
             value={emailTo}
             onChange={(event) => setEmailTo(event.target.value)}
-            placeholder="insurer@example.com"
+            placeholder="Email address"
             className={field}
           />
         </label>
+        {sendToNote ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2 text-sm md:col-span-2">{sendToNote}</p> : null}
         <label className="text-sm">
           Date of sending
           <input name="occurredAt" type="datetime-local" className={field} />
