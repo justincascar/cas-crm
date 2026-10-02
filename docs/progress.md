@@ -392,9 +392,11 @@ Blocked: per-file permissions, shared hosting, live DVLA. Incoming mail is not b
 - The general Send email box lists documents already stored on that claim. Each one starts unticked. Nothing is attached unless a person ticks it.
 - A generated letter or hire agreement (the saved page) goes out as that page. An uploaded file, such as a V5C, licence, insurance certificate or handover photograph, goes out as the stored file. A document that is not on this claim cannot be attached.
 - If the claim has no stored document, the box says so and the email can still be sent as text.
-- Microsoft's simple send, which this CRM uses, refuses attachments over 3 MB in total. The screen says so and does not send. A larger upload, up to the mailbox's wider limit, is not built. A failed send is not marked as sent, and the ticked documents stay ticked.
+- An email with documents is saved as a draft, each document is attached on its own, and the draft is then sent. A file under 3 MB is attached in one call. A file of 3 MB or more is uploaded in pieces, which is the method Microsoft requires for a larger single file. A plain email with nothing attached still uses the single send call.
+- The screen refuses a selection over 35 MB and does not send. 35 MB is Exchange Online's published default for a whole message. This app cannot read this mailbox's own limit. Graph will accept one file up to 150 MB only if an administrator has raised the mailbox limit. A failed send deletes the draft, is not marked as sent, and the ticked documents stay ticked.
+- Saving that draft needs Microsoft Graph application permission **Mail.ReadWrite**, with admin consent, on the same app registration that already has Mail.Send. Without it, Microsoft refuses the draft and nothing is sent.
 - The sent email on this file, and the file history, name the documents that went with it.
-- Tests: `tests/email-attachments.test.ts` (four cases). Full suite: 251 passing, 0 failing.
+- Tests: `tests/email-attachments.test.ts` (six cases). Full suite: 253 passing, 0 failing.
 
 ## Not yet claimed
 

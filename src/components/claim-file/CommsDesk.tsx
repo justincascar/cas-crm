@@ -21,7 +21,7 @@ import {
   ATTACHMENT_TOO_LARGE_MESSAGE,
   NO_STORED_DOCUMENTS_MESSAGE,
   attachmentChoices,
-  attachmentsExceedSimpleSend,
+  attachmentsExceedMailboxLimit,
   selectedAttachmentBytes,
 } from "@/lib/email/attachments";
 import { applySendToChoice, buildSendToOptions, type SendToRole } from "@/lib/email/send-to";
@@ -200,7 +200,7 @@ export function CommsDesk({
         className="grid gap-3 rounded-xl border border-line bg-card p-5 md:grid-cols-2"
         action={async (formData) => {
           const chosen = formData.getAll("attachmentId").map((value) => String(value));
-          if (attachmentsExceedSimpleSend(selectedAttachmentBytes(attachable, chosen))) {
+          if (attachmentsExceedMailboxLimit(selectedAttachmentBytes(attachable, chosen))) {
             setEmailMsg(ATTACHMENT_TOO_LARGE_MESSAGE);
             return;
           }
@@ -370,7 +370,7 @@ export function CommsDesk({
               ))}
             </ul>
           )}
-          {attachmentsExceedSimpleSend(selectedAttachmentBytes(attachable, attachmentIds)) ? (
+          {attachmentsExceedMailboxLimit(selectedAttachmentBytes(attachable, attachmentIds)) ? (
             <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2 text-sm">{ATTACHMENT_TOO_LARGE_MESSAGE}</p>
           ) : null}
         </fieldset>

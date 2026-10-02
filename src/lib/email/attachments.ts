@@ -2,13 +2,22 @@ import { claimDocumentTypeLabel } from "../domain/claim-documents";
 import { formatUkDate } from "../dates";
 
 /**
- * Microsoft Graph's simple sendMail call refuses a file attachment over 3 MB.
- * The mailbox can hold a larger message by a different upload, which this send does not use.
+ * A file under this size is added to a draft in one call.
+ * At this size or above, Graph requires an upload session and refuses the one-call attachment.
  */
-export const SIMPLE_SEND_ATTACHMENT_LIMIT_BYTES = 3 * 1024 * 1024;
+export const GRAPH_INLINE_ATTACHMENT_LIMIT_BYTES = 3 * 1024 * 1024;
 
-export const ATTACHMENT_TOO_LARGE_MESSAGE =
-  "These documents are too large for this send (over 3 MB altogether). Nothing was sent. Untick a document and try again.";
+/** One file in an upload session. Graph's own ceiling, separate from the mailbox limit below. */
+export const GRAPH_UPLOAD_SESSION_LIMIT_BYTES = 150 * 1024 * 1024;
+
+/**
+ * Exchange Online's published default for a whole message, including its attachments.
+ * This app cannot read the mailbox's own MaxSendSize. An administrator can raise that
+ * setting, up to the 150 MB service maximum. The screen uses this published default.
+ */
+export const MAILBOX_ATTACHMENT_LIMIT_BYTES = 35 * 1024 * 1024;
+
+export const ATTACHMENT_TOO_LARGE_MESSAGE = `These documents are too large for this send (over ${MAILBOX_ATTACHMENT_LIMIT_BYTES / (1024 * 1024)} MB altogether). Nothing was sent. Untick a document and try again.`;
 
 export const NO_STORED_DOCUMENTS_MESSAGE = "No documents stored on this claim yet.";
 
@@ -47,8 +56,8 @@ export function selectedAttachmentBytes(choices: AttachmentChoice[], ids: string
   return choices.filter((choice) => chosen.has(choice.id)).reduce((total, choice) => total + choice.byteSize, 0);
 }
 
-export function attachmentsExceedSimpleSend(totalBytes: number): boolean {
-  return totalBytes > SIMPLE_SEND_ATTACHMENT_LIMIT_BYTES;
+export function attachmentsExceedMailboxLimit(totalBytes: number): boolean {
+  return totalBytes > MAILBOX_ATTACHMENT_LIMIT_BYTES;
 }
 
 function hasStoredContent(row: AttachmentSource): boolean {

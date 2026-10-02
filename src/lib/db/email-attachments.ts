@@ -1,4 +1,4 @@
-import { ATTACHMENT_TOO_LARGE_MESSAGE, attachmentsExceedSimpleSend } from "../email/attachments";
+import { ATTACHMENT_TOO_LARGE_MESSAGE, attachmentsExceedMailboxLimit } from "../email/attachments";
 import { claimDocumentTypeLabel } from "../domain/claim-documents";
 import { formatUkDate } from "../dates";
 import { readStoredFile, safeFilename } from "../storage/files";
@@ -51,7 +51,7 @@ export function loadClaimEmailAttachments(
     attachments.push(loaded.attachment);
   }
   const total = attachments.reduce((sum, item) => sum + item.content.length, 0);
-  if (attachmentsExceedSimpleSend(total)) return { ok: false, error: ATTACHMENT_TOO_LARGE_MESSAGE };
+  if (attachmentsExceedMailboxLimit(total)) return { ok: false, error: ATTACHMENT_TOO_LARGE_MESSAGE };
   return { ok: true, attachments };
 }
 
