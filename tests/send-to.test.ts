@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { applySendToChoice, buildSendToOptions, representativeIsRecorded, savedText } from "../src/lib/email/send-to.ts";
+import { emailTemplatesForRole, templateKeyForRole } from "../src/lib/documents/email-templates.ts";
 
 const contacts = {
   clientEmail: "ceri.walsh@example.test",
@@ -124,5 +125,30 @@ describe("Send to picker", () => {
     });
     assert.equal(cleared.needsConfirm, false);
     if (!cleared.needsConfirm) assert.equal(cleared.address, "");
+  });
+
+  it("offers only the templates written for the chosen recipient", () => {
+    const titles = (role: string) => emailTemplatesForRole(role).map((template) => template.title);
+    const client = titles("client");
+    assert.ok(client.includes("Client welcome (intake)"));
+    assert.ok(client.includes("Client status update"));
+    assert.ok(client.includes("Vehicle ready for collection"));
+    assert.equal(client.some((title) => /payment chase/i.test(title)), false);
+
+    const insurer = titles("third_party");
+    assert.deepEqual(insurer, ["Payment chase 1 — first reminder", "Payment chase 2 — final warning"]);
+    assert.deepEqual(titles("representative"), insurer);
+
+    assert.deepEqual(titles("engineer"), []);
+    assert.deepEqual(titles(""), []);
+    assert.ok(titles("other").length > client.length);
+    assert.ok(titles("other").includes("Client welcome (intake)"));
+    assert.ok(titles("other").includes("Payment chase 1 — first reminder"));
+
+    assert.equal(templateKeyForRole("client", "payment_chase_1"), "client_welcome");
+    assert.equal(templateKeyForRole("client", "client_status_update"), "client_status_update");
+    assert.equal(templateKeyForRole("third_party", "client_welcome"), "payment_chase_1");
+    assert.equal(templateKeyForRole("other", "client_status_update"), "client_status_update");
+    assert.equal(templateKeyForRole("engineer", "client_welcome"), "");
   });
 });

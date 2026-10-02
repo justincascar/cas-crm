@@ -382,7 +382,9 @@ Blocked: per-file permissions, shared hosting, live DVLA. Incoming mail is not b
 - Choosing a role fills that contact's saved email. If the role has no email, the box stays empty and the screen says there is no email on file. Nothing is invented. The address can still be typed or changed. A typed address is not replaced by another role until the person confirms.
 - Third party representative uses the name already stored as the representative, or the third-party insurer's agent on Third party 1. The email is the agent's saved email, then the agent handler's email. A representative name on its own has no address, so the option appears and says no email is on file.
 - Instruct Engineer and the chase screens are unchanged. Sending itself is unchanged.
-- Tests: `tests/send-to.test.ts` (four cases). Full suite: 246 passing, 0 failing.
+- Send to is the first choice in that box. The template list then shows only templates written for that recipient. Client gets the client emails (welcome, status, total-loss update, vehicle ready, case closed). Third party (insurer) and a recorded representative get the two payment chases. Other / type manually shows every template. An instructed engineer has no template in this list; the message is typed, or Instruct Engineer is used.
+- Hire pack cover, the initial insurer letter and the liability chaser stay under Generate a document. They are not in this email list. The client paper chase stays on its own prepared email.
+- Tests: `tests/send-to.test.ts` (five cases). Full suite: 247 passing, 0 failing.
 - Next: reading incoming mail and matching replies to the right file. Automatic no-click chasers remain a separate decision.
 
 ## Not yet claimed

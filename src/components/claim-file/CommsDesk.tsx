@@ -14,7 +14,7 @@ import { DocumentGenerateForm } from "@/components/DocumentGenerateForm";
 import { InstructEngineerPanel } from "@/components/InstructEngineerPanel";
 import { ChasePanel, type HireAgreementHistoryRow } from "@/components/ChasePanel";
 import { ValidatedForm } from "@/components/ValidatedForm";
-import { EMAIL_TEMPLATES } from "@/lib/documents/email-templates";
+import { emailTemplatesForRole, templateKeyForRole } from "@/lib/documents/email-templates";
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
 import { formatUkDateTime } from "@/lib/dates";
 import { applySendToChoice, buildSendToOptions, type SendToRole } from "@/lib/email/send-to";
@@ -94,7 +94,7 @@ export function CommsDesk({
   const [sendToNote, setSendToNote] = useState<string | null>(null);
   const [emailSubject, setEmailSubject] = useState(defaultSubject);
   const [emailBody, setEmailBody] = useState("Dear Sir / Madam\n\n");
-  const [emailTemplate, setEmailTemplate] = useState<string>(EMAIL_TEMPLATES[0].key);
+  const [emailTemplate, setEmailTemplate] = useState("");
   const [fillMsg, setFillMsg] = useState<string | null>(null);
   const [waMsg, setWaMsg] = useState<string | null>(null);
   const [callMsg, setCallMsg] = useState<string | null>(null);
@@ -127,7 +127,10 @@ export function CommsDesk({
     setEmailTo(decision.address);
     setFilledAddress(decision.filledAddress);
     setSendToNote(decision.missingMessage);
+    setEmailTemplate((current) => templateKeyForRole(role, current));
   }
+
+  const visibleTemplates = emailTemplatesForRole(sendTo);
 
   return (
     <div className="space-y-6">
@@ -199,23 +202,61 @@ export function CommsDesk({
         <input type="hidden" name="actorId" value={handlerId} />
         <input type="hidden" name="templateKey" value={emailTemplate} />
         <label className="text-sm md:col-span-2">
+          Send to
+          <select className={field} value={sendTo} onChange={(event) => chooseRecipient(event.target.value)}>
+            <option value="">Choose who this is going to</option>
+            {sendToOptions.map((option) => (
+              <option key={option.role} value={option.role}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-sm">
+          To
+          <input
+            name="to"
+            required
+            value={emailTo}
+            onChange={(event) => setEmailTo(event.target.value)}
+            placeholder="Email address"
+            className={field}
+          />
+        </label>
+        {sendToNote ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2 text-sm md:col-span-2">{sendToNote}</p> : null}
+        <label className="text-sm md:col-span-2">
           CAS email template
           <select
             className={field}
             value={emailTemplate}
             onChange={(event) => setEmailTemplate(event.target.value)}
           >
-            {EMAIL_TEMPLATES.map((t) => (
-              <option key={t.key} value={t.key}>
-                {t.title}
+            {visibleTemplates.length === 0 ? (
+              <option value="">
+                {sendTo ? "No email template for this recipient" : "Choose who this is going to first"}
               </option>
-            ))}
+            ) : (
+              visibleTemplates.map((t) => (
+                <option key={t.key} value={t.key}>
+                  {t.title}
+                </option>
+              ))
+            )}
           </select>
         </label>
+        {sendTo === "engineer" ? (
+          <p className="text-sm text-slate md:col-span-2">
+            No saved email template is written for an engineer. Type the message here, or use Instruct Engineer above.
+          </p>
+        ) : null}
         <button
           className="rounded-md border border-line bg-white px-3 py-2 text-sm md:col-span-2"
           type="button"
           onClick={async () => {
+            if (!emailTemplate) {
+              setFillMsg(sendTo ? "No template is available for this recipient. Type the message instead." : "Choose who this is going to first.");
+              return;
+            }
             const form = new FormData();
             form.set("claimId", claimId);
             form.set("templateKey", emailTemplate);
@@ -235,8 +276,6 @@ export function CommsDesk({
               } else {
                 setEmailTo(to);
                 setFilledAddress(to);
-                setSendTo("");
-                setSendToNote(null);
                 setEmailSubject(subject);
                 setEmailBody(body);
               }
@@ -262,29 +301,6 @@ export function CommsDesk({
           Fill from this file
         </button>
         {fillMsg ? <p className="text-sm text-slate md:col-span-2">{fillMsg}</p> : null}
-        <label className="text-sm md:col-span-2">
-          Send to
-          <select className={field} value={sendTo} onChange={(event) => chooseRecipient(event.target.value)}>
-            <option value="">Choose who this is going to</option>
-            {sendToOptions.map((option) => (
-              <option key={option.role} value={option.role}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="text-sm">
-          To
-          <input
-            name="to"
-            required
-            value={emailTo}
-            onChange={(event) => setEmailTo(event.target.value)}
-            placeholder="Email address"
-            className={field}
-          />
-        </label>
-        {sendToNote ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2 text-sm md:col-span-2">{sendToNote}</p> : null}
         <label className="text-sm">
           Date of sending
           <input name="occurredAt" type="datetime-local" className={field} />
