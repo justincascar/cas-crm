@@ -12,7 +12,7 @@ import { findPreparedEngineerInstruction, getEngineer, listActiveEngineers } fro
 import { representativeIsRecorded, savedText } from "@/lib/email/send-to";
 import { findPreparedChase, listChasesForClaim } from "@/lib/db/chase";
 import { listHireAgreements } from "@/lib/db/chronology";
-import { seedScreenDefaults } from "@/lib/db/screens";
+import { getScreenData, seedScreenDefaults } from "@/lib/db/screens";
 import { HireEndDateReview } from "@/components/claims/HireEndDateReview";
 import { TotalLossPanel } from "@/components/claims/TotalLossPanel";
 import { StorageDateReview } from "@/components/claims/StorageDateReview";
@@ -122,6 +122,7 @@ export default async function ClaimWorkScreenPage({
             clientPhone: String(data.claim.mobile_tel || data.claim.telephone || ""),
             tpInsurer: String(data.thirdParties[0]?.insurer_name || ""),
             tpEmail: String(data.thirdParties[0]?.insurer_email || data.thirdParties[0]?.handler_email || ""),
+            ownInsurerEmail: savedText(getScreenData(String(data.claim.id), "insurer").email),
             tpPhone: String(data.thirdParties[0]?.insurer_tel || data.thirdParties[0]?.handler_tel || ""),
             representativeRecorded: representativeIsRecorded(data.thirdParties[0]),
             representativeEmail: savedText(String(data.thirdParties[0]?.agent_email || "")) || savedText(String(data.thirdParties[0]?.agent_handler_email || "")),

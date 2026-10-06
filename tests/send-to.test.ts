@@ -5,6 +5,7 @@ import { emailTemplatesForRole, templateKeyForRole } from "../src/lib/documents/
 
 const contacts = {
   clientEmail: "ceri.walsh@example.test",
+  ownInsurerEmail: "claims@aviva.example.test",
   thirdPartyEmail: "claims@zurich.example.test",
   representativeRecorded: true,
   representativeEmail: "keoghs@example.test",
@@ -17,9 +18,9 @@ describe("Send to picker", () => {
     const options = buildSendToOptions(contacts);
     assert.deepEqual(
       options.map((option) => option.role),
-      ["client", "third_party", "representative", "engineer", "other"],
+      ["client", "own_insurer", "third_party", "representative", "engineer", "other"],
     );
-    for (const role of ["client", "third_party", "representative", "engineer"] as const) {
+    for (const role of ["client", "own_insurer", "third_party", "representative", "engineer"] as const) {
       const applied = applySendToChoice({
         role,
         options,
@@ -53,20 +54,21 @@ describe("Send to picker", () => {
     });
     assert.deepEqual(
       options.map((option) => option.role),
-      ["client", "third_party", "other"],
+      ["client", "own_insurer", "third_party", "other"],
     );
   });
 
   it("says when a role has no email and does not invent one", () => {
     const options = buildSendToOptions({
       clientEmail: "Unknown",
+      ownInsurerEmail: "Unknown",
       thirdPartyEmail: "  ",
       representativeRecorded: true,
       representativeEmail: "",
       engineerInstructed: true,
       engineerEmail: null,
     });
-    for (const role of ["client", "third_party", "representative", "engineer"] as const) {
+    for (const role of ["client", "own_insurer", "third_party", "representative", "engineer"] as const) {
       const applied = applySendToChoice({
         role,
         options,
@@ -140,6 +142,7 @@ describe("Send to picker", () => {
     assert.deepEqual(titles("representative"), insurer);
 
     assert.deepEqual(titles("engineer"), []);
+    assert.deepEqual(titles("own_insurer"), []);
     assert.deepEqual(titles(""), []);
     assert.ok(titles("other").length > client.length);
     assert.ok(titles("other").includes("Client welcome (intake)"));
@@ -150,5 +153,47 @@ describe("Send to picker", () => {
     assert.equal(templateKeyForRole("third_party", "client_welcome"), "payment_chase_1");
     assert.equal(templateKeyForRole("other", "client_status_update"), "client_status_update");
     assert.equal(templateKeyForRole("engineer", "client_welcome"), "");
+    assert.equal(templateKeyForRole("own_insurer", "payment_chase_1"), "");
+  });
+
+  it("treats the client's own insurer like the third party insurer", () => {
+    const blank = buildSendToOptions({ ownInsurerEmail: "" });
+    const missing = applySendToChoice({
+      role: "own_insurer",
+      options: blank,
+      currentAddress: "",
+      filledAddress: "",
+      confirmed: false,
+    });
+    assert.equal(missing.needsConfirm, false);
+    if (!missing.needsConfirm) {
+      assert.equal(missing.address, "");
+      assert.equal(
+        missing.missingMessage,
+        "No email on file for the client's own insurer — enter one manually, or add it on Client insurer.",
+      );
+    }
+
+    const saved = buildSendToOptions({ ownInsurerEmail: "claims@aviva.example.test" });
+    const blocked = applySendToChoice({
+      role: "own_insurer",
+      options: saved,
+      currentAddress: "typed@example.test",
+      filledAddress: "",
+      confirmed: false,
+    });
+    assert.equal(blocked.needsConfirm, true);
+    const replaced = applySendToChoice({
+      role: "own_insurer",
+      options: saved,
+      currentAddress: "typed@example.test",
+      filledAddress: "",
+      confirmed: true,
+    });
+    assert.equal(replaced.needsConfirm, false);
+    if (!replaced.needsConfirm) assert.equal(replaced.address, "claims@aviva.example.test");
+
+    assert.deepEqual(emailTemplatesForRole("own_insurer"), []);
+    assert.equal(templateKeyForRole("own_insurer", "payment_chase_1"), "");
   });
 });

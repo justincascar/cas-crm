@@ -1,4 +1,4 @@
-export type SendToRole = "client" | "third_party" | "representative" | "engineer" | "other";
+export type SendToRole = "client" | "own_insurer" | "third_party" | "representative" | "engineer" | "other";
 
 export type SendToOption = {
   role: SendToRole;
@@ -9,6 +9,7 @@ export type SendToOption = {
 
 export type ComposerContacts = {
   clientEmail?: string | null;
+  ownInsurerEmail?: string | null;
   thirdPartyEmail?: string | null;
   representativeRecorded?: boolean;
   representativeEmail?: string | null;
@@ -18,6 +19,7 @@ export type ComposerContacts = {
 
 const MISSING = {
   client: "No email on file for the client — enter one manually, or add it on the client record.",
+  own_insurer: "No email on file for the client's own insurer — enter one manually, or add it on Client insurer.",
   third_party: "No email on file for the third party insurer — enter one manually, or add it on Third party 1.",
   representative: "No email on file for the third party representative — enter one manually, or add it on Third party 1.",
   engineer: "No email on file for the engineer — enter one manually, or add it under Settings → Engineers.",
@@ -45,11 +47,13 @@ export function representativeIsRecorded(row: {
 
 export function buildSendToOptions(input: ComposerContacts): SendToOption[] {
   const clientEmail = savedText(input.clientEmail);
+  const ownInsurerEmail = savedText(input.ownInsurerEmail);
   const thirdPartyEmail = savedText(input.thirdPartyEmail);
   const representativeEmail = savedText(input.representativeEmail);
   const engineerEmail = savedText(input.engineerEmail);
   const options: SendToOption[] = [
     option("client", "Client", clientEmail, MISSING.client),
+    option("own_insurer", "Client's own insurer", ownInsurerEmail, MISSING.own_insurer),
     option("third_party", "Third party (insurer)", thirdPartyEmail, MISSING.third_party),
   ];
   if (input.representativeRecorded) {

@@ -36,6 +36,7 @@ export type CommsContactDefaults = {
   clientPhone: string;
   tpInsurer: string;
   tpEmail: string;
+  ownInsurerEmail: string;
   tpPhone: string;
   representativeRecorded: boolean;
   representativeEmail: string;
@@ -107,6 +108,7 @@ export function CommsDesk({
   const [callMsg, setCallMsg] = useState<string | null>(null);
   const sendToOptions = buildSendToOptions({
     clientEmail: defaults.clientEmail,
+    ownInsurerEmail: defaults.ownInsurerEmail,
     thirdPartyEmail: defaults.tpEmail,
     representativeRecorded: defaults.representativeRecorded,
     representativeEmail: defaults.representativeEmail,
@@ -264,6 +266,11 @@ export function CommsDesk({
         {sendTo === "engineer" ? (
           <p className="text-sm text-slate md:col-span-2">
             No saved email template is written for an engineer. Type the message here, or use Instruct Engineer above.
+          </p>
+        ) : null}
+        {sendTo === "own_insurer" ? (
+          <p className="text-sm text-slate md:col-span-2">
+            No saved email template is written for the client's own insurer. Type the message here. The fault claim letter stays under Generate a document.
           </p>
         ) : null}
         <button
