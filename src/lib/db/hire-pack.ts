@@ -14,6 +14,8 @@ import { FieldValidationError } from "../form-validation";
 import { mobileNumberError } from "../phone-number";
 import { formatGbp } from "../money";
 import { all, get, newId, run } from "./connection";
+import { MITIGATION_QUESTIONNAIRE } from "../domain/impecuniosity";
+import { impecuniosityGate, latestMitigationForPack, type ImpecuniosityGate } from "./impecuniosity";
 import { recordClaimEvent } from "./chronology";
 
 export type HirePackData = Record<string, string | number | null>;
@@ -184,6 +186,8 @@ export function getHirePack(claimId: string) {
     packSaved: Boolean(savedRow),
     parts,
     handoverReadings,
+    impecuniosity: impecuniosityGate(claimId),
+    mitigationStatement: latestMitigationForPack(claimId),
   };
 }
 
@@ -332,6 +336,40 @@ function money(pence: string | number | null | undefined) {
   return formatGbp(Number(pence || 0));
 }
 
+function mitigationAnswersHtml(
+  pack: { mitigationStatement?: ReturnType<typeof latestMitigationForPack> },
+  stored: HirePackData,
+) {
+  const statement = pack.mitigationStatement;
+  const noOffer = statement ? statement.offer_position === "no_offer" : Number(stored.no_replacement_offer) === 1;
+  const declined = statement ? statement.offer_position === "declined" : Boolean(String(stored.declined_offer_reason || "").trim());
+  const declinedReason = statement ? String(statement.declined_offer_reason || "") : String(stored.declined_offer_reason || "");
+  const liability = statement ? Number(statement.understands_personal_liability) === 1 : Number(stored.understands_personal_liability) === 1;
+  const need = statement ? statement.need_reason : String(stored.need_reason || "");
+  const unusable = statement ? Number(statement.own_vehicle_unusable) === 1 : Number(stored.own_vehicle_unusable) === 1;
+  const noOther = statement ? Number(statement.no_other_vehicle) === 1 : Number(stored.no_other_vehicle) === 1;
+  const q = MITIGATION_QUESTIONNAIRE;
+  return `<p>${noOffer ? "☑" : "☐"} ${q.noOffer}</p>
+<p>OR</p>
+<p>${declined ? "☑" : "☐"} ${q.declinedBecause}: ${escape(v(declinedReason))}</p>
+<p>${liability ? "☑" : "☐"} ${q.personalLiability}</p>
+<p>${q.needBecause}: ${escape(v(need))}</p>
+<p>${unusable ? "☑" : "☐"} ${q.ownVehicle}</p>
+<p>${noOther ? "☑" : "☐"} ${q.noOtherVehicle}</p>`;
+}
+
+function impecuniosityMeansHtml(pack: { impecuniosity?: ImpecuniosityGate }) {
+  const gate = pack.impecuniosity;
+  if (gate?.canRely && gate.clientAnswer) return `<p>${escape(gate.clientAnswer)}</p>`;
+  if (gate?.canRely) {
+    return `<p>An authorised user has approved relying on impecuniosity, but the client has not given an answer on this file. Nothing has been added.</p>`;
+  }
+  const sentence =
+    gate?.withheldSentence ||
+    "This copy does not rely on impecuniosity: the evidence checklist is Not started, not Complete, and an authorised user has not approved relying on impecuniosity. A complete checklist is a record of what is held. It does not mean the charges can be recovered.";
+  return `<p class="missing">${escape(sentence)}</p>`;
+}
+
 export function renderHirePack(pack: NonNullable<ReturnType<typeof getHirePack>>) {
   const s = pack.stored;
   const hire = pack.hire;
@@ -380,24 +418,18 @@ ${missingBanner}
 </section>
 
 <section>
-<h2>Mitigation Questionnaire / Statement of Truth</h2>
+<h2>${MITIGATION_QUESTIONNAIRE.heading}</h2>
 <p>Agreement Number: <strong>${escape(agreement)}</strong> &nbsp; Date: ${escape(dateOut)}</p>
-<p>TO BE COMPLETED BY CUSTOMER</p>
-<p>Prior to agreeing to enter into the hire agreement my duty to keep my losses to a minimum have been explained to me and</p>
-<p>${Number(s.no_replacement_offer) ? "☑" : "☐"} I had not received an offer for a replacement vehicle from the at-fault insurer</p>
-<p>${s.declined_offer_reason ? "☑" : "☐"} I did receive an offer of a replacement vehicle but did not accept it because: ${escape(v(s.declined_offer_reason))}</p>
-<p>${Number(s.understands_personal_liability) ? "☑" : "☐"} I understand that if I choose to hire on credit I am personally liable for paying for the hire costs which I would not have incurred had I been offered and accepted a suitable courtesy vehicle from my own motor insurer or legal expenses insurer.</p>
-<p>I need a hire vehicle because: ${escape(v(s.need_reason))}</p>
-<p>${Number(s.own_vehicle_unusable) ? "☑" : "☐"} I believe my own vehicle is unroadworthy and/or unusable and I understand temporary repairs are impractical or uneconomic.</p>
-<p>${Number(s.no_other_vehicle) ? "☑" : "☐"} I do not have another suitable vehicle available to me, either being my own or through my immediate family.</p>
+<p>${MITIGATION_QUESTIONNAIRE.audience}</p>
+<p>${MITIGATION_QUESTIONNAIRE.preamble}</p>
+${mitigationAnswersHtml(pack, s)}
 <h3>Financial means</h3>
 <p>Need for a vehicle is separate from whether I could reasonably have paid for a replacement myself. The hire agreement asks for a statement of means and three months' bank statements before the replacement vehicle goes out. This declaration refers to that request; it does not replace it.</p>
 <p>${Number(s.means_documents_requested) ? "☑" : "☐"} A statement of means and bank statements have been requested</p>
 <p>${Number(s.means_documents_on_file) ? "☑" : "☐"} A statement of means and/or bank statements are on this file</p>
-<p>${Number(s.cannot_fund_hire) ? "☑" : "☐"} I could not reasonably have funded a replacement vehicle from my own resources</p>
-<p>${Number(s.no_other_credit) ? "☑" : "☐"} I did not have access to other credit that I could reasonably have used to hire a replacement</p>
+${impecuniosityMeansHtml(pack)}
 <p>Further notes: ${escape(v(s.means_notes))}</p>
-<p>I have read and understood the above and I believe that the answers I have given are true.</p>
+<p>${MITIGATION_QUESTIONNAIRE.statementOfTruth}</p>
 <p>Name: ${escape(name)} &nbsp; Address: ${escape(address)}</p>
 <p>Signed: ______________________ &nbsp; Date: ${escape(dateOut)}</p>
 </section>

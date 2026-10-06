@@ -571,6 +571,71 @@ CREATE TABLE IF NOT EXISTS sessions (
   expires_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS financial_circumstances (
+  id TEXT PRIMARY KEY,
+  claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+  recorded_at TEXT NOT NULL,
+  recorded_by TEXT,
+  correction_reason TEXT,
+  employment_status TEXT NOT NULL,
+  employment_words TEXT,
+  income_as_stated TEXT,
+  benefits_as_stated TEXT,
+  ability_to_pay TEXT NOT NULL,
+  ability_to_pay_words TEXT,
+  no_bank_explanation TEXT,
+  question_wording TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS impecuniosity_accounts (
+  id TEXT PRIMARY KEY,
+  claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+  label TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  notes TEXT,
+  recorded_at TEXT NOT NULL,
+  recorded_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS impecuniosity_checklist_events (
+  id TEXT PRIMARY KEY,
+  claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+  status TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  recorded_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS impecuniosity_concerns (
+  id TEXT PRIMARY KEY,
+  claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+  body TEXT NOT NULL,
+  recorded_at TEXT NOT NULL,
+  recorded_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS impecuniosity_approvals (
+  id TEXT PRIMARY KEY,
+  claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+  approved INTEGER NOT NULL,
+  recorded_at TEXT NOT NULL,
+  recorded_by TEXT
+);
+
+CREATE TABLE IF NOT EXISTS mitigation_statements (
+  id TEXT PRIMARY KEY,
+  claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+  recorded_at TEXT NOT NULL,
+  recorded_by TEXT,
+  statement_on TEXT,
+  correction_reason TEXT,
+  offer_position TEXT NOT NULL,
+  declined_offer_reason TEXT,
+  understands_personal_liability INTEGER NOT NULL DEFAULT 0,
+  need_reason TEXT NOT NULL,
+  own_vehicle_unusable INTEGER NOT NULL DEFAULT 0,
+  no_other_vehicle INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE INDEX IF NOT EXISTS idx_claims_handler ON claims(handler_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_staff ON sessions(staff_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);

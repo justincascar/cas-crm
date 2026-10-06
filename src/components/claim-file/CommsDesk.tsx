@@ -63,6 +63,7 @@ export function CommsDesk({
   hireAgreements,
   preparedByKind,
   mailboxConnected = false,
+  impecuniosityBlockReason = null,
 }: {
   claimId: string;
   handlerId: string;
@@ -92,6 +93,7 @@ export function CommsDesk({
     } | null
   >;
   mailboxConnected?: boolean;
+  impecuniosityBlockReason?: string | null;
 }) {
   const router = useRouter();
   const defaultSubject = `Our ref: ${defaults.fileReference}  Your policy: ${defaults.policyRef || "…"}`;
@@ -537,6 +539,7 @@ export function CommsDesk({
         handlerId={handlerId}
         liabilityStatus={liabilityStatus}
         variant="comms"
+        impecuniosityBlockReason={impecuniosityBlockReason}
       />
 
       {documents.length > 0 ? (

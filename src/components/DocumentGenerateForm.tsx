@@ -14,11 +14,13 @@ export function DocumentGenerateForm({
   handlerId,
   liabilityStatus,
   variant = "comms",
+  impecuniosityBlockReason = null,
 }: {
   claimId: string;
   handlerId: string;
   liabilityStatus: string;
   variant?: "comms" | "history";
+  impecuniosityBlockReason?: string | null;
 }) {
   const suggested = suggestedLetterTemplateKey(liabilityStatus);
   const [templateKey, setTemplateKey] = useState(suggested || "");
@@ -67,6 +69,9 @@ export function DocumentGenerateForm({
     setBusy(false);
   }
 
+  const impecuniosityBlocked = templateKey === "impecuniosity_disclosure" && Boolean(impecuniosityBlockReason);
+  const returnTo = variant === "history" ? `/claims/${claimId}` : `/claims/${claimId}/work/comms`;
+
   const boxClass =
     variant === "comms"
       ? "grid gap-3 rounded-xl border-2 border-teal bg-[#e8f4f2] p-5 md:grid-cols-2"
@@ -84,6 +89,7 @@ export function DocumentGenerateForm({
       <p className={`text-sm text-navy-deep ${variant === "comms" ? "md:col-span-2" : ""}`}>{letterSuggestionNote(liabilityStatus)}</p>
       <input type="hidden" name="claimId" value={claimId} />
       <input type="hidden" name="actorId" value={handlerId} />
+      <input type="hidden" name="returnTo" value={returnTo} />
       <label className="text-sm">
         Document
         <select
@@ -121,7 +127,7 @@ export function DocumentGenerateForm({
         >
           Preview
         </button>
-        <button className="rounded-md bg-teal px-4 py-2 text-sm font-semibold text-white" type="submit" disabled={!templateKey}>
+        <button className="rounded-md bg-teal px-4 py-2 text-sm font-semibold text-white" type="submit" disabled={!templateKey || impecuniosityBlocked}>
           Generate and open
         </button>
         {variant === "comms" ? (
@@ -130,6 +136,11 @@ export function DocumentGenerateForm({
           </Link>
         ) : null}
       </div>
+      {impecuniosityBlocked ? (
+        <p className={`rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue ${variant === "comms" ? "md:col-span-2" : ""}`}>
+          {impecuniosityBlockReason}
+        </p>
+      ) : null}
       {preview ? (
         <div className={`space-y-3 ${variant === "comms" ? "md:col-span-2" : ""}`}>
           {preview.error ? <p className="text-sm text-copper">{preview.error}</p> : null}

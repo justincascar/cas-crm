@@ -12,6 +12,7 @@ import { findPreparedEngineerInstruction, getEngineer, listActiveEngineers } fro
 import { representativeIsRecorded, savedText } from "@/lib/email/send-to";
 import { findPreparedChase, listChasesForClaim } from "@/lib/db/chase";
 import { listHireAgreements } from "@/lib/db/chronology";
+import { impecuniosityGate } from "@/lib/db/impecuniosity";
 import { getScreenData, seedScreenDefaults } from "@/lib/db/screens";
 import { HireEndDateReview } from "@/components/claims/HireEndDateReview";
 import { TotalLossPanel } from "@/components/claims/TotalLossPanel";
@@ -141,6 +142,7 @@ export default async function ClaimWorkScreenPage({
           hireAgreements={hireAgreements}
           preparedByKind={preparedByKind}
           mailboxConnected={mailboxIsConnected()}
+          impecuniosityBlockReason={impecuniosityGate(String(data.claim.id)).generationBlock}
         />
       ) : null}
 

@@ -277,16 +277,26 @@ export async function actionGenerateDocument(formData: FormData) {
   if (!isDocumentTemplateKey(templateKey)) {
     redirect(`/claims/${claimId}${errorQuery("Unknown document template.")}`);
   }
-  const result = generateClaimDocument({
-    claimId,
-    templateKey,
-    actorId: String(formData.get("actorId") || "staff-sian"),
-    letterDate: String(formData.get("letterDate") || "") || undefined,
-    recordOnFile: formData.get("recordOnFile") === "yes",
-  });
+  const requestedReturn = String(formData.get("returnTo") || "");
+  const safeReturn = requestedReturn.startsWith(`/claims/${claimId}`)
+    ? requestedReturn.split("?")[0]
+    : `/claims/${claimId}/work/comms`;
+  let documentId = "";
+  try {
+    const result = generateClaimDocument({
+      claimId,
+      templateKey,
+      actorId: String(formData.get("actorId") || "staff-sian"),
+      letterDate: String(formData.get("letterDate") || "") || undefined,
+      recordOnFile: formData.get("recordOnFile") === "yes",
+    });
+    documentId = result.documentId;
+  } catch (error) {
+    redirect(`${safeReturn}${errorQuery(error instanceof Error ? error.message : "The document was not produced.")}`);
+  }
   revalidatePath(`/claims/${claimId}`);
   revalidatePath("/documents");
-  redirect(`/documents/${result.documentId}`);
+  redirect(`/documents/${documentId}`);
 }
 
 export async function actionPreviewCorrespondence(formData: FormData) {
@@ -295,12 +305,25 @@ export async function actionPreviewCorrespondence(formData: FormData) {
   if (!isDocumentTemplateKey(templateKey)) {
     return { error: "Unknown template.", to: "", subject: "", body: "", html: "", missing: [] as string[], legalSignOffRequired: false };
   }
-  const preview = letterPreview(
-    String(formData.get("claimId")),
-    templateKey,
-    String(formData.get("letterDate") || "") || undefined,
-    String(formData.get("engineerId") || "") || undefined,
-  );
+  let preview;
+  try {
+    preview = letterPreview(
+      String(formData.get("claimId")),
+      templateKey,
+      String(formData.get("letterDate") || "") || undefined,
+      String(formData.get("engineerId") || "") || undefined,
+    );
+  } catch (error) {
+    return {
+      error: error instanceof Error ? error.message : "The document was not produced.",
+      to: "",
+      subject: "",
+      body: "",
+      html: "",
+      missing: [] as string[],
+      legalSignOffRequired: false,
+    };
+  }
   const to = "to" in preview && typeof preview.to === "string" ? preview.to : "";
   return {
     to,

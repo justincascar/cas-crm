@@ -42,10 +42,10 @@ export default async function ClaimDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tlError?: string; tlMail?: string; mailboxError?: string; mailboxSent?: string }>;
+  searchParams: Promise<{ error?: string; tlError?: string; tlMail?: string; mailboxError?: string; mailboxSent?: string }>;
 }) {
   const { id } = await params;
-  const { tlError, tlMail, mailboxError, mailboxSent } = await searchParams;
+  const { error, tlError, tlMail, mailboxError, mailboxSent } = await searchParams;
   await requireStaff();
   const data = getClaim(id);
   if (!data) notFound();
@@ -100,6 +100,7 @@ export default async function ClaimDetailPage({
         roadworthiness={String(claim.roadworthiness || "")}
       />
 
+      {error ? <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p> : null}
       <MailboxSendNotice sent={mailboxSent} error={mailboxError} />
 
       <OutstandingSummary items={outstandingForClaim(String(claim.id))} />

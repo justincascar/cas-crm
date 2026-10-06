@@ -5,6 +5,7 @@ import { DocumentGenerateForm } from "@/components/DocumentGenerateForm";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { CLAIM_EVENT_TYPES } from "@/lib/domain/events";
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
+import { impecuniosityGate } from "@/lib/db/impecuniosity";
 import { mailboxIsConnected } from "@/lib/email/microsoft-graph";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import Link from "next/link";
@@ -128,6 +129,7 @@ export function FileHistory({
           handlerId={handlerId}
           liabilityStatus={liabilityStatus}
           variant="history"
+          impecuniosityBlockReason={impecuniosityGate(claimId).generationBlock}
         />
 
         <div className="space-y-2 rounded-lg border-2 border-navy bg-[#e8eef4] p-4">

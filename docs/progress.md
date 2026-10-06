@@ -405,6 +405,18 @@ Blocked: per-file permissions, shared hosting, live DVLA. Incoming mail is not b
 - `claims@cascar.co.uk` is a shared mailbox, so Microsoft will not take that address as the policy scope on its own. The scope is the mail-enabled security group **CAS CRM claims mailbox** (`cas-crm-claims-mailbox@cascar.co.uk`), whose only member is the claims mailbox. Do not add other mailboxes to that group. Do not delete the group. Do not remove the policy to get a send working on another mailbox.
 - Checked the same day: `Test-ApplicationAccessPolicy` returned **Granted** for `claims@cascar.co.uk` and **Denied** for `justin@cascar.co.uk`. Microsoft says the restriction can take up to 30 minutes to apply to live mail. The test already showed the denial.
 
+## Financial circumstances, impecuniosity and mitigation (6 October 2026)
+
+- A claim has a Financial circumstances section. Staff record employment, approximate income and benefits in the client's own words, and the client's own answer to whether they could have paid for a replacement without a sacrifice they could not reasonably have been expected to make. That question is drafted close to the Lagden test and is flagged for Justin to review. It is not a finding.
+- The evidence checklist is Not started, Requested, Partial or Complete. Bank accounts, wage slips and benefit award letters are listed one by one. Files are stored with the existing document upload, tagged Impecuniosity evidence. The status changes only when a handler sets it. Uploading files does not mark it Complete, and Partial is not promoted on its own. A handler can note a disclosure concern. The system does not draft that note.
+- If the client has no bank account or is paid in cash, their explanation can be saved. The section is not blocked.
+- A later change of circumstances, or a correction of the mitigation statement, is a new dated entry. The earlier entry stays.
+- The mitigation statement uses the Hire Pack questionnaire already in the CRM (offer of a replacement or not, personal liability, why a vehicle is needed, own vehicle unusable, no other suitable vehicle, statement of truth). There is no separate "how long" question on that page. Duration is recorded in the client's answer to why they need a vehicle. A signature is not added.
+- An administrator can approve relying on impecuniosity. That flag is separate from the checklist. The impecuniosity disclosure letter, and an email that uses the assertion wording, is refused until the checklist is Complete and that approval is set. The screen states the reason. A generated hire pack leaves that assertion out until both are in place. A complete checklist does not mean the charges can be recovered.
+- There is no client form for this. Staff enter it. Two people saving at once: the later save is kept. The CRM does not yet warn of a clash. Earlier dated entries stay.
+- `claude/impecuniosity-legal-research.md` was not in the project. The build used the points in the stage note (burden on the client, incomplete disclosure, do not assert impecuniosity without evidence and approval) and did not add case law.
+- Tests: `tests/impecuniosity.test.ts` (five cases: dated circumstances, checklist not promoted by files, approval gate on the letter and an asserting email, mitigation versions, hire pack withholding the assertion). Full suite before this stage: 254 passing, 0 failing. After: 259 passing, 0 failing.
+
 ## Not yet claimed
 
 Stages 2–5 (finer permissions, live integrations, payment packs from CAS templates, litigation issue, backups/restore/deploy). Working dashboard is not production readiness.

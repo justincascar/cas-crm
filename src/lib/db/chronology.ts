@@ -21,7 +21,9 @@ import { generateEmail, isEmailTemplateKey } from "../documents/email-templates"
 import { generateLetter, isLetterTemplateKey, type LetterTemplateKey } from "../documents/templates";
 import { addCalendarDaysIso, formatUkDate, londonDateIso, nowUtcIso, occurredFromForm } from "../dates";
 import { blankInsurerField } from "../insurers";
+import { textAssertsImpecuniosity, templateReliesOnImpecuniosity } from "../domain/impecuniosity";
 import { all, get, getDb, newId, run } from "./connection";
+import { impecuniosityGate } from "./impecuniosity";
 import {
   correspondenceCanBeMarkedSent,
   ENGINEER_INSTRUCTION_MARKED_SENT,
@@ -338,6 +340,12 @@ function letterContext(claimId: string, letterDate: string = nowUtcIso(), engine
   };
 }
 
+function impecuniosityRefusal(claimId: string, templateKey: string | undefined, text: string): string | null {
+  const relies = (templateKey ? templateReliesOnImpecuniosity(templateKey) : false) || textAssertsImpecuniosity(text);
+  if (!relies) return null;
+  return impecuniosityGate(claimId).generationBlock;
+}
+
 export function generateClaimDocument(input: {
   claimId: string;
   templateKey: DocumentTemplateKey | LetterTemplateKey;
@@ -348,6 +356,8 @@ export function generateClaimDocument(input: {
   if (!isDocumentTemplateKey(input.templateKey)) {
     throw new Error("Unknown document template.");
   }
+  const blocked = impecuniosityRefusal(input.claimId, input.templateKey, "");
+  if (blocked) throw new Error(blocked);
   const letterDate = occurredFromForm(input.letterDate);
   const ctx = letterContext(input.claimId, letterDate);
   const generated = isEmailTemplateKey(input.templateKey)
@@ -449,6 +459,8 @@ async function deliverClaimEmail(input: {
   occurredAt?: string;
   attachmentIds?: string[];
 }) {
+  const blocked = impecuniosityRefusal(input.claimId, input.templateKey, `${input.subject}\n${input.body}`);
+  if (blocked) return { ok: false as const, status: "failed" as const, error: blocked };
   const when = occurredFromForm(input.occurredAt);
   const loaded = loadClaimEmailAttachments(input.claimId, input.attachmentIds || []);
   if (!loaded.ok) return { ok: false as const, status: "failed" as const, error: loaded.error };
@@ -686,6 +698,8 @@ export function letterPreview(
   letterDate?: string,
   engineerId?: string,
 ) {
+  const blocked = impecuniosityRefusal(claimId, templateKey, "");
+  if (blocked) throw new Error(blocked);
   const ctx = letterContext(claimId, occurredFromForm(letterDate), engineerId);
   if (isEmailTemplateKey(templateKey)) return generateEmail(templateKey, ctx);
   if (isLetterTemplateKey(templateKey)) return generateLetter(templateKey, ctx);

@@ -26,6 +26,7 @@ PostgreSQL can replace SQLite later if CAS hosts a shared office server. Lookup,
 - `src/lib/documents/` — CAS letter/email wording (`cas-wording.ts`), Hire Pack terms (`cas-hire-terms.ts`, not invented).
 - `src/lib/lookups/` — postcode lookup uses free postcodes.io and OpenStreetMap; vehicle lookup remains simulated.
 - `src/lib/db/` — schema, seed, queries, claim screen persistence (`claim_screen_data`).
+- Financial circumstances, the impecuniosity checklist and mitigation statements are dated rows on the claim (`financial_circumstances`, `impecuniosity_accounts`, `impecuniosity_checklist_events`, `impecuniosity_concerns`, `impecuniosity_approvals`, `mitigation_statements`). A change adds a row. It does not update the earlier one. Checklist status is the latest handler-set event, not a count of files. Impecuniosity evidence files use the existing `documents` table with type `impecuniosity_evidence`. The disclosure letter and an email that asserts impecuniosity are refused unless the checklist is Complete and an administrator has approved relying on it. That approval is not a decision that the charges can be recovered. There is no client portal for this section. Two simultaneous saves are last-write-wins, the same as the rest of the claim record. The screen says so.
 - `src/app/` — screens. Server actions write to SQLite. Each claim file has a right-hand viewing pane of operational screens taken from the current CRM.
 
 ## Security posture
