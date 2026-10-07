@@ -4,11 +4,11 @@ Supplied by Justin on 7 October 2026 for the CAS CRM dispute and litigation work
 
 This is legal background for building and operating the CRM's evidence-capture and approval-gate features. It is not legal advice. Any case-specific assertion of impecuniosity still requires Justin's approval and, where appropriate, qualified legal review.
 
-The CRM has not rewritten its letters from this note. Existing letters that already name Lagden still cite **Lagden v O'Connor** [2003] UKHL 64. This note cites [2004] UKHL 64. That year was left as Justin wrote it, and the letters were left as they were, because the note itself says the citations were not checked against each full judgment.
+The CRM has not rewritten its letters from this note. Existing letters that already name Lagden still cite **Lagden v O'Connor** [2003] UKHL 64. This note cites [2003] UKHL 64; [2004] 1 AC 1067, matching the letters' neutral citation. The letters were left as they were.
 
 ## What "impecuniosity" means
 
-A claimant is "impecunious" if they could not have paid for a replacement vehicle (or repairs) without making unreasonable sacrifices. If impecuniosity is proved, the claimant can recover credit hire charges even where a cheaper "basic hire rate" (BHR) was available, because they genuinely couldn't access the cheaper option. The test comes from **Lagden v O'Connor [2004] UKHL 64; [2004] 1 AC 1067** (House of Lords) — a deliberately open-ended test, not a fixed checklist.
+A claimant is "impecunious" if they could not have paid for a replacement vehicle (or repairs) without making unreasonable sacrifices. If impecuniosity is proved, the claimant can recover credit hire charges even where a cheaper "basic hire rate" (BHR) was available, because they genuinely couldn't access the cheaper option. The test comes from **Lagden v O'Connor [2003] UKHL 64; [2004] 1 AC 1067** (House of Lords) — a deliberately open-ended test, not a fixed checklist.
 
 ## Burden and structure of proof
 
@@ -36,7 +36,7 @@ Disclosure must be complete. Courts draw adverse inferences from missing stateme
 | Mattocks v Mann | [1993] RTR 13 | Early recognition that impecunious claimants can recover credit hire charges |
 | Dimond v Lovell | [2000] 2 AC 384 | Distinguished the basic hire element from "additional" credit-hire services |
 | Clark v Ardington Electrical Services | [2002] EWCA Civ 510 | Claimants acting reasonably in instructing a reputable credit hire organisation |
-| Lagden v O'Connor | [2004] UKHL 64; [2004] 1 AC 1067 | Establishes the impecuniosity/"unreasonable sacrifice" test itself |
+| Lagden v O'Connor | [2003] UKHL 64; [2004] 1 AC 1067 | Establishes the impecuniosity/"unreasonable sacrifice" test itself |
 | Bent v Highways & Utilities Construction | [2010] EWCA Civ 292 | Courts are familiar with, and can make, comparable BHR adjustments |
 | Zurich Insurance plc v Umerji | [2014] EWCA Civ 357 | Burden of proof; impecuniosity goes to rate *and* period; effect of being debarred |
 | Stevens v Equity Syndicate Management Ltd | [2015] EWCA Civ 93 | Criteria for an appropriate basic hire rate comparison |

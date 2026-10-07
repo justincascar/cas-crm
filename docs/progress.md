@@ -427,7 +427,7 @@ Blocked: per-file permissions, shared hosting, live DVLA. Incoming mail is not b
 - Justin's note is filed at `docs/impecuniosity-legal-research.md`. It is background for the evidence checklist and the approval gate. It is not legal advice, and it is not a finding on any file.
 - The checklist already refused an impecuniosity document until a handler marked it Complete and an administrator approved relying on it. A disclosure concern stayed on the file. A complete checklist was already stated not to mean the charges can be recovered. Those rules are unchanged.
 - The listed evidence set now also names household expenditure or commitments, and other income or support (savings, family help, a joint account), alongside every bank account, wage slips and a benefit schedule. Listing one still does not mark the checklist Complete. The screen says a gap stays visible.
-- The ability-to-pay question is still the draft close to Lagden, flagged for Justin to review. Existing letters that already cite Lagden still say [2003] UKHL 64. The note says [2004] UKHL 64. Neither citation was changed, because the note says the cases were not checked against each full judgment.
+- The ability-to-pay question is still the draft close to Lagden, flagged for Justin to review. Existing letters that already cite Lagden still say [2003] UKHL 64. The note now uses [2003] UKHL 64; [2004] 1 AC 1067, matching the letters' neutral citation.
 
 ## Not yet claimed
 
