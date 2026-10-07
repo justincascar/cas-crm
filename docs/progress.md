@@ -378,7 +378,7 @@ Blocked: per-file permissions, shared hosting, live DVLA. Incoming mail is not b
 
 ## Send to, on the general email (2 October 2026)
 
-- On Email / WhatsApp / Calls, the general Send email box now starts with **Send to**. Staff choose Client, Client's own insurer, Third party (insurer), Third party representative (only when one is recorded), Engineer (only when one has been instructed on the file), or Other / type manually.
+- On Email / WhatsApp / Calls, the general Send email box now starts with **Send to**. Staff choose Client, Client's own insurer, Third party (insurer), Third party representative, Engineer (only when one has been instructed on the file), or Other / type manually. Third party representative is always in that list. If none is recorded, the screen says there is no email on file.
 - Client's own insurer uses the Email already saved on the Client insurer screen. No new contact field was added. If that box is blank, the screen says there is no email on file. None of the saved email templates are written for the client's own insurer, so the list stays empty and the message is typed. The fault claim letter stays under Generate a document.
 - Choosing a role fills that contact's saved email. If the role has no email, the box stays empty and the screen says there is no email on file. Nothing is invented. The address can still be typed or changed. A typed address is not replaced by another role until the person confirms.
 - Third party representative uses the name already stored as the representative, or the third-party insurer's agent on Third party 1. The email is the agent's saved email, then the agent handler's email. A representative name on its own has no address, so the option appears and says no email is on file.
@@ -416,6 +416,11 @@ Blocked: per-file permissions, shared hosting, live DVLA. Incoming mail is not b
 - There is no client form for this. Staff enter it. Two people saving at once: the later save is kept. The CRM does not yet warn of a clash. Earlier dated entries stay.
 - `claude/impecuniosity-legal-research.md` was not in the project. The build used the points in the stage note (burden on the client, incomplete disclosure, do not assert impecuniosity without evidence and approval) and did not add case law.
 - Tests: `tests/impecuniosity.test.ts` (five cases: dated circumstances, checklist not promoted by files, approval gate on the letter and an asserting email, mitigation versions, hire pack withholding the assertion). Full suite before this stage: 254 passing, 0 failing. After: 259 passing, 0 failing.
+
+## Send to — third party representative always listed (7 October 2026)
+
+- Third party representative was left out of Send to when the claim had no representative recorded. Client, Client's own insurer and Third party (insurer) were already shown in that case, with “no email on file”. The representative option now stays in the list on every claim and uses that same message when no contact is saved. An engineer is still shown only after one has been instructed on the file.
+- Tests: `tests/send-to.test.ts` now includes a case that the recipient list stays complete when the claim has no contacts. Full suite before this fix: 259 passing, 0 failing. After: 260 passing, 0 failing.
 
 ## Not yet claimed
 

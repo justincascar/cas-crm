@@ -45,7 +45,7 @@ describe("Send to picker", () => {
     if (!other.needsConfirm) assert.equal(other.address, "");
   });
 
-  it("hides a representative or engineer that is not on the file", () => {
+  it("hides an engineer that has not been instructed, and still lists the representative", () => {
     const options = buildSendToOptions({
       clientEmail: contacts.clientEmail,
       thirdPartyEmail: "",
@@ -54,8 +54,43 @@ describe("Send to picker", () => {
     });
     assert.deepEqual(
       options.map((option) => option.role),
-      ["client", "own_insurer", "third_party", "other"],
+      ["client", "own_insurer", "third_party", "representative", "other"],
     );
+  });
+
+  it("always lists every recipient even when the claim has no contact recorded", () => {
+    const options = buildSendToOptions({});
+    assert.deepEqual(
+      options.map((option) => option.role),
+      ["client", "own_insurer", "third_party", "representative", "other"],
+    );
+    for (const role of ["client", "own_insurer", "third_party", "representative"] as const) {
+      const applied = applySendToChoice({
+        role,
+        options,
+        currentAddress: "",
+        filledAddress: "",
+        confirmed: false,
+      });
+      assert.equal(applied.needsConfirm, false);
+      if (!applied.needsConfirm) {
+        assert.equal(applied.address, "");
+        assert.match(String(applied.missingMessage), /No email on file/i);
+      }
+    }
+    const representative = options.find((option) => option.role === "representative");
+    assert.equal(
+      representative?.missingMessage,
+      "No email on file for the third party representative — enter one manually, or add it on Third party 1.",
+    );
+
+    const recordedWithoutTheFlag = buildSendToOptions({
+      representativeRecorded: false,
+      representativeEmail: "keoghs@example.test",
+    });
+    const filled = recordedWithoutTheFlag.find((option) => option.role === "representative");
+    assert.equal(filled?.email, "keoghs@example.test");
+    assert.equal(filled?.missingMessage, null);
   });
 
   it("says when a role has no email and does not invent one", () => {

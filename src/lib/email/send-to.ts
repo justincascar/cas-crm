@@ -55,10 +55,8 @@ export function buildSendToOptions(input: ComposerContacts): SendToOption[] {
     option("client", "Client", clientEmail, MISSING.client),
     option("own_insurer", "Client's own insurer", ownInsurerEmail, MISSING.own_insurer),
     option("third_party", "Third party (insurer)", thirdPartyEmail, MISSING.third_party),
+    option("representative", "Third party representative", representativeEmail, MISSING.representative),
   ];
-  if (input.representativeRecorded) {
-    options.push(option("representative", "Third party representative", representativeEmail, MISSING.representative));
-  }
   if (input.engineerInstructed) {
     options.push(option("engineer", "Engineer", engineerEmail, MISSING.engineer));
   }
