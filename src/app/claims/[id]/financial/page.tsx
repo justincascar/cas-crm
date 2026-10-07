@@ -27,6 +27,7 @@ import {
   OPERATIONAL_RECORD_NOTICE,
   abilityAnswerLabel,
   checklistStatusLabel,
+  EVIDENCE_SET_NOTICE,
   employmentLabel,
   evidenceKindLabel,
 } from "@/lib/domain/impecuniosity";
@@ -169,9 +170,10 @@ export default async function FinancialCircumstancesPage({
       <section className="space-y-4 rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Evidence checklist</h2>
         <p className="text-sm text-slate">
-          Status is {checklistStatusLabel(status)}. Uploading a file, or listing an account, does not change it. Only a handler can mark it Complete, and only by using that button.
-          Partial stays Partial until a handler changes it.
+          Status is {checklistStatusLabel(status)}. Uploading a file, or listing an item, does not change it. Only a handler can mark it Complete, and only by using that button.
+          Partial stays Partial until a handler changes it. Saying the client could not pay, or that lack of money explains how long the hire lasted, still needs this checklist Complete and an administrator&apos;s approval.
         </p>
+        <p className="text-sm">{EVIDENCE_SET_NOTICE}</p>
         <div className="flex flex-wrap gap-2">
           {(
             [
@@ -197,7 +199,7 @@ export default async function FinancialCircumstancesPage({
           </form>
         </div>
         <h3 className="font-serif text-lg text-navy-deep">Accounts and papers, each listed separately</h3>
-        {accounts.length === 0 ? <p className="text-sm">No account, wage slips or benefit letter listed yet.</p> : null}
+        {accounts.length === 0 ? <p className="text-sm">Nothing listed yet.</p> : null}
         <ul className="space-y-2 text-sm">
           {accounts.map((row) => (
             <li key={row.id} className="rounded-lg border border-line px-3 py-2">

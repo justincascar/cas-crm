@@ -59,10 +59,16 @@ export const ABILITY_ANSWERS = [
 ] as const;
 
 export const EVIDENCE_KINDS = [
-  { value: "bank_account", label: "Bank account" },
+  { value: "bank_account", label: "Bank account — statements for the relevant period" },
   { value: "wage_slips", label: "Wage slips" },
-  { value: "benefit_award", label: "Benefit award letter" },
+  { value: "benefit_award", label: "Benefit award schedule" },
+  { value: "household_expenditure", label: "Household expenditure or commitments" },
+  { value: "other_support", label: "Other income or support (savings, family help, joint account)" },
 ] as const;
+
+/** The defined set. Listing an item does not mark the checklist Complete. */
+export const EVIDENCE_SET_NOTICE =
+  "List every account the client holds for the relevant period, not only the main one, plus wage slips or a benefit award schedule, regular household commitments, and any other income or support. A missing account, a gap in dates, or an unexplained transfer stays visible as Partial or as a disclosure concern. It is not hidden, and the system does not fill the gap in.";
 
 export const OFFER_POSITIONS = ["not_answered", "no_offer", "declined"] as const;
 export type OfferPosition = (typeof OFFER_POSITIONS)[number];

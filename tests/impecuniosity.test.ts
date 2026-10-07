@@ -93,6 +93,8 @@ describe("financial circumstances and impecuniosity", () => {
           file: { buffer: Buffer.from("%PDF-1.4 statement"), filename: "statement.pdf", mimeType: "application/pdf" },
         });
         addImpecuniosityAccount({ claimId: "c4", actorId: "staff-sian", label: "Wage slips March", kind: "wage_slips" });
+        addImpecuniosityAccount({ claimId: "c4", actorId: "staff-sian", label: "Rent and council tax", kind: "household_expenditure" });
+        addImpecuniosityAccount({ claimId: "c4", actorId: "staff-sian", label: "Help from a parent, as the client described it", kind: "other_support" });
         assert.equal(checklistStatus("c4"), "partial");
         assert.throws(
           () => setChecklistStatus({ claimId: "c4", actorId: "staff-driver", actorRole: "driver", status: "complete" }),

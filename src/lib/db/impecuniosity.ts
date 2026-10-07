@@ -94,7 +94,9 @@ function abilityOrThrow(value: string): string {
 
 function kindOrThrow(value: string): string {
   const kind = value.trim();
-  if (!EVIDENCE_KINDS.some((item) => item.value === kind)) throw new Error("Choose bank account, wage slips, or a benefit award letter.");
+  if (!EVIDENCE_KINDS.some((item) => item.value === kind)) {
+    throw new Error("Choose bank statements, wage slips, a benefit schedule, household commitments, or other income or support.");
+  }
   return kind;
 }
 
@@ -166,7 +168,7 @@ export function listImpecuniosityAccounts(claimId: string): AccountRow[] {
 export function addImpecuniosityAccount(input: { claimId: string; actorId: string; label: string; kind: string; notes?: string }) {
   assertClaim(input.claimId);
   const label = input.label.trim();
-  if (!label) throw new Error("Name the account, wage slips, or benefit award. Each one is listed on its own.");
+  if (!label) throw new Error("Name each account, set of papers, or explanation. Each one is listed on its own.");
   const id = newId("acc");
   run(
     `INSERT INTO impecuniosity_accounts(id, claim_id, label, kind, notes, recorded_at, recorded_by)

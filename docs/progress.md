@@ -414,13 +414,20 @@ Blocked: per-file permissions, shared hosting, live DVLA. Incoming mail is not b
 - The mitigation statement uses the Hire Pack questionnaire already in the CRM (offer of a replacement or not, personal liability, why a vehicle is needed, own vehicle unusable, no other suitable vehicle, statement of truth). There is no separate "how long" question on that page. Duration is recorded in the client's answer to why they need a vehicle. A signature is not added.
 - An administrator can approve relying on impecuniosity. That flag is separate from the checklist. The impecuniosity disclosure letter, and an email that uses the assertion wording, is refused until the checklist is Complete and that approval is set. The screen states the reason. A generated hire pack leaves that assertion out until both are in place. A complete checklist does not mean the charges can be recovered.
 - There is no client form for this. Staff enter it. Two people saving at once: the later save is kept. The CRM does not yet warn of a clash. Earlier dated entries stay.
-- `claude/impecuniosity-legal-research.md` was not in the project. The build used the points in the stage note (burden on the client, incomplete disclosure, do not assert impecuniosity without evidence and approval) and did not add case law.
+- The research note was not in the project on 6 October. Justin supplied it on 7 October. It is stored at `docs/impecuniosity-legal-research.md`. Letters were not rewritten from it.
 - Tests: `tests/impecuniosity.test.ts` (five cases: dated circumstances, checklist not promoted by files, approval gate on the letter and an asserting email, mitigation versions, hire pack withholding the assertion). Full suite before this stage: 254 passing, 0 failing. After: 259 passing, 0 failing.
 
 ## Send to — third party representative always listed (7 October 2026)
 
 - Third party representative was left out of Send to when the claim had no representative recorded. Client, Client's own insurer and Third party (insurer) were already shown in that case, with “no email on file”. The representative option now stays in the list on every claim and uses that same message when no contact is saved. An engineer is still shown only after one has been instructed on the file.
 - Tests: `tests/send-to.test.ts` now includes a case that the recipient list stays complete when the claim has no contacts. Full suite before this fix: 259 passing, 0 failing. After: 260 passing, 0 failing.
+
+## Impecuniosity research note (7 October 2026)
+
+- Justin's note is filed at `docs/impecuniosity-legal-research.md`. It is background for the evidence checklist and the approval gate. It is not legal advice, and it is not a finding on any file.
+- The checklist already refused an impecuniosity document until a handler marked it Complete and an administrator approved relying on it. A disclosure concern stayed on the file. A complete checklist was already stated not to mean the charges can be recovered. Those rules are unchanged.
+- The listed evidence set now also names household expenditure or commitments, and other income or support (savings, family help, a joint account), alongside every bank account, wage slips and a benefit schedule. Listing one still does not mark the checklist Complete. The screen says a gap stays visible.
+- The ability-to-pay question is still the draft close to Lagden, flagged for Justin to review. Existing letters that already cite Lagden still say [2003] UKHL 64. The note says [2004] UKHL 64. Neither citation was changed, because the note says the cases were not checked against each full judgment.
 
 ## Not yet claimed
 
