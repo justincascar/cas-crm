@@ -48,6 +48,21 @@ export function parseStaffRole(raw: string): StaffAccessRole | null {
   return null;
 }
 
+/** Stored on staff_permissions. Not implied by the administrator role or by impecuniosity approval. */
+export const OVERRIDE_PREHIRE_CHECKS = "overridePreHireChecks";
+
+/**
+ * True only when this account has been granted overridePreHireChecks.
+ * The role is accepted so callers pass it, and it is not consulted.
+ */
+export function canOverridePreHireChecks(account: {
+  role: string | null | undefined;
+  permissions: readonly string[];
+}): boolean {
+  void account.role;
+  return account.permissions.includes(OVERRIDE_PREHIRE_CHECKS);
+}
+
 /** Server-side page allow-list. Office roles may open anything. */
 export function pathAllowedForRole(role: string | null | undefined, pathname: string): boolean {
   if (isOfficeRole(role)) return true;

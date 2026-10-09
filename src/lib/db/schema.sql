@@ -636,6 +636,23 @@ CREATE TABLE IF NOT EXISTS mitigation_statements (
   no_other_vehicle INTEGER NOT NULL DEFAULT 0
 );
 
+CREATE TABLE IF NOT EXISTS staff_permissions (
+  staff_id TEXT NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
+  permission TEXT NOT NULL,
+  PRIMARY KEY (staff_id, permission)
+);
+
+CREATE TABLE IF NOT EXISTS prehire_overrides (
+  id TEXT PRIMARY KEY,
+  claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+  check_kind TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  recorded_by TEXT NOT NULL REFERENCES staff(id),
+  recorded_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_prehire_overrides_claim ON prehire_overrides(claim_id, recorded_at);
+
 CREATE INDEX IF NOT EXISTS idx_claims_handler ON claims(handler_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_staff ON sessions(staff_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);

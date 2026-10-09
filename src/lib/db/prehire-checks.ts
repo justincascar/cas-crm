@@ -1,11 +1,16 @@
+import { canOverridePreHireChecks } from "../auth/roles";
 import { londonTodayIso, nowUtcIso } from "../dates";
 import {
   hireAgreementRefusal,
+  isPrehireCheckKind,
   type NamedHireDriver,
+  type PrehireCheckKind,
 } from "../domain/prehire-checks";
+import { recordClaimEvent } from "./chronology";
 import { all, get, getDb, newId, run } from "./connection";
 import { listFinancialCircumstances, listImpecuniosityAccounts } from "./impecuniosity";
 import { migrate } from "./migrate";
+import { listStaffPermissions } from "./permissions";
 
 let licenceTableReady = false;
 
@@ -237,7 +242,93 @@ export function bankStatementPosition(claimId: string): BankStatementPosition {
   };
 }
 
-/** Refusal text, or null when both checks are satisfied. No role and no override is accepted. */
+export type PrehireOverrideRow = {
+  id: string;
+  claim_id: string;
+  check_kind: string;
+  reason: string;
+  recorded_at: string;
+  recorded_by_name: string | null;
+};
+
+/** Every override recorded on this claim, oldest first. Rows are not removed when evidence is added later. */
+export function listPrehireOverrides(claimId: string): PrehireOverrideRow[] {
+  ensureLicenceTable();
+  return all<PrehireOverrideRow>(
+    `SELECT o.id, o.claim_id, o.check_kind, o.reason, o.recorded_at, s.name AS recorded_by_name
+     FROM prehire_overrides o
+     LEFT JOIN staff s ON s.id = o.recorded_by
+     WHERE o.claim_id = ?
+     ORDER BY o.recorded_at ASC, o.rowid ASC`,
+    [claimId],
+  );
+}
+
+export function prehireCheckOverridden(claimId: string, checkKind: PrehireCheckKind): boolean {
+  return listPrehireOverrides(claimId).some((row) => row.check_kind === checkKind);
+}
+
+function licenceEvidenceMissing(claimId: string): boolean {
+  const drivers = listHireDrivers(claimId);
+  if (drivers.length === 0) return true;
+  const checked = new Set(listLicenceChecks(claimId).map((row) => row.driver_key));
+  return drivers.some((driver) => !checked.has(driver.key));
+}
+
+/**
+ * Records one check's override on this claim. The other check is untouched.
+ * Permission is read from staff_permissions for actorId. Role is loaded and not treated as a grant.
+ */
+export function recordPrehireOverride(input: {
+  claimId: string;
+  actorId: string;
+  checkKind: string;
+  reason: string;
+}): { id: string; checkKind: PrehireCheckKind; reason: string } {
+  ensureLicenceTable();
+  const claim = get<{ id: string }>(`SELECT id FROM claims WHERE id = ?`, [input.claimId]);
+  if (!claim) throw new Error("File not found.");
+  const staff = get<{ role: string }>(`SELECT role FROM staff WHERE id = ? AND active = 1`, [input.actorId]);
+  const permissions = staff ? listStaffPermissions(input.actorId) : [];
+  if (!staff || !canOverridePreHireChecks({ role: staff.role, permissions })) {
+    throw new Error("You do not have permission to override a pre-hire check. The administrator role does not include this.");
+  }
+  if (!isPrehireCheckKind(input.checkKind)) {
+    throw new Error("Choose the licence check or the bank-statement check.");
+  }
+  const reason = input.reason.trim();
+  if (!reason) throw new Error("Enter a reason. An override is not saved without one.");
+  if (reason.length > 1000) throw new Error("Keep the reason to a short explanation of why this check is being overridden.");
+  if (input.checkKind === "licence" && !licenceEvidenceMissing(input.claimId)) {
+    throw new Error("A licence check is already recorded for everyone who will drive. An override was not saved.");
+  }
+  if (input.checkKind === "bank" && bankStatementPosition(input.claimId).satisfied) {
+    throw new Error("Bank-statement evidence is already on this file. An override was not saved.");
+  }
+  const id = newId("override");
+  const recordedAt = nowUtcIso();
+  run(
+    `INSERT INTO prehire_overrides(id, claim_id, check_kind, reason, recorded_by, recorded_at)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, input.claimId, input.checkKind, reason, input.actorId, recordedAt],
+  );
+  const which = input.checkKind === "licence" ? "Licence check" : "Bank-statement evidence";
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "other",
+    occurredAt: recordedAt,
+    details: `${which} overridden on this file. Reason: ${reason}`,
+    actorId: input.actorId,
+    source: "staff",
+  });
+  return { id, checkKind: input.checkKind, reason };
+}
+
+/**
+ * Refusal text, or null when both checks are satisfied or overridden on this claim.
+ * There is no bypass argument. Stored overrides are read for this claim only.
+ * The caller's role is not consulted.
+ */
 export function hireAgreementPrehireBlock(claimId: string): string | null {
   const drivers = listHireDrivers(claimId);
   const checked = new Set(listLicenceChecks(claimId).map((row) => row.driver_key));
@@ -246,5 +337,7 @@ export function hireAgreementPrehireBlock(claimId: string): string | null {
     missingDriverNames: missing,
     driverRecorded: drivers.length > 0,
     bankSatisfied: bankStatementPosition(claimId).satisfied,
+    licenceOverridden: prehireCheckOverridden(claimId, "licence"),
+    bankOverridden: prehireCheckOverridden(claimId, "bank"),
   });
 }

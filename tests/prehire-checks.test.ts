@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, it } from "node:test";
+import { canOverridePreHireChecks, isAdministrator } from "../src/lib/auth/roles.ts";
 import { withDatabase } from "../src/lib/db/connection.ts";
 import { generateHireAgreementDocument } from "../src/lib/db/hire-agreement.ts";
 import { saveHirePack } from "../src/lib/db/hire-pack.ts";
@@ -13,14 +14,19 @@ import {
   saveFinancialCircumstances,
 } from "../src/lib/db/impecuniosity.ts";
 import { migrate } from "../src/lib/db/migrate.ts";
+import { listStaffPermissions } from "../src/lib/db/permissions.ts";
 import {
   hireAgreementPrehireBlock,
   listHireDrivers,
+  listPrehireOverrides,
   recordLicenceCheck,
+  recordPrehireOverride,
 } from "../src/lib/db/prehire-checks.ts";
+import { createStaffAccount } from "../src/lib/db/staff-admin.ts";
 import { seed } from "../src/lib/db/seed.ts";
 import { isoDateFromNow, londonTodayIso } from "../src/lib/dates.ts";
-import { handoverStaleLines, licenceCheckIsStale } from "../src/lib/domain/prehire-checks.ts";
+import { canApproveImpecuniosity } from "../src/lib/domain/impecuniosity.ts";
+import { handoverStaleLines, hireAgreementRefusal, licenceCheckIsStale } from "../src/lib/domain/prehire-checks.ts";
 
 const schema = fs.readFileSync(path.join(process.cwd(), "src/lib/db/schema.sql"), "utf8");
 
@@ -178,6 +184,201 @@ describe("pre-hire checks before a hire agreement", () => {
       assert.match(lines[0], /21-day demonstration window/);
       assert.match(lines[0], /Dafydd Jones/);
     });
+    db.close();
+  });
+});
+
+describe("pre-hire check overrides", () => {
+  it("allows the override only when the permission is granted, not because the account is an administrator", () => {
+    assert.equal(isAdministrator("administrator"), true);
+    assert.equal(canApproveImpecuniosity("administrator"), true);
+    assert.equal(canOverridePreHireChecks({ role: "administrator", permissions: [] }), false);
+    assert.equal(canOverridePreHireChecks({ role: "staff", permissions: [] }), false);
+    assert.equal(canOverridePreHireChecks({ role: "administrator", permissions: ["overridePreHireChecks"] }), true);
+    assert.equal(canOverridePreHireChecks({ role: "staff", permissions: ["overridePreHireChecks"] }), true);
+    const licenceOnly = hireAgreementRefusal({
+      missingDriverNames: ["Dafydd Jones"],
+      driverRecorded: true,
+      bankSatisfied: false,
+      licenceOverridden: true,
+    });
+    assert.match(String(licenceOnly), /no bank account/);
+    assert.doesNotMatch(String(licenceOnly), /Dafydd Jones/);
+    assert.equal(
+      hireAgreementRefusal({
+        missingDriverNames: ["Dafydd Jones"],
+        driverRecorded: true,
+        bankSatisfied: false,
+        licenceOverridden: true,
+        bankOverridden: true,
+      }),
+      null,
+    );
+
+    const db = prepared();
+    withDatabase(db, () => {
+      const justin = db.prepare(`SELECT role FROM staff WHERE id = 'staff-justin'`).get() as { role: string };
+      assert.equal(justin.role, "administrator");
+      assert.deepEqual(listStaffPermissions("staff-justin"), ["overridePreHireChecks"]);
+      assert.deepEqual(listStaffPermissions("staff-sian"), []);
+
+      const created = createStaffAccount({
+        name: "Second Admin",
+        username: "secondadmin",
+        email: "second.admin@example.test",
+        password: "password1",
+        role: "administrator",
+        actorId: "staff-justin",
+      });
+      if (!created.ok) throw new Error(created.error);
+      const second = db.prepare(`SELECT role FROM staff WHERE id = ?`).get(created.id) as { role: string };
+      assert.equal(second.role, "administrator");
+      assert.equal(canOverridePreHireChecks({ role: second.role, permissions: listStaffPermissions(created.id) }), false);
+
+      assert.throws(
+        () =>
+          recordPrehireOverride({
+            claimId: "c4",
+            actorId: "staff-sian",
+            checkKind: "licence",
+            reason: "Sian trying the licence check.",
+          }),
+        /permission/,
+      );
+      assert.throws(
+        () =>
+          recordPrehireOverride({
+            claimId: "c4",
+            actorId: created.id,
+            checkKind: "bank",
+            reason: "An administrator without the permission.",
+          }),
+        /permission/,
+      );
+      assert.equal(listPrehireOverrides("c4").length, 0);
+      assert.throws(() => generateHireAgreementDocument("c4", created.id, 0), /No licence check is recorded for Dafydd Jones/);
+      assert.throws(() => generateHireAgreementDocument("c4", "staff-sian", 0), /no override/i);
+
+      db.prepare(`DELETE FROM staff_permissions WHERE staff_id = 'staff-justin'`).run();
+      assert.equal(canOverridePreHireChecks({ role: "administrator", permissions: listStaffPermissions("staff-justin") }), false);
+      assert.throws(
+        () =>
+          recordPrehireOverride({
+            claimId: "c4",
+            actorId: "staff-justin",
+            checkKind: "licence",
+            reason: "Still an administrator.",
+          }),
+        /permission/,
+      );
+      assert.equal(listPrehireOverrides("c4").length, 0);
+      db.prepare(`INSERT INTO staff_permissions(staff_id, permission) VALUES ('staff-justin', 'overridePreHireChecks')`).run();
+      assert.throws(
+        () => recordPrehireOverride({ claimId: "c4", actorId: "staff-justin", checkKind: "licence", reason: "   " }),
+        /reason/,
+      );
+      assert.equal(listPrehireOverrides("c4").length, 0);
+    });
+    db.close();
+  });
+
+  it("overrides the licence check and the bank check separately, and generation still refuses the one that was not overridden", () => {
+    const db = prepared();
+    withDatabase(db, () => {
+      recordPrehireOverride({
+        claimId: "c4",
+        actorId: "staff-justin",
+        checkKind: "licence",
+        reason: "Proceeding without a check code.",
+      });
+      assert.equal(listPrehireOverrides("c4").map((row) => row.check_kind).join(","), "licence");
+      assert.throws(() => generateHireAgreementDocument("c4", "staff-sian", 0), /no bank account listed/);
+      assert.equal(hireAgreementCount(db, "c4"), 0);
+      assert.match(String(hireAgreementPrehireBlock("c5")), /Elin Powell/);
+      assert.match(String(hireAgreementPrehireBlock("c5")), /no override/i);
+
+      recordPrehireOverride({
+        claimId: "c4",
+        actorId: "staff-justin",
+        checkKind: "bank",
+        reason: "Proceeding without bank evidence.",
+      });
+      const rows = listPrehireOverrides("c4");
+      assert.deepEqual(
+        rows.map((row) => row.check_kind),
+        ["licence", "bank"],
+      );
+      assert.equal(rows[0].recorded_by_name, "Justin Roberts");
+      assert.equal(rows[0].reason, "Proceeding without a check code.");
+      assert.equal(hireAgreementPrehireBlock("c4"), null);
+      const result = generateHireAgreementDocument("c4", "staff-sian", 0);
+      const signed = db.prepare(`SELECT signed FROM documents WHERE id = ?`).get(result.documentId) as { signed: number };
+      assert.equal(signed.signed, 0);
+      assert.match(String(hireAgreementPrehireBlock("c5")), /Elin Powell/);
+    });
+    db.close();
+  });
+
+  it("still refuses generation for a missing licence check when only the bank check was overridden", () => {
+    const db = prepared();
+    withDatabase(db, () => {
+      recordPrehireOverride({
+        claimId: "c4",
+        actorId: "staff-justin",
+        checkKind: "bank",
+        reason: "No statements yet.",
+      });
+      assert.throws(() => generateHireAgreementDocument("c4", "staff-justin", 0), /No licence check is recorded for Dafydd Jones/);
+      assert.equal(
+        listPrehireOverrides("c4").some((row) => row.check_kind === "licence"),
+        false,
+      );
+      assert.equal(hireAgreementCount(db, "c4"), 0);
+    });
+    db.close();
+  });
+
+  it("keeps the override record after the missing evidence is later recorded", () => {
+    const db = prepared();
+    withDatabase(db, () => {
+      recordPrehireOverride({
+        claimId: "c4",
+        actorId: "staff-justin",
+        checkKind: "licence",
+        reason: "Browser check: proceeding without a check code",
+      });
+      const driver = listHireDrivers("c4")[0];
+      licenceFor("c4", driver.key);
+      addImpecuniosityAccount({ claimId: "c4", actorId: "staff-sian", label: "Barclays current", kind: "bank_account" });
+      const rows = listPrehireOverrides("c4");
+      assert.equal(rows.length, 1);
+      assert.equal(rows[0].check_kind, "licence");
+      assert.equal(rows[0].reason, "Browser check: proceeding without a check code");
+      assert.equal(rows[0].recorded_by_name, "Justin Roberts");
+      assert.match(rows[0].recorded_at, /^\d{4}-\d{2}-\d{2}T/);
+      const event = db
+        .prepare(`SELECT details, actor_id FROM claim_events WHERE claim_id = 'c4' AND details LIKE '%overridden%'`)
+        .get() as { details: string; actor_id: string };
+      assert.match(event.details, /Licence check overridden/);
+      assert.match(event.details, /Browser check: proceeding without a check code/);
+      assert.equal(event.actor_id, "staff-justin");
+      assert.equal(hireAgreementPrehireBlock("c4"), null);
+    });
+    db.close();
+  });
+
+  it("puts the permission back on Justin's staff row during migrate, without wiping claims or granting Sian", () => {
+    const db = prepared();
+    const claimsBefore = (db.prepare(`SELECT COUNT(*) AS n FROM claims`).get() as { n: number }).n;
+    db.prepare(`DELETE FROM staff_permissions`).run();
+    migrate(db);
+    const justin = db.prepare(`SELECT permission FROM staff_permissions WHERE staff_id = 'staff-justin'`).get() as {
+      permission: string;
+    };
+    assert.equal(justin.permission, "overridePreHireChecks");
+    const sian = db.prepare(`SELECT COUNT(*) AS n FROM staff_permissions WHERE staff_id = 'staff-sian'`).get() as { n: number };
+    assert.equal(sian.n, 0);
+    assert.equal((db.prepare(`SELECT COUNT(*) AS n FROM claims`).get() as { n: number }).n, claimsBefore);
     db.close();
   });
 });

@@ -1,5 +1,6 @@
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { DEMO_STAFF, demoPasswordFor } from "../auth/demo-staff";
+import { OVERRIDE_PREHIRE_CHECKS } from "../auth/roles";
 import { hashPasswordSync } from "../auth/passwords";
 import {
   FILE_REFERENCE_PREFIX_DEFAULT,
@@ -57,6 +58,11 @@ export function seed(db: DatabaseSync) {
       ],
     );
   }
+
+  run(db, `INSERT OR IGNORE INTO staff_permissions(staff_id, permission) VALUES (?, ?)`, [
+    "staff-justin",
+    OVERRIDE_PREHIRE_CHECKS,
+  ]);
 
   const people: Array<Record<string, string | null>> = [
     { id: "p-aled", kind: "individual", name: "Aled Morgan", dob: "1988-04-12", a1: "14 Splott Road", town: "Cardiff", pc: "CF24 2DA", tel: "029 2000 1001", email: "aled.morgan@example.test", ch: "phone" },

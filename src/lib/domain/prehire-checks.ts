@@ -1,7 +1,9 @@
 /**
  * Pre-hire checks for a hire agreement.
- * There is no override argument on these functions, and none should be added.
- * A real exception, if one is ever needed, is a later decision.
+ * These functions do not take a bypass flag. A recorded override is a fact
+ * about this claim (licenceOverridden / bankOverridden), already stored with
+ * a reason by an account that holds overridePreHireChecks. The administrator
+ * role is not an input.
  */
 
 export const LICENCE_CHECK_WINDOW_DAYS = 21;
@@ -15,6 +17,22 @@ export const DVLA_MANUAL_NOTICE =
 
 export const NO_OVERRIDE_NOTICE =
   "There is no administrator override. A hire agreement cannot be generated until every person who will drive has a licence check, and the file has a listed bank account or a saved explanation that there is no bank account.";
+
+export const PREHIRE_OVERRIDE_NOTICE =
+  "This account can override a missing licence check, or missing bank-statement evidence, on this file. That permission is not the administrator role, and it is not approval to rely on impecuniosity. Each override needs a reason and is kept on the file, including if the evidence is added later. Overriding one check does not override the other, and it does not apply to any other file.";
+
+export const PREHIRE_CHECK_KINDS = ["licence", "bank"] as const;
+export type PrehireCheckKind = (typeof PREHIRE_CHECK_KINDS)[number];
+
+export function isPrehireCheckKind(value: string): value is PrehireCheckKind {
+  return value === "licence" || value === "bank";
+}
+
+export function prehireCheckKindLabel(kind: string): string {
+  if (kind === "licence") return "Licence check";
+  if (kind === "bank") return "Bank-statement evidence";
+  return "Pre-hire check";
+}
 
 export const BANK_REUSE_NOTICE =
   "Bank statements stay on Financial circumstances. A bank account listed there satisfies this check. A saved explanation that the client has no bank account also satisfies it. The evidence checklist does not need to be Complete, and approval to rely on impecuniosity is a different gate. A file stored on that page is not labelled as a bank statement, so a file on its own is not treated as one.";
@@ -66,20 +84,48 @@ export function hireAgreementRefusal(input: {
   missingDriverNames: string[];
   driverRecorded: boolean;
   bankSatisfied: boolean;
+  /** A prehire_overrides row for the licence check already exists on this claim. */
+  licenceOverridden?: boolean;
+  /** A prehire_overrides row for bank-statement evidence already exists on this claim. */
+  bankOverridden?: boolean;
 }): string | null {
-  if (input.driverRecorded && input.missingDriverNames.length === 0 && input.bankSatisfied) return null;
+  const licenceOverridden = input.licenceOverridden === true;
+  const bankOverridden = input.bankOverridden === true;
+  const licenceBlocks = !licenceOverridden && (!input.driverRecorded || input.missingDriverNames.length > 0);
+  const bankBlocks = !bankOverridden && !input.bankSatisfied;
+  if (!licenceBlocks && !bankBlocks) return null;
   const gaps: string[] = [];
-  if (!input.driverRecorded) {
-    gaps.push("Nobody is recorded as the person who will drive the hire vehicle.");
-  } else if (input.missingDriverNames.length > 0) {
-    gaps.push(`No licence check is recorded for ${input.missingDriverNames.join(", ")}.`);
+  if (licenceBlocks) {
+    if (!input.driverRecorded) {
+      gaps.push("Nobody is recorded as the person who will drive the hire vehicle.");
+    } else if (input.missingDriverNames.length > 0) {
+      gaps.push(`No licence check is recorded for ${input.missingDriverNames.join(", ")}.`);
+    }
   }
-  if (!input.bankSatisfied) {
+  if (bankBlocks) {
     gaps.push(
       "There is no bank account listed on Financial circumstances, and no saved explanation that the client has no bank account.",
     );
   }
-  return `A hire agreement was not produced. ${gaps.join(" ")} This is required on every hire. There is no override.`;
+  const closing =
+    licenceOverridden || bankOverridden
+      ? "The other check is still required on this file. Overriding one check does not override the other."
+      : "This is required on every hire. There is no override.";
+  return `A hire agreement was not produced. ${gaps.join(" ")} ${closing}`;
+}
+
+/** Shown when generation is allowed. An override is named. Evidence is not described as present if it was overridden. */
+export function hireAgreementReadyLine(input: { licenceOverridden: boolean; bankOverridden: boolean }): string {
+  if (!input.licenceOverridden && !input.bankOverridden) {
+    return "Licence checks and bank-statement evidence are on this file. Generating still does not sign the agreement.";
+  }
+  const licence = input.licenceOverridden
+    ? "The licence check was overridden on this file."
+    : "Licence checks are on this file.";
+  const bank = input.bankOverridden
+    ? "The bank-statement check was overridden on this file."
+    : "Bank-statement evidence is on this file.";
+  return `${licence} ${bank} Generating still does not sign the agreement.`;
 }
 
 export function staleLicenceLine(name: string, checkedOn: string, asAtYmd: string): string {

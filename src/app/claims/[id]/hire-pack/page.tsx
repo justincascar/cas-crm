@@ -9,7 +9,9 @@ import { PageHeader } from "@/components/ClaimTable";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { requireStaff } from "@/lib/auth/session";
 import { getHirePack } from "@/lib/db/hire-pack";
-import { hireAgreementPrehireBlock } from "@/lib/db/prehire-checks";
+import { hireAgreementPrehireBlock, listPrehireOverrides } from "@/lib/db/prehire-checks";
+import { formatUkDateTime } from "@/lib/dates";
+import { hireAgreementReadyLine, prehireCheckKindLabel } from "@/lib/domain/prehire-checks";
 import { RENTAL_PERIOD_DECISION } from "@/lib/documents/hire-pack-fields";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
@@ -44,6 +46,11 @@ export default async function HirePackPage({
   const chargedHigher = groupChargedAboveClient(charged, clientGroup);
   const parts = pack.parts;
   const prehireBlock = hireAgreementPrehireBlock(id);
+  const prehireOverrides = listPrehireOverrides(id);
+  const readyLine = hireAgreementReadyLine({
+    licenceOverridden: prehireOverrides.some((row) => row.check_kind === "licence"),
+    bankOverridden: prehireOverrides.some((row) => row.check_kind === "bank"),
+  });
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -70,12 +77,23 @@ export default async function HirePackPage({
         </p>
       ) : (
         <p className="rounded-md border border-ok/40 bg-[#eef6ef] px-4 py-3 text-sm">
-          Licence checks and bank-statement evidence are on this file. Generating still does not sign the agreement.{" "}
+          {readyLine}{" "}
           <Link href={`/claims/${id}/prehire`} className="text-teal-dark underline">
             Pre-hire checks
           </Link>
         </p>
       )}
+
+      {prehireOverrides.length > 0 ? (
+        <ul className="space-y-2 text-sm">
+          {prehireOverrides.map((row) => (
+            <li key={row.id} className="rounded-md border border-line bg-card px-4 py-3">
+              {prehireCheckKindLabel(row.check_kind)} overridden by {row.recorded_by_name || "Unknown"} on{" "}
+              {formatUkDateTime(row.recorded_at)}. Reason: {row.reason}
+            </li>
+          ))}
+        </ul>
+      ) : null}
 
       <section className="rounded-xl border border-line bg-card p-5 text-sm">
         <h2 className="font-serif text-xl text-navy-deep">What this agreement will include</h2>

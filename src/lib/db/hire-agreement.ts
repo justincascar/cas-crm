@@ -445,6 +445,7 @@ export function generateHireAgreementDocument(claimId: string, actorId: string, 
   if (!pack) throw new Error("File not found.");
   // The only step that files a hire agreement. There is no separate preview-for-signing
   // or mark-ready-to-sign function. Refuse before an agreement number is taken and before insert.
+  // Actor role is not consulted. A missing check clears only when this claim has a stored override for that check.
   const blocked = hireAgreementPrehireBlock(claimId);
   if (blocked) throw new Error(blocked);
   const agreementNumber = allocateHireAgreementNumber(claimId);

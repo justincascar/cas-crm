@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import { OVERRIDE_PREHIRE_CHECKS } from "../auth/roles";
 
 const TABLES: Record<string, Array<[string, string]>> = {
   correspondence: [
@@ -546,5 +547,25 @@ export function migrate(db: DatabaseSync) {
       recorded_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_licence_checks_claim ON licence_checks(claim_id, recorded_at);
+    CREATE TABLE IF NOT EXISTS staff_permissions (
+      staff_id TEXT NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
+      permission TEXT NOT NULL,
+      PRIMARY KEY (staff_id, permission)
+    );
+    CREATE TABLE IF NOT EXISTS prehire_overrides (
+      id TEXT PRIMARY KEY,
+      claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+      check_kind TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      recorded_by TEXT NOT NULL REFERENCES staff(id),
+      recorded_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_prehire_overrides_claim ON prehire_overrides(claim_id, recorded_at);
   `);
+  // Data grant for the existing Justin Roberts staff row. The gate does not read the username.
+  db.prepare(
+    `INSERT OR IGNORE INTO staff_permissions(staff_id, permission)
+     SELECT ?, ?
+     WHERE EXISTS (SELECT 1 FROM staff WHERE id = ?)`,
+  ).run("staff-justin", OVERRIDE_PREHIRE_CHECKS, "staff-justin");
 }
