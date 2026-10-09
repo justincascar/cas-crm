@@ -15,6 +15,7 @@ import { get, newId, run } from "./connection";
 import { recordClaimEvent } from "./chronology";
 import { formatHandoverMileage } from "./handover";
 import { getHirePack, type HirePackData } from "./hire-pack";
+import { hireAgreementPrehireBlock } from "./prehire-checks";
 
 export const HIRE_AGREEMENT_TEMPLATE_KEY = "hire_agreement";
 export const HIRE_AGREEMENT_DOCUMENT_TYPE = "hire_agreement";
@@ -442,6 +443,10 @@ export function buildHireAgreementView(
 export function generateHireAgreementDocument(claimId: string, actorId: string, dailyRatePence: number | null) {
   const pack = getHirePack(claimId);
   if (!pack) throw new Error("File not found.");
+  // The only step that files a hire agreement. There is no separate preview-for-signing
+  // or mark-ready-to-sign function. Refuse before an agreement number is taken and before insert.
+  const blocked = hireAgreementPrehireBlock(claimId);
+  if (blocked) throw new Error(blocked);
   const agreementNumber = allocateHireAgreementNumber(claimId);
   const view = buildHireAgreementView(pack, agreementNumber, dailyRatePence);
   const html = renderHireAgreement(view);

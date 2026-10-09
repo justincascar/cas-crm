@@ -532,5 +532,19 @@ export function migrate(db: DatabaseSync) {
       own_vehicle_unusable INTEGER NOT NULL DEFAULT 0,
       no_other_vehicle INTEGER NOT NULL DEFAULT 0
     );
+    CREATE TABLE IF NOT EXISTS licence_checks (
+      id TEXT PRIMARY KEY,
+      claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+      driver_key TEXT NOT NULL,
+      driver_name TEXT NOT NULL,
+      check_code TEXT NOT NULL,
+      category TEXT NOT NULL,
+      points_endorsements TEXT NOT NULL,
+      licence_expires_on TEXT NOT NULL,
+      checked_on TEXT NOT NULL,
+      recorded_by TEXT,
+      recorded_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_licence_checks_claim ON licence_checks(claim_id, recorded_at);
   `);
 }

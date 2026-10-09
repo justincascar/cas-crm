@@ -16,6 +16,7 @@ import { migrate } from "../src/lib/db/migrate.ts";
 import { seed } from "../src/lib/db/seed.ts";
 import { CAS_HIRE_TERMS_HTML } from "../src/lib/documents/cas-hire-terms.ts";
 import { standardDailyRatePence } from "../src/lib/documents/gta.ts";
+import { recordPassingPrehireChecks } from "./prehire-setup.ts";
 
 const schema = fs.readFileSync(path.join(process.cwd(), "src/lib/db/schema.sql"), "utf8");
 
@@ -93,6 +94,7 @@ describe("hire agreement rating and the four-page document", () => {
   it("generates four pages at the client's group when the supplied vehicle is the same group", () => {
     const db = prepared();
     withDatabase(db, () => {
+      recordPassingPrehireChecks("c3");
       db.prepare(`UPDATE people SET licence_number = 'WALSH840302AB9CD' WHERE id = 'p-ceri'`).run();
       db.prepare(`UPDATE vehicles SET gta_group = 'S4' WHERE id = 'v-fleet-2'`).run();
       const rating = prepareHireRating({
@@ -143,6 +145,7 @@ describe("hire agreement rating and the four-page document", () => {
   it("warns when a higher-group vehicle is supplied but still rates the client's own group", () => {
     const db = prepared();
     withDatabase(db, () => {
+      recordPassingPrehireChecks("c3");
       db.prepare(`UPDATE people SET licence_number = 'WALSH840302AB9CD' WHERE id = 'p-ceri'`).run();
       db.prepare(`UPDATE vehicles SET gta_group = 'S7' WHERE id = 'v-fleet-2'`).run();
       const rating = prepareHireRating({
@@ -171,6 +174,7 @@ describe("hire agreement rating and the four-page document", () => {
   it("warns and records who set Group Charged above the client's group, without blocking it", () => {
     const db = prepared();
     withDatabase(db, () => {
+      recordPassingPrehireChecks("c3");
       const rating = prepareHireRating({
         claimId: "c3",
         clientGroupRaw: "S3",
@@ -226,6 +230,10 @@ describe("hire agreement rating and the four-page document", () => {
   it("leaves out Storage & Recovery when none has been arranged, and leaves out hire pages when no vehicle is allocated", () => {
     const db = prepared();
     withDatabase(db, () => {
+      recordPassingPrehireChecks("c4");
+      recordPassingPrehireChecks("c3");
+      recordPassingPrehireChecks("c1");
+      recordPassingPrehireChecks("c2");
       db.prepare(`UPDATE people SET licence_number = 'DAF000000AB9CD' WHERE id = 'p-daf'`).run();
       const hireOnly = generateHireAgreementDocument("c4", "staff-megan", 0);
       const hireHtml = String((db.prepare(`SELECT body_html FROM documents WHERE id = ?`).get(hireOnly.documentId) as { body_html: string }).body_html);
@@ -278,6 +286,7 @@ describe("hire agreement rating and the four-page document", () => {
   it("does not treat recovery marked required as storage or recovery arranged through CAS", () => {
     const db = prepared();
     withDatabase(db, () => {
+      recordPassingPrehireChecks("c4");
       db.prepare(`UPDATE claims SET recovery_status = 'required', storage_status = 'none', storage_started_on = NULL WHERE id = 'c4'`).run();
       const result = generateHireAgreementDocument("c4", "staff-megan", 0);
       const html = String((db.prepare(`SELECT body_html FROM documents WHERE id = ?`).get(result.documentId) as { body_html: string }).body_html);

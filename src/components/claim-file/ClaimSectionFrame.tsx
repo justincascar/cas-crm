@@ -21,7 +21,8 @@ export function ClaimSectionFrame({
   const onDocuments = pathname === `${claimPath}/documents` || pathname.startsWith(`${claimPath}/documents/`);
   const onVehicles = pathname === `${claimPath}/vehicles` || pathname.startsWith(`${claimPath}/vehicles/`);
   const onFinancial = pathname === `${claimPath}/financial` || pathname.startsWith(`${claimPath}/financial/`);
-  const hideScreenNav = onOverview || onHandover || onDocuments || onVehicles || onFinancial;
+  const onPrehire = pathname === `${claimPath}/prehire` || pathname.startsWith(`${claimPath}/prehire/`);
+  const hideScreenNav = onOverview || onHandover || onDocuments || onVehicles || onFinancial || onPrehire;
   const tabClass = (active: boolean) =>
     `inline-flex min-h-11 items-center rounded-md px-3 py-2 text-sm font-semibold ${
       active ? "bg-navy text-white" : "border border-line bg-white text-navy"
@@ -56,6 +57,9 @@ export function ClaimSectionFrame({
         </Link>
         <Link href={`${claimPath}/hire-pack`} className={tabClass(pathname.startsWith(`${claimPath}/hire-pack`))}>
           Hire Pack
+        </Link>
+        <Link href={`${claimPath}/prehire`} className={tabClass(onPrehire)}>
+          Pre-hire checks
         </Link>
         <Link href={`${claimPath}/financial`} className={tabClass(onFinancial)}>
           Financial circumstances

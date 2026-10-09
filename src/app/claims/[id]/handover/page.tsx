@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/ClaimTable";
 import { HandoverStartForm } from "@/components/handover/HandoverStartForm";
 import { ShotCamera } from "@/components/handover/ShotCamera";
 import { ValidatedForm } from "@/components/ValidatedForm";
-import { formatUkDateTime, londonDateTimeLocal, toLondonDateTimeLocal } from "@/lib/dates";
+import { formatUkDateTime, londonDateIso, londonDateTimeLocal, londonTodayIso, toLondonDateTimeLocal } from "@/lib/dates";
 import { canDoFieldJob, isOfficeRole, roleLabel } from "@/lib/auth/roles";
 import { requireSignedIn } from "@/lib/auth/session";
 import {
@@ -24,6 +24,8 @@ import {
 } from "@/lib/db/handover";
 import { getDayAssignment, handoverSuggestion, isHandoverAssignment, listAssignablePeople, listMyJobs } from "@/lib/db/jobs";
 import { SIGNATURE_HONESTY } from "@/lib/domain/handover-signature";
+import { LICENCE_CHECK_WINDOW_NOTICE, handoverStaleLines } from "@/lib/domain/prehire-checks";
+import { listHireDrivers, listLicenceChecks } from "@/lib/db/prehire-checks";
 import { getClaim } from "@/lib/db/queries";
 
 const field = "mt-1 w-full max-w-full rounded-md border border-line bg-white px-3 py-3 text-base";
@@ -169,6 +171,13 @@ export default async function HandoverPage({
     [claim.claim.make, claim.claim.model, claim.claim.registration].filter(Boolean).join(" ") || "Not recorded on the file";
   const savedText =
     saved === "photo" ? "Photograph saved." : saved === "details" ? "Details saved. Take the photographs below." : saved ? "Handover saved." : "";
+  const hireUsers = listHireDrivers(id);
+  const licenceSnapshots = listLicenceChecks(id).map((row) => ({
+    driverKey: row.driver_key,
+    checkedOn: row.checked_on,
+    recordedAt: row.recorded_at,
+  }));
+  const staleToday = handoverStaleLines({ drivers: hireUsers, checks: licenceSnapshots, asAtYmd: londonTodayIso() });
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -201,6 +210,17 @@ export default async function HandoverPage({
 
       {error ? <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p> : null}
       {savedText ? <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm">{savedText}</p> : null}
+      {staleToday.length > 0 ? (
+        <div className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">
+          <p className="font-semibold">Licence check</p>
+          {staleToday.map((line) => (
+            <p key={line} className="mt-2">
+              {line}
+            </p>
+          ))}
+          <p className="mt-2 text-slate">{LICENCE_CHECK_WINDOW_NOTICE} Handover is not stopped.</p>
+        </div>
+      ) : null}
 
       <HandoverStartForm
         action={`/claims/${id}/handover/start`}
@@ -222,7 +242,13 @@ export default async function HandoverPage({
       <section className="space-y-4">
         <h2 className="font-serif text-xl text-navy-deep">Saved handovers</h2>
         {records.length === 0 ? <p className="text-sm text-slate">None recorded on this file yet.</p> : null}
-        {records.map((record) => (
+        {records.map((record) => {
+          const staleOnRecord = handoverStaleLines({
+            drivers: hireUsers,
+            checks: licenceSnapshots,
+            asAtYmd: londonDateIso(new Date(record.occurredAt)),
+          });
+          return (
           <article key={record.id} className="rounded-xl border border-line bg-card p-5 text-sm">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
@@ -247,6 +273,14 @@ export default async function HandoverPage({
                 </p>
               )}
             </div>
+            {staleOnRecord.length > 0 ? (
+              <div className="mt-3 rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2">
+                {staleOnRecord.map((line) => (
+                  <p key={line}>{line}</p>
+                ))}
+                <p className="mt-2 text-slate">{LICENCE_CHECK_WINDOW_NOTICE} This handover is not changed.</p>
+              </div>
+            ) : null}
             <p className="mt-3">
               Mileage {record.mileage.toLocaleString("en-GB")} · Fuel {record.fuelLabel}
             </p>
@@ -307,7 +341,8 @@ export default async function HandoverPage({
               <p className="text-xs text-slate">Optional. Attaching a scan does not change the mileage, fuel or the incomplete flag.</p>
             </div> : null}
           </article>
-        ))}
+          );
+        })}
       </section>
     </div>
   );

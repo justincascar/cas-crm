@@ -198,7 +198,7 @@ export default async function FinancialCircumstancesPage({
             </button>
           </form>
         </div>
-        <h3 className="font-serif text-lg text-navy-deep">Accounts and papers, each listed separately</h3>
+        <h3 id="bank-accounts" className="font-serif text-lg text-navy-deep">Accounts and papers, each listed separately</h3>
         {accounts.length === 0 ? <p className="text-sm">Nothing listed yet.</p> : null}
         <ul className="space-y-2 text-sm">
           {accounts.map((row) => (

@@ -29,6 +29,7 @@ import {
 } from "@/lib/db/chronology";
 import { generateHirePackDocument, generateStorageRecoveryDocument, getHirePack, saveHirePack } from "@/lib/db/hire-pack";
 import { generateHireAgreementDocument, getGtaMarkupPercent, prepareHireRating } from "@/lib/db/hire-agreement";
+import { hireAgreementPrehireBlock } from "@/lib/db/prehire-checks";
 import { normaliseGtaGroup, standardDailyRatePence } from "@/lib/documents/gta";
 import { saveScreenData, valuesFromForm } from "@/lib/db/screens";
 import { isoDaysFromNow } from "@/lib/dates";
@@ -590,8 +591,10 @@ export async function actionSaveHirePack(formData: FormData) {
 
 export async function actionGenerateHireAgreement(formData: FormData) {
   await requireStaff();
-  await actionSaveHirePack(formData);
   const claimId = String(formData.get("claimId"));
+  const blocked = hireAgreementPrehireBlock(claimId);
+  if (blocked) redirect(`/claims/${claimId}/hire-pack${errorQuery(blocked)}`);
+  await actionSaveHirePack(formData);
   const pack = getHirePack(claimId);
   if (!pack) throw new Error("File not found.");
   const markup = getGtaMarkupPercent();

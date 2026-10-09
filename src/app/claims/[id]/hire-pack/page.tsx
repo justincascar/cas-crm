@@ -9,6 +9,7 @@ import { PageHeader } from "@/components/ClaimTable";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { requireStaff } from "@/lib/auth/session";
 import { getHirePack } from "@/lib/db/hire-pack";
+import { hireAgreementPrehireBlock } from "@/lib/db/prehire-checks";
 import { RENTAL_PERIOD_DECISION } from "@/lib/documents/hire-pack-fields";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
@@ -42,6 +43,7 @@ export default async function HirePackPage({
   const suppliedHigher = !groupChargedAboveClient(charged, clientGroup) && groupChargedAboveClient(suppliedGroup, clientGroup);
   const chargedHigher = groupChargedAboveClient(charged, clientGroup);
   const parts = pack.parts;
+  const prehireBlock = hireAgreementPrehireBlock(id);
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -58,6 +60,22 @@ export default async function HirePackPage({
       {error ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
       ) : null}
+
+      {prehireBlock ? (
+        <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">
+          {prehireBlock}{" "}
+          <Link href={`/claims/${id}/prehire`} className="underline">
+            Pre-hire checks
+          </Link>
+        </p>
+      ) : (
+        <p className="rounded-md border border-ok/40 bg-[#eef6ef] px-4 py-3 text-sm">
+          Licence checks and bank-statement evidence are on this file. Generating still does not sign the agreement.{" "}
+          <Link href={`/claims/${id}/prehire`} className="text-teal-dark underline">
+            Pre-hire checks
+          </Link>
+        </p>
+      )}
 
       <section className="rounded-xl border border-line bg-card p-5 text-sm">
         <h2 className="font-serif text-xl text-navy-deep">What this agreement will include</h2>

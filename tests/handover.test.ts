@@ -26,6 +26,7 @@ import { utcFromLondonDateTime } from "../src/lib/dates.ts";
 import { readStoredFile } from "../src/lib/storage/files.ts";
 import { migrate } from "../src/lib/db/migrate.ts";
 import { seed } from "../src/lib/db/seed.ts";
+import { recordPassingPrehireChecks } from "./prehire-setup.ts";
 
 const schema = fs.readFileSync(path.join(process.cwd(), "src/lib/db/schema.sql"), "utf8");
 
@@ -166,6 +167,7 @@ describe("vehicle handover records", () => {
           conditionNote: "Recovered from the scene.",
         }),
       );
+      recordPassingPrehireChecks("c3");
       const result = generateHireAgreementDocument("c3", "staff-sian", 6653);
       const html = String((db.prepare(`SELECT body_html FROM documents WHERE id = ?`).get(result.documentId) as { body_html: string }).body_html);
       assert.match(html, /Mileage at delivery: 22,222/);
