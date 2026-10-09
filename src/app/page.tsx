@@ -122,6 +122,16 @@ export default async function DashboardPage() {
         rows={data.chasesDue.filter((row) => row.kind === "total_loss_payment")}
       />
       <ChaseDueTable
+        title="Repair invoice payments"
+        hint="Follows the agreed repair invoice only. Storage is not included. The first email is prepared for you to send. After that, a reminder is due on the payment reminder interval (three days unless this file has an override). A part-payment pauses it. Nothing is sent until you click Send. The insurer payment term is separate and is not set until CAS confirms it."
+        rows={data.chasesDue.filter((row) => row.kind === "repair_payment")}
+      />
+      <ChaseDueTable
+        title="Total-loss settlement payments"
+        hint="Follows the agreed total-loss settlement. A part-payment pauses this chase and is not treated as paid. Full payment stops it and flags hire and storage for review. Nothing is sent until you click Send."
+        rows={data.chasesDue.filter((row) => row.kind === "settlement_payment")}
+      />
+      <ChaseDueTable
         title="Hire agreement renewals"
         hint="Counted from the current signed hire agreement start date, not the fleet booking dates. Amber from day 70 (approaching), red from day 80 (due), red overdue from day 88 if still not renewed. Courtesy cars are excluded unless a hire agreement is on the file. Clears only when a renewal is logged — it does not disappear just because time passes. Reminder only — no email is sent automatically."
         rows={data.chasesDueByKind.hire_agreement_renewal}

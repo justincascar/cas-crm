@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { actionAddNote, actionAddTask, actionCompleteTask, actionUpdateClaim } from "@/app/actions";
+import { actionRecordAgreedRepair } from "@/app/chase-actions";
 import { FileHistory } from "@/components/FileHistory";
 import { ClaimWorkflowStatus } from "@/components/ClaimWorkflowStatus";
 import { ChasePanel } from "@/components/ChasePanel";
@@ -469,6 +470,21 @@ export default async function ClaimDetailPage({
               ))}
             </tbody>
           </table>
+          {Number(claim.total_loss) === 1 ? null : (
+            <form action={actionRecordAgreedRepair} className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+              <label className="text-sm">
+                Agreed repair invoice (£)
+                <input name="agreed" inputMode="decimal" required className={field} />
+                <span className="mt-1 block text-slate">
+                  This is the agreed repair figure only. It does not include storage, and it does not change the amount received.
+                </span>
+              </label>
+              <input type="hidden" name="claimId" value={String(claim.id)} />
+              <button className="rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white" type="submit">
+                Record agreed figure
+              </button>
+            </form>
+          )}
         </div>
       </section>
 

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { generateLetter } from "../src/lib/documents/templates.ts";
 import { generateEmail } from "../src/lib/documents/email-templates.ts";
+import { CAS_EMAIL_SPECS } from "../src/lib/documents/cas-wording.ts";
 import { DOCUMENT_TEMPLATES } from "../src/lib/documents/catalog.ts";
 import {
   DOCUMENT_PLACEHOLDER_NOTE,
@@ -234,8 +235,6 @@ describe("CAS email templates", () => {
       "total_loss_cessation",
       "internal_chase",
       "client_welcome",
-      "payment_chase_1",
-      "payment_chase_2",
       "client_total_loss_update",
       "client_status_update",
       "vehicle_ready",
@@ -243,6 +242,11 @@ describe("CAS email templates", () => {
     ]) {
       assert.ok(keys.includes(key as never), `missing ${key}`);
     }
+    assert.equal(keys.includes("payment_chase_1"), false);
+    assert.equal(keys.includes("payment_chase_2"), false);
+    const wording = CAS_EMAIL_SPECS.map((item) => item.key);
+    assert.ok(wording.includes("payment_chase_1"));
+    assert.ok(wording.includes("payment_chase_2"));
   });
 });
 

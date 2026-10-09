@@ -16,16 +16,32 @@ import {
   LIABILITY_RESPONSE_CHASE_DUE_LABEL,
   LIABILITY_RESPONSE_CHASE_RULE,
   LIABILITY_RESPONSE_CHASE_TEMPLATE,
+  PAYMENT_CHASE_INTERVAL_DAYS_DEFAULT,
   REPAIR_AUTHORISATION_CHASE_DUE_LABEL,
   REPAIR_AUTHORISATION_CHASE_RULE,
   REPAIR_AUTHORISATION_CHASE_TEMPLATE,
+  REPAIR_PAYMENT_CHASE_DUE_LABEL,
+  REPAIR_PAYMENT_CHASE_RULE,
+  REPAIR_PAYMENT_CHASE_TEMPLATE,
   SETTING_AGREEMENT_RENEWAL_ALERT_DAY,
   SETTING_ENGINEER_CHASE_INTERVAL_DAYS,
   SETTING_LIABILITY_CHASE_INTERVAL_DAYS,
+  SETTING_PAYMENT_CHASE_INTERVAL_DAYS,
   SETTING_REPAIR_AUTH_CHASE_INTERVAL_DAYS,
+  SETTLEMENT_PAYMENT_CHASE_DUE_LABEL,
+  SETTLEMENT_PAYMENT_CHASE_RULE,
+  SETTLEMENT_PAYMENT_CHASE_TEMPLATE,
 } from "../constants";
+import type { PaymentChaseHead } from "./payment-chase";
 
-export const CHASE_KINDS = ["engineer_report", "liability_response", "repair_authorisation", "hire_agreement_renewal"] as const;
+export const CHASE_KINDS = [
+  "engineer_report",
+  "liability_response",
+  "repair_authorisation",
+  "hire_agreement_renewal",
+  "repair_payment",
+  "settlement_payment",
+] as const;
 export type ChaseKind = (typeof CHASE_KINDS)[number];
 
 export type ChaseHandlerState = "tracking" | "paused" | "cancelled";
@@ -57,6 +73,8 @@ export type ChaseKindDefinition = {
   ignoreLastChaseSent?: boolean;
   approachingLabel?: string;
   overdueLabel?: string;
+  /** When set, the chase follows this head's agreed balance. Storage is never a head. */
+  paymentHead?: PaymentChaseHead;
 };
 
 const DEFAULT_INTERVAL = ENGINEER_CHASER_INTERVAL_DAYS_DEFAULT;
@@ -131,6 +149,54 @@ export const CHASE_KIND_DEFINITIONS: Record<ChaseKind, ChaseKindDefinition> = {
     notStartedReason: "No repair authorisation or payment request has been marked as sent.",
     outcomeOnFileReason: "Repair authorisation or payment has been logged as received.",
   },
+  repair_payment: {
+    kind: "repair_payment",
+    ruleKey: REPAIR_PAYMENT_CHASE_RULE,
+    track: "repair_payment",
+    settingKey: SETTING_PAYMENT_CHASE_INTERVAL_DAYS,
+    defaultIntervalDays: PAYMENT_CHASE_INTERVAL_DAYS_DEFAULT,
+    templateKey: REPAIR_PAYMENT_CHASE_TEMPLATE,
+    dueLabel: REPAIR_PAYMENT_CHASE_DUE_LABEL,
+    title: "Repair invoice payment",
+    waitingReason: "Waiting for payment of the agreed repair invoice. Reminder only — not auto-sent.",
+    startEventTypes: ["repair_payment_request_sent"],
+    startTemplateKeys: [],
+    chaseSentEventType: "repair_payment_reminder_sent",
+    extraChaseSentEventTypes: [],
+    outcomeReceivedEventTypes: [],
+    outcomeClearedEventType: "repair_payment_chase_cleared",
+    pauseEventType: "repair_payment_chase_paused",
+    resumeEventType: "repair_payment_chase_resumed",
+    cancelEventType: "repair_payment_chase_cancelled",
+    recipient: "insurer",
+    notStartedReason: "No repair-invoice payment request has been marked as sent.",
+    outcomeOnFileReason: "The agreed repair invoice has been paid in full. Hire and storage are not closed.",
+    paymentHead: "repairs",
+  },
+  settlement_payment: {
+    kind: "settlement_payment",
+    ruleKey: SETTLEMENT_PAYMENT_CHASE_RULE,
+    track: "settlement_payment",
+    settingKey: SETTING_PAYMENT_CHASE_INTERVAL_DAYS,
+    defaultIntervalDays: PAYMENT_CHASE_INTERVAL_DAYS_DEFAULT,
+    templateKey: SETTLEMENT_PAYMENT_CHASE_TEMPLATE,
+    dueLabel: SETTLEMENT_PAYMENT_CHASE_DUE_LABEL,
+    title: "Total-loss settlement payment",
+    waitingReason: "Waiting for payment of the agreed total-loss settlement. Reminder only — not auto-sent.",
+    startEventTypes: ["settlement_payment_request_sent"],
+    startTemplateKeys: [],
+    chaseSentEventType: "settlement_payment_reminder_sent",
+    extraChaseSentEventTypes: [],
+    outcomeReceivedEventTypes: [],
+    outcomeClearedEventType: "settlement_payment_chase_cleared",
+    pauseEventType: "settlement_payment_chase_paused",
+    resumeEventType: "settlement_payment_chase_resumed",
+    cancelEventType: "settlement_payment_chase_cancelled",
+    recipient: "insurer",
+    notStartedReason: "No total-loss settlement payment request has been marked as sent.",
+    outcomeOnFileReason: "The agreed total-loss settlement has been paid in full. Hire and storage are not closed.",
+    paymentHead: "vehicle_damage",
+  },
   hire_agreement_renewal: {
     kind: "hire_agreement_renewal",
     ruleKey: HIRE_AGREEMENT_RENEWAL_CHASE_RULE,
@@ -165,7 +231,13 @@ export const CHASE_KIND_ORDER: ChaseKind[] = [
   "engineer_report",
   "repair_authorisation",
   "hire_agreement_renewal",
+  "repair_payment",
+  "settlement_payment",
 ];
+
+export function isPaymentChaseKind(kind: ChaseKind): boolean {
+  return Boolean(CHASE_KIND_DEFINITIONS[kind].paymentHead);
+}
 
 export function isChaseKind(value: string | null | undefined): value is ChaseKind {
   return CHASE_KINDS.includes(String(value || "") as ChaseKind);

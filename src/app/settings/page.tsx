@@ -1,18 +1,21 @@
 import { PageHeader } from "@/components/ClaimTable";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import Link from "next/link";
-import { actionSaveAgreementLimits, actionSaveChaseIntervals, actionSaveDefaultVehicleLocation, actionSaveGtaMarkup } from "@/app/settings-actions";
+import { actionSaveAgreementLimits, actionSaveChaseIntervals, actionSaveDefaultVehicleLocation, actionSaveGtaMarkup, actionSavePaymentTerm } from "@/app/settings-actions";
 import { isAdministrator } from "@/lib/auth/roles";
 import { requireStaff } from "@/lib/auth/session";
 import { dbLocation, getSettings, listStaff } from "@/lib/db/queries";
 import { getDefaultVehicleLocation } from "@/lib/db/vehicle-location";
-import { getAgreementApproachingDay, getAgreementMaxDays, getChaseIntervalDays } from "@/lib/db/chase";
+import { getAgreementApproachingDay, getAgreementMaxDays, getChaseIntervalDays, getInsurerPaymentTermDays } from "@/lib/db/chase";
 import { getGtaMarkupPercent } from "@/lib/db/hire-agreement";
 import { getInsurerPaymentDetails } from "@/lib/db/payment-details";
 import { GTA_RATE_PERIOD_LABEL } from "@/lib/documents/gta";
 import { CAS_CLAIMS_MAILBOX, INDICATIVE_DEFAULTS } from "@/lib/constants";
 import { mailboxIsConnected } from "@/lib/email/microsoft-graph";
 import { formatGbp } from "@/lib/money";
+import { formatUkDateTime } from "@/lib/dates";
+import { currentCasInsuranceDocument } from "@/lib/db/company-insurance";
+import { PAYMENT_REQUEST_PACK_MISSING } from "@/lib/email/payment-request-pack";
 
 export default async function SettingsPage({
   searchParams,
@@ -28,11 +31,14 @@ export default async function SettingsPage({
   const engineerChaseIntervalDays = getChaseIntervalDays("engineer_report");
   const liabilityChaseIntervalDays = getChaseIntervalDays("liability_response");
   const repairChaseIntervalDays = getChaseIntervalDays("repair_authorisation");
+  const paymentChaseIntervalDays = getChaseIntervalDays("repair_payment");
+  const insurerPaymentTermDays = getInsurerPaymentTermDays();
   const agreementRenewalAlertDay = getChaseIntervalDays("hire_agreement_renewal");
   const agreementRenewalApproachingDay = getAgreementApproachingDay();
   const agreementMaxDays = getAgreementMaxDays();
   const gtaMarkupPercent = getGtaMarkupPercent();
   const paymentDetails = getInsurerPaymentDetails();
+  const casInsurance = currentCasInsuranceDocument();
   return (
     <div className="max-w-3xl space-y-6">
       <PageHeader
@@ -42,7 +48,11 @@ export default async function SettingsPage({
       {error ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
       ) : null}
-      {saved ? (
+      {saved === "insurance" ? (
+        <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm text-ok">
+          CAS insurance certificate stored. Nothing was sent.
+        </p>
+      ) : saved ? (
         <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm text-ok">Saved.</p>
       ) : null}
       <section className="rounded-xl border border-warn/40 bg-[#fff6e8] p-5">
@@ -136,6 +146,65 @@ export default async function SettingsPage({
             Save payment details
           </button>
         </form>
+        <h3 className="mt-6 font-semibold text-navy">Insurer payment term</h3>
+        <p className="mt-1 text-sm text-slate">
+          How many days an insurer has to pay once a payment request is sent. This is not set. Nothing is filled in until you confirm the number.
+          An empty box stays empty. It is not the chase reminder interval.
+        </p>
+        <p className="mt-2 text-sm font-semibold">{insurerPaymentTermDays == null ? "Not set" : `${insurerPaymentTermDays} days`}</p>
+        <ValidatedForm action={actionSavePaymentTerm} className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            Days
+            <input
+              name="insurerPaymentTermDays"
+              type="number"
+              min={1}
+              step={1}
+              className="mt-1 w-32 rounded-md border border-line bg-white px-3 py-2 text-sm"
+              defaultValue={insurerPaymentTermDays ?? ""}
+              placeholder="Not set"
+            />
+          </label>
+          <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
+            Save payment term
+          </button>
+        </ValidatedForm>
+      </section>
+      <section className="rounded-xl border border-line bg-card p-5">
+        <h2 className="font-serif text-xl text-navy-deep">CAS insurance certificate</h2>
+        <p className="mt-1 text-sm text-slate">
+          CAS&apos;s own insurance certificate, kept once for the company. It is not stored on each claim, and it is not invented. Storing a file
+          here does not send an email. A payment-request email ticks the current copy when one is stored.
+        </p>
+        {casInsurance ? (
+          <p className="mt-3 text-sm">
+            Current certificate: {casInsurance.original_filename} · version {casInsurance.version} ·{" "}
+            {formatUkDateTime(casInsurance.created_at)} ·{" "}
+            <Link className="text-teal-dark underline" href={`/documents/${casInsurance.id}`}>
+              View
+            </Link>
+          </p>
+        ) : (
+          <p className="mt-3 rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2 text-sm">{PAYMENT_REQUEST_PACK_MISSING.casInsurance}</p>
+        )}
+        <form method="post" action="/settings/cas-insurance" encType="multipart/form-data" className="mt-4 space-y-3">
+          <label className="block text-sm">
+            {casInsurance ? "Store a newer copy" : "Certificate file"}
+            <input
+              name="document"
+              type="file"
+              required
+              accept="application/pdf,image/jpeg,image/png,image/webp,image/gif,.pdf,.jpg,.jpeg,.png,.webp,.gif"
+              className="mt-1 block w-full text-sm"
+            />
+          </label>
+          <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
+            {casInsurance ? "Store a newer copy" : "Store certificate"}
+          </button>
+          {casInsurance ? (
+            <p className="text-sm text-slate">The earlier copy stays available to tick by hand. Only the current copy is pre-ticked.</p>
+          ) : null}
+        </form>
       </section>
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Environment</h2>
@@ -200,7 +269,8 @@ export default async function SettingsPage({
         <h2 className="font-serif text-xl text-navy-deep">Chase reminder intervals</h2>
         <p className="mt-1 text-sm text-slate">
           After an outstanding request is marked as sent, the file is flagged if the outcome has not been logged within
-          this many calendar days. Each type has its own default. A longer interval can still be set on an individual
+          this many calendar days. Each type has its own default. The payment reminder uses the same three-day demonstration
+          default. It is not the insurer payment term, which stays unset until you confirm it. A longer interval can still be set on an individual
           file (for example where an insurer has agreed a slower chase). Reminders only — no email is sent
           automatically. Changing these numbers later does not reopen a chase that has already been cancelled, paused,
           or cleared by a logged outcome, and does not overwrite a per-file override.
@@ -240,6 +310,18 @@ export default async function SettingsPage({
               required
               className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
               defaultValue={repairChaseIntervalDays}
+            />
+          </label>
+          <label className="text-sm">
+            Payment reminder (days)
+            <input
+              name="paymentChaseIntervalDays"
+              type="number"
+              min={1}
+              step={1}
+              required
+              className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
+              defaultValue={paymentChaseIntervalDays}
             />
           </label>
           <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white sm:col-span-3">

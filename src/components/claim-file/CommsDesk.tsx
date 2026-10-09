@@ -15,6 +15,7 @@ import { InstructEngineerPanel } from "@/components/InstructEngineerPanel";
 import { ChasePanel, type HireAgreementHistoryRow } from "@/components/ChasePanel";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { emailTemplatesForRole, templateKeyForRole } from "@/lib/documents/email-templates";
+import { PAYMENT_REQUEST_EMAIL_TEMPLATE_KEY, isPaymentRequestEmailTemplate, paymentRequestPack } from "@/lib/email/payment-request-pack";
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
 import { formatUkDateTime } from "@/lib/dates";
 import {
@@ -55,6 +56,7 @@ export function CommsDesk({
   defaults,
   correspondence,
   documents,
+  companyDocuments = [],
   liabilityStatus,
   engineers,
   selectedEngineerId,
@@ -70,6 +72,7 @@ export function CommsDesk({
   defaults: CommsContactDefaults;
   correspondence: CorrespondenceRow[];
   documents: DocumentRow[];
+  companyDocuments?: DocumentRow[];
   liabilityStatus: string;
   engineers: Array<{ id: string; name: string; address: string; email: string; active: number }>;
   selectedEngineerId: string;
@@ -138,12 +141,33 @@ export function CommsDesk({
     setEmailTo(decision.address);
     setFilledAddress(decision.filledAddress);
     setSendToNote(decision.missingMessage);
-    setEmailTemplate((current) => templateKeyForRole(role, current));
+    applyTemplate(templateKeyForRole(role, emailTemplate));
   }
 
   const visibleTemplates = emailTemplatesForRole(sendTo);
-  const attachable = attachmentChoices(documents);
+  const attachable = attachmentChoices([...companyDocuments, ...documents]);
+  const packPreview = paymentRequestPack({
+    templateKey: PAYMENT_REQUEST_EMAIL_TEMPLATE_KEY,
+    claimDocuments: documents,
+    companyDocuments,
+  });
+  const pack = paymentRequestPack({
+    templateKey: emailTemplate,
+    claimDocuments: documents,
+    companyDocuments,
+  });
   const [attachmentIds, setAttachmentIds] = useState<string[]>([]);
+
+  function applyTemplate(next: string) {
+    const wasPack = isPaymentRequestEmailTemplate(emailTemplate);
+    const nextPack = isPaymentRequestEmailTemplate(next);
+    if (nextPack && !wasPack) {
+      setAttachmentIds(packPreview.selectedIds);
+    } else if (wasPack && !nextPack && sameIds(attachmentIds, packPreview.selectedIds)) {
+      setAttachmentIds([]);
+    }
+    setEmailTemplate(next);
+  }
 
   return (
     <div className="space-y-6">
@@ -250,7 +274,7 @@ export function CommsDesk({
           <select
             className={field}
             value={emailTemplate}
-            onChange={(event) => setEmailTemplate(event.target.value)}
+            onChange={(event) => applyTemplate(event.target.value)}
           >
             {visibleTemplates.length === 0 ? (
               <option value="">
@@ -265,6 +289,11 @@ export function CommsDesk({
             )}
           </select>
         </label>
+        {sendTo === "third_party" || sendTo === "representative" ? (
+          <p className="text-sm text-slate md:col-span-2">
+            Payment chase 1 and 2 are no longer free-standing templates. The repair invoice and total-loss settlement chases prepare the payment email, with the figure and bank details filled in. Nothing is sent until you click Send on that chase.
+          </p>
+        ) : null}
         {sendTo === "engineer" ? (
           <p className="text-sm text-slate md:col-span-2">
             No saved email template is written for an engineer. Type the message here, or use Instruct Engineer above.
@@ -354,7 +383,25 @@ export function CommsDesk({
         </label>
         <fieldset className="space-y-2 md:col-span-2">
           <legend className="text-sm">Documents to attach</legend>
-          <p className="text-xs text-slate">Nothing is attached unless you tick it. Only documents already stored on this claim are listed.</p>
+          {pack.applies ? (
+            <p className="text-xs text-slate">
+              {visibleTemplates.find((template) => template.key === emailTemplate)?.title ?? "This payment chase"} ticks the payment-request pack
+              that is already stored. Check the ticks. Nothing is sent until you click Send. Untick a document, or tick others. A required document
+              that is not stored is named below and is not attached.
+            </p>
+          ) : (
+            <p className="text-xs text-slate">
+              Nothing is attached unless you tick it. Only documents already stored on this claim are listed. CAS&apos;s own insurance certificate
+              is listed as well when it has been stored under Settings.
+            </p>
+          )}
+          {pack.applies && pack.missing.length > 0 ? (
+            <ul className="space-y-1 rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2 text-sm">
+              {pack.missing.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          ) : null}
           {attachable.length === 0 ? (
             <p className="text-sm">{NO_STORED_DOCUMENTS_MESSAGE}</p>
           ) : (
@@ -564,6 +611,13 @@ export function CommsDesk({
       ) : null}
     </div>
   );
+}
+
+function sameIds(left: string[], right: string[]): boolean {
+  if (left.length !== right.length) return false;
+  const a = [...left].sort();
+  const b = [...right].sort();
+  return a.every((id, index) => id === b[index]);
 }
 
 function attachmentSummary(value: string | number | null | undefined): string {

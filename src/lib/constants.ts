@@ -75,6 +75,24 @@ export const LIABILITY_RESPONSE_CHASE_DUE_LABEL = "Liability response chase due"
 export const REPAIR_AUTHORISATION_CHASE_RULE = "repair_authorisation_chase";
 export const REPAIR_AUTHORISATION_CHASE_TEMPLATE = "repair_authorisation_chase";
 export const REPAIR_AUTHORISATION_CHASE_DUE_LABEL = "Repair authorisation chase due";
+/** How soon the next payment reminder is prepared. Same demonstration default as the other chasers. Not the insurer payment term. */
+export const SETTING_PAYMENT_CHASE_INTERVAL_DAYS = "payment_chase_interval_days";
+export const PAYMENT_CHASE_INTERVAL_DAYS_DEFAULT = ENGINEER_CHASER_INTERVAL_DAYS_DEFAULT;
+/**
+ * Days the insurer is allowed before the payment in the email is due.
+ * Empty until CAS confirms the number. There is no default.
+ */
+export const SETTING_INSURER_PAYMENT_TERM_DAYS = "insurer_payment_term_days";
+export const PAYMENT_TERM_NOT_SET_LABEL =
+  "Insurer payment term: not set. No payment due date until CAS confirms how many days.";
+export const REPAIR_PAYMENT_CHASE_RULE = "repair_payment_chase";
+export const REPAIR_PAYMENT_CHASE_TEMPLATE = "repair_payment_chase";
+export const REPAIR_PAYMENT_CHASE_DUE_LABEL = "Repair invoice payment chase due";
+export const REPAIR_PAYMENT_REQUEST_LABEL = "Repair invoice payment request ready";
+export const SETTLEMENT_PAYMENT_CHASE_RULE = "settlement_payment_chase";
+export const SETTLEMENT_PAYMENT_CHASE_TEMPLATE = "settlement_payment_chase";
+export const SETTLEMENT_PAYMENT_CHASE_DUE_LABEL = "Total-loss settlement payment chase due";
+export const SETTLEMENT_PAYMENT_REQUEST_LABEL = "Total-loss settlement payment request ready";
 export const FILE_REFERENCE_PREFIX_DEFAULT = "TEST-";
 
 /** Confirmed Microsoft 365 claims mailbox. Live send/receive is not connected. */

@@ -7,13 +7,17 @@ import {
   actionClearChaseOutcome,
   actionClearChaseOverride,
   actionLogChaseOutcome,
+  actionLogHeadPayment,
+  actionLogUnreferencedPayment,
   actionMarkChaseSent,
   actionPauseChase,
   actionPrepareChase,
+  actionRecordAgreedRepair,
   actionResumeChase,
   actionSaveChaseOverride,
 } from "@/app/chase-actions";
-import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
+import { CAS_CLAIMS_MAILBOX, PAYMENT_TERM_NOT_SET_LABEL } from "@/lib/constants";
+import { formatGbp } from "@/lib/money";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import { buildMailtoHref } from "@/lib/email/mailto";
 import { SendPreparedEmailForm } from "@/components/claims/SendPreparedEmailForm";
@@ -103,6 +107,7 @@ export function ChasePanel({
   );
   const [preparedId, setPreparedId] = useState(prepared?.id || "");
   const [toAddress, setToAddress] = useState(prepared?.to_address || chase.contactEmail);
+  const [packIds, setPackIds] = useState<string[]>(chase.payment?.packSelectedIds || []);
 
   async function run<T extends { error?: string }>(
     action: (form: FormData) => Promise<T>,
@@ -238,6 +243,31 @@ export function ChasePanel({
         </div>
       ) : null}
 
+      {chase.payment ? (
+        <div className="mt-3 rounded-md border border-line bg-white px-4 py-3 text-sm">
+          <p>
+            Agreed {formatGbp(chase.payment.agreedPence)} · Received {formatGbp(chase.payment.receivedPence)} · Still to pay{" "}
+            {formatGbp(chase.payment.outstandingPence)}
+          </p>
+          <p className="mt-1 text-slate">
+            Storage still outstanding {formatGbp(chase.payment.storageOutstandingPence)} is not part of this figure and is not chased here.
+          </p>
+          <p className="mt-1">{chase.payment.bankLine}</p>
+          {chase.payment.dueDateUnset ? (
+            <p className="mt-2 rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2 font-semibold">{PAYMENT_TERM_NOT_SET_LABEL}</p>
+          ) : (
+            <p className="mt-1">Payment term: {chase.payment.paymentTermDays} days. The reminder interval is separate.</p>
+          )}
+          {chase.payment.partPaid ? (
+            <p className="mt-2 font-semibold">Part-payment recorded. This is not paid. The chase uses the reduced balance.</p>
+          ) : null}
+          {chase.payment.reviewNote ? <p className="mt-2">{chase.payment.reviewNote}</p> : null}
+          {chase.payment.paidInFull ? (
+            <p className="mt-2 font-semibold">Paid in full on this head. Hire and storage are flagged for review and have not been closed.</p>
+          ) : null}
+        </div>
+      ) : null}
+
       {chase.due ? (
         <p
           className={`mt-3 rounded-md border bg-white px-4 py-3 text-sm font-semibold ${
@@ -269,7 +299,7 @@ export function ChasePanel({
                   Open pre-filled email
                 </a>
               ) : null}
-              {mailboxConnected && preparedId ? (
+              {mailboxConnected && preparedId && !chase.payment ? (
                 <SendPreparedEmailForm claimId={claimId} correspondenceId={preparedId} returnTo={sendBack} />
               ) : null}
             </>
@@ -322,6 +352,52 @@ export function ChasePanel({
         </p>
       ) : null}
 
+      {chase.payment && chase.due && preparedId ? (
+        <div className="mt-3 rounded-md border border-line bg-white px-4 py-3 text-sm">
+          <p className="font-semibold">Payment-request documents</p>
+          <p className="mt-1 text-slate">
+            Current versions are ticked. A missing item is named and is not replaced. Nothing is sent until you click Send.
+          </p>
+          {chase.payment.packMissing.length > 0 ? (
+            <ul className="mt-2 list-disc pl-5">
+              {chase.payment.packMissing.map((line) => (
+                <li key={line}>{line}</li>
+              ))}
+            </ul>
+          ) : null}
+          {chase.payment.packSelectedIds.length > 0 ? (
+            <ul className="mt-2 space-y-1">
+              {chase.payment.packSelectedIds.map((id) => (
+                <li key={id}>
+                  <label className="flex items-start gap-2">
+                    <input
+                      type="checkbox"
+                      checked={packIds.includes(id)}
+                      onChange={(event) =>
+                        setPackIds((current) => (event.target.checked ? [...current, id] : current.filter((item) => item !== id)))
+                      }
+                    />
+                    <span>Stored document ticked for review</span>
+                  </label>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {mailboxConnected ? (
+            <form method="post" action={`/claims/${claimId}/send-email`} className="mt-3">
+              <input type="hidden" name="correspondenceId" value={preparedId} />
+              <input type="hidden" name="returnTo" value={sendBack} />
+              {packIds.map((id) => (
+                <input key={id} type="hidden" name="attachmentId" value={id} />
+              ))}
+              <button className="min-h-11 rounded-md bg-teal px-3 py-2 text-sm font-semibold text-white" type="submit">
+                Send from {CAS_CLAIMS_MAILBOX}
+              </button>
+            </form>
+          ) : null}
+        </div>
+      ) : null}
+
       {preparedId && chase.due && !chase.contactMissing && !mailboxConnected ? (
         <div className="mt-3">
           <button
@@ -335,7 +411,80 @@ export function ChasePanel({
         </div>
       ) : null}
 
-      {!chase.outcomeOnFile ? (
+      {chase.payment && !chase.payment.paidInFull ? (
+        <div className="mt-4 space-y-3">
+          {chase.payment.head === "repairs" && chase.payment.agreedPence <= 0 ? (
+            <form
+              className="grid gap-2 rounded-md border border-line bg-white p-3 sm:grid-cols-[1fr_auto] sm:items-end"
+              onSubmit={(event) => {
+                event.preventDefault();
+                const form = new FormData(event.currentTarget);
+                void run(actionRecordAgreedRepair, { agreed: String(form.get("agreed") || "") });
+              }}
+            >
+              <label className="text-sm">
+                Agreed repair invoice (£)
+                <input name="agreed" inputMode="decimal" className={field} required />
+              </label>
+              <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white" disabled={busy}>
+                Record agreed figure
+              </button>
+            </form>
+          ) : null}
+          <form
+            className="grid gap-2 rounded-md border border-line bg-white p-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              void run(actionLogHeadPayment, {
+                head: chase.payment?.head || "",
+                amount: String(form.get("amount") || ""),
+                correction: form.get("correction") ? "yes" : "",
+              });
+            }}
+          >
+            <label className="text-sm">
+              Amount received on this head (£)
+              <input name="amount" inputMode="decimal" className={field} required />
+              <span className="mt-1 block text-slate">Added to the amount already received on this head. A part-payment pauses the chase.</span>
+            </label>
+            <label className="flex items-start gap-2 text-sm">
+              <input type="checkbox" name="correction" value="yes" />
+              <span>This corrects the amount just recorded. It replaces that figure. It is not added on top.</span>
+            </label>
+            <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white" disabled={busy}>
+              Record payment received
+            </button>
+          </form>
+          <form
+            className="grid gap-2 rounded-md border border-line bg-white p-3"
+            onSubmit={(event) => {
+              event.preventDefault();
+              const form = new FormData(event.currentTarget);
+              void run(actionLogUnreferencedPayment, {
+                amount: String(form.get("amount") || ""),
+                note: String(form.get("note") || ""),
+              });
+            }}
+          >
+            <p className="text-sm font-semibold">Payment with no reference</p>
+            <p className="text-sm text-slate">Flag it here. It is not allocated to this repair invoice, the settlement, or storage.</p>
+            <label className="text-sm">
+              Amount (£), if known
+              <input name="amount" inputMode="decimal" className={field} />
+            </label>
+            <label className="text-sm">
+              What is missing
+              <input name="note" className={field} />
+            </label>
+            <button type="submit" className="rounded-md border border-line bg-white px-4 py-2 text-sm" disabled={busy}>
+              Flag without allocating
+            </button>
+          </form>
+        </div>
+      ) : null}
+
+      {!chase.outcomeOnFile && !chase.payment ? (
         <form
           className="mt-4 grid gap-2 rounded-md border border-line bg-white p-3 sm:grid-cols-[1fr_auto] sm:items-end"
           onSubmit={(event) => {
@@ -398,7 +547,8 @@ export function ChasePanel({
                   : "Log authorisation or payment received"}
           </button>
         </form>
-      ) : (
+      ) : null}
+      {chase.outcomeOnFile && !chase.payment ? (
         <div className="mt-4">
           <button
             type="button"
@@ -409,7 +559,7 @@ export function ChasePanel({
             Logged in error
           </button>
         </div>
-      )}
+      ) : null}
       {chase.kind === "hire_agreement_renewal" && chase.canClearHireRenewal && !chase.outcomeOnFile ? (
         <div className="mt-3">
           <button

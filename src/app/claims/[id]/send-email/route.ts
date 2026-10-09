@@ -20,8 +20,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     return NextResponse.redirect(url, 303);
   };
   const correspondenceId = String(form.get("correspondenceId") || "");
+  const attachmentIds = form.getAll("attachmentId").map((value) => String(value)).filter(Boolean);
   try {
-    await sendPreparedCorrespondence({ claimId: id, correspondenceId, actorId: staff.id });
+    await sendPreparedCorrespondence({ claimId: id, correspondenceId, actorId: staff.id, attachmentIds });
     return back("mailboxSent", correspondenceId);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Microsoft 365 did not send this email. Nothing was sent.";

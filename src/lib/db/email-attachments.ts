@@ -1,5 +1,6 @@
 import { ATTACHMENT_TOO_LARGE_MESSAGE, attachmentsExceedMailboxLimit } from "../email/attachments";
 import { claimDocumentTypeLabel } from "../domain/claim-documents";
+import { CAS_INSURANCE_DOCUMENT_TYPE } from "../email/payment-request-pack";
 import { formatUkDate } from "../dates";
 import { readStoredFile, safeFilename } from "../storage/files";
 import { all } from "./connection";
@@ -39,11 +40,19 @@ export function loadClaimEmailAttachments(
      FROM documents WHERE claim_id = ? AND id IN (${marks})`,
     [claimId, ...ids],
   );
+  const companyRows = all<StoredRow>(
+    `SELECT id, claim_id, title, document_type, template_key, version, created_at, original_filename, stored_relpath, mime_type, byte_size, body_html
+     FROM documents WHERE claim_id IS NULL AND document_type = ? AND id IN (${marks})`,
+    [CAS_INSURANCE_DOCUMENT_TYPE, ...ids],
+  );
   const byId = new Map(rows.map((row) => [row.id, row]));
+  const companyById = new Map(companyRows.map((row) => [row.id, row]));
   const attachments: EmailFileAttachment[] = [];
   for (const id of ids) {
-    const row = byId.get(id);
-    if (!row || row.claim_id !== claimId) {
+    const onClaim = byId.get(id);
+    const company = companyById.get(id);
+    const row = onClaim?.claim_id === claimId ? onClaim : company && company.claim_id == null ? company : undefined;
+    if (!row) {
       return { ok: false, error: "That document is not stored on this claim. Nothing was sent." };
     }
     const loaded = readOne(row);

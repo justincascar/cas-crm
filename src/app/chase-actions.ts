@@ -18,6 +18,8 @@ import {
   recordClaimEvent,
 } from "@/lib/db/chronology";
 import { chaseDefinition, isChaseKind, type ChaseKind } from "@/lib/domain/chase";
+import { optionalPoundsToPence } from "@/lib/domain/total-loss";
+import { recordAgreedRepairInvoice, recordHeadPayment, recordUnreferencedPayment } from "@/lib/db/payment-ledger";
 
 function refreshClaim(claimId: string) {
   revalidatePath(`/claims/${claimId}`);
@@ -169,6 +171,60 @@ export async function actionCancelChase(formData: FormData) {
     return { ok: true as const };
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Could not cancel the chase." };
+  }
+}
+
+function poundsFrom(formData: FormData, name: string): number {
+  const parsed = optionalPoundsToPence(String(formData.get(name) || ""));
+  if (parsed == null || parsed <= 0) throw new Error("Enter the amount in pounds.");
+  return parsed;
+}
+
+export async function actionRecordAgreedRepair(formData: FormData) {
+  const staff = await requireStaff();
+  const claimId = String(formData.get("claimId"));
+  try {
+    recordAgreedRepairInvoice({ claimId, actorId: staff.id, agreedPence: poundsFrom(formData, "agreed") });
+    refreshClaim(claimId);
+    return { ok: true as const };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not record the agreed repair invoice." };
+  }
+}
+
+export async function actionLogHeadPayment(formData: FormData) {
+  const staff = await requireStaff();
+  const claimId = String(formData.get("claimId"));
+  try {
+    const result = recordHeadPayment({
+      claimId,
+      actorId: staff.id,
+      head: String(formData.get("head") || ""),
+      amountPence: poundsFrom(formData, "amount"),
+      correction: String(formData.get("correction") || "") === "yes",
+    });
+    refreshClaim(claimId);
+    return { ok: true as const, error: undefined, ...result };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not record the payment." };
+  }
+}
+
+export async function actionLogUnreferencedPayment(formData: FormData) {
+  const staff = await requireStaff();
+  const claimId = String(formData.get("claimId"));
+  try {
+    const raw = String(formData.get("amount") || "").trim();
+    recordUnreferencedPayment({
+      claimId,
+      actorId: staff.id,
+      amountPence: raw ? optionalPoundsToPence(raw) : null,
+      note: String(formData.get("note") || ""),
+    });
+    refreshClaim(claimId);
+    return { ok: true as const };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not flag the payment." };
   }
 }
 

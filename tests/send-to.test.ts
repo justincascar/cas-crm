@@ -173,19 +173,20 @@ describe("Send to picker", () => {
     assert.equal(client.some((title) => /payment chase/i.test(title)), false);
 
     const insurer = titles("third_party");
-    assert.deepEqual(insurer, ["Payment chase 1 — first reminder", "Payment chase 2 — final warning"]);
+    assert.deepEqual(insurer, []);
+    assert.equal(insurer.some((title) => /payment chase/i.test(title)), false);
     assert.deepEqual(titles("representative"), insurer);
 
     assert.deepEqual(titles("engineer"), []);
     assert.deepEqual(titles("own_insurer"), []);
     assert.deepEqual(titles(""), []);
-    assert.ok(titles("other").length > client.length);
+    assert.deepEqual(titles("other"), client);
     assert.ok(titles("other").includes("Client welcome (intake)"));
-    assert.ok(titles("other").includes("Payment chase 1 — first reminder"));
+    assert.equal(titles("other").some((title) => /payment chase/i.test(title)), false);
 
     assert.equal(templateKeyForRole("client", "payment_chase_1"), "client_welcome");
     assert.equal(templateKeyForRole("client", "client_status_update"), "client_status_update");
-    assert.equal(templateKeyForRole("third_party", "client_welcome"), "payment_chase_1");
+    assert.equal(templateKeyForRole("third_party", "client_welcome"), "");
     assert.equal(templateKeyForRole("other", "client_status_update"), "client_status_update");
     assert.equal(templateKeyForRole("engineer", "client_welcome"), "");
     assert.equal(templateKeyForRole("own_insurer", "payment_chase_1"), "");

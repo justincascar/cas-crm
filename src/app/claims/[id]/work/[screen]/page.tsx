@@ -22,6 +22,7 @@ import { getHireEndDateReviews } from "@/lib/db/hire-collection-date";
 import { getStorageDateReview, getStorageEndDateReview } from "@/lib/db/storage-recovery-date";
 import { MailboxSendNotice } from "@/components/claims/SendPreparedEmailForm";
 import { mailboxIsConnected } from "@/lib/email/microsoft-graph";
+import { listCasInsuranceDocuments } from "@/lib/db/company-insurance";
 
 export default async function ClaimWorkScreenPage({
   params,
@@ -134,6 +135,7 @@ export default async function ClaimWorkScreenPage({
           }}
           correspondence={data.correspondence.map((row) => ({ ...row }))}
           documents={data.documents.map((row) => ({ ...row }))}
+          companyDocuments={listCasInsuranceDocuments().map((row) => ({ ...row }))}
           liabilityStatus={String(data.claim.claim_type || "")}
           engineers={listActiveEngineers()}
           selectedEngineerId={String(data.claim.engineer_id || "")}

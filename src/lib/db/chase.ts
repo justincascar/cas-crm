@@ -4,6 +4,7 @@ import {
   AGREEMENT_RENEWAL_APPROACHING_DAY_DEFAULT,
   SETTING_AGREEMENT_MAX_DAYS,
   SETTING_AGREEMENT_RENEWAL_APPROACHING_DAY,
+  SETTING_INSURER_PAYMENT_TERM_DAYS,
 } from "../constants";
 import { addCalendarDaysIso, daysBetweenLondon, nowUtcIso } from "../dates";
 import {
@@ -15,6 +16,7 @@ import {
   chaseKindForRuleKey,
   effectiveChaseIntervalDays,
   isChaseKind,
+  isPaymentChaseKind,
   hireAgreementRenewalDecision,
   laterIso,
   laterIsoAll,
@@ -25,6 +27,13 @@ import {
   type ChaseKind,
   type ChaseSeverity,
 } from "../domain/chase";
+import { paymentDetailsLetterLine, type InsurerPaymentDetails } from "../domain/payment-details";
+import {
+  paymentChaseDecision,
+  type PaymentChaseHead,
+} from "../domain/payment-chase";
+import { paymentRequestPack, type PackDocument } from "../email/payment-request-pack";
+import { getInsurerPaymentDetails } from "./payment-details";
 import type { SupplementaryChaseKind } from "../domain/follow-up-chases";
 import { SEEDED_ENGINEER } from "./engineers";
 import { all, get, newId, run } from "./connection";
@@ -71,6 +80,21 @@ export type ChaseView = {
   agreementMaxDays?: number | null;
   agreementApproachingDay?: number | null;
   canClearHireRenewal?: boolean;
+  payment?: {
+    head: PaymentChaseHead;
+    agreedPence: number;
+    receivedPence: number;
+    outstandingPence: number;
+    storageOutstandingPence: number;
+    bankLine: string;
+    paymentTermDays: number | null;
+    dueDateUnset: boolean;
+    partPaid: boolean;
+    paidInFull: boolean;
+    reviewNote: string | null;
+    packMissing: string[];
+    packSelectedIds: string[];
+  };
 };
 
 function handlerStateFromRow(row: { status: string; paused: number } | undefined): ChaseHandlerState {
@@ -135,6 +159,35 @@ export function setAgreementApproachingDay(value: string | number) {
     run(`UPDATE settings SET value = ? WHERE key = ?`, [String(days), SETTING_AGREEMENT_RENEWAL_APPROACHING_DAY]);
   } else {
     run(`INSERT INTO settings(key, value) VALUES (?, ?)`, [SETTING_AGREEMENT_RENEWAL_APPROACHING_DAY, String(days)]);
+  }
+}
+
+/** Blank means not set. A missing row is not set. No number is filled in. */
+export function getInsurerPaymentTermDays(): number | null {
+  const row = get<{ value: string }>(`SELECT value FROM settings WHERE key = ?`, [SETTING_INSURER_PAYMENT_TERM_DAYS]);
+  if (!row) return null;
+  const text = String(row.value ?? "").trim();
+  if (!text) return null;
+  const n = Number.parseInt(text, 10);
+  if (!Number.isFinite(n) || n < 1 || String(n) !== text) return null;
+  return n;
+}
+
+export function setInsurerPaymentTermDays(raw: string) {
+  const text = String(raw || "").trim();
+  if (!text) {
+    run(`DELETE FROM settings WHERE key = ?`, [SETTING_INSURER_PAYMENT_TERM_DAYS]);
+    return;
+  }
+  const n = Number.parseInt(text, 10);
+  if (!Number.isFinite(n) || n < 1 || String(n) !== text) {
+    throw new Error("Enter the insurer payment term as a whole number of days, or leave the box empty. It is not guessed.");
+  }
+  const existing = get<{ key: string }>(`SELECT key FROM settings WHERE key = ?`, [SETTING_INSURER_PAYMENT_TERM_DAYS]);
+  if (existing) {
+    run(`UPDATE settings SET value = ? WHERE key = ?`, [String(n), SETTING_INSURER_PAYMENT_TERM_DAYS]);
+  } else {
+    run(`INSERT INTO settings(key, value) VALUES (?, ?)`, [SETTING_INSURER_PAYMENT_TERM_DAYS, String(n)]);
   }
 }
 
@@ -207,6 +260,18 @@ type HireClaimFacts = {
   agreementCount: number;
 };
 
+type HeadMoney = { agreed: number; received: number };
+
+type PaymentClaimFacts = {
+  repairs: HeadMoney;
+  vehicleDamage: HeadMoney;
+  storage: HeadMoney;
+  totalLoss: boolean;
+  reviewNote: string | null;
+  packMissing: string[];
+  packSelectedIds: string[];
+};
+
 type ChaseFacts = {
   latestEvent: Map<string, string>;
   latestMarkedSent: Map<string, string>;
@@ -215,6 +280,9 @@ type ChaseFacts = {
   agreementApproachingDay: number;
   contacts: Map<string, { engineerName: string; engineerEmail: string; insurerName: string; insurerEmail: string }>;
   hire: Map<string, HireClaimFacts>;
+  payment: Map<string, PaymentClaimFacts>;
+  paymentTermDays: number | null;
+  bank: InsurerPaymentDetails;
 };
 
 function placeholders(count: number) {
@@ -350,6 +418,9 @@ function loadChaseFacts(claimIds: string[]): ChaseFacts {
     agreementApproachingDay: limits.approachingDay,
     contacts: new Map(),
     hire: new Map(),
+    payment: loadPaymentFacts(claimIds),
+    paymentTermDays: getInsurerPaymentTermDays(),
+    bank: getInsurerPaymentDetails(),
   };
   if (claimIds.length === 0) return empty;
 
@@ -408,6 +479,105 @@ function loadChaseFacts(claimIds: string[]): ChaseFacts {
   }
   empty.hire = loadHireFacts(claimIds);
   return empty;
+}
+
+function blankMoney(): HeadMoney {
+  return { agreed: 0, received: 0 };
+}
+
+function loadPaymentFacts(claimIds: string[]): Map<string, PaymentClaimFacts> {
+  const map = new Map<string, PaymentClaimFacts>();
+  if (claimIds.length === 0) return map;
+  const lines = all<{
+    claim_id: string;
+    head_of_loss: string;
+    agreed_pence: number;
+    received_pence: number;
+    total_loss: number | null;
+    later_declared_total_loss: number | null;
+  }>(
+    `SELECT fl.claim_id, fl.head_of_loss, fl.agreed_pence, fl.received_pence, c.total_loss, c.later_declared_total_loss
+     FROM financial_lines fl
+     JOIN claims c ON c.id = fl.claim_id
+     WHERE fl.claim_id IN (${placeholders(claimIds.length)})
+       AND fl.head_of_loss IN ('repairs', 'vehicle_damage', 'storage')
+     ORDER BY fl.id`,
+    claimIds,
+  );
+  const seen = new Set<string>();
+  for (const row of lines) {
+    const key = `${row.claim_id}:${row.head_of_loss}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const fact = map.get(row.claim_id) || {
+      repairs: blankMoney(),
+      vehicleDamage: blankMoney(),
+      storage: blankMoney(),
+      totalLoss: Number(row.total_loss) === 1 || Number(row.later_declared_total_loss) === 1,
+      reviewNote: null,
+      packMissing: [],
+      packSelectedIds: [],
+    };
+    fact.totalLoss = Number(row.total_loss) === 1 || Number(row.later_declared_total_loss) === 1;
+    const money = { agreed: Number(row.agreed_pence) || 0, received: Number(row.received_pence) || 0 };
+    if (row.head_of_loss === "repairs") fact.repairs = money;
+    if (row.head_of_loss === "vehicle_damage") fact.vehicleDamage = money;
+    if (row.head_of_loss === "storage") fact.storage = money;
+    map.set(row.claim_id, fact);
+  }
+  const claimsMissing = claimIds.filter((id) => !map.has(id));
+  if (claimsMissing.length) {
+    const flags = all<{ id: string; total_loss: number | null; later_declared_total_loss: number | null }>(
+      `SELECT id, total_loss, later_declared_total_loss FROM claims WHERE id IN (${placeholders(claimsMissing.length)})`,
+      claimsMissing,
+    );
+    for (const row of flags) {
+      map.set(row.id, {
+        repairs: blankMoney(),
+        vehicleDamage: blankMoney(),
+        storage: blankMoney(),
+        totalLoss: Number(row.total_loss) === 1 || Number(row.later_declared_total_loss) === 1,
+        reviewNote: null,
+        packMissing: [],
+        packSelectedIds: [],
+      });
+    }
+  }
+  return map;
+}
+
+function attachPaymentPack(claimId: string, view: ChaseView): ChaseView {
+  if (!view.payment) return view;
+  const documents = all<PackDocument>(
+    `SELECT id, title, document_type, template_key, version, created_at, stored_relpath, body_html, byte_size, signed, replaces_document_id
+     FROM documents WHERE claim_id = ?`,
+    [claimId],
+  );
+  const company = all<PackDocument>(
+    `SELECT id, title, document_type, template_key, version, created_at, stored_relpath, body_html, byte_size, signed, replaces_document_id
+     FROM documents WHERE claim_id IS NULL AND document_type = 'cas_insurance_certificate'`,
+  );
+  const pack = paymentRequestPack({
+    templateKey: chaseDefinition(view.kind as ChaseKind).templateKey,
+    claimDocuments: documents,
+    companyDocuments: company,
+  });
+  const note = get<{ details: string | null }>(
+    `SELECT details FROM claim_events
+     WHERE claim_id = ? AND event_type IN ('payment_chase_review_flagged', 'payment_reply_uncertain', 'payment_reference_unclear', 'payment_hire_storage_review')
+       AND (details LIKE ? OR details LIKE 'head=unclear%')
+     ORDER BY occurred_at DESC, recorded_at DESC LIMIT 1`,
+    [claimId, `%head=${view.payment.head}%`],
+  );
+  return {
+    ...view,
+    payment: {
+      ...view.payment,
+      packMissing: pack.missing,
+      packSelectedIds: pack.selectedIds,
+      reviewNote: String(note?.details || view.payment.reviewNote || "").trim() || null,
+    },
+  };
 }
 
 function latestFact(map: Map<string, string>, claimId: string, name: string): string | null {
@@ -476,8 +646,22 @@ function evaluateChase(kind: ChaseKind, claimId: string, row: ChaseRow, facts: C
     frozenDays: frozenIntervalDays,
   });
   const hire = facts.hire.get(claimId);
-  const decision =
-    def.clockMode === "agreement_day"
+  const money = facts.payment.get(claimId);
+  const headMoney =
+    def.paymentHead === "repairs" ? money?.repairs : def.paymentHead === "vehicle_damage" ? money?.vehicleDamage : null;
+  const decision = def.paymentHead
+    ? paymentChaseDecision({
+        head: def.paymentHead,
+        agreedPence: headMoney?.agreed || 0,
+        receivedPence: headMoney?.received || 0,
+        startedAt: startedAtFromFacts(facts, claimId, kind),
+        lastChaseSentAt: lastChaseSentFromFacts(facts, claimId, kind),
+        handlerState,
+        intervalDays: effective.days,
+        asAt,
+        pausedReason: row.reason ? String(row.reason) : null,
+      })
+    : def.clockMode === "agreement_day"
       ? hireAgreementRenewalDecision({
           applies: hire ? hireChaseApplies(hire) : false,
           hireEnded: hire ? hireEnded(hire, asAt) : false,
@@ -504,6 +688,9 @@ function evaluateChase(kind: ChaseKind, claimId: string, row: ChaseRow, facts: C
           outcomeOnFileReason: def.outcomeOnFileReason,
         });
   const contact = contactFromFacts(facts, claimId, kind);
+  const outstanding = headMoney ? Math.max(0, (headMoney.agreed || 0) - (headMoney.received || 0)) : 0;
+  const storageOutstanding = money ? Math.max(0, (money.storage.agreed || 0) - (money.storage.received || 0)) : 0;
+  const bankLine = paymentDetailsLetterLine(facts.bank);
   return {
     kind,
     claimId,
@@ -524,16 +711,84 @@ function evaluateChase(kind: ChaseKind, claimId: string, row: ChaseRow, facts: C
     agreementMaxDays: def.clockMode === "agreement_day" ? hire?.agreementMaxDays || facts.agreementMaxDays : null,
     agreementApproachingDay: def.clockMode === "agreement_day" ? facts.agreementApproachingDay : null,
     canClearHireRenewal: def.clockMode === "agreement_day" && Number(hire?.latestSignedSequence || 0) > 1,
+    payment: def.paymentHead
+      ? {
+          head: def.paymentHead,
+          agreedPence: headMoney?.agreed || 0,
+          receivedPence: headMoney?.received || 0,
+          outstandingPence: headMoney && headMoney.agreed > 0 && headMoney.received < headMoney.agreed ? outstanding : 0,
+          storageOutstandingPence: storageOutstanding,
+          bankLine,
+          paymentTermDays: facts.paymentTermDays,
+          dueDateUnset: facts.paymentTermDays == null,
+          partPaid: Boolean(headMoney && headMoney.received > 0 && headMoney.agreed > headMoney.received),
+          paidInFull: Boolean(headMoney && headMoney.agreed > 0 && headMoney.received === headMoney.agreed),
+          reviewNote: money?.reviewNote || null,
+          packMissing: money?.packMissing || [],
+          packSelectedIds: money?.packSelectedIds || [],
+        }
+      : undefined,
   };
 }
 
 export function chaseForClaim(kind: ChaseKind, claimId: string, asAt: string = nowUtcIso()): ChaseView | null {
   const row = chaseRow(claimId, kind);
   if (!row) return null;
-  return evaluateChase(kind, claimId, row, loadChaseFacts([claimId]), asAt);
+  return attachPaymentPack(claimId, evaluateChase(kind, claimId, row, loadChaseFacts([claimId]), asAt));
+}
+
+function ensurePaymentRow(claimId: string, kind: ChaseKind) {
+  if (!isPaymentChaseKind(kind)) return;
+  if (chaseRow(claimId, kind)) return;
+  const def = chaseDefinition(kind);
+  const interval = getChaseIntervalDays(kind);
+  run(
+    `INSERT INTO automations(id, claim_id, rule_key, track, next_run_at, interval_days, interval_unit, paused, last_outcome, reason, status)
+     VALUES (?, ?, ?, ?, NULL, ?, 'calendar_days', 0, 'balance_outstanding', ?, 'tracking')`,
+    [newId("auto"), claimId, def.ruleKey, def.track, interval, def.waitingReason],
+  );
+}
+
+/** One row per outstanding head. Storage never gets a row. An existing pause or cancellation is left as it is. */
+export function syncOutstandingPaymentChases(claimIds?: string[]) {
+  const limited = Boolean(claimIds && claimIds.length);
+  const filter = limited ? ` AND fl.claim_id IN (${placeholders(claimIds!.length)})` : "";
+  const lines = all<{
+    claim_id: string;
+    head_of_loss: string;
+    agreed_pence: number;
+    received_pence: number;
+    total_loss: number | null;
+    later_declared_total_loss: number | null;
+  }>(
+    `SELECT fl.claim_id, fl.head_of_loss, fl.agreed_pence, fl.received_pence, c.total_loss, c.later_declared_total_loss
+     FROM financial_lines fl
+     JOIN claims c ON c.id = fl.claim_id
+     WHERE fl.head_of_loss IN ('repairs', 'vehicle_damage')${filter}
+     ORDER BY fl.id`,
+    limited ? claimIds! : [],
+  );
+  const seen = new Set<string>();
+  const repairs = new Set<string>();
+  const settlements = new Set<string>();
+  for (const row of lines) {
+    const key = `${row.claim_id}:${row.head_of_loss}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const agreed = Number(row.agreed_pence) || 0;
+    const received = Number(row.received_pence) || 0;
+    if (agreed <= 0 || received >= agreed) continue;
+    if (row.head_of_loss === "repairs") repairs.add(row.claim_id);
+    if (row.head_of_loss === "vehicle_damage" && (Number(row.total_loss) === 1 || Number(row.later_declared_total_loss) === 1)) {
+      settlements.add(row.claim_id);
+    }
+  }
+  for (const claimId of repairs) ensurePaymentRow(claimId, "repair_payment");
+  for (const claimId of settlements) ensurePaymentRow(claimId, "settlement_payment");
 }
 
 export function listChasesForClaim(claimId: string, asAt: string = nowUtcIso()): ChaseView[] {
+  syncOutstandingPaymentChases([claimId]);
   const facts = loadChaseFacts([claimId]);
   const rows = all<ChaseRow & { rule_key: string }>(
     `SELECT id, status, paused, interval_days, reason, interval_override_days, interval_override_reason, rule_key
@@ -544,7 +799,7 @@ export function listChasesForClaim(claimId: string, asAt: string = nowUtcIso()):
   return CHASE_KIND_ORDER.map((kind) => {
     const row = byKind.get(kind);
     if (!row) return null;
-    return evaluateChase(kind, claimId, row, facts, asAt);
+    return attachPaymentPack(claimId, evaluateChase(kind, claimId, row, facts, asAt));
   }).filter((row): row is ChaseView => Boolean(row));
 }
 
@@ -557,6 +812,7 @@ type ListedChaseRow = ChaseRow & {
 };
 
 export function listDueChases(asAt: string = nowUtcIso()): ChaseView[] {
+  syncOutstandingPaymentChases();
   const rows = all<ListedChaseRow>(
     `SELECT a.id, a.claim_id, a.rule_key, a.status, a.paused, a.interval_days, a.reason,
             a.interval_override_days, a.interval_override_reason,
@@ -661,12 +917,13 @@ function requireChaseRow(kind: ChaseKind, claimId: string) {
   return row;
 }
 
-export function pauseChase(kind: ChaseKind, claimId: string) {
+export function pauseChase(kind: ChaseKind, claimId: string, reason?: string) {
   const row = requireChaseRow(kind, claimId);
   if (row.status === "cancelled") throw new Error("This chase has been cancelled.");
+  const text = String(reason || "").trim() || "Handler pause — do not show as due. Reminder only — not auto-sent.";
   run(
     `UPDATE automations SET paused = 1, status = 'paused', last_outcome = 'paused', reason = ? WHERE id = ?`,
-    ["Handler pause — do not show as due. Reminder only — not auto-sent.", row.id],
+    [text, row.id],
   );
 }
 

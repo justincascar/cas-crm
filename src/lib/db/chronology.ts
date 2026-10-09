@@ -42,13 +42,16 @@ import {
   chaseKindForChaseSentEvent,
   chaseKindForStartEvent,
   isLiabilityDecisionValue,
+  isPaymentChaseKind,
   isRepairOutcomeValue,
   LIABILITY_DECISIONS,
   NO_INSURER_CONTACT_MESSAGE,
   REPAIR_OUTCOMES,
   type ChaseKind,
 } from "../domain/chase";
-import { findPreparedChase, getAgreementMaxDays, getChaseIntervalDays, restartChaseClock, startChase, chaseForClaim } from "./chase";
+import { classifyPaymentReply, paymentRequestCopy } from "../domain/payment-chase";
+import { getInsurerPaymentDetails } from "./payment-details";
+import { findPreparedChase, getAgreementMaxDays, getChaseIntervalDays, getInsurerPaymentTermDays, pauseChase, restartChaseClock, startChase, chaseForClaim, chaseRow } from "./chase";
 import { ENGINEER_REPORT_CHASE_TEMPLATE } from "../constants";
 import { findKnownInsurerOn } from "./insurers";
 import { vehicleLocationForClaim } from "./vehicle-location";
@@ -550,7 +553,55 @@ export function logIncomingEmail(input: {
     correspondenceId,
     source: "staff",
   });
+  applyPaymentReply({ claimId: input.claimId, actorId: input.actorId, subject: input.subject, body: input.body, occurredAt: when });
   return correspondenceId;
+}
+
+function applyPaymentReply(input: { claimId: string; actorId: string; subject: string; body: string; occurredAt: string }) {
+  const klass = classifyPaymentReply(`${input.subject}\n${input.body}`);
+  for (const kind of ["repair_payment", "settlement_payment"] as const) {
+    const row = chaseRow(input.claimId, kind);
+    if (!row || row.status === "cancelled") continue;
+    const view = chaseForClaim(kind, input.claimId, input.occurredAt);
+    if (!view?.payment || view.payment.paidInFull || view.payment.agreedPence <= 0) continue;
+    const head = view.payment.head;
+    if (klass === "acknowledgement") continue;
+    if (klass === "substantive") {
+      pauseChase(
+        kind,
+        input.claimId,
+        "Paused for review. The reply was read as a query, dispute or part-offer. It does not resolve the chase. Nothing was sent.",
+      );
+      recordClaimEvent({
+        claimId: input.claimId,
+        eventType: "payment_reply_substantive",
+        occurredAt: input.occurredAt,
+        actorId: input.actorId,
+        details: `head=${head} Substantive reply. Chase paused for review. Not treated as paid.`,
+        source: "staff",
+        channel: "email",
+      });
+      recordClaimEvent({
+        claimId: input.claimId,
+        eventType: "payment_chase_review_flagged",
+        occurredAt: input.occurredAt,
+        actorId: input.actorId,
+        details: `head=${head} Paused for review after a query, dispute or part-offer.`,
+        source: "staff",
+        channel: "file",
+      });
+      continue;
+    }
+    recordClaimEvent({
+      claimId: input.claimId,
+      eventType: "payment_reply_uncertain",
+      occurredAt: input.occurredAt,
+      actorId: input.actorId,
+      details: `head=${head} The reply could not be classified. It was not treated as an acknowledgement or as a dispute. The chase was not resolved.`,
+      source: "staff",
+      channel: "email",
+    });
+  }
 }
 
 export async function sendClaimWhatsApp(input: {
@@ -1068,9 +1119,92 @@ function chaseEmailCopy(kind: ChaseKind, ctx: CorrespondenceContext, contactName
   return { subject, body };
 }
 
+function paymentHistorySent(claimId: string, head: string, eventType: "payment_chase_1_sent" | "payment_chase_2_sent"): string | null {
+  const row = get<{ occurred_at: string }>(
+    `SELECT occurred_at FROM claim_events
+     WHERE claim_id = ? AND event_type = ? AND details LIKE ?
+     ORDER BY occurred_at DESC LIMIT 1`,
+    [claimId, eventType, `%head=${head}%`],
+  );
+  return row?.occurred_at ? String(row.occurred_at) : null;
+}
+
+function preparePaymentRequestChase(input: { claimId: string; actorId: string; kind: ChaseKind }) {
+  const def = chaseDefinition(input.kind);
+  const view = chaseForClaim(input.kind, input.claimId);
+  if (!view?.payment || !def.paymentHead) throw new Error(`There is no ${def.title.toLowerCase()} on this file yet.`);
+  if (view.payment.outstandingPence <= 0) throw new Error("Nothing is outstanding on this head. No payment email was prepared.");
+  if (view.contactMissing || !view.contactEmail) throw new Error(view.contactMissingMessage || NO_INSURER_CONTACT_MESSAGE);
+  const ctx = letterContext(input.claimId, nowUtcIso());
+  const firstAt = paymentHistorySent(input.claimId, def.paymentHead, "payment_chase_1_sent");
+  const copy = paymentRequestCopy({
+    stage: firstAt ? "reminder" : "first",
+    fileReference: String(ctx.fileReference),
+    theirRef: String(ctx.tpPolicyOrClaimRef || ""),
+    head: def.paymentHead,
+    agreedPence: view.payment.agreedPence,
+    receivedPence: view.payment.receivedPence,
+    outstandingPence: view.payment.outstandingPence,
+    bank: getInsurerPaymentDetails(),
+    paymentTermDays: getInsurerPaymentTermDays(),
+    asAt: nowUtcIso(),
+    hirePackSentOn: ctx.dates.hire_pack_sent || null,
+    firstChaseOn: firstAt,
+    handlerName: String(ctx.handlerName || "Claims handler"),
+  });
+  const to = view.contactEmail;
+  const attachmentIds = JSON.stringify(view.payment.packSelectedIds);
+  const existing = findPreparedChase(input.kind, input.claimId);
+  if (existing) {
+    run(
+      `UPDATE correspondence SET subject = ?, preview = ?, body = ?, to_address = ?, from_address = ?, attachments_json = ? WHERE id = ?`,
+      [copy.subject, copy.body.slice(0, 180), copy.body, to, CAS_CLAIMS_MAILBOX, attachmentIds, existing.id],
+    );
+    return {
+      correspondenceId: existing.id,
+      mailto: buildMailtoHref(to, copy.subject, letterTextForMailto(copy.body)),
+      to,
+      subject: copy.subject,
+      body: copy.body,
+      dueDateUnset: copy.dueDateUnset,
+      packMissing: view.payment.packMissing,
+    };
+  }
+  const correspondenceId = newId("corr");
+  run(
+    `INSERT INTO correspondence(id, claim_id, direction, channel, subject, preview, body, to_address, from_address, unread, sent_status, template_key, attachments_json, created_at)
+     VALUES (?, ?, 'outgoing', 'email', ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)`,
+    [
+      correspondenceId,
+      input.claimId,
+      copy.subject,
+      copy.body.slice(0, 180),
+      copy.body,
+      to,
+      CAS_CLAIMS_MAILBOX,
+      ENGINEER_INSTRUCTION_PREPARED,
+      def.templateKey,
+      attachmentIds,
+      nowUtcIso(),
+    ],
+  );
+  return {
+    correspondenceId,
+    mailto: buildMailtoHref(to, copy.subject, letterTextForMailto(copy.body)),
+    to,
+    subject: copy.subject,
+    body: copy.body,
+    dueDateUnset: copy.dueDateUnset,
+    packMissing: view.payment.packMissing,
+  };
+}
+
 export function prepareOutstandingChase(input: { claimId: string; actorId: string; kind: ChaseKind }) {
   if (input.kind === "engineer_report") {
     return prepareEngineerReportChase({ claimId: input.claimId, actorId: input.actorId });
+  }
+  if (isPaymentChaseKind(input.kind)) {
+    return preparePaymentRequestChase(input);
   }
   if (input.kind === "hire_agreement_renewal") {
     throw new Error("This reminder does not send an email. Log the renewal on the file.");
@@ -1128,6 +1262,78 @@ export function prepareOutstandingChase(input: { claimId: string; actorId: strin
   };
 }
 
+function markPaymentChaseSent(input: {
+  claimId: string;
+  correspondenceId: string;
+  actorId: string;
+  kind: ChaseKind;
+  occurredAt?: string;
+  deliveredByMailbox?: boolean;
+}) {
+  const def = chaseDefinition(input.kind);
+  const head = def.paymentHead;
+  if (!head) throw new Error("This chase is not a payment chase.");
+  const row = get<{
+    id: string;
+    claim_id: string;
+    subject: string | null;
+    to_address: string | null;
+    sent_status: string | null;
+    template_key: string | null;
+  }>(`SELECT id, claim_id, subject, to_address, sent_status, template_key FROM correspondence WHERE id = ?`, [
+    input.correspondenceId,
+  ]);
+  if (!row || row.claim_id !== input.claimId) throw new Error("Prepared chase not found on this file.");
+  if (row.template_key !== def.templateKey) throw new Error(`This item is not a ${def.title.toLowerCase()}.`);
+  if (row.sent_status === ENGINEER_INSTRUCTION_MARKED_SENT) throw new Error("This chase is already marked as sent.");
+  if (!correspondenceCanBeMarkedSent(row.sent_status, input.deliveredByMailbox)) {
+    throw new Error("This item is not a prepared chase waiting to be marked as sent.");
+  }
+  const when = occurredFromForm(input.occurredAt);
+  const handler = get<{ name: string }>(`SELECT name FROM staff WHERE id = ?`, [input.actorId]);
+  const handlerName = handler?.name || "Unknown handler";
+  const firstAlready = paymentHistorySent(input.claimId, head, "payment_chase_1_sent");
+  const clockEvent = (firstAlready ? def.chaseSentEventType : def.startEventTypes[0]) as ClaimEventType;
+  const historyEvent = (firstAlready ? "payment_chase_2_sent" : "payment_chase_1_sent") as ClaimEventType;
+  run(`UPDATE correspondence SET sent_status = ? WHERE id = ?`, [ENGINEER_INSTRUCTION_MARKED_SENT, input.correspondenceId]);
+  const subject = String(row.subject || def.title);
+  const to = String(row.to_address || "");
+  const mailbox = Boolean(input.deliveredByMailbox);
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "outgoing_email",
+    occurredAt: when,
+    details: mailbox
+      ? mailboxSentDetails(subject, to, handlerName)
+      : `${subject} prepared for ${to}. Marked as sent by ${handlerName} after opening their own email client. Not auto-sent — live sending from ${CAS_CLAIMS_MAILBOX} is not connected.`,
+    actorId: input.actorId,
+    channel: "email",
+    correspondenceId: input.correspondenceId,
+    source: "staff",
+  });
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: clockEvent,
+    occurredAt: when,
+    details: `head=${head} ${mailbox ? "Sent" : "Marked as sent"} by ${handlerName}. Reminder only — not auto-sent.`,
+    actorId: input.actorId,
+    channel: "email",
+    correspondenceId: input.correspondenceId,
+    source: "staff",
+  });
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: historyEvent,
+    occurredAt: when,
+    details: `head=${head} ${subject}`,
+    actorId: input.actorId,
+    channel: "email",
+    correspondenceId: input.correspondenceId,
+    source: "staff",
+  });
+  return { handlerName, occurredAt: when };
+}
+
 export function markOutstandingChaseSent(input: {
   claimId: string;
   correspondenceId: string;
@@ -1144,6 +1350,9 @@ export function markOutstandingChaseSent(input: {
       occurredAt: input.occurredAt,
       deliveredByMailbox: input.deliveredByMailbox,
     });
+  }
+  if (isPaymentChaseKind(input.kind)) {
+    return markPaymentChaseSent(input);
   }
   const def = chaseDefinition(input.kind);
   const row = get<{

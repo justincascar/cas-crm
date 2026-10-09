@@ -1,4 +1,5 @@
 import { nowUtcIso } from "../dates";
+import { loadClaimEmailAttachments } from "./email-attachments";
 import { CHASE_KINDS, chaseDefinition } from "../domain/chase";
 import { isDocumentChaseKind } from "../domain/follow-up-chases";
 import { MailboxSendError, sendMailboxMessage } from "../email/microsoft-graph";
@@ -26,7 +27,12 @@ type PreparedRow = {
   template_key: string | null;
 };
 
-export async function sendPreparedCorrespondence(input: { claimId: string; correspondenceId: string; actorId: string }) {
+export async function sendPreparedCorrespondence(input: {
+  claimId: string;
+  correspondenceId: string;
+  actorId: string;
+  attachmentIds?: string[];
+}) {
   const row = get<PreparedRow>(
     `SELECT id, claim_id, subject, body, to_address, sent_status, template_key FROM correspondence WHERE id = ?`,
     [input.correspondenceId],
@@ -45,6 +51,8 @@ export async function sendPreparedCorrespondence(input: { claimId: string; corre
   const subject = String(row.subject || "").trim();
   const body = String(row.body || "").trim();
   if (!to || !subject || !body) throw new Error("This prepared email is missing a recipient, subject or message. Nothing was sent.");
+  const loaded = loadClaimEmailAttachments(input.claimId, input.attachmentIds || []);
+  if (!loaded.ok) throw new Error(loaded.error);
 
   const claimed = getDb()
     .prepare(`UPDATE correspondence SET sent_status = ? WHERE id = ? AND claim_id = ? AND sent_status = ?`)
@@ -54,7 +62,12 @@ export async function sendPreparedCorrespondence(input: { claimId: string; corre
   }
 
   try {
-    await sendMailboxMessage({ to, subject, body });
+    await sendMailboxMessage({
+      to,
+      subject,
+      body,
+      attachments: loaded.attachments.map((item) => ({ name: item.name, contentType: item.contentType, content: item.content })),
+    });
   } catch (error) {
     getDb()
       .prepare(`UPDATE correspondence SET sent_status = ? WHERE id = ? AND sent_status = ?`)

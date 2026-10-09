@@ -19,20 +19,6 @@ export const EMAIL_TEMPLATES = [
     forRoles: ["client"] as const,
   },
   {
-    key: "payment_chase_1",
-    title: "Payment chase 1 — first reminder",
-    eventType: "payment_chase_1_sent" as const,
-    channel: "email" as const,
-    forRoles: ["third_party", "representative"] as const,
-  },
-  {
-    key: "payment_chase_2",
-    title: "Payment chase 2 — final warning",
-    eventType: "payment_chase_2_sent" as const,
-    channel: "email" as const,
-    forRoles: ["third_party", "representative"] as const,
-  },
-  {
     key: "client_total_loss_update",
     title: "Client total-loss update",
     eventType: "client_total_loss_update_sent" as const,
