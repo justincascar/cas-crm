@@ -1,5 +1,11 @@
 import { DEFAULT_VEHICLE_LOCATION } from "./constants";
 import { GTA_GROUPS, GTA_NOT_CLASSIFIED } from "./documents/gta";
+import { VEHICLE_CLASSES, VEHICLE_CLASS_LABELS } from "./fleet/classes";
+
+const vehicleRecoveredOptions = [
+  { value: "", label: "Not selected" },
+  ...VEHICLE_CLASSES.map((value) => ({ value, label: VEHICLE_CLASS_LABELS[value] })),
+];
 
 export type FieldType = "text" | "textarea" | "date" | "time" | "gbp" | "number" | "checkbox" | "select";
 
@@ -712,8 +718,10 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
     key: "recovery",
     label: "Recovery",
     group: "recovery",
+    hint: "The standard charge and any ticked extra fill in from the defaults. The card fee is 4.5% of the net charges, only when ticked. Something else is for a charge that is not on the list. VAT and the total follow what is ticked.",
     sections: [
       {
+        title: "Recoverer",
         fields: [
           { name: "name", label: "Name" },
           { name: "address", label: "Address", type: "textarea", span: 2 },
@@ -722,18 +730,51 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
           { name: "email", label: "Email" },
           { name: "ref", label: "Ref" },
           { name: "invoiceNo", label: "Invoice no." },
+        ],
+      },
+      {
+        title: "The recovery",
+        fields: [
           { name: "location", label: "Recovery location", type: "textarea", span: 2 },
           { name: "recoveryDate", label: "Recovery date", type: "date" },
-          { name: "outOfHours", label: "Out of hours", type: "checkbox" },
-          { name: "environment", label: "Environment", type: "checkbox" },
-          { name: "winch", label: "Winch", type: "checkbox" },
-          { name: "priorFeeIncurred", label: "Prior fee incurred / inherited", type: "gbp" },
-          { name: "reasonForFee", label: "Reason for fee" },
+          {
+            name: "typeRecovered",
+            label: "Type of vehicle recovered",
+            type: "select",
+            options: vehicleRecoveredOptions,
+          },
+        ],
+      },
+      {
+        title: "On collection",
+        fields: [
           { name: "vehicleRole", label: "Vehicle role", type: "checkbox" },
           { name: "vehicleDrive", label: "Vehicle drive", type: "checkbox" },
           { name: "personalBelongings", label: "Personal belongings collected by client", type: "checkbox" },
-          { name: "typeRecovered", label: "Type of vehicle recovered" },
+        ],
+      },
+      {
+        title: "Charges",
+        fields: [
           { name: "standardCharge", label: "Standard recovery charge", type: "gbp" },
+          { name: "outOfHours", label: "Out of hours", type: "checkbox" },
+          { name: "outOfHoursFee", label: "Out of hours fee", type: "gbp" },
+          { name: "outOfHoursKept", label: "Out of hours figure kept", type: "gbp" },
+          { name: "environment", label: "Environmental", type: "checkbox" },
+          { name: "environmentFee", label: "Environmental fee", type: "gbp" },
+          { name: "environmentKept", label: "Environmental figure kept", type: "gbp" },
+          { name: "winch", label: "Winch", type: "checkbox" },
+          { name: "winchFee", label: "Winch fee", type: "gbp" },
+          { name: "winchKept", label: "Winch figure kept", type: "gbp" },
+          { name: "somethingElse", label: "Something else", type: "checkbox" },
+          { name: "somethingElseDescription", label: "What it is" },
+          { name: "somethingElseFee", label: "Something else amount", type: "gbp" },
+          { name: "somethingElseKept", label: "Something else figure kept", type: "gbp" },
+          { name: "cardPayment", label: "Card fee", type: "checkbox" },
+          { name: "cardPaymentFee", label: "Card fee amount", type: "gbp" },
+          { name: "cardPaymentKept", label: "Card fee figure kept", type: "gbp" },
+          { name: "priorFeeIncurred", label: "Prior fee incurred / inherited", type: "gbp" },
+          { name: "reasonForFee", label: "Reason for fee" },
           { name: "vat", label: "VAT", type: "gbp" },
           { name: "total", label: "Total", type: "gbp" },
         ],

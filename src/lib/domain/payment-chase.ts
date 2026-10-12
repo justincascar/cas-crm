@@ -128,6 +128,7 @@ export function paymentRequestCopy(input: {
   agreedPence: number;
   receivedPence: number;
   outstandingPence: number;
+  salvageProceedsPence?: number;
   bank: InsurerPaymentDetails;
   paymentTermDays: number | null;
   asAt: string;
@@ -151,10 +152,16 @@ export function paymentRequestCopy(input: {
         ? `We refer to our letter of ${packOn} enclosing our hire pack. The amount still outstanding on the ${headName} is ${outstanding}.`
         : `We write on ${fileRef}. The amount still outstanding on the ${headName} is ${outstanding}.`
       : `We refer to ${fileRef}${input.firstChaseOn ? ` and our letter of ${formatUkDate(input.firstChaseOn)}` : ""}. The amount still outstanding on the ${headName} is ${outstanding}.`;
+  const salvage = Math.max(0, Math.trunc(input.salvageProceedsPence || 0));
+  const net = Math.max(0, input.agreedPence - salvage);
+  const salvageSentence =
+    input.head === "vehicle_damage" && salvage > 0
+      ? ` Salvage proceeds of ${formatGbp(salvage)} are already recorded, so the amount to pay is ${formatGbp(net)}.`
+      : "";
   const receivedLine =
     input.receivedPence > 0
-      ? `The agreed figure is ${agreed}. ${received} has been received. The balance still to pay is ${outstanding}. Storage is not included in this figure.`
-      : `The agreed figure is ${agreed}. Nothing has been received against it. Storage is not included in this figure.`;
+      ? `The agreed figure is ${agreed}.${salvageSentence} ${received} has been received. The balance still to pay is ${outstanding}. Storage is not included in this figure.`
+      : `The agreed figure is ${agreed}.${salvageSentence} Nothing has been received against it. Storage is not included in this figure.`;
   const ask =
     input.stage === "reminder"
       ? `We have still not received payment of ${outstanding}, nor a substantive response setting out any dispute. This is a further reminder. Please pay ${outstanding}, or reply with the reasons for disputing that figure.`
@@ -191,10 +198,13 @@ export function paymentChaseDecision(input: {
   intervalDays: number;
   asAt: string;
   pausedReason: string | null;
+  /** Agreed figure after salvage proceeds, when that applies. Defaults to the agreed figure. */
+  comparisonPence?: number;
 }): ChaseClockDecision {
   const dueLabel = input.head === "repairs" ? REPAIR_PAYMENT_CHASE_DUE_LABEL : SETTLEMENT_PAYMENT_CHASE_DUE_LABEL;
   const firstLabel = input.head === "repairs" ? REPAIR_PAYMENT_REQUEST_LABEL : SETTLEMENT_PAYMENT_REQUEST_LABEL;
-  const paid = headSettledInFull(input.agreedPence, input.receivedPence);
+  const comparison = input.comparisonPence ?? input.agreedPence;
+  const paid = input.agreedPence > 0 && comparison > 0 && input.receivedPence === comparison;
   const clock = chaseClockDecision({
     startedAt: input.startedAt,
     lastChaseSentAt: input.lastChaseSentAt,
@@ -218,7 +228,7 @@ export function paymentChaseDecision(input: {
       reason: "No agreed figure on this head. Claimed and offered amounts are not chased.",
     };
   }
-  if (input.receivedPence > input.agreedPence) {
+  if (comparison <= 0) {
     return {
       ...clock,
       active: true,
@@ -226,7 +236,22 @@ export function paymentChaseDecision(input: {
       outcomeOnFile: false,
       label: null,
       severity: null,
-      reason: "The amount received is higher than the agreed figure. Flagged for review. It is not treated as paid, and it is not chased.",
+      reason:
+        "Salvage proceeds are not less than the agreed figure. Flagged for review. It is not treated as paid, and it is not chased.",
+    };
+  }
+  if (input.receivedPence > comparison) {
+    return {
+      ...clock,
+      active: true,
+      due: false,
+      outcomeOnFile: false,
+      label: null,
+      severity: null,
+      reason:
+        comparison === input.agreedPence
+          ? "The amount received is higher than the agreed figure. Flagged for review. It is not treated as paid, and it is not chased."
+          : "The amount received is higher than the agreed figure after salvage proceeds. Flagged for review. It is not treated as paid, and it is not chased.",
     };
   }
   if (paid) return { ...clock, due: false, outcomeOnFile: true, label: null, severity: null };

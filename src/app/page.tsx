@@ -5,6 +5,7 @@ import { requireStaff } from "@/lib/auth/session";
 import { dbLocation, getDashboard } from "@/lib/db/queries";
 import { formatUkDate } from "@/lib/dates";
 import type { ChaseView } from "@/lib/db/chase";
+import type { PaymentAttentionRow } from "@/lib/db/payment-review";
 import { chaseStageRowClass, chaseStageShortLabel, chaseStageTextClass } from "@/lib/domain/chase";
 
 const toneClass: Record<string, string> = {
@@ -13,6 +14,61 @@ const toneClass: Record<string, string> = {
   bad: "border-l-overdue",
   ok: "border-l-ok",
 };
+
+function AttentionTable({
+  title,
+  hint,
+  rows,
+  stage,
+}: {
+  title: string;
+  hint: string;
+  rows: PaymentAttentionRow[];
+  stage: string;
+}) {
+  return (
+    <section className="mt-8 rounded-xl border border-line bg-card p-5">
+      <h2 className="font-serif text-xl text-navy-deep">{title}</h2>
+      <p className="mb-4 text-sm text-slate">{hint}</p>
+      {rows.length === 0 ? (
+        <p className="text-sm text-slate">None.</p>
+      ) : (
+        <table className="ledger-table">
+          <thead>
+            <tr>
+              <th>File</th>
+              <th>Client</th>
+              <th>Stage</th>
+              <th>Next action</th>
+              <th>Since</th>
+              <th>Handler</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.id} className="bg-[#fff6e8]">
+                <td>
+                  <Link href={row.href} className="ref text-teal-dark hover:underline">
+                    {row.fileReference}
+                  </Link>
+                </td>
+                <td>{row.clientName}</td>
+                <td className="font-semibold text-warn">{stage}</td>
+                <td>
+                  <Link href={row.href} className="text-navy-deep underline">
+                    {row.label}
+                  </Link>
+                </td>
+                <td>{row.occurredAt ? formatUkDate(row.occurredAt) : "Open"}</td>
+                <td>{row.handlerName}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
+  );
+}
 
 function ChaseDueTable({
   title,
@@ -96,6 +152,18 @@ export default async function DashboardPage() {
         ))}
       </section>
 
+      <AttentionTable
+        title="Awaiting decision"
+        hint="A payment has been recorded and does not cover that head of loss. It stays here until someone opens it. Recording the payment does not make the choice."
+        rows={data.awaitingDecisions}
+        stage="Awaiting decision"
+      />
+      <AttentionTable
+        title="Payments to review"
+        hint="Money arrived on a head that was already accepted as the final figure. It was not added to the agreed or received figures."
+        rows={data.paymentsAfterSettlement}
+        stage="Review"
+      />
       <ChaseDueTable
         title="Liability response chases due"
         hint="Starts when a liability enquiry has been sent. Clears only when a staff member logs an insurer decision (accepted, rejected or partial), or pauses/cancels this chase. Disputed / unclear on the file is not a decision. Reminder only — no email is sent automatically."
@@ -107,8 +175,8 @@ export default async function DashboardPage() {
         rows={data.chasesDueByKind.engineer_report}
       />
       <ChaseDueTable
-        title="Repair authorisation chases due"
-        hint="Starts when a repair estimate or payment request has been sent. Clears when staff log authorisation or payment received. Reminder only — no email is sent automatically."
+        title="Repair authorisation and total-loss agreement"
+        hint="The same chase. On a repairable file it is called a repair authorisation chase. On a total loss it is called a total-loss agreement chase. It starts when that request has been marked as sent, and clears when staff log the authorisation or agreement, or payment received. Reminder only — no email is sent automatically."
         rows={data.chasesDueByKind.repair_authorisation}
       />
       <ChaseDueTable

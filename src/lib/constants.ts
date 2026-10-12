@@ -37,6 +37,12 @@ export const HEAD_LABELS: Record<HeadOfLoss, string> = {
 export const INDICATIVE_DEFAULTS = {
   storage_per_day_net_pence: 3900,
   recovery_net_pence: 39500,
+  /** Net extras on the Recovery screen. Filled in when that box is ticked; a job can still use a different figure. */
+  ooh_net_pence: 10000,
+  environmental_net_pence: 15000,
+  winch_net_pence: 9500,
+  /** Net card-payment surcharge on the Recovery screen. Applied only when that box is ticked, on the other net charges, before VAT. */
+  card_fee_rate: 0.045,
   gate_fee_net_pence: 19900,
   cdw_per_day_net_pence_range: [1500, 2000] as const,
   additional_driver_per_day_net_pence_range: [2000, 2500] as const,
@@ -75,6 +81,8 @@ export const LIABILITY_RESPONSE_CHASE_DUE_LABEL = "Liability response chase due"
 export const REPAIR_AUTHORISATION_CHASE_RULE = "repair_authorisation_chase";
 export const REPAIR_AUTHORISATION_CHASE_TEMPLATE = "repair_authorisation_chase";
 export const REPAIR_AUTHORISATION_CHASE_DUE_LABEL = "Repair authorisation chase due";
+export const TOTAL_LOSS_AGREEMENT_CHASE_TITLE = "Total-loss agreement chase";
+export const TOTAL_LOSS_AGREEMENT_CHASE_DUE_LABEL = "Total-loss agreement chase due";
 /** How soon the next payment reminder is prepared. Same demonstration default as the other chasers. Not the insurer payment term. */
 export const SETTING_PAYMENT_CHASE_INTERVAL_DAYS = "payment_chase_interval_days";
 export const PAYMENT_CHASE_INTERVAL_DAYS_DEFAULT = ENGINEER_CHASER_INTERVAL_DAYS_DEFAULT;

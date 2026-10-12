@@ -18,6 +18,8 @@ import {
   LIABILITY_RESPONSE_CHASE_TEMPLATE,
   PAYMENT_CHASE_INTERVAL_DAYS_DEFAULT,
   REPAIR_AUTHORISATION_CHASE_DUE_LABEL,
+  TOTAL_LOSS_AGREEMENT_CHASE_DUE_LABEL,
+  TOTAL_LOSS_AGREEMENT_CHASE_TITLE,
   REPAIR_AUTHORISATION_CHASE_RULE,
   REPAIR_AUTHORISATION_CHASE_TEMPLATE,
   REPAIR_PAYMENT_CHASE_DUE_LABEL,
@@ -245,6 +247,14 @@ export function isChaseKind(value: string | null | undefined): value is ChaseKin
 
 export function chaseDefinition(kind: ChaseKind): ChaseKindDefinition {
   return CHASE_KIND_DEFINITIONS[kind];
+}
+
+/** Same repair-authorisation chase. The name follows whether this file is a total loss. */
+export function repairAuthorisationPresentation(totalLoss: boolean): { title: string; dueLabel: string } {
+  if (totalLoss) {
+    return { title: TOTAL_LOSS_AGREEMENT_CHASE_TITLE, dueLabel: TOTAL_LOSS_AGREEMENT_CHASE_DUE_LABEL };
+  }
+  return { title: "Repair authorisation chase", dueLabel: REPAIR_AUTHORISATION_CHASE_DUE_LABEL };
 }
 
 export function chaseKindForRuleKey(ruleKey: string): ChaseKind | null {

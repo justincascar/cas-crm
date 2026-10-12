@@ -19,12 +19,16 @@ import {
 } from "@/lib/db/chronology";
 import { chaseDefinition, isChaseKind, type ChaseKind } from "@/lib/domain/chase";
 import { optionalPoundsToPence } from "@/lib/domain/total-loss";
-import { recordAgreedRepairInvoice, recordHeadPayment, recordUnreferencedPayment } from "@/lib/db/payment-ledger";
+import { recordAgreedHeadFigure, recordAgreedRepairInvoice, recordHeadPayment, recordUnreferencedPayment } from "@/lib/db/payment-ledger";
+import { acceptPaymentAsFinal, disputePaymentSettlement } from "@/lib/db/payment-review";
 
 function refreshClaim(claimId: string) {
   revalidatePath(`/claims/${claimId}`);
   revalidatePath(`/claims/${claimId}/work/comms`);
   revalidatePath(`/claims/${claimId}/work/history`);
+  revalidatePath(`/claims/${claimId}/heads/hire`);
+  revalidatePath(`/claims/${claimId}/heads/recovery-storage`);
+  revalidatePath(`/claims/${claimId}/heads/vehicle`);
   revalidatePath("/claims");
   revalidatePath("/");
 }
@@ -192,6 +196,23 @@ export async function actionRecordAgreedRepair(formData: FormData) {
   }
 }
 
+export async function actionRecordAgreedHead(formData: FormData) {
+  const staff = await requireStaff();
+  const claimId = String(formData.get("claimId"));
+  try {
+    recordAgreedHeadFigure({
+      claimId,
+      actorId: staff.id,
+      head: String(formData.get("head") || ""),
+      agreedPence: poundsFrom(formData, "agreed"),
+    });
+    refreshClaim(claimId);
+    return { ok: true as const };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not record the agreed figure." };
+  }
+}
+
 export async function actionLogHeadPayment(formData: FormData) {
   const staff = await requireStaff();
   const claimId = String(formData.get("claimId"));
@@ -202,11 +223,51 @@ export async function actionLogHeadPayment(formData: FormData) {
       head: String(formData.get("head") || ""),
       amountPence: poundsFrom(formData, "amount"),
       correction: String(formData.get("correction") || "") === "yes",
+      insurerReason: String(formData.get("insurerReason") || ""),
+    });
+    refreshClaim(claimId);
+    const message = result.reconciliation
+      ? "No claim or invoice is recorded on that head. The payment was flagged for manual reconciliation and was not added to the financial record."
+      : result.settledReview
+        ? "This head was already accepted as the final figure. The payment was flagged for review and was not added to the agreed or received figures."
+        : undefined;
+    return { ok: true as const, error: undefined, message, ...result };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not record the payment." };
+  }
+}
+
+export async function actionAcceptPaymentSettlement(formData: FormData) {
+  const staff = await requireStaff();
+  const claimId = String(formData.get("claimId"));
+  try {
+    const result = acceptPaymentAsFinal({
+      claimId,
+      actorId: staff.id,
+      head: String(formData.get("head") || ""),
+      confirmed: String(formData.get("confirm") || "") === "yes",
     });
     refreshClaim(claimId);
     return { ok: true as const, error: undefined, ...result };
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Could not record the payment." };
+    return { error: error instanceof Error ? error.message : "Could not accept the payment." };
+  }
+}
+
+export async function actionDisputePaymentSettlement(formData: FormData) {
+  const staff = await requireStaff();
+  const claimId = String(formData.get("claimId"));
+  try {
+    const result = disputePaymentSettlement({
+      claimId,
+      actorId: staff.id,
+      head: String(formData.get("head") || ""),
+      grounds: String(formData.get("grounds") || ""),
+    });
+    refreshClaim(claimId);
+    return { ok: true as const, error: undefined, ...result };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Could not record the dispute." };
   }
 }
 

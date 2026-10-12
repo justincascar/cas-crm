@@ -219,7 +219,7 @@ describe("pre-hire check overrides", () => {
     withDatabase(db, () => {
       const justin = db.prepare(`SELECT role FROM staff WHERE id = 'staff-justin'`).get() as { role: string };
       assert.equal(justin.role, "administrator");
-      assert.deepEqual(listStaffPermissions("staff-justin"), ["overridePreHireChecks"]);
+      assert.deepEqual(listStaffPermissions("staff-justin"), ["acceptPaymentSettlement", "overridePreHireChecks"]);
       assert.deepEqual(listStaffPermissions("staff-sian"), []);
 
       const created = createStaffAccount({
@@ -372,10 +372,13 @@ describe("pre-hire check overrides", () => {
     const claimsBefore = (db.prepare(`SELECT COUNT(*) AS n FROM claims`).get() as { n: number }).n;
     db.prepare(`DELETE FROM staff_permissions`).run();
     migrate(db);
-    const justin = db.prepare(`SELECT permission FROM staff_permissions WHERE staff_id = 'staff-justin'`).get() as {
-      permission: string;
-    };
-    assert.equal(justin.permission, "overridePreHireChecks");
+    const permissions = db
+      .prepare(`SELECT permission FROM staff_permissions WHERE staff_id = 'staff-justin' ORDER BY permission`)
+      .all() as { permission: string }[];
+    assert.deepEqual(
+      permissions.map((row) => row.permission),
+      ["acceptPaymentSettlement", "overridePreHireChecks"],
+    );
     const sian = db.prepare(`SELECT COUNT(*) AS n FROM staff_permissions WHERE staff_id = 'staff-sian'`).get() as { n: number };
     assert.equal(sian.n, 0);
     assert.equal((db.prepare(`SELECT COUNT(*) AS n FROM claims`).get() as { n: number }).n, claimsBefore);

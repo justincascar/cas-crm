@@ -653,6 +653,23 @@ CREATE TABLE IF NOT EXISTS prehire_overrides (
 
 CREATE INDEX IF NOT EXISTS idx_prehire_overrides_claim ON prehire_overrides(claim_id, recorded_at);
 
+CREATE TABLE IF NOT EXISTS payment_settlement_decisions (
+  id TEXT PRIMARY KEY,
+  claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+  head_of_loss TEXT NOT NULL,
+  decision TEXT NOT NULL,
+  received_pence INTEGER NOT NULL,
+  target_pence INTEGER NOT NULL,
+  write_off_pence INTEGER,
+  insurer_reason TEXT,
+  grounds TEXT,
+  decided_by TEXT NOT NULL REFERENCES staff(id),
+  decided_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_payment_settlement_decisions
+  ON payment_settlement_decisions(claim_id, head_of_loss, decided_at);
+
 CREATE INDEX IF NOT EXISTS idx_claims_handler ON claims(handler_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_staff ON sessions(staff_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);

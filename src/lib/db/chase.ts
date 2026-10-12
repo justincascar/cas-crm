@@ -22,6 +22,7 @@ import {
   laterIsoAll,
   NO_INSURER_CONTACT_MESSAGE,
   parseChaseIntervalDays,
+  repairAuthorisationPresentation,
   type ChaseHandlerState,
   type ChaseIntervalSource,
   type ChaseKind,
@@ -32,6 +33,8 @@ import {
   paymentChaseDecision,
   type PaymentChaseHead,
 } from "../domain/payment-chase";
+import { chaseComparisonPence, recordedSalvageProceedsPence } from "../domain/payment-review";
+import type { InsurerSalvageInterest, SalvageDisposal } from "../domain/total-loss";
 import { paymentRequestPack, type PackDocument } from "../email/payment-request-pack";
 import { getInsurerPaymentDetails } from "./payment-details";
 import type { SupplementaryChaseKind } from "../domain/follow-up-chases";
@@ -91,6 +94,7 @@ export type ChaseView = {
     dueDateUnset: boolean;
     partPaid: boolean;
     paidInFull: boolean;
+    salvageProceedsPence: number;
     reviewNote: string | null;
     packMissing: string[];
     packSelectedIds: string[];
@@ -267,6 +271,8 @@ type PaymentClaimFacts = {
   vehicleDamage: HeadMoney;
   storage: HeadMoney;
   totalLoss: boolean;
+  salvageProceedsPence: number;
+  vehicleDamageAccepted: boolean;
   reviewNote: string | null;
   packMissing: string[];
   packSelectedIds: string[];
@@ -485,6 +491,65 @@ function blankMoney(): HeadMoney {
   return { agreed: 0, received: 0 };
 }
 
+function blankPaymentFacts(totalLoss: boolean): PaymentClaimFacts {
+  return {
+    repairs: blankMoney(),
+    vehicleDamage: blankMoney(),
+    storage: blankMoney(),
+    totalLoss,
+    salvageProceedsPence: 0,
+    vehicleDamageAccepted: false,
+    reviewNote: null,
+    packMissing: [],
+    packSelectedIds: [],
+  };
+}
+
+function asInterest(value: string | null): InsurerSalvageInterest | null {
+  if (value === "no_interest" || value === "takes_interest") return value;
+  return null;
+}
+
+function asDisposal(value: string | null): SalvageDisposal | null {
+  if (value === "sold" || value === "returned" || value === "bought_by_cas") return value;
+  return null;
+}
+
+function attachSalvageAndAcceptance(map: Map<string, PaymentClaimFacts>) {
+  const ids = [...map.keys()];
+  if (ids.length === 0) return;
+  const reports = all<{
+    claim_id: string;
+    salvage_pence: number | null;
+    sale_proceeds_pence: number | null;
+    disposal: string | null;
+    insurer_salvage_interest: string | null;
+  }>(
+    `SELECT claim_id, salvage_pence, sale_proceeds_pence, disposal, insurer_salvage_interest
+     FROM total_loss_reports WHERE claim_id IN (${placeholders(ids.length)})`,
+    ids,
+  );
+  for (const report of reports) {
+    const fact = map.get(report.claim_id);
+    if (!fact) continue;
+    fact.salvageProceedsPence = recordedSalvageProceedsPence({
+      interest: asInterest(report.insurer_salvage_interest),
+      salvagePence: report.salvage_pence,
+      saleProceedsPence: report.sale_proceeds_pence,
+      disposal: asDisposal(report.disposal),
+    });
+  }
+  const accepted = all<{ claim_id: string }>(
+    `SELECT DISTINCT claim_id FROM payment_settlement_decisions
+     WHERE decision = 'accept_final' AND head_of_loss = 'vehicle_damage' AND claim_id IN (${placeholders(ids.length)})`,
+    ids,
+  );
+  for (const row of accepted) {
+    const fact = map.get(row.claim_id);
+    if (fact) fact.vehicleDamageAccepted = true;
+  }
+}
+
 function loadPaymentFacts(claimIds: string[]): Map<string, PaymentClaimFacts> {
   const map = new Map<string, PaymentClaimFacts>();
   if (claimIds.length === 0) return map;
@@ -509,15 +574,8 @@ function loadPaymentFacts(claimIds: string[]): Map<string, PaymentClaimFacts> {
     const key = `${row.claim_id}:${row.head_of_loss}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    const fact = map.get(row.claim_id) || {
-      repairs: blankMoney(),
-      vehicleDamage: blankMoney(),
-      storage: blankMoney(),
-      totalLoss: Number(row.total_loss) === 1 || Number(row.later_declared_total_loss) === 1,
-      reviewNote: null,
-      packMissing: [],
-      packSelectedIds: [],
-    };
+    const fact =
+      map.get(row.claim_id) || blankPaymentFacts(Number(row.total_loss) === 1 || Number(row.later_declared_total_loss) === 1);
     fact.totalLoss = Number(row.total_loss) === 1 || Number(row.later_declared_total_loss) === 1;
     const money = { agreed: Number(row.agreed_pence) || 0, received: Number(row.received_pence) || 0 };
     if (row.head_of_loss === "repairs") fact.repairs = money;
@@ -532,17 +590,10 @@ function loadPaymentFacts(claimIds: string[]): Map<string, PaymentClaimFacts> {
       claimsMissing,
     );
     for (const row of flags) {
-      map.set(row.id, {
-        repairs: blankMoney(),
-        vehicleDamage: blankMoney(),
-        storage: blankMoney(),
-        totalLoss: Number(row.total_loss) === 1 || Number(row.later_declared_total_loss) === 1,
-        reviewNote: null,
-        packMissing: [],
-        packSelectedIds: [],
-      });
+      map.set(row.id, blankPaymentFacts(Number(row.total_loss) === 1 || Number(row.later_declared_total_loss) === 1));
     }
   }
+  attachSalvageAndAcceptance(map);
   return map;
 }
 
@@ -649,11 +700,21 @@ function evaluateChase(kind: ChaseKind, claimId: string, row: ChaseRow, facts: C
   const money = facts.payment.get(claimId);
   const headMoney =
     def.paymentHead === "repairs" ? money?.repairs : def.paymentHead === "vehicle_damage" ? money?.vehicleDamage : null;
+  const comparison = def.paymentHead
+    ? chaseComparisonPence({
+        head: def.paymentHead,
+        agreedPence: headMoney?.agreed || 0,
+        salvageProceedsPence: def.paymentHead === "vehicle_damage" ? money?.salvageProceedsPence || 0 : 0,
+        acceptedAsFinal: def.paymentHead === "vehicle_damage" && Boolean(money?.vehicleDamageAccepted),
+      })
+    : 0;
+  const authorisation = kind === "repair_authorisation" ? repairAuthorisationPresentation(Boolean(money?.totalLoss)) : null;
   const decision = def.paymentHead
     ? paymentChaseDecision({
         head: def.paymentHead,
         agreedPence: headMoney?.agreed || 0,
         receivedPence: headMoney?.received || 0,
+        comparisonPence: comparison,
         startedAt: startedAtFromFacts(facts, claimId, kind),
         lastChaseSentAt: lastChaseSentFromFacts(facts, claimId, kind),
         handlerState,
@@ -683,18 +744,18 @@ function evaluateChase(kind: ChaseKind, claimId: string, row: ChaseRow, facts: C
           handlerState,
           intervalDays: effective.days,
           asAt,
-          dueLabel: def.dueLabel,
+          dueLabel: authorisation?.dueLabel || def.dueLabel,
           notStartedReason: def.notStartedReason,
           outcomeOnFileReason: def.outcomeOnFileReason,
         });
   const contact = contactFromFacts(facts, claimId, kind);
-  const outstanding = headMoney ? Math.max(0, (headMoney.agreed || 0) - (headMoney.received || 0)) : 0;
+  const outstanding = headMoney && comparison > 0 ? Math.max(0, comparison - (headMoney.received || 0)) : 0;
   const storageOutstanding = money ? Math.max(0, (money.storage.agreed || 0) - (money.storage.received || 0)) : 0;
   const bankLine = paymentDetailsLetterLine(facts.bank);
   return {
     kind,
     claimId,
-    title: def.title,
+    title: authorisation?.title || def.title,
     dueLabel: decision.label || def.dueLabel,
     ...decision,
     contactName: contact.name,
@@ -716,13 +777,14 @@ function evaluateChase(kind: ChaseKind, claimId: string, row: ChaseRow, facts: C
           head: def.paymentHead,
           agreedPence: headMoney?.agreed || 0,
           receivedPence: headMoney?.received || 0,
-          outstandingPence: headMoney && headMoney.agreed > 0 && headMoney.received < headMoney.agreed ? outstanding : 0,
+          outstandingPence: headMoney && comparison > 0 && headMoney.received < comparison ? outstanding : 0,
           storageOutstandingPence: storageOutstanding,
           bankLine,
           paymentTermDays: facts.paymentTermDays,
           dueDateUnset: facts.paymentTermDays == null,
-          partPaid: Boolean(headMoney && headMoney.received > 0 && headMoney.agreed > headMoney.received),
-          paidInFull: Boolean(headMoney && headMoney.agreed > 0 && headMoney.received === headMoney.agreed),
+          partPaid: Boolean(headMoney && headMoney.agreed > 0 && headMoney.received > 0 && headMoney.received < comparison),
+          paidInFull: Boolean(headMoney && headMoney.agreed > 0 && comparison > 0 && headMoney.received === comparison),
+          salvageProceedsPence: def.paymentHead === "vehicle_damage" && !money?.vehicleDamageAccepted ? money?.salvageProceedsPence || 0 : 0,
           reviewNote: money?.reviewNote || null,
           packMissing: money?.packMissing || [],
           packSelectedIds: money?.packSelectedIds || [],
@@ -771,13 +833,53 @@ export function syncOutstandingPaymentChases(claimIds?: string[]) {
   const seen = new Set<string>();
   const repairs = new Set<string>();
   const settlements = new Set<string>();
+  const claimIdList = [...new Set(lines.map((row) => row.claim_id))];
+  const salvage = new Map<string, number>();
+  const accepted = new Set<string>();
+  if (claimIdList.length) {
+    const reports = all<{
+      claim_id: string;
+      salvage_pence: number | null;
+      sale_proceeds_pence: number | null;
+      disposal: string | null;
+      insurer_salvage_interest: string | null;
+    }>(
+      `SELECT claim_id, salvage_pence, sale_proceeds_pence, disposal, insurer_salvage_interest
+       FROM total_loss_reports WHERE claim_id IN (${placeholders(claimIdList.length)})`,
+      claimIdList,
+    );
+    for (const report of reports) {
+      salvage.set(
+        report.claim_id,
+        recordedSalvageProceedsPence({
+          interest: asInterest(report.insurer_salvage_interest),
+          salvagePence: report.salvage_pence,
+          saleProceedsPence: report.sale_proceeds_pence,
+          disposal: asDisposal(report.disposal),
+        }),
+      );
+    }
+    const acceptedRows = all<{ claim_id: string }>(
+      `SELECT DISTINCT claim_id FROM payment_settlement_decisions
+       WHERE decision = 'accept_final' AND head_of_loss = 'vehicle_damage' AND claim_id IN (${placeholders(claimIdList.length)})`,
+      claimIdList,
+    );
+    for (const row of acceptedRows) accepted.add(row.claim_id);
+  }
   for (const row of lines) {
     const key = `${row.claim_id}:${row.head_of_loss}`;
     if (seen.has(key)) continue;
     seen.add(key);
     const agreed = Number(row.agreed_pence) || 0;
     const received = Number(row.received_pence) || 0;
-    if (agreed <= 0 || received >= agreed) continue;
+    const head = row.head_of_loss === "vehicle_damage" ? "vehicle_damage" : "repairs";
+    const comparison = chaseComparisonPence({
+      head,
+      agreedPence: agreed,
+      salvageProceedsPence: head === "vehicle_damage" ? salvage.get(row.claim_id) || 0 : 0,
+      acceptedAsFinal: head === "vehicle_damage" && accepted.has(row.claim_id),
+    });
+    if (agreed <= 0 || comparison <= 0 || received >= comparison) continue;
     if (row.head_of_loss === "repairs") repairs.add(row.claim_id);
     if (row.head_of_loss === "vehicle_damage" && (Number(row.total_loss) === 1 || Number(row.later_declared_total_loss) === 1)) {
       settlements.add(row.claim_id);

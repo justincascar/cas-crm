@@ -253,10 +253,18 @@ export default async function SettingsPage({
       </section>
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Indicative charge defaults</h2>
-        <p className="mt-1 text-sm text-slate">Not applied automatically. Ranges require an actual chosen rate.</p>
+        <p className="mt-1 text-sm text-slate">
+          Recovery, out of hours, environmental, winch and the card fee fill in on the Recovery screen. A different figure
+          can still be typed on that job. The card fee is added only when Card fee is ticked. Storage and the other
+          amounts are not added unless someone enters them. A range is not a chosen rate.
+        </p>
         <ul className="mt-3 space-y-1 text-sm">
           <li>Storage {formatGbp(INDICATIVE_DEFAULTS.storage_per_day_net_pence)}/day + VAT</li>
           <li>Recovery {formatGbp(INDICATIVE_DEFAULTS.recovery_net_pence)} + VAT</li>
+          <li>Out of hours {formatGbp(INDICATIVE_DEFAULTS.ooh_net_pence)} + VAT</li>
+          <li>Environmental {formatGbp(INDICATIVE_DEFAULTS.environmental_net_pence)} + VAT</li>
+          <li>Winch {formatGbp(INDICATIVE_DEFAULTS.winch_net_pence)} + VAT</li>
+          <li>Card fee {(INDICATIVE_DEFAULTS.card_fee_rate * 100).toFixed(1)}% of the net charges, before VAT, then VAT on that fee</li>
           <li>Gate fee {formatGbp(INDICATIVE_DEFAULTS.gate_fee_net_pence)} + VAT</li>
           <li>
             CDW {formatGbp(INDICATIVE_DEFAULTS.cdw_per_day_net_pence_range[0])}–

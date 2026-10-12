@@ -8,6 +8,8 @@ import { get, all, getDb, newId, run } from "./connection";
 import { recordClaimEvent } from "./chronology";
 import { normaliseGtaGroup } from "../documents/gta";
 import { poundsToPence } from "./intake";
+import { INDICATIVE_DEFAULTS } from "../constants";
+import { normaliseRecoveryScreen, somethingElseSaveError } from "../domain/recovery-charges";
 import { rememberAgentOn, rememberInsurerOn } from "./insurers";
 import { displayValue } from "../screen-display";
 import { updateClaimAudatexCodes, updateClaimWorkflowStatus, suggestAudatexCodesForClaim } from "./queries";
@@ -66,6 +68,7 @@ export function valuesFromForm(formData: FormData, screenKey: string): ScreenVal
   for (const key of ["clientPanels", "tpPanels", "crossHire", "crossHireNotes"]) {
     if (formData.has(key)) values[key] = String(formData.get(key) || "");
   }
+  if (screenKey === "recovery") return normaliseRecoveryScreen(values);
   return values;
 }
 
@@ -74,6 +77,10 @@ export function screenSaveFieldError(
   screenKey: string,
   values: ScreenValues,
 ): { field: string; message: string } | null {
+  if (screenKey === "recovery") {
+    const extra = somethingElseSaveError(values);
+    if (extra) return extra;
+  }
   if (screenKey === "accident") {
     const accident = accidentDateError(values.accidentDate);
     return accident ? { field: "accidentDate", message: accident } : null;
@@ -104,16 +111,17 @@ export function screenSaveError(claimId: string, screenKey: string, values: Scre
 }
 
 export function saveScreenData(claimId: string, screenKey: string, values: ScreenValues, actorId: string) {
-  const blocked = screenSaveFieldError(claimId, screenKey, values);
+  const stored = screenKey === "recovery" ? normaliseRecoveryScreen(values) : values;
+  const blocked = screenSaveFieldError(claimId, screenKey, stored);
   if (blocked) throw new FieldValidationError(blocked.field, blocked.message);
   const now = nowUtcIso();
   run(
     `INSERT INTO claim_screen_data(claim_id, screen_key, data_json, updated_at)
      VALUES (?, ?, ?, ?)
      ON CONFLICT(claim_id, screen_key) DO UPDATE SET data_json = excluded.data_json, updated_at = excluded.updated_at`,
-    [claimId, screenKey, JSON.stringify(values), now],
+    [claimId, screenKey, JSON.stringify(stored), now],
   );
-  applySideEffects(claimId, screenKey, values, actorId);
+  applySideEffects(claimId, screenKey, stored, actorId);
   run(`UPDATE claims SET updated_at = ? WHERE id = ?`, [now, claimId]);
 }
 
@@ -260,16 +268,19 @@ function applySideEffects(claimId: string, screenKey: string, values: ScreenValu
   if (screenKey === "recovery") {
     const existing = get<{ id: string }>(`SELECT id FROM recovery_jobs WHERE claim_id = ? LIMIT 1`, [claimId]);
     if (existing) {
+      const charged = (tick: string, fee: string) => (values[tick] === "yes" ? Number.parseInt(values[fee] || "0", 10) || 0 : 0);
       run(
         `UPDATE recovery_jobs SET location = COALESCE(NULLIF(?, ''), location), recovered_at = COALESCE(NULLIF(?, ''), recovered_at),
-          charge_pence = CASE WHEN ? != '' THEN CAST(? AS INTEGER) ELSE charge_pence END,
+          charge_pence = ?, ooh_pence = ?, environmental_pence = ?, winch_pence = ?,
           inherited_note = COALESCE(NULLIF(?, ''), inherited_note)
          WHERE id = ?`,
         [
           values.location || "",
           values.recoveryDate || "",
-          values.standardCharge || "",
-          values.standardCharge || "0",
+          Number.parseInt(values.standardCharge || "0", 10) || 0,
+          charged("outOfHours", "outOfHoursFee"),
+          charged("environment", "environmentFee"),
+          charged("winch", "winchFee"),
           values.reasonForFee || "",
           existing.id,
         ],
@@ -551,7 +562,20 @@ export function seedScreenDefaults(claimId: string, screenKey: string): ScreenVa
     if (job) {
       fill("location", job.location);
       fill("recoveryDate", job.recovered_at ? String(job.recovered_at).slice(0, 10) : "");
-      if (job.charge_pence != null) fill("standardCharge", String(job.charge_pence));
+      if (!Object.prototype.hasOwnProperty.call(saved, "standardCharge") && Number(job.charge_pence) > 0) {
+        defaults.standardCharge = String(job.charge_pence);
+      }
+      const jobExtras: Array<[string, string, string, number, number]> = [
+        ["outOfHours", "outOfHoursFee", "outOfHoursKept", Number(job.ooh_pence), INDICATIVE_DEFAULTS.ooh_net_pence],
+        ["environment", "environmentFee", "environmentKept", Number(job.environmental_pence), INDICATIVE_DEFAULTS.environmental_net_pence],
+        ["winch", "winchFee", "winchKept", Number(job.winch_pence), INDICATIVE_DEFAULTS.winch_net_pence],
+      ];
+      for (const [tick, fee, kept, jobPence, defaultPence] of jobExtras) {
+        if (Object.prototype.hasOwnProperty.call(saved, tick) || !(jobPence > 0)) continue;
+        defaults[tick] = "yes";
+        defaults[fee] = String(jobPence);
+        if (jobPence !== defaultPence) defaults[kept] = String(jobPence);
+      }
       fill("reasonForFee", job.inherited_note);
     }
   }

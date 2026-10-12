@@ -1,6 +1,7 @@
 import { accidentDateError } from "./dates";
 import { dobKindForField, dobSaveError, isDobFieldName, type DobKind } from "./age";
 import { isMobileFieldName, mobileNumberError } from "./phone-number";
+import { somethingElseGap } from "./domain/recovery-charges";
 
 export const FIELD_INVALID_CLASS = "field-invalid";
 export const FIELD_ERROR_CLASS = "field-error";
@@ -118,11 +119,26 @@ function dobKindFromControl(el: FormControl): DobKind {
   return dobKindForField("", el.name);
 }
 
+function namedValue(form: HTMLFormElement, name: string): string {
+  const node = form.elements.namedItem(name);
+  if (node instanceof HTMLInputElement || node instanceof HTMLTextAreaElement) return node.value;
+  return "";
+}
+
 export function customErrorForControl(el: FormControl, form: HTMLFormElement): string | null {
-  return namedFieldError(el.name, el.value, {
+  const named = namedFieldError(el.name, el.value, {
     dobKind: dobKindFromControl(el),
     dobConfirmed: confirmChecked(form, el.name),
   });
+  if (named) return named;
+  if (el.name !== "somethingElseDescription" && el.name !== "somethingElseFee") return null;
+  const gap = somethingElseGap({
+    ticked: true,
+    description: namedValue(form, "somethingElseDescription"),
+    amount: namedValue(form, "somethingElseFee"),
+  });
+  if (!gap || gap.field !== el.name) return null;
+  return gap.message;
 }
 
 export function relatedControl(el: FormControl, form: HTMLFormElement): FormControl {

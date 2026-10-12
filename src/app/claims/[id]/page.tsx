@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { actionAddNote, actionAddTask, actionCompleteTask, actionUpdateClaim } from "@/app/actions";
 import { actionRecordAgreedRepair } from "@/app/chase-actions";
@@ -28,6 +28,11 @@ import { OutstandingSummary } from "@/components/claims/OutstandingSummary";
 import { MailboxSendNotice } from "@/components/claims/SendPreparedEmailForm";
 import { mailboxIsConnected } from "@/lib/email/microsoft-graph";
 import { outstandingForClaim } from "@/lib/db/outstanding";
+import { listOpenPaymentReviews, listPayableHeads, listPaymentsAfterSettlement } from "@/lib/db/payment-review";
+import { PaymentReviewPanel } from "@/components/claims/PaymentReviewPanel";
+import { AwaitingDecisionList } from "@/components/claims/AwaitingDecisionList";
+import { isPaymentReviewHead } from "@/lib/domain/payment-review";
+import { headScreenPath } from "@/lib/domain/head-screen";
 import { getHireEndDateReviews } from "@/lib/db/hire-collection-date";
 import { getStorageDateReview, getStorageEndDateReview } from "@/lib/db/storage-recovery-date";
 
@@ -43,10 +48,17 @@ export default async function ClaimDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; tlError?: string; tlMail?: string; mailboxError?: string; mailboxSent?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    tlError?: string;
+    tlMail?: string;
+    mailboxError?: string;
+    mailboxSent?: string;
+    paymentDecision?: string;
+  }>;
 }) {
   const { id } = await params;
-  const { error, tlError, tlMail, mailboxError, mailboxSent } = await searchParams;
+  const { error, tlError, tlMail, mailboxError, mailboxSent, paymentDecision } = await searchParams;
   await requireStaff();
   const data = getClaim(id);
   if (!data) notFound();
@@ -54,6 +66,10 @@ export default async function ClaimDetailPage({
   const staff = listStaff();
   const chases = listChasesForClaim(String(claim.id));
   const hireAgreements = listHireAgreements(String(claim.id));
+  const claimId = String(claim.id);
+  if (paymentDecision && isPaymentReviewHead(paymentDecision)) redirect(headScreenPath(claimId, paymentDecision));
+  const reviews = listOpenPaymentReviews(claimId);
+  const settledPayments = listPaymentsAfterSettlement(claimId);
   const preparedByKind = Object.fromEntries(
     chases.map((chase) => {
       const row = findPreparedChase(chase.kind, String(claim.id));
@@ -95,16 +111,32 @@ export default async function ClaimDetailPage({
         }
       />
 
+      {error ? <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p> : null}
+      <MailboxSendNotice sent={mailboxSent} error={mailboxError} />
+
+      <nav aria-label="Heads of loss" className="flex flex-wrap gap-2">
+        <Link href={`/claims/${claimId}/heads/recovery-storage`} className="rounded-md border border-navy px-4 py-2 text-sm font-semibold text-navy">
+          Recovery and storage
+        </Link>
+        <Link href={`/claims/${claimId}/heads/hire`} className="rounded-md border border-navy px-4 py-2 text-sm font-semibold text-navy">
+          Hire
+        </Link>
+        <Link href={`/claims/${claimId}/heads/vehicle`} className="rounded-md border border-navy px-4 py-2 text-sm font-semibold text-navy">
+          Vehicle damage
+        </Link>
+      </nav>
+
+      <AwaitingDecisionList claimId={claimId} reviews={reviews} settled={settledPayments} />
+
       <ClaimWorkflowStatus
         claimId={String(claim.id)}
         liabilityStatus={String(claim.claim_type || "")}
         roadworthiness={String(claim.roadworthiness || "")}
       />
 
-      {error ? <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p> : null}
-      <MailboxSendNotice sent={mailboxSent} error={mailboxError} />
+      <OutstandingSummary items={outstandingForClaim(claimId)} />
 
-      <OutstandingSummary items={outstandingForClaim(String(claim.id))} />
+      <PaymentReviewPanel claimId={claimId} payableHeads={listPayableHeads(claimId)} />
 
       {chases.map((chase) => (
         <ChasePanel
@@ -115,6 +147,11 @@ export default async function ClaimDetailPage({
           agreements={chase.kind === "hire_agreement_renewal" ? hireAgreements : undefined}
           mailboxConnected={mailboxIsConnected()}
           returnTo={`/claims/${claim.id}`}
+          awaitingDecisionHref={
+            chase.payment && reviews.some((item) => item.head === chase.payment?.head)
+              ? headScreenPath(String(claim.id), chase.payment.head)
+              : null
+          }
         />
       ))}
 
@@ -460,14 +497,26 @@ export default async function ClaimDetailPage({
               </tr>
             </thead>
             <tbody>
-              {data.financials.map((line) => (
+              {data.financials.map((line) => {
+                const head = String(line.head_of_loss);
+                const label = HEAD_LABELS[head as HeadOfLoss] || head;
+                return (
                 <tr key={String(line.id)}>
-                  <td>{HEAD_LABELS[String(line.head_of_loss) as HeadOfLoss] || String(line.head_of_loss)}</td>
+                  <td>
+                    {isPaymentReviewHead(head) ? (
+                      <Link href={headScreenPath(claimId, head)} className="text-teal-dark underline">
+                        {label}
+                      </Link>
+                    ) : (
+                      label
+                    )}
+                  </td>
                   <td className="tabular">{formatGbp(Number(line.claimed_pence))}</td>
                   <td className="tabular">{formatGbp(Number(line.offered_pence))}</td>
                   <td className="tabular">{formatGbp(Number(line.received_pence))}</td>
                 </tr>
-              ))}
+                );
+              })}
             </tbody>
           </table>
           {Number(claim.total_loss) === 1 ? null : (

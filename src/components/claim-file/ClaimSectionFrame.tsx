@@ -22,7 +22,8 @@ export function ClaimSectionFrame({
   const onVehicles = pathname === `${claimPath}/vehicles` || pathname.startsWith(`${claimPath}/vehicles/`);
   const onFinancial = pathname === `${claimPath}/financial` || pathname.startsWith(`${claimPath}/financial/`);
   const onPrehire = pathname === `${claimPath}/prehire` || pathname.startsWith(`${claimPath}/prehire/`);
-  const hideScreenNav = onOverview || onHandover || onDocuments || onVehicles || onFinancial || onPrehire;
+  const onHeads = pathname.includes("/heads/");
+  const hideScreenNav = onOverview || onHandover || onDocuments || onVehicles || onFinancial || onPrehire || onHeads;
   const tabClass = (active: boolean) =>
     `inline-flex min-h-11 items-center rounded-md px-3 py-2 text-sm font-semibold ${
       active ? "bg-navy text-white" : "border border-line bg-white text-navy"

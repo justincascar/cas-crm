@@ -471,6 +471,59 @@ Blocked: per-file permissions, shared hosting, live DVLA. Incoming mail is not b
 - The document pack that used to pre-tick on Payment chase 1 and 2 now pre-ticks on the prepared payment chase. Current versions are ticked. Missing items are named. Nothing is sent until Send.
 - Tests: `tests/payment-chase.test.ts`. A part-payment pauses, reduces the balance, and is not paid. Full payment stops the chase and flags hire and storage without closing them. A reminder is due after the interval. An outage leaves one catch-up reminder. Full suite before this stage: 279 passing, 0 failing. After: 288 passing, 0 failing.
 
+## Review payment (12 October 2026)
+
+- When money arrives on recovery, storage, hire, repairs, or total loss and does not cover the figure for that head, the file keeps one item for that head. It shows the amount received, the amount still outstanding, and the insurer's stated reason for paying less. If they gave none, it says "no reason given". A reason is never invented. Logging the payment does not open the choice. See the next section.
+- If that head has an agreed figure, the outstanding amount is against the agreed figure. If nothing is agreed, it is against the claimed figure (claimed minus received). Claimed and agreed are not added together. A part-payment still reduces the balance and pauses the repair-invoice or total-loss settlement chase. The review is the decision on top of that pause. Storage still has no payment chase of its own.
+- On a total loss, receipts are compared with the agreed pre-accident value minus salvage proceeds already on the file. Sale proceeds are used when a sale figure is recorded. Otherwise the engineer's salvage value is used, the same subtraction as the existing net suggestion. Nothing is subtracted when the insurer is taking the salvage. The two salvage figures are not added together. Example: agreed pre-accident value £13,150.00 and salvage £190.75, so the receipt is compared with £12,959.25. If salvage is recorded or corrected after the payment, the outstanding figure is worked out again from the figures then on the file.
+- A payment that matches that figure stops the chase and flags hire and storage for review. It does not close them, and it does not write a hire end date. The existing hire-end suggestion still appears only when the amount received equals the agreed vehicle-damage figure on the file, and only when staff confirm it.
+- **Accept as final** sets the agreed figure on that head to the amount received, records the shortfall as a write-off with the insurer's reason (or "no reason given"), and stops the chase on that head. It does not close hire or storage. It never runs on its own. It needs the permission `acceptPaymentSettlement`, a row in `staff_permissions`. The seed and the migration grant it to Justin Roberts's staff row (`staff-justin`) only. Sian is not granted it. Being an administrator does not grant it. The check does not read the username. A direct call from an account without the permission is refused.
+- **Dispute / keep chasing** does not need that permission. The agreed figure stays as it was, or stays unset. The chase resumes for the balance still outstanding, and the grounds are the words staff type. A later payment that completes the figure stops the chase in the normal way and flags hire and storage without closing them.
+- Each head is separate. A review on hire does not change storage, repairs, or the pre-accident value.
+- A payment on a head that has no claim or invoice at all is flagged for manual reconciliation. No financial record is created from nothing. Two payments before the review are one item: a normal second payment is added, and a correction ticked within two minutes replaces the last figure so it is not counted twice.
+- Tests: `tests/payment-review.test.ts`. Full suite before this stage: 288 passing, 0 failing. After: 301 passing, 0 failing.
+
+## Payment decision is a separate step (12 October 2026)
+
+- Logging a payment records the amount on one head and nothing else. It does not open Accept as final or Dispute. Staff can record the money and leave the file.
+- If the amount does not cover that head, the chase pauses as it already did. The file and the dashboard then show **Awaiting decision** for that head, in the same amber list as the other chase reminders. It stays until someone opens it. It is not a popup. A second payment before any choice updates the received and outstanding figures on that same item. There is still one item per head.
+- Opening Awaiting decision shows the figures then on the file, and Accept as final and Dispute / keep chasing, one under the other. Those two actions are unchanged, including the permission on Accept and the salvage figure on a total loss.
+- After Dispute, a later payment reduces what is still outstanding. The chase is already going for the remainder, so it does not pause again and it does not open another Awaiting decision. A later payment that meets the figure still stops the chase in the normal way.
+- After Accept as final, a later payment on that head is flagged under **Payments to review** on the file and on the dashboard. It is not added to the agreed or received figures.
+- Tests: `tests/payment-review.test.ts`. Full suite before this stage: 301 passing, 0 failing. After: 306 passing, 0 failing.
+
+## Head of loss screens (12 October 2026)
+
+- Three screens open from the file: **Recovery and storage**, **Hire**, and **Vehicle damage**. Recovery and storage are two sections on one screen, and each keeps its own figures. Vehicle damage shows repairs, or total loss, whichever the file is now. It does not show both.
+- Each section shows claimed, agreed, received, outstanding, and a status in plain words: nothing recorded yet, awaiting decision, active chase, paused, disputed, or settled. On a total loss the agreed figure is the pre-accident value minus salvage proceeds already recorded, until that shortfall is accepted. After acceptance, salvage is not taken off again.
+- Accept as final and Dispute sit on that screen, with the payments, decisions, write-offs and chase activity listed underneath. Accept as final asks for confirmation of the write-off before it is saved. It still does not close hire or storage.
+- The file and the dashboard keep the short Awaiting decision and Payments to review lines. Those lines, and the head names in the file's financial table, open the matching screen. Logging a payment still does not open the choice.
+- Tests: `tests/head-screen.test.ts` and `tests/payment-review.test.ts`. Full suite before this stage: 306 passing, 0 failing. After: 311 passing, 0 failing.
+
+## Chase name follows the file (12 October 2026)
+
+- The repair-authorisation chase is unchanged underneath. On a repairable file it is still called **Repair authorisation chase**. On a total loss, including a file later declared a total loss, the same chase is called **Total-loss agreement chase**. The dashboard row and the file's next action use that name. The dashboard heading covers both. Full suite: 312 passing, 0 failing.
+
+## Recovery screen charges (12 October 2026)
+
+- The Recovery screen is grouped into recoverer, the recovery itself, what was collected, and charges. Out of hours, environmental and winch sit together. Each shows its fee beside the tick.
+- Those fees fill in when ticked: out of hours £100.00 net, environmental £150.00 net, winch £95.00 net. They sit with the existing defaults, recovery £395.00 net and storage £39.00 a day. Unticking an extra takes it out of the total. A figure typed on that job is kept if the box is unticked and ticked again. The standard recovery charge fills in at £395.00 and can still be changed on the job.
+- VAT and the total are worked out from the standard charge and the extras that are ticked. They are not typed again. Type of vehicle recovered uses the same list as the fleet: car, van, motorcycle, campervan, and wheelchair-accessible taxi.
+- Tests: `tests/recovery-charges.test.ts`. Full suite before this stage: 312 passing, 0 failing. After: 318 passing, 0 failing.
+
+## Agreed figures and payments on the head screens (12 October 2026)
+
+- Each head screen now has **Record a payment** for that head only. It is the same payment action as on the file. Recovery and storage each have their own.
+- **Record agreed figure** on Vehicle damage is the existing repair-invoice box when the file is repairable, and the existing total-loss buttons (**Use this suggestion as the agreed amount** and **Save this as the agreed amount**) when it is a total loss.
+- Hire, recovery and storage now have their own **Record agreed figure** box. It stays blank until staff type the figure the insurer has agreed. It is not filled from the claimed amount. Saving it does not change the amount already received, and it does not pause, resume or cancel a chase that is already running. From then on, a payment on that head is measured against the agreed figure. If a short payment was already being compared with the claimed figure, the outstanding amount is worked out again from the agreed figure.
+- Tests: `tests/agreed-head.test.ts`. Full suite before this stage: 318 passing, 0 failing. After: 323 passing, 0 failing.
+
+## Recovery card fee and something else (12 October 2026)
+
+- The Recovery screen Charges section has two more optional lines. **Card fee** is 4.5% of the other net charges (the standard charge and any ticked extras, before VAT). It is added only when ticked, on its own line, and VAT at 20% applies to it with the rest. It fills in from the current charges and changes if those charges change. A figure typed on the job is kept, including if the box is unticked and ticked again. Clear that figure to go back to 4.5%.
+- **Something else** is for a charge that is not on the list, such as dealing with a fallen tree. Ticking it shows a description and an amount. The amount starts blank. There is no default. When both are filled in, the amount is added into VAT and the total in the same way as the named extras. A description without an amount, or an amount without a description, is refused and is not saved as £0. Unticking takes it out of the total and keeps what was typed.
+- Tests: `tests/recovery-charges.test.ts`. Full suite before this stage: 323 passing, 0 failing. After: 327 passing, 0 failing.
+
 ## Not yet claimed
 
 Stages 2–5 (finer permissions, live integrations, payment packs from CAS templates, litigation issue, backups/restore/deploy). Working dashboard is not production readiness.

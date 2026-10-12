@@ -55,6 +55,16 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   };
   try {
     const intent = String(form.get("intent") || "save");
+    if (intent === "confirm_suggestion" && !form.has("pav")) {
+      confirmTotalLossSuggestion({ claimId: id, actorId: staff.id });
+      return back();
+    }
+    if (intent === "confirm_agreed" && !form.has("pav")) {
+      const agreedOnly = optionalPoundsToPence(String(form.get("agreed") || ""));
+      if (agreedOnly == null) throw new Error("Enter the agreed amount, or use the suggestion button.");
+      confirmTypedVehicleDamageAgreed({ claimId: id, actorId: staff.id, agreedPence: agreedOnly });
+      return back();
+    }
     if (intent === "mark_sent") {
       markTotalLossNoticeSent({
         claimId: id,

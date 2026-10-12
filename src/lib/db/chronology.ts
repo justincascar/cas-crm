@@ -1145,6 +1145,7 @@ function preparePaymentRequestChase(input: { claimId: string; actorId: string; k
     agreedPence: view.payment.agreedPence,
     receivedPence: view.payment.receivedPence,
     outstandingPence: view.payment.outstandingPence,
+    salvageProceedsPence: view.payment.salvageProceedsPence,
     bank: getInsurerPaymentDetails(),
     paymentTermDays: getInsurerPaymentTermDays(),
     asAt: nowUtcIso(),

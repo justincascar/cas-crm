@@ -7,6 +7,8 @@ import {
   ENGINEER_REPORT_CHASE_DUE_LABEL,
   LIABILITY_RESPONSE_CHASE_DUE_LABEL,
   REPAIR_AUTHORISATION_CHASE_DUE_LABEL,
+  TOTAL_LOSS_AGREEMENT_CHASE_DUE_LABEL,
+  TOTAL_LOSS_AGREEMENT_CHASE_TITLE,
 } from "../src/lib/constants.ts";
 import { isoDaysFromNow } from "../src/lib/dates.ts";
 import {
@@ -175,6 +177,7 @@ describe("repair authorisation chase", () => {
     withDatabase(db, () => {
       const repair = chaseForClaim("repair_authorisation", "c6");
       assert.equal(repair?.due, true);
+      assert.equal(repair?.title, "Repair authorisation chase");
       assert.equal(repair?.label, REPAIR_AUTHORISATION_CHASE_DUE_LABEL);
       assert.equal(chaseForClaim("engineer_report", "c6"), null);
       assert.equal(chaseForClaim("liability_response", "c6"), null);
@@ -191,6 +194,20 @@ describe("repair authorisation chase", () => {
       });
       assert.equal(chaseForClaim("repair_authorisation", "c6")?.due, false);
       assert.equal(chaseForClaim("repair_authorisation", "c6")?.outcomeOnFile, true);
+    });
+    db.close();
+  });
+
+  it("uses the total-loss agreement name on the same chase when the file is a total loss", () => {
+    const db = seeded();
+    withDatabase(db, () => {
+      db.prepare(`UPDATE claims SET later_declared_total_loss = 1 WHERE id = 'c6'`).run();
+      const chase = chaseForClaim("repair_authorisation", "c6");
+      assert.equal(chase?.kind, "repair_authorisation");
+      assert.equal(chase?.title, TOTAL_LOSS_AGREEMENT_CHASE_TITLE);
+      assert.equal(chase?.label, TOTAL_LOSS_AGREEMENT_CHASE_DUE_LABEL);
+      const six = listClaims().find((row) => row.file_reference === "TEST-0006");
+      assert.match(String(six?.next_action), /Total-loss agreement chase due/);
     });
     db.close();
   });

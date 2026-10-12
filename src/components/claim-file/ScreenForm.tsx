@@ -12,6 +12,7 @@ import { InsurerNameField } from "@/components/InsurerNameField";
 import { TpInsuranceFields } from "@/components/TpInsuranceFields";
 import { TpAgentFields } from "@/components/TpAgentFields";
 import { DamageDiagram } from "@/components/claim-file/DamageDiagram";
+import { RecoveryCharges } from "@/components/claim-file/RecoveryCharges";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { dobKindForField, isDobFieldName } from "@/lib/age";
 import type { ClaimScreenDef, ScreenField } from "@/lib/claim-screens";
@@ -110,9 +111,11 @@ function FieldInput({
     );
   }
   if (type === "select") {
+    const options = field.options || [];
+    const current = shown && !options.some((opt) => opt.value === shown) ? [{ value: shown, label: shown }] : [];
     return (
       <select name={field.name} className={control} defaultValue={shown}>
-        {(field.options || []).map((opt) => (
+        {[...current, ...options].map((opt) => (
           <option key={opt.value} value={opt.value}>
             {opt.label}
           </option>
@@ -196,7 +199,9 @@ export function ScreenForm({
       {def.sections.map((section, index) => (
         <fieldset key={section.title || index} className="space-y-3 rounded-xl border border-line bg-card p-5">
           {section.title ? <legend className="font-serif text-xl text-navy-deep">{section.title}</legend> : null}
-          {section.title === "TP insurance" ? (
+          {def.key === "recovery" && section.title === "Charges" ? (
+            <RecoveryCharges values={values} />
+          ) : section.title === "TP insurance" ? (
             <TpInsuranceFields values={values} insurers={insurers} />
           ) : section.title === "TP insurer agent" ? (
             <TpAgentFields values={values} agents={agents} />

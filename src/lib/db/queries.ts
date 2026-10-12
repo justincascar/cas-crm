@@ -1,5 +1,6 @@
 import { FILE_REFERENCE_PREFIX_DEFAULT, HEAD_LABELS, type HeadOfLoss } from "../constants";
 import { listDueChases, type ChaseView } from "./chase";
+import { listPaymentAttention } from "./payment-review";
 import { dueFollowUpChases } from "./follow-up-chases";
 import { accidentDateError, isBeforeLondonDay, isSameLondonDay, londonDateIso, nowUtcIso } from "../dates";
 import { formatGbp, sumDistinctHeads } from "../money";
@@ -255,6 +256,7 @@ export function getDashboard() {
     repair_authorisation: chasesDue.filter((row) => row.kind === "repair_authorisation"),
     hire_agreement_renewal: chasesDue.filter((row) => row.kind === "hire_agreement_renewal"),
   };
+  const paymentAttention = listPaymentAttention();
 
   const cards = [
     { key: "new_enquiries", label: "New enquiries / incomplete forms", count: countClaims("new_enquiries"), tone: "warn" },
@@ -295,6 +297,8 @@ export function getDashboard() {
     headLabels: HEAD_LABELS as Record<string, string>,
     chasesDue,
     chasesDueByKind,
+    awaitingDecisions: paymentAttention.awaiting,
+    paymentsAfterSettlement: paymentAttention.afterSettlement,
     engineerChasesDue: chasesDueByKind.engineer_report,
     dashboardLoadMs: elapsedMs,
     dashboardSqlStatements: sqlStatements,

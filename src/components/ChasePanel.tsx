@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   actionCancelChase,
@@ -88,6 +89,7 @@ export function ChasePanel({
   agreements,
   mailboxConnected = false,
   returnTo,
+  awaitingDecisionHref = null,
 }: {
   claimId: string;
   chase: ChaseView;
@@ -95,6 +97,7 @@ export function ChasePanel({
   agreements?: HireAgreementHistoryRow[];
   mailboxConnected?: boolean;
   returnTo?: string;
+  awaitingDecisionHref?: string | null;
 }) {
   const router = useRouter();
   const sendBack = returnTo || `/claims/${claimId}`;
@@ -109,7 +112,7 @@ export function ChasePanel({
   const [toAddress, setToAddress] = useState(prepared?.to_address || chase.contactEmail);
   const [packIds, setPackIds] = useState<string[]>(chase.payment?.packSelectedIds || []);
 
-  async function run<T extends { error?: string }>(
+  async function run<T extends { error?: string; message?: string }>(
     action: (form: FormData) => Promise<T>,
     extra?: Record<string, string>,
   ): Promise<T> {
@@ -127,6 +130,7 @@ export function ChasePanel({
       setMessage(result.error);
       return result;
     }
+    if (result.message) setMessage(result.message);
     router.refresh();
     return result;
   }
@@ -413,6 +417,16 @@ export function ChasePanel({
 
       {chase.payment && !chase.payment.paidInFull ? (
         <div className="mt-4 space-y-3">
+          {awaitingDecisionHref ? (
+            <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm font-semibold">
+              <Link href={awaitingDecisionHref} className="text-navy-deep underline">
+                Awaiting decision
+              </Link>
+              <span className="mt-1 block font-normal">
+                The payment is recorded. Open this when you are ready. Recording the payment does not make the choice.
+              </span>
+            </p>
+          ) : null}
           {chase.payment.head === "repairs" && chase.payment.agreedPence <= 0 ? (
             <form
               className="grid gap-2 rounded-md border border-line bg-white p-3 sm:grid-cols-[1fr_auto] sm:items-end"
@@ -440,13 +454,22 @@ export function ChasePanel({
                 head: chase.payment?.head || "",
                 amount: String(form.get("amount") || ""),
                 correction: form.get("correction") ? "yes" : "",
+                insurerReason: String(form.get("insurerReason") || ""),
               });
             }}
           >
             <label className="text-sm">
               Amount received on this head (£)
               <input name="amount" inputMode="decimal" className={field} required />
-              <span className="mt-1 block text-slate">Added to the amount already received on this head. A part-payment pauses the chase.</span>
+              <span className="mt-1 block text-slate">
+                Added to the amount already received on this head. If it does not cover the figure, the chase pauses and Awaiting
+                decision stays on this file until you open it.
+              </span>
+            </label>
+            <label className="text-sm">
+              Insurer&apos;s stated reason for paying less, if they gave one
+              <input name="insurerReason" className={field} />
+              <span className="mt-1 block text-slate">Leave this blank if they gave no reason. A reason is not invented.</span>
             </label>
             <label className="flex items-start gap-2 text-sm">
               <input type="checkbox" name="correction" value="yes" />

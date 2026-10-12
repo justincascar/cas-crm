@@ -63,6 +63,24 @@ export function canOverridePreHireChecks(account: {
   return account.permissions.includes(OVERRIDE_PREHIRE_CHECKS);
 }
 
+/**
+ * Stored on staff_permissions. Accepting a short payment as the final figure.
+ * Not implied by the administrator role.
+ */
+export const ACCEPT_PAYMENT_SETTLEMENT = "acceptPaymentSettlement";
+
+/**
+ * True only when this account has been granted acceptPaymentSettlement.
+ * The role is accepted so callers pass it, and it is not consulted.
+ */
+export function canAcceptPaymentSettlement(account: {
+  role: string | null | undefined;
+  permissions: readonly string[];
+}): boolean {
+  void account.role;
+  return account.permissions.includes(ACCEPT_PAYMENT_SETTLEMENT);
+}
+
 /** Server-side page allow-list. Office roles may open anything. */
 export function pathAllowedForRole(role: string | null | undefined, pathname: string): boolean {
   if (isOfficeRole(role)) return true;

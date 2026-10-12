@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import { OVERRIDE_PREHIRE_CHECKS } from "../auth/roles";
+import { ACCEPT_PAYMENT_SETTLEMENT, OVERRIDE_PREHIRE_CHECKS } from "../auth/roles";
 
 const TABLES: Record<string, Array<[string, string]>> = {
   correspondence: [
@@ -568,4 +568,26 @@ export function migrate(db: DatabaseSync) {
      SELECT ?, ?
      WHERE EXISTS (SELECT 1 FROM staff WHERE id = ?)`,
   ).run("staff-justin", OVERRIDE_PREHIRE_CHECKS, "staff-justin");
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS payment_settlement_decisions (
+      id TEXT PRIMARY KEY,
+      claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+      head_of_loss TEXT NOT NULL,
+      decision TEXT NOT NULL,
+      received_pence INTEGER NOT NULL,
+      target_pence INTEGER NOT NULL,
+      write_off_pence INTEGER,
+      insurer_reason TEXT,
+      grounds TEXT,
+      decided_by TEXT NOT NULL REFERENCES staff(id),
+      decided_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_payment_settlement_decisions
+      ON payment_settlement_decisions(claim_id, head_of_loss, decided_at);
+  `);
+  db.prepare(
+    `INSERT OR IGNORE INTO staff_permissions(staff_id, permission)
+     SELECT ?, ?
+     WHERE EXISTS (SELECT 1 FROM staff WHERE id = ?)`,
+  ).run("staff-justin", ACCEPT_PAYMENT_SETTLEMENT, "staff-justin");
 }
