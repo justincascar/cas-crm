@@ -13,6 +13,7 @@ import {
   saveTotalLossReport,
 } from "@/lib/db/total-loss";
 import { optionalPoundsToPence, type CasSalvageRequest, type InsurerSalvageInterest, type SalvageDisposal } from "@/lib/domain/total-loss";
+import { requireCalendarDate } from "@/lib/db/vehicle-offers";
 import { browserOrigin } from "@/lib/http/browser-origin";
 
 function interestOf(raw: string): InsurerSalvageInterest | null {
@@ -28,6 +29,13 @@ function disposalOf(raw: string): SalvageDisposal | null {
 function requestOf(raw: string): CasSalvageRequest | null {
   if (raw === "full_pav" || raw === "net_cas") return raw;
   return null;
+}
+
+function optionalAgreedOn(form: FormData): string | undefined {
+  if (!form.has("agreedOn")) return undefined;
+  const raw = String(form.get("agreedOn") || "").trim();
+  if (!raw) return undefined;
+  return requireCalendarDate(raw, "the date agreement was reached");
 }
 
 function dateOrNull(raw: string): string | null {
@@ -56,13 +64,18 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   try {
     const intent = String(form.get("intent") || "save");
     if (intent === "confirm_suggestion" && !form.has("pav")) {
-      confirmTotalLossSuggestion({ claimId: id, actorId: staff.id });
+      confirmTotalLossSuggestion({ claimId: id, actorId: staff.id, agreedOn: optionalAgreedOn(form) });
       return back();
     }
     if (intent === "confirm_agreed" && !form.has("pav")) {
       const agreedOnly = optionalPoundsToPence(String(form.get("agreed") || ""));
       if (agreedOnly == null) throw new Error("Enter the agreed amount, or use the suggestion button.");
-      confirmTypedVehicleDamageAgreed({ claimId: id, actorId: staff.id, agreedPence: agreedOnly });
+      confirmTypedVehicleDamageAgreed({
+        claimId: id,
+        actorId: staff.id,
+        agreedPence: agreedOnly,
+        agreedOn: optionalAgreedOn(form),
+      });
       return back();
     }
     if (intent === "mark_sent") {
@@ -125,11 +138,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       return back(undefined, prepared.id);
     }
     if (intent === "confirm_suggestion") {
-      confirmTotalLossSuggestion({ claimId: id, actorId: staff.id });
+      confirmTotalLossSuggestion({ claimId: id, actorId: staff.id, agreedOn: optionalAgreedOn(form) });
     } else if (intent === "confirm_agreed") {
       const agreed = optionalPoundsToPence(String(form.get("agreed") || ""));
       if (agreed == null) throw new Error("Enter the agreed amount, or use the suggestion button.");
-      confirmTypedVehicleDamageAgreed({ claimId: id, actorId: staff.id, agreedPence: agreed });
+      confirmTypedVehicleDamageAgreed({ claimId: id, actorId: staff.id, agreedPence: agreed, agreedOn: optionalAgreedOn(form) });
     }
     return back();
   } catch (error) {

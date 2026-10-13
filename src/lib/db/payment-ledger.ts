@@ -116,7 +116,13 @@ function flagHireStorage(claimId: string, actorId: string, head: string, totalLo
   });
 }
 
-export function recordAgreedRepairInvoice(input: { claimId: string; actorId: string; agreedPence: number }) {
+export function recordAgreedRepairInvoice(input: {
+  claimId: string;
+  actorId: string;
+  agreedPence: number;
+  /** Calendar day yyyy-mm-dd. Omitted leaves any date already stored as it is. */
+  agreedOn?: string;
+}) {
   if (!claimRow(input.claimId)) throw new Error("File not found.");
   if (!Number.isInteger(input.agreedPence) || input.agreedPence <= 0) {
     throw new Error("Enter the agreed repair invoice amount. It is not taken from the claimed figure.");
@@ -139,12 +145,16 @@ export function recordAgreedRepairInvoice(input: { claimId: string; actorId: str
   if (!after || Number(after.received_pence) !== receivedBefore || (existing && Number(after.claimed_pence) !== claimedBefore)) {
     throw new Error("The agreed repair invoice could not be saved without changing claimed or received.");
   }
+  if (input.agreedOn) {
+    run(`UPDATE financial_lines SET agreed_on = ? WHERE id = ?`, [input.agreedOn, after.id]);
+  }
+  const dated = input.agreedOn ? ` Agreement was reached on ${input.agreedOn.split("-").reverse().join("/")}.` : "";
   recordClaimEvent({
     claimId: input.claimId,
     eventType: "repair_invoice_agreed_recorded",
     occurredAt: nowUtcIso(),
     actorId: input.actorId,
-    details: `Staff recorded ${formatGbp(input.agreedPence)} as the agreed repair invoice. Claimed and received were not changed. Storage was not included.`,
+    details: `Staff recorded ${formatGbp(input.agreedPence)} as the agreed repair invoice. Claimed and received were not changed. Storage was not included.${dated}`,
     source: "staff",
     channel: "file",
   });

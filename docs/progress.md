@@ -524,6 +524,18 @@ Blocked: per-file permissions, shared hosting, live DVLA. Incoming mail is not b
 - **Something else** is for a charge that is not on the list, such as dealing with a fallen tree. Ticking it shows a description and an amount. The amount starts blank. There is no default. When both are filled in, the amount is added into VAT and the total in the same way as the named extras. A description without an amount, or an amount without a description, is refused and is not saved as £0. Unticking takes it out of the total and keeps what was typed.
 - Tests: `tests/recovery-charges.test.ts`. Full suite before this stage: 323 passing, 0 failing. After: 327 passing, 0 failing.
 
+## Offers on the Vehicle damage screen (12 October 2026)
+
+- The Vehicle damage screen now keeps **Offers** apart from **Agreed**. Each offer has an amount, the date of the offer, and an optional note. A later offer is added to the list. The earlier one stays. The newest open offer is shown first; older offers, and any marked withdrawn or lapsed, stay visible underneath. Nothing is deleted.
+- Recording an offer does not set the agreed figure. **Use this figure** copies that offer into the agreed amount and date so they can be changed before they are saved. The agreed figure can also be typed on its own, with the date agreement was reached. Saving it again corrects it. The amount already received is not changed. What is still outstanding is still the agreed figure when there is one, otherwise the claimed figure, minus what has been received.
+- An existing file with an agreed figure and no dated offers still opens. The offer list says no offers are recorded. A single offered figure already stored without a date is mentioned, and is not turned into a history entry.
+- **Use this figure** fills the agreed amount and date, brings those boxes into view, and highlights them. They were already being filled; they sit further down the page, so a press at the top did not show that anything had changed.
+- **Reject** records that CAS declined the offer. An optional note is kept with it. The row stays, labelled Rejected, with the date. **Use this figure** remains available until Reject is pressed, and is not offered once the offer is Rejected, Withdrawn or Lapsed. Withdrawn means the insurer pulled it back. Lapsed means it expired.
+- Pressing **Record offer** once does not insert two rows. A second save of the same amount, date and note, while that offer is still open, is ignored for one minute. That is what produced the two identical £13,000 rows on TEST-0009: two separate saves, 37 seconds apart, with the page loading again between them. It was not the development server inserting twice from one press.
+- Hire, recovery and storage do not have this offer list yet.
+- Tests: `tests/vehicle-offers.test.ts`. Full suite before this stage: 327 passing, 0 failing. After this correction: 335 passing, 0 failing.
+
 ## Not yet claimed
 
-Stages 2–5 (finer permissions, live integrations, payment packs from CAS templates, litigation issue, backups/restore/deploy). Working dashboard is not production readiness.
+- The same offer list, kept separate from the agreed figure, is still to be added on Hire and on Recovery & Storage.
+- Stages 2–5 (finer permissions, live integrations, payment packs from CAS templates, litigation issue, backups/restore/deploy). Working dashboard is not production readiness.

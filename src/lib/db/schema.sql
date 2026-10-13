@@ -357,7 +357,8 @@ CREATE TABLE IF NOT EXISTS financial_lines (
   offered_pence INTEGER NOT NULL DEFAULT 0,
   agreed_pence INTEGER NOT NULL DEFAULT 0,
   received_pence INTEGER NOT NULL DEFAULT 0,
-  offer_status TEXT
+  offer_status TEXT,
+  agreed_on TEXT
 );
 
 CREATE TABLE IF NOT EXISTS correspondence (
@@ -669,6 +670,24 @@ CREATE TABLE IF NOT EXISTS payment_settlement_decisions (
 
 CREATE INDEX IF NOT EXISTS idx_payment_settlement_decisions
   ON payment_settlement_decisions(claim_id, head_of_loss, decided_at);
+
+CREATE TABLE IF NOT EXISTS insurer_offers (
+  id TEXT PRIMARY KEY,
+  claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+  head_of_loss TEXT NOT NULL,
+  amount_pence INTEGER NOT NULL,
+  offered_on TEXT NOT NULL,
+  note TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'open',
+  recorded_at TEXT NOT NULL,
+  recorded_by TEXT NOT NULL REFERENCES staff(id),
+  closed_at TEXT,
+  closed_by TEXT,
+  closed_note TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_insurer_offers_claim
+  ON insurer_offers(claim_id, head_of_loss, offered_on);
 
 CREATE INDEX IF NOT EXISTS idx_claims_handler ON claims(handler_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_staff ON sessions(staff_id);

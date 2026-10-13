@@ -36,6 +36,8 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["removed_reason", "TEXT"],
     ["v5c_source_file", "TEXT"],
   ],
+  financial_lines: [["agreed_on", "TEXT"]],
+  insurer_offers: [["closed_note", "TEXT"]],
   documents: [
     ["body_html", "TEXT"],
     ["template_key", "TEXT"],
@@ -584,6 +586,22 @@ export function migrate(db: DatabaseSync) {
     );
     CREATE INDEX IF NOT EXISTS idx_payment_settlement_decisions
       ON payment_settlement_decisions(claim_id, head_of_loss, decided_at);
+    CREATE TABLE IF NOT EXISTS insurer_offers (
+      id TEXT PRIMARY KEY,
+      claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+      head_of_loss TEXT NOT NULL,
+      amount_pence INTEGER NOT NULL,
+      offered_on TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      status TEXT NOT NULL DEFAULT 'open',
+      recorded_at TEXT NOT NULL,
+      recorded_by TEXT NOT NULL REFERENCES staff(id),
+      closed_at TEXT,
+      closed_by TEXT,
+      closed_note TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_insurer_offers_claim
+      ON insurer_offers(claim_id, head_of_loss, offered_on);
   `);
   db.prepare(
     `INSERT OR IGNORE INTO staff_permissions(staff_id, permission)

@@ -137,10 +137,11 @@ export function getVehicleDamageMoney(claimId: string): VehicleDamageMoney {
   };
 }
 
-function writeAgreed(claimId: string, agreedPence: number) {
+function writeAgreed(claimId: string, agreedPence: number, agreedOn?: string) {
   const existing = getVehicleDamageMoney(claimId);
   if (existing.id) {
     run(`UPDATE financial_lines SET agreed_pence = ? WHERE id = ?`, [agreedPence, existing.id]);
+    if (agreedOn) run(`UPDATE financial_lines SET agreed_on = ? WHERE id = ?`, [agreedOn, existing.id]);
     return;
   }
   run(
@@ -150,6 +151,7 @@ function writeAgreed(claimId: string, agreedPence: number) {
     ) VALUES (?, ?, 'vehicle_damage', 'Vehicle damage — total loss', 1, 'item', 0, 0, 0, 0, 0, 0, ?, 0, NULL)`,
     [`vd-${claimId}`, claimId, agreedPence],
   );
+  if (agreedOn) run(`UPDATE financial_lines SET agreed_on = ? WHERE id = ?`, [agreedOn, `vd-${claimId}`]);
 }
 
 function writeOffered(claimId: string, offeredPence: number) {
@@ -254,41 +256,48 @@ export function saveTotalLossReport(input: {
   return next;
 }
 
-export function confirmTotalLossSuggestion(input: { claimId: string; actorId: string }) {
+export function confirmTotalLossSuggestion(input: { claimId: string; actorId: string; agreedOn?: string }) {
   assertTotalLoss(input.claimId);
   const report = getTotalLossReport(input.claimId);
   const suggestion = totalLossSuggestion(report);
   if (suggestion.kind !== "suggestion") throw new Error("A suggestion is only available when both engineer's figures are entered and the insurer has no interest in the salvage.");
   if (suggestion.pence < 0) throw new Error("Salvage value is higher than the pre-accident value. The suggestion was not applied. Check the engineer's figures.");
   const before = getVehicleDamageMoney(input.claimId);
-  writeAgreed(input.claimId, suggestion.pence);
+  writeAgreed(input.claimId, suggestion.pence, input.agreedOn);
   const after = getVehicleDamageMoney(input.claimId);
   if (after.receivedPence !== before.receivedPence || after.claimedPence !== before.claimedPence) {
     throw new Error("Paid and claimed amounts must stay as they are.");
   }
+  const dated = input.agreedOn ? ` Agreement was reached on ${input.agreedOn.split("-").reverse().join("/")}.` : "";
   recordClaimEvent({
     claimId: input.claimId,
     eventType: "total_loss_agreed_confirmed",
     occurredAt: nowUtcIso(),
     actorId: input.actorId,
-    details: `Staff confirmed the suggested insurer payment of ${(suggestion.pence / 100).toFixed(2)} pounds as the agreed vehicle-damage amount. The amount paid was not changed.`,
+    details: `Staff confirmed the suggested insurer payment of ${(suggestion.pence / 100).toFixed(2)} pounds as the agreed vehicle-damage amount. The amount paid was not changed.${dated}`,
     source: "staff",
   });
 }
 
-export function confirmTypedVehicleDamageAgreed(input: { claimId: string; actorId: string; agreedPence: number }) {
+export function confirmTypedVehicleDamageAgreed(input: {
+  claimId: string;
+  actorId: string;
+  agreedPence: number;
+  agreedOn?: string;
+}) {
   assertTotalLoss(input.claimId);
   if (!Number.isInteger(input.agreedPence) || input.agreedPence < 0) throw new Error("Enter the agreed amount in pounds.");
   const before = getVehicleDamageMoney(input.claimId);
-  writeAgreed(input.claimId, input.agreedPence);
+  writeAgreed(input.claimId, input.agreedPence, input.agreedOn);
   const after = getVehicleDamageMoney(input.claimId);
   if (after.receivedPence !== before.receivedPence) throw new Error("The amount paid was not changed.");
+  const dated = input.agreedOn ? ` Agreement was reached on ${input.agreedOn.split("-").reverse().join("/")}.` : "";
   recordClaimEvent({
     claimId: input.claimId,
     eventType: "total_loss_agreed_confirmed",
     occurredAt: nowUtcIso(),
     actorId: input.actorId,
-    details: `Staff recorded ${(input.agreedPence / 100).toFixed(2)} pounds as the agreed vehicle-damage amount. This is separate from the engineer's figures. The amount paid was not changed.`,
+    details: `Staff recorded ${(input.agreedPence / 100).toFixed(2)} pounds as the agreed vehicle-damage amount. This is separate from the engineer's figures. The amount paid was not changed.${dated}`,
     source: "staff",
   });
 }
