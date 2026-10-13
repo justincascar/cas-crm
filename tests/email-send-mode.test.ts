@@ -97,6 +97,21 @@ describe("EMAIL_SEND_MODE", () => {
     assert.equal(LIVE_EMAIL_BANNER, "LIVE SENDING ENABLED — this will send a real email");
   });
 
+  it("keeps the sidebar footer email sentence on emailSendBanner()", () => {
+    const shell = fs.readFileSync(path.join(process.cwd(), "src/components/AppShell.tsx"), "utf8");
+    const layout = fs.readFileSync(path.join(process.cwd(), "src/app/layout.tsx"), "utf8");
+    const aside = shell.slice(shell.indexOf("<aside"), shell.indexOf("</aside>"));
+    assert.match(layout, /const emailBanner = emailSendBanner\(\)/);
+    assert.match(layout, /emailBannerText=\{emailBanner\.text\}/);
+    assert.match(aside, /Prototype — fictional test data/);
+    assert.match(aside, /Simulated lookups/);
+    assert.match(aside, /\{emailBannerText\}/);
+    assert.equal(aside.includes("No live sending"), false);
+    assert.equal(aside.includes(SIMULATED_EMAIL_BANNER), false);
+    assert.equal(aside.includes(LIVE_EMAIL_BANNER), false);
+    assert.equal(emailSendBanner().text, emailSendMode() === "live" ? LIVE_EMAIL_BANNER : SIMULATED_EMAIL_BANNER);
+  });
+
   it("does not call Graph in simulate mode when credentials are set", async () => {
     const saved = rememberEnv();
     const db = seeded();

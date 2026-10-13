@@ -67,7 +67,8 @@ export function AppShell({
         <div className="px-5 py-6 text-xs leading-relaxed text-white/45">
           Prototype — fictional test data.
           <br />
-          Simulated lookups. No live sending.
+          Simulated lookups.{" "}
+          <span className={emailMode === "live" ? "font-semibold text-white" : undefined}>{emailBannerText}</span>
         </div>
       </aside>
       <div className="min-w-0">
