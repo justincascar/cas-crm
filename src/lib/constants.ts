@@ -103,5 +103,5 @@ export const SETTLEMENT_PAYMENT_CHASE_DUE_LABEL = "Total-loss settlement payment
 export const SETTLEMENT_PAYMENT_REQUEST_LABEL = "Total-loss settlement payment request ready";
 export const FILE_REFERENCE_PREFIX_DEFAULT = "TEST-";
 
-/** Confirmed Microsoft 365 claims mailbox. Live send/receive is not connected. */
+/** Confirmed Microsoft 365 claims mailbox. A real send happens only when EMAIL_SEND_MODE is exactly live. */
 export const CAS_CLAIMS_MAILBOX = "claims@cascar.co.uk";

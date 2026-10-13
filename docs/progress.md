@@ -12,7 +12,7 @@ Implemented:
 
 - Persistent SQLite store with 12 fictional TEST claims spanning new enquiry, roadworthy reservation without charges, undriveable recovery/hire, fault courtesy, liability/engineer waits, repair auth, repairs in progress, ready for return, total-loss payment/salvage, qualifying off-hire countdown, day-80 unsigned renewal, litigation/offer review.
 - Dashboard counts that open filtered lists; search; claim create/edit; notes; tasks; fleet availability and overlap-blocked reservations.
-- File history with dated steps (initial TP insurer letter, engineer instructed, repairs started, hire pack, rebuttals, total-loss cessation, case closed, and related events). Letters and emails are generated from those dates using CAS's supplied templates in `docs/correspondence-templates/`. Missing fields are listed, not invented. Rebuttal wording includes supplied case-law citations and is flagged for solicitor sign-off before live use. Email compose is recorded on the file. When `CAS_M365_TENANT_ID`, `CAS_M365_CLIENT_ID` and `CAS_M365_CLIENT_SECRET` are all set, Send delivers from `claims@cascar.co.uk`. Until then, prepared emails open in the handler's own email client and the screen says Microsoft 365 is not yet connected. A person still clicks Send. Incoming mail is not read.
+- File history with dated steps (initial TP insurer letter, engineer instructed, repairs started, hire pack, rebuttals, total-loss cessation, case closed, and related events). Letters and emails are generated from those dates using CAS's supplied templates in `docs/correspondence-templates/`. Missing fields are listed, not invented. Rebuttal wording includes supplied case-law citations and is flagged for solicitor sign-off before live use. Email compose is recorded on the file. A real send from `claims@cascar.co.uk` happens only when `EMAIL_SEND_MODE` is exactly `live` and `CAS_M365_TENANT_ID`, `CAS_M365_CLIENT_ID` and `CAS_M365_CLIENT_SECRET` are all set. Credentials alone do not send. If the mode is missing or anything other than `live`, the send is simulated and nothing leaves the mailbox. A person still clicks Send. Incoming mail is not read.
 - Hire Pack data collection and generation from the CAS Hire Pack.doc structure (hirer, additional driver, hire vehicle vs own vehicle, charges, mitigation including financial means, handover, cancellation notice). Storage & Recovery is generated as a standalone document, not as a hire-agreement page. Signatures are not fabricated. The 89-day pack wording versus 88-day CRM alerts is flagged for Justin; neither figure has been changed.
 - Staff intake form covering client (owner/driver/owner/driver split), vehicle lookup, tax/MOT/insurance recording, damage, accident (maps link, police, witnesses, speeds, photographs taken at the scene with a simulated WhatsApp send-in), recovery charges, storage starting the same day as recovery, and up to three third parties with insurer autocomplete (generic telephone/email/address only) and TPI agent fields.
 - Claim file screens matching the current CRM viewing pane (client, hire, damage diagram, fleet reserve, recovery, storage, loss of use dates, financial summary). Values persist in SQLite. Opening a file or reserving a vehicle still does not start charges.
@@ -366,7 +366,7 @@ Blocked: per-file permissions, shared hosting, live DVLA. Incoming mail is not b
 
 - A person still reviews each email and clicks Send. Nothing sends itself. Reading replies is not part of this stage.
 - The mailbox is `claims@cascar.co.uk`. Credentials are environment variables only. They are not on the Settings screen, not in source code, and must not be committed.
-- Set all three, or leave all three unset. If any one is missing, every prepared email behaves as before: open it in your own email client, then mark it as sent. The screen says Microsoft 365 is not yet connected.
+- Set all three, or leave all three unset. Credentials alone do not send. From 13 October 2026 a real send also needs `EMAIL_SEND_MODE` set to the exact value `live`. If that flag is missing or anything else, the send is simulated.
   - `CAS_M365_TENANT_ID` — Directory (tenant) ID from the Microsoft 365 app registration
   - `CAS_M365_CLIENT_ID` — Application (client) ID
   - `CAS_M365_CLIENT_SECRET` — client secret value
@@ -554,6 +554,15 @@ Blocked: per-file permissions, shared hosting, live DVLA. Incoming mail is not b
 - Inspection date, the report sent to the insurer, the vehicle received for repair, parts ordered, and repair completed are deliberately not on this list. They are not reliable history lines yet, and they are queued for the next two stages.
 - The hidden loss-of-use dates are not used here.
 - Tests: `tests/justification-chronology.test.ts`. Full suite: 344 passing, 0 failing.
+
+## Email send mode (13 October 2026)
+
+- `claims@cascar.co.uk` can send through Microsoft 365. That connection is unchanged. It sends only when `EMAIL_SEND_MODE` is exactly `live`. If the variable is missing, empty, or any other value, the mode is simulate, even when `CAS_M365_TENANT_ID`, `CAS_M365_CLIENT_ID` and `CAS_M365_CLIENT_SECRET` are all set.
+- Every outbound email uses `sendOutboundEmail`. That includes the in-claim Send screen, prepared emails, attachment sends, chase mailbox delivery, document and payment-pack emails, and the engineer-instruction mailbox send. In simulate it records `simulated_sent` and does not call Microsoft Graph. In live it attempts the Graph send. If live is on and the credentials are missing or rejected, the screen shows the failure. It is not recorded as sent, and it does not quietly switch back to simulate.
+- The bar on screen reads that same flag. Simulate says “Simulated — no real email will be sent”. Live says “LIVE SENDING ENABLED — this will send a real email”.
+- Settings has “Check Microsoft 365 sign-in”. That asks Microsoft for an application token only. It does not send an email. Simulated day-to-day use does not need it.
+- This computer is set to simulate in the local `.env`, which is not committed. Tests mock the network. They do not send.
+- Tests: `tests/email-send-mode.test.ts`. Full suite: 352 passing, 0 failing.
 
 ## Not yet claimed
 

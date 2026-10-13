@@ -6,7 +6,8 @@ import { ValidatedForm } from "@/components/ValidatedForm";
 import { CLAIM_EVENT_TYPES } from "@/lib/domain/events";
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
 import { impecuniosityGate } from "@/lib/db/impecuniosity";
-import { mailboxIsConnected } from "@/lib/email/microsoft-graph";
+import { liveEmailSending } from "@/lib/email/send-mode";
+import { SIMULATED_EMAIL_BANNER } from "@/lib/email/send-mode-copy";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import Link from "next/link";
 
@@ -49,9 +50,9 @@ export function FileHistory({
         <p className="text-sm text-slate">
           Dated steps on this file — when the initial letter went, when the engineer was instructed, when repairs started, and so on.
           Letters and emails are built from these dates. Email is logged here.{" "}
-          {mailboxIsConnected()
+          {liveEmailSending()
             ? `Send uses ${CAS_CLAIMS_MAILBOX}. Nothing is sent until a person clicks Send. A failed send is not recorded as sent.`
-            : `Microsoft 365 not yet connected. Instruct Engineer is prepared in your own email client, then marked as sent. It is not sent from ${CAS_CLAIMS_MAILBOX}.`}
+            : `${SIMULATED_EMAIL_BANNER}. Instruct Engineer is prepared on this file. It is not sent from ${CAS_CLAIMS_MAILBOX}.`}
         </p>
       </div>
 

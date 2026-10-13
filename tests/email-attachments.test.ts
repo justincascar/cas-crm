@@ -21,9 +21,10 @@ import {
   M365_TENANT_ID_ENV,
   setMailboxFetchForTests,
 } from "../src/lib/email/microsoft-graph.ts";
+import { EMAIL_SEND_MODE_ENV } from "../src/lib/email/send-mode.ts";
 import { storeFileCopy } from "../src/lib/storage/files.ts";
 
-const ENV_KEYS = [M365_TENANT_ID_ENV, M365_CLIENT_ID_ENV, M365_CLIENT_SECRET_ENV, "CAS_FILES_DIR"] as const;
+const ENV_KEYS = [M365_TENANT_ID_ENV, M365_CLIENT_ID_ENV, M365_CLIENT_SECRET_ENV, EMAIL_SEND_MODE_ENV, "CAS_FILES_DIR"] as const;
 
 function seeded() {
   const schema = fs.readFileSync(path.join(process.cwd(), "src/lib/db/schema.sql"), "utf8");
@@ -50,6 +51,7 @@ function useTestCredentials() {
   process.env[M365_TENANT_ID_ENV] = "11111111-1111-1111-1111-111111111111";
   process.env[M365_CLIENT_ID_ENV] = "22222222-2222-2222-2222-222222222222";
   process.env[M365_CLIENT_SECRET_ENV] = "secret-test-value";
+  process.env[EMAIL_SEND_MODE_ENV] = "live";
 }
 
 describe("email attachments", () => {

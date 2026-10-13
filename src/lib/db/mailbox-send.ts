@@ -2,7 +2,8 @@ import { nowUtcIso } from "../dates";
 import { loadClaimEmailAttachments } from "./email-attachments";
 import { CHASE_KINDS, chaseDefinition } from "../domain/chase";
 import { isDocumentChaseKind } from "../domain/follow-up-chases";
-import { MailboxSendError, sendMailboxMessage } from "../email/microsoft-graph";
+import { sendOutboundEmail } from "../email/gateway";
+import { MailboxSendError } from "../email/microsoft-graph";
 import { CAS_CLAIMS_MAILBOX } from "../constants";
 import { mailboxSentDetails } from "../email/sent-wording";
 import { get, getDb } from "./connection";
@@ -61,30 +62,41 @@ export async function sendPreparedCorrespondence(input: {
     throw new Error("A send is already in progress for this email. Nothing further was sent.");
   }
 
-  try {
-    await sendMailboxMessage({
-      to,
-      subject,
-      body,
-      attachments: loaded.attachments.map((item) => ({ name: item.name, contentType: item.contentType, content: item.content })),
-    });
-  } catch (error) {
+  const result = await sendOutboundEmail({
+    to,
+    subject,
+    body,
+    attachments: loaded.attachments.map((item) => ({ name: item.name, contentType: item.contentType, content: item.content })),
+  });
+  if (!result.ok) {
     getDb()
       .prepare(`UPDATE correspondence SET sent_status = ? WHERE id = ? AND sent_status = ?`)
       .run(ENGINEER_INSTRUCTION_PREPARED, row.id, CORRESPONDENCE_SENDING);
-    const message = error instanceof Error ? error.message : "Microsoft 365 did not send this email. Nothing was sent.";
     recordClaimEvent({
       claimId: input.claimId,
       eventType: "email_send_failed",
       occurredAt: nowUtcIso(),
-      details: `Not sent to ${to}. ${message}`,
+      details: `Not sent to ${to}. ${result.error}`,
       actorId: input.actorId,
       channel: "email",
       correspondenceId: row.id,
       source: "staff",
     });
-    if (error instanceof MailboxSendError) throw error;
-    throw new MailboxSendError("unreachable", message);
+    throw new MailboxSendError("rejected", result.error);
+  }
+  if (result.status === "simulated_sent") {
+    getDb().prepare(`UPDATE correspondence SET sent_status = ? WHERE id = ?`).run("simulated_sent", row.id);
+    recordClaimEvent({
+      claimId: input.claimId,
+      eventType: "outgoing_email",
+      occurredAt: nowUtcIso(),
+      details: `${subject} — ${result.warning}`,
+      actorId: input.actorId,
+      channel: "email",
+      correspondenceId: row.id,
+      source: "staff",
+    });
+    return { simulated: true as const };
   }
 
   try {
@@ -108,6 +120,7 @@ export async function sendPreparedCorrespondence(input: {
     const detail = error instanceof Error ? error.message : "The file history could not be finished.";
     throw new Error(`The email was sent from ${CAS_CLAIMS_MAILBOX}. Do not send it again. ${detail}`);
   }
+  return { simulated: false as const };
 }
 
 function finishSend(row: PreparedRow, actorId: string) {

@@ -18,6 +18,7 @@ import {
   actionSaveChaseOverride,
 } from "@/app/chase-actions";
 import { CAS_CLAIMS_MAILBOX, PAYMENT_TERM_NOT_SET_LABEL } from "@/lib/constants";
+import { SIMULATED_EMAIL_BANNER } from "@/lib/email/send-mode-copy";
 import { formatGbp } from "@/lib/money";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import { buildMailtoHref } from "@/lib/email/mailto";
@@ -148,7 +149,7 @@ export function ChasePanel({
     setMailto(prepared.mailto);
     setPreparedId(String(prepared.correspondenceId || ""));
     setToAddress(String(prepared.to || chase.contactEmail));
-    if (!mailboxConnected) window.location.href = prepared.mailto;
+    router.refresh();
   }
 
   async function markSent() {
@@ -303,8 +304,13 @@ export function ChasePanel({
                   Open pre-filled email
                 </a>
               ) : null}
-              {mailboxConnected && preparedId && !chase.payment ? (
-                <SendPreparedEmailForm claimId={claimId} correspondenceId={preparedId} returnTo={sendBack} />
+              {preparedId && !chase.payment ? (
+                <SendPreparedEmailForm
+                  claimId={claimId}
+                  correspondenceId={preparedId}
+                  returnTo={sendBack}
+                  liveSending={mailboxConnected}
+                />
               ) : null}
             </>
           ) : null}
@@ -344,15 +350,15 @@ export function ChasePanel({
           click Send.
         </p>
       ) : mailto && chase.due ? (
-        <p className="mt-3 rounded-md border border-ok/40 bg-white px-4 py-3 text-sm">
-          Microsoft 365 not yet connected. A pre-filled email to <strong>{toAddress}</strong> is ready in your email client. After you click send
-          there, mark it as sent on this file. The CRM has not sent it from {CAS_CLAIMS_MAILBOX}.
+        <p className="mt-3 rounded-md border-4 border-navy bg-[#d9e4ef] px-4 py-3 text-sm font-bold text-navy-deep">
+          {SIMULATED_EMAIL_BANNER}. A chase email to <strong>{toAddress}</strong> can be recorded on this file. It is not sent from{" "}
+          {CAS_CLAIMS_MAILBOX}.
         </p>
       ) : prepared && preparedId && chase.due ? (
         <p className="mt-3 rounded-md border border-warn/40 bg-white px-4 py-3 text-sm">
           {mailboxConnected
             ? `A chase email was prepared ${formatUkDateTime(prepared.created_at)} for ${prepared.to_address}. It has not been sent.`
-            : `Microsoft 365 not yet connected. A chase email was prepared ${formatUkDateTime(prepared.created_at)} for ${prepared.to_address}. Open it from your client if you still need to send it, then mark it as sent.`}
+            : `${SIMULATED_EMAIL_BANNER}. A chase email was prepared ${formatUkDateTime(prepared.created_at)} for ${prepared.to_address}.`}
         </p>
       ) : null}
 
@@ -387,7 +393,7 @@ export function ChasePanel({
               ))}
             </ul>
           ) : null}
-          {mailboxConnected ? (
+          {preparedId ? (
             <form method="post" action={`/claims/${claimId}/send-email`} className="mt-3">
               <input type="hidden" name="correspondenceId" value={preparedId} />
               <input type="hidden" name="returnTo" value={sendBack} />
@@ -395,7 +401,7 @@ export function ChasePanel({
                 <input key={id} type="hidden" name="attachmentId" value={id} />
               ))}
               <button className="min-h-11 rounded-md bg-teal px-3 py-2 text-sm font-semibold text-white" type="submit">
-                Send from {CAS_CLAIMS_MAILBOX}
+                {mailboxConnected ? `Send from ${CAS_CLAIMS_MAILBOX}` : "Record simulated send"}
               </button>
             </form>
           ) : null}

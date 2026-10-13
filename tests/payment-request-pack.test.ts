@@ -22,6 +22,7 @@ import {
   M365_TENANT_ID_ENV,
   setMailboxFetchForTests,
 } from "../src/lib/email/microsoft-graph.ts";
+import { EMAIL_SEND_MODE_ENV } from "../src/lib/email/send-mode.ts";
 import {
   CAS_INSURANCE_DOCUMENT_TYPE,
   PAYMENT_REQUEST_EMAIL_TEMPLATE_KEY,
@@ -30,7 +31,7 @@ import {
   type PackDocument,
 } from "../src/lib/email/payment-request-pack.ts";
 
-const ENV_KEYS = [M365_TENANT_ID_ENV, M365_CLIENT_ID_ENV, M365_CLIENT_SECRET_ENV, "CAS_FILES_DIR"] as const;
+const ENV_KEYS = [M365_TENANT_ID_ENV, M365_CLIENT_ID_ENV, M365_CLIENT_SECRET_ENV, EMAIL_SEND_MODE_ENV, "CAS_FILES_DIR"] as const;
 const ALL_MISSING = [
   PAYMENT_REQUEST_PACK_MISSING.letter,
   PAYMENT_REQUEST_PACK_MISSING.signedHireAgreement,
@@ -66,6 +67,7 @@ function useTestCredentials() {
   process.env[M365_TENANT_ID_ENV] = "11111111-1111-1111-1111-111111111111";
   process.env[M365_CLIENT_ID_ENV] = "22222222-2222-2222-2222-222222222222";
   process.env[M365_CLIENT_SECRET_ENV] = "secret-test-value";
+  process.env[EMAIL_SEND_MODE_ENV] = "live";
 }
 
 function fileDoc(id: string, documentType: string, extra: Partial<PackDocument> = {}): PackDocument {

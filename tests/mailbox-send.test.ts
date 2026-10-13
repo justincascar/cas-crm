@@ -16,8 +16,9 @@ import {
   mailboxIsConnected,
   setMailboxFetchForTests,
 } from "../src/lib/email/microsoft-graph.ts";
+import { EMAIL_SEND_MODE_ENV } from "../src/lib/email/send-mode.ts";
 
-const ENV_KEYS = [M365_TENANT_ID_ENV, M365_CLIENT_ID_ENV, M365_CLIENT_SECRET_ENV] as const;
+const ENV_KEYS = [M365_TENANT_ID_ENV, M365_CLIENT_ID_ENV, M365_CLIENT_SECRET_ENV, EMAIL_SEND_MODE_ENV] as const;
 const SECRET = "secret-test-value";
 
 function seeded() {
@@ -46,6 +47,7 @@ function useTestCredentials() {
   process.env[M365_TENANT_ID_ENV] = "11111111-1111-1111-1111-111111111111";
   process.env[M365_CLIENT_ID_ENV] = "22222222-2222-2222-2222-222222222222";
   process.env[M365_CLIENT_SECRET_ENV] = SECRET;
+  process.env[EMAIL_SEND_MODE_ENV] = "live";
 }
 
 function clearCredentials() {
@@ -59,23 +61,31 @@ function requestUrl(input: RequestInfo | URL): string {
 }
 
 describe("Microsoft 365 sending", () => {
-  it("keeps today's mailto path when credentials are not configured", async () => {
+  it("records a simulated send when the mode is not live, even with no credentials", async () => {
     const saved = rememberEnv();
     clearCredentials();
+    process.env[EMAIL_SEND_MODE_ENV] = "simulate";
     const db = seeded();
+    let calls = 0;
+    setMailboxFetchForTests(async () => {
+      calls += 1;
+      return new Response(null, { status: 202 });
+    });
     try {
       assert.equal(mailboxIsConnected(), false);
       await withDatabaseAsync(db, async () => {
         const prepared = instructEngineer({ claimId: "c3", engineerId: SEEDED_ENGINEER.id, actorId: "staff-justin" });
-        await assert.rejects(
-          () => sendPreparedCorrespondence({ claimId: "c3", correspondenceId: prepared.correspondenceId, actorId: "staff-justin" }),
-          /not connected/i,
-        );
+        const recordedPrepared = await sendPreparedCorrespondence({
+          claimId: "c3",
+          correspondenceId: prepared.correspondenceId,
+          actorId: "staff-justin",
+        });
+        assert.equal(recordedPrepared.simulated, true);
         const row = db.prepare(`SELECT sent_status, body FROM correspondence WHERE id = ?`).get(prepared.correspondenceId) as {
           sent_status: string;
           body: string;
         };
-        assert.equal(row.sent_status, ENGINEER_INSTRUCTION_PREPARED);
+        assert.equal(row.sent_status, "simulated_sent");
         assert.equal(row.body, prepared.body);
         const recorded = await sendClaimEmail({
           claimId: "c3",
@@ -89,6 +99,7 @@ describe("Microsoft 365 sending", () => {
           assert.equal(recorded.status, "simulated_sent");
           assert.match(recorded.warning, /Not sent to a real mailbox/);
         }
+        assert.equal(calls, 0);
       });
     } finally {
       db.close();

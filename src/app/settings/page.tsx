@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/ClaimTable";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import Link from "next/link";
-import { actionSaveAgreementLimits, actionSaveChaseIntervals, actionSaveDefaultVehicleLocation, actionSaveGtaMarkup, actionSavePaymentTerm } from "@/app/settings-actions";
+import { actionSaveAgreementLimits, actionSaveChaseIntervals, actionSaveDefaultVehicleLocation, actionSaveGtaMarkup, actionSavePaymentTerm, actionTestMailboxConnection } from "@/app/settings-actions";
 import { isAdministrator } from "@/lib/auth/roles";
 import { requireStaff } from "@/lib/auth/session";
 import { dbLocation, getSettings, listStaff } from "@/lib/db/queries";
@@ -10,8 +10,10 @@ import { getAgreementApproachingDay, getAgreementMaxDays, getChaseIntervalDays, 
 import { getGtaMarkupPercent } from "@/lib/db/hire-agreement";
 import { getInsurerPaymentDetails } from "@/lib/db/payment-details";
 import { GTA_RATE_PERIOD_LABEL } from "@/lib/documents/gta";
+import { EmailSendModeBanner } from "@/components/EmailSendModeBanner";
 import { CAS_CLAIMS_MAILBOX, INDICATIVE_DEFAULTS } from "@/lib/constants";
 import { mailboxIsConnected } from "@/lib/email/microsoft-graph";
+import { emailSendBanner } from "@/lib/email/send-mode";
 import { formatGbp } from "@/lib/money";
 import { formatUkDateTime } from "@/lib/dates";
 import { currentCasInsuranceDocument } from "@/lib/db/company-insurance";
@@ -20,10 +22,10 @@ import { PAYMENT_REQUEST_PACK_MISSING } from "@/lib/email/payment-request-pack";
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; mailboxCheck?: string; mailboxCheckError?: string }>;
 }) {
   const staffUser = await requireStaff();
-  const { error, saved } = await searchParams;
+  const { error, saved, mailboxCheck, mailboxCheckError } = await searchParams;
   const settings = getSettings();
   const staff = listStaff();
   const admin = isAdministrator(staffUser.role);
@@ -45,6 +47,7 @@ export default async function SettingsPage({
         title="Settings"
         subtitle="Prototype configuration. Administrator and staff can open every file. Driver and bodyshop / mechanic can open only the jobs assigned to them today."
       />
+      <EmailSendModeBanner />
       {error ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
       ) : null}
@@ -54,6 +57,12 @@ export default async function SettingsPage({
         </p>
       ) : saved ? (
         <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm text-ok">Saved.</p>
+      ) : null}
+      {mailboxCheck ? (
+        <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm text-ok">{mailboxCheck}</p>
+      ) : null}
+      {mailboxCheckError ? (
+        <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{mailboxCheckError}</p>
       ) : null}
       <section className="rounded-xl border border-warn/40 bg-[#fff6e8] p-5">
         <h2 className="font-serif text-xl text-navy-deep">Hire agreement length — decision needed</h2>
@@ -215,15 +224,27 @@ export default async function SettingsPage({
           <Row label="Renewal approaching (amber) day" value={settings.agreement_renewal_approaching_day} />
           <Row label="Renewal due (red) day" value={settings.agreement_renewal_alert_day} />
           <Row
+            label="Email sending"
+            value={emailSendBanner().text}
+          />
+          <Row
             label="Claims mailbox"
             value={
               mailboxIsConnected()
-                ? `${CAS_CLAIMS_MAILBOX} (Microsoft 365 credentials are set. A person still clicks Send. A failed send is shown and is not treated as sent.)`
-                : `${CAS_CLAIMS_MAILBOX} (Microsoft 365 not yet connected)`
+                ? `${CAS_CLAIMS_MAILBOX}. Microsoft 365 credentials are saved on this computer. They do not send email unless the mode above is live.`
+                : `${CAS_CLAIMS_MAILBOX}. Microsoft 365 credentials are not set.`
             }
           />
           <Row label="Database file" value={dbLocation()} />
         </dl>
+        <form action={actionTestMailboxConnection} className="mt-4">
+          <button type="submit" className="rounded-md border border-navy bg-white px-4 py-2 text-sm font-semibold text-navy">
+            Check Microsoft 365 sign-in
+          </button>
+          <p className="mt-2 text-sm text-slate">
+            This asks Microsoft to accept the saved credentials. It does not send an email. Ordinary simulated use does not need it.
+          </p>
+        </form>
       </section>
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">GTA daily rate</h2>

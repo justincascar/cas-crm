@@ -27,7 +27,8 @@ import { StorageDateReview } from "@/components/claims/StorageDateReview";
 import { StorageEndDateReview } from "@/components/claims/StorageEndDateReview";
 import { OutstandingSummary } from "@/components/claims/OutstandingSummary";
 import { MailboxSendNotice } from "@/components/claims/SendPreparedEmailForm";
-import { mailboxIsConnected } from "@/lib/email/microsoft-graph";
+import { EmailSendModeBanner } from "@/components/EmailSendModeBanner";
+import { liveEmailSending } from "@/lib/email/send-mode";
 import { outstandingForClaim } from "@/lib/db/outstanding";
 import { listOpenPaymentReviews, listPayableHeads, listPaymentsAfterSettlement } from "@/lib/db/payment-review";
 import { PaymentReviewPanel } from "@/components/claims/PaymentReviewPanel";
@@ -55,11 +56,12 @@ export default async function ClaimDetailPage({
     tlMail?: string;
     mailboxError?: string;
     mailboxSent?: string;
+    mailboxSimulated?: string;
     paymentDecision?: string;
   }>;
 }) {
   const { id } = await params;
-  const { error, tlError, tlMail, mailboxError, mailboxSent, paymentDecision } = await searchParams;
+  const { error, tlError, tlMail, mailboxError, mailboxSent, mailboxSimulated, paymentDecision } = await searchParams;
   await requireStaff();
   const data = getClaim(id);
   if (!data) notFound();
@@ -113,7 +115,8 @@ export default async function ClaimDetailPage({
       />
 
       {error ? <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p> : null}
-      <MailboxSendNotice sent={mailboxSent} error={mailboxError} />
+      <EmailSendModeBanner />
+      <MailboxSendNotice sent={mailboxSent} simulated={mailboxSimulated} error={mailboxError} />
 
       <nav aria-label="Heads of loss" className="flex flex-wrap gap-2">
         <Link href={`/claims/${claimId}/heads/recovery-storage`} className="rounded-md border border-navy px-4 py-2 text-sm font-semibold text-navy">
@@ -146,7 +149,7 @@ export default async function ClaimDetailPage({
           chase={chase}
           prepared={preparedByKind[chase.kind] || null}
           agreements={chase.kind === "hire_agreement_renewal" ? hireAgreements : undefined}
-          mailboxConnected={mailboxIsConnected()}
+          mailboxConnected={liveEmailSending()}
           returnTo={`/claims/${claim.id}`}
           awaitingDecisionHref={
             chase.payment && reviews.some((item) => item.head === chase.payment?.head)

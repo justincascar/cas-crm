@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/AppShell";
 import { isOfficeRole, pathAllowedForRole } from "@/lib/auth/roles";
 import { getRequestStaff } from "@/lib/auth/session";
+import { emailSendBanner } from "@/lib/email/send-mode";
 import "./globals.css";
 
 const sans = IBM_Plex_Sans({
@@ -44,10 +45,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     redirect("/jobs");
   }
 
+  const emailBanner = emailSendBanner();
+
   return (
     <html lang="en-GB">
       <body className={`${sans.variable} ${serif.variable} ${mono.variable} antialiased`}>
-        <AppShell staffName={staff?.name ?? ""} staffUsername={staff?.username ?? ""} office={!staff || isOfficeRole(staff.role)}>
+        <AppShell
+          staffName={staff?.name ?? ""}
+          staffUsername={staff?.username ?? ""}
+          office={!staff || isOfficeRole(staff.role)}
+          emailMode={emailBanner.mode}
+          emailBannerText={emailBanner.text}
+        >
           {children}
         </AppShell>
       </body>

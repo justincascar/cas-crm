@@ -5,6 +5,7 @@ import {
   GRAPH_UPLOAD_SESSION_LIMIT_BYTES,
   attachmentsExceedMailboxLimit,
 } from "./attachments";
+import { emailSendMode } from "./send-mode";
 
 /** Environment names Justin supplies after the Microsoft 365 app registration exists. */
 export const M365_TENANT_ID_ENV = "CAS_M365_TENANT_ID";
@@ -77,6 +78,12 @@ export async function sendMailboxMessage(message: {
   body: string;
   attachments?: MailboxAttachment[];
 }): Promise<void> {
+  if (emailSendMode() !== "live") {
+    throw new MailboxSendError(
+      "not_connected",
+      "Email sending is simulated. Nothing was sent from claims@cascar.co.uk.",
+    );
+  }
   const credentials = mailboxCredentials();
   if (!credentials) {
     throw new MailboxSendError(
@@ -291,6 +298,30 @@ async function discardDraft(token: string, draftId: string, original: unknown): 
   }
   const first = original instanceof Error ? original.message : REJECTED_ERROR;
   throw new MailboxSendError("rejected", `${first} ${DRAFT_LEFT_BEHIND}`);
+}
+
+/**
+ * Asks Microsoft for an application token only. It never calls sendMail, creates a draft, or sends.
+ * Ordinary simulated use does not need this check.
+ */
+export async function testMailboxConnection(): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
+  const credentials = mailboxCredentials();
+  if (!credentials) {
+    return {
+      ok: false,
+      error: "Microsoft 365 credentials are not set. Nothing was sent. This check does not send an email.",
+    };
+  }
+  try {
+    await accessToken(credentials);
+    return {
+      ok: true,
+      message: `Microsoft 365 accepted the credentials for ${CAS_CLAIMS_MAILBOX}. No email was sent.`,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Microsoft 365 could not be reached. Nothing was sent.";
+    return { ok: false, error: message.includes("No email was sent") ? message : `${message} No email was sent.` };
+  }
 }
 
 async function accessToken(credentials: { tenantId: string; clientId: string; clientSecret: string }): Promise<string> {

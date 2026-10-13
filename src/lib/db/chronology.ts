@@ -1,6 +1,6 @@
 import { emailGateway } from "../email/gateway";
 import { loadClaimEmailAttachments } from "./email-attachments";
-import { mailboxIsConnected } from "../email/microsoft-graph";
+import { emailSendMode } from "../email/send-mode";
 import { mailboxSentDetails } from "../email/sent-wording";
 import { phoneGateway } from "../phone/gateway";
 import { whatsappGateway } from "../whatsapp/gateway";
@@ -467,7 +467,7 @@ async function deliverClaimEmail(input: {
   const when = occurredFromForm(input.occurredAt);
   const loaded = loadClaimEmailAttachments(input.claimId, input.attachmentIds || []);
   if (!loaded.ok) return { ok: false as const, status: "failed" as const, error: loaded.error };
-  const live = mailboxIsConnected();
+  const live = emailSendMode() === "live";
   const result = await emailGateway.send({
     to: input.to,
     subject: input.subject,

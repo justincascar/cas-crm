@@ -5,9 +5,11 @@ import { formatUkDateTime, nowUtcIso } from "@/lib/dates";
 import { requireStaff } from "@/lib/auth/session";
 import { documentChaseTemplateKey, getPreparedFollowUpEmail, listFollowUpChases } from "@/lib/db/follow-up-chases";
 import { buildMailtoHref } from "@/lib/email/mailto";
-import { mailboxIsConnected } from "@/lib/email/microsoft-graph";
+import { EmailSendModeBanner } from "@/components/EmailSendModeBanner";
 import { MailboxSendNotice, SendPreparedEmailForm } from "@/components/claims/SendPreparedEmailForm";
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
+import { liveEmailSending } from "@/lib/email/send-mode";
+import { SIMULATED_EMAIL_BANNER } from "@/lib/email/send-mode-copy";
 import { DOCUMENT_CHASES } from "@/lib/domain/follow-up-chases";
 import {
   claimDocumentGaps,
@@ -30,7 +32,7 @@ export default async function ClaimDocumentsPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; mailboxError?: string; mailboxSent?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; mailboxError?: string; mailboxSent?: string; mailboxSimulated?: string }>;
 }) {
   await requireStaff();
   const { id } = await params;
@@ -41,7 +43,7 @@ export default async function ClaimDocumentsPage({
   const gaps = claimDocumentGaps(id);
   const vehicles = claimDocumentVehicleChoices(id);
   const paperChases = listFollowUpChases(nowUtcIso(), id).filter((row) => DOCUMENT_CHASES.some((paper) => paper.kind === row.kind));
-  const connected = mailboxIsConnected();
+  const liveSending = liveEmailSending();
 
   return (
     <div className="space-y-6">
@@ -52,7 +54,8 @@ export default async function ClaimDocumentsPage({
       {query.error ? (
         <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.error}</p>
       ) : null}
-      <MailboxSendNotice sent={query.mailboxSent} error={query.mailboxError} />
+      <EmailSendModeBanner />
+      <MailboxSendNotice sent={query.mailboxSent} simulated={query.mailboxSimulated} error={query.mailboxError} />
       {query.saved ? (
         <p className="rounded-md border border-teal/40 bg-[#eef8f6] px-4 py-3 text-sm">
           {query.saved === "chase" ? "Chase email updated. Nothing was sent automatically." : "Document stored on this file."}
@@ -65,7 +68,7 @@ export default async function ClaimDocumentsPage({
           Driving licence, insurance certificate and the client&apos;s logbook (V5C) are chased every 24 hours after the client welcome is marked as
           sent. Bank statements start when the hire agreement is generated, then the same 24 hours. Uploading the paper clears the chase straight
           away. A reminder is prepared for you to send. Nothing is sent automatically.
-          {connected ? ` Send uses ${CAS_CLAIMS_MAILBOX}.` : " Microsoft 365 not yet connected."}
+          {liveSending ? ` Send uses ${CAS_CLAIMS_MAILBOX}.` : ` ${SIMULATED_EMAIL_BANNER}.`}
         </p>
         {DOCUMENT_CHASES.some((paper) => paper.trigger === "welcome" && !paperChases.some((chase) => chase.kind === paper.kind)) ? (
           <p className="mt-3 text-sm">Driving licence, insurance certificate and logbook have not started. The client welcome has not been marked as sent.</p>
@@ -94,25 +97,31 @@ export default async function ClaimDocumentsPage({
                       </button>
                     </form>
                   ) : null}
-                  {mailto && prepared && connected ? (
+                  {mailto && prepared ? (
                     <div className="mt-2">
-                      <SendPreparedEmailForm claimId={id} correspondenceId={prepared.id} returnTo={`/claims/${id}/documents`} />
-                    </div>
-                  ) : mailto && prepared ? (
-                    <div className="mt-2">
-                      <p className="text-sm">Microsoft 365 not yet connected.</p>
-                      <a className="text-teal-dark underline" href={mailto}>
-                        Open the prepared email
-                      </a>
-                      <form method="post" action={`/claims/${id}/follow-up`} className="mt-2">
-                        <input type="hidden" name="intent" value="mark_sent" />
-                        <input type="hidden" name="kind" value={chase.kind} />
-                        <input type="hidden" name="correspondenceId" value={prepared.id} />
-                        <input type="hidden" name="returnTo" value={`/claims/${id}/documents`} />
-                        <button className="min-h-11 rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white" type="submit">
-                          Mark chase as sent
-                        </button>
-                      </form>
+                      {liveSending ? null : <p className="text-sm font-bold">{SIMULATED_EMAIL_BANNER}.</p>}
+                      <SendPreparedEmailForm
+                        claimId={id}
+                        correspondenceId={prepared.id}
+                        returnTo={`/claims/${id}/documents`}
+                        liveSending={liveSending}
+                      />
+                      {liveSending ? null : (
+                        <>
+                          <a className="mt-2 inline-block text-teal-dark underline" href={mailto}>
+                            Open the prepared email
+                          </a>
+                          <form method="post" action={`/claims/${id}/follow-up`} className="mt-2">
+                            <input type="hidden" name="intent" value="mark_sent" />
+                            <input type="hidden" name="kind" value={chase.kind} />
+                            <input type="hidden" name="correspondenceId" value={prepared.id} />
+                            <input type="hidden" name="returnTo" value={`/claims/${id}/documents`} />
+                            <button className="min-h-11 rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white" type="submit">
+                              Mark chase as sent
+                            </button>
+                          </form>
+                        </>
+                      )}
                     </div>
                   ) : null}
                 </li>

@@ -17,6 +17,7 @@ import { ValidatedForm } from "@/components/ValidatedForm";
 import { emailTemplatesForRole, templateKeyForRole } from "@/lib/documents/email-templates";
 import { PAYMENT_REQUEST_EMAIL_TEMPLATE_KEY, isPaymentRequestEmailTemplate, paymentRequestPack } from "@/lib/email/payment-request-pack";
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
+import { SIMULATED_EMAIL_BANNER } from "@/lib/email/send-mode-copy";
 import { formatUkDateTime } from "@/lib/dates";
 import {
   ATTACHMENT_TOO_LARGE_MESSAGE,
@@ -174,7 +175,7 @@ export function CommsDesk({
       <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">
         {mailboxConnected
           ? `Email sends from ${CAS_CLAIMS_MAILBOX} when you click Send. A failure is shown here and is not recorded as sent. WhatsApp and calls are still recorded on this file and do not leave this computer. Nothing sends itself.`
-          : `Microsoft 365 not yet connected. Email, WhatsApp and calls are recorded on this file. They do not leave this computer until CAS's mailbox, WhatsApp Business account and telephone system are connected. A click is not proof of delivery. Instruct Engineer prepares a letter and opens it in your own email client — it is not auto-sent from ${CAS_CLAIMS_MAILBOX}.`}
+          : `${SIMULATED_EMAIL_BANNER}. Email, WhatsApp and calls are recorded on this file. A click is not proof of delivery. Nothing is sent from ${CAS_CLAIMS_MAILBOX}.`}
       </p>
 
       <InstructEngineerPanel
@@ -241,7 +242,7 @@ export function CommsDesk({
         <p className="text-sm text-slate md:col-span-2">
           {mailboxConnected
             ? `Fill the message, then click Send. It goes from ${CAS_CLAIMS_MAILBOX}. It is not sent until then. Hire pack cover letters are sent from here in the same way.`
-            : "Microsoft 365 not yet connected. Pick a CAS email template to fill from this file, then record the simulated send. Nothing leaves this computer."}
+            : `${SIMULATED_EMAIL_BANNER}. Pick a CAS email template to fill from this file, then record the simulated send.`}
         </p>
         <input type="hidden" name="claimId" value={claimId} />
         <input type="hidden" name="actorId" value={handlerId} />

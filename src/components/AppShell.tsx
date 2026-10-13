@@ -23,11 +23,15 @@ export function AppShell({
   staffName,
   staffUsername,
   office = true,
+  emailMode,
+  emailBannerText,
 }: {
   children: React.ReactNode;
   staffName: string;
   staffUsername: string;
   office?: boolean;
+  emailMode: "simulate" | "live";
+  emailBannerText: string;
 }) {
   const path = usePathname();
   if (path === "/login") {
@@ -86,10 +90,20 @@ export function AppShell({
             })}
           </nav>
         </details>
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-copper/30 bg-[#efe4d2] px-4 py-2 text-sm text-ink print:hidden">
+        <div
+          className={
+            emailMode === "live"
+              ? "flex flex-wrap items-center justify-between gap-2 border-b-4 border-[#3d0a0a] bg-overdue px-4 py-3 text-base font-bold text-white print:hidden"
+              : "flex flex-wrap items-center justify-between gap-2 border-b-4 border-navy bg-[#d9e4ef] px-4 py-3 text-base font-bold text-navy-deep print:hidden"
+          }
+        >
           <p>
-            <strong>Prototype — fictional test data.</strong> Lookups, email and WhatsApp are simulated.
-            Do not send real correspondence from this system.
+            {emailBannerText}
+            {emailMode === "simulate" ? (
+              <span className="mt-1 block text-sm font-semibold">Prototype — fictional test data. WhatsApp and telephone are not connected.</span>
+            ) : (
+              <span className="mt-1 block text-sm font-semibold">A click on Send will leave claims@cascar.co.uk.</span>
+            )}
           </p>
           <div className="flex flex-wrap items-center gap-3">
             <span>

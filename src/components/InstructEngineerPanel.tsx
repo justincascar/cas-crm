@@ -10,6 +10,7 @@ import {
   actionSetClaimEngineer,
 } from "@/app/actions";
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
+import { SIMULATED_EMAIL_BANNER } from "@/lib/email/send-mode-copy";
 import { formatUkDateTime } from "@/lib/dates";
 import type { Engineer } from "@/lib/db/engineers";
 import { buildMailtoHref } from "@/lib/email/mailto";
@@ -101,7 +102,6 @@ export function InstructEngineerPanel({
     setPreparedId(result.correspondenceId);
     setToAddress(result.to);
     setPreview({ html: result.letter.html, missing: result.letter.missing, subject: result.subject });
-    if (!mailboxConnected) window.location.href = result.mailto;
     router.refresh();
   }
 
@@ -137,8 +137,7 @@ export function InstructEngineerPanel({
           </>
         ) : (
           <>
-            Microsoft 365 not yet connected. It opens a ready-to-send email in your own email client. It is{" "}
-            <strong>prepared, not auto-sent</strong>.
+            {SIMULATED_EMAIL_BANNER}. Instruct Engineer prepares the letter on this file. It is not sent from {CAS_CLAIMS_MAILBOX}.
           </>
         )}
       </p>
@@ -220,8 +219,8 @@ export function InstructEngineerPanel({
             Open pre-filled email
           </a>
         ) : null}
-        {mailboxConnected && preparedId ? (
-          <SendPreparedEmailForm claimId={claimId} correspondenceId={preparedId} returnTo={sendBack} />
+        {preparedId ? (
+          <SendPreparedEmailForm claimId={claimId} correspondenceId={preparedId} returnTo={sendBack} liveSending={mailboxConnected} />
         ) : null}
       </div>
 
@@ -231,13 +230,12 @@ export function InstructEngineerPanel({
         </p>
       ) : mailto ? (
         <p className="mt-3 rounded-md border border-ok/40 bg-[#eef6ef] px-4 py-3 text-sm">
-          Microsoft 365 not yet connected. A pre-filled email to <strong>{toAddress}</strong> is ready in your email client. After you click send
-          there, mark it as sent on this file. The CRM has not sent it from {CAS_CLAIMS_MAILBOX}.
+          {SIMULATED_EMAIL_BANNER}. A pre-filled email to <strong>{toAddress}</strong> can be opened in your own email client. The CRM has not sent it
+          from {CAS_CLAIMS_MAILBOX}.
         </p>
       ) : prepared && preparedId ? (
         <p className="mt-3 rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">
-          Microsoft 365 not yet connected. An instruction was prepared {formatUkDateTime(prepared.created_at)} for {prepared.to_address}. Open the
-          email from your client if you still need to send it, then mark it as sent.
+          {SIMULATED_EMAIL_BANNER}. An instruction was prepared {formatUkDateTime(prepared.created_at)} for {prepared.to_address}.
         </p>
       ) : null}
 

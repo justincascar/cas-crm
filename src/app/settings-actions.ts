@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/auth/session";
 import { setDefaultVehicleLocation } from "@/lib/db/vehicle-location";
 import { setChaseIntervalDays, setAgreementMaxDays, setAgreementApproachingDay, setInsurerPaymentTermDays } from "@/lib/db/chase";
+import { testMailboxConnection } from "@/lib/email/microsoft-graph";
 
 function revalidateSettings() {
   revalidatePath("/settings");
@@ -88,4 +89,11 @@ export async function actionSaveGtaMarkup(formData: FormData) {
   }
   revalidateSettings();
   redirect("/settings?saved=1");
+}
+
+export async function actionTestMailboxConnection() {
+  await requireStaff();
+  const result = await testMailboxConnection();
+  if (result.ok) redirect(`/settings?mailboxCheck=${encodeURIComponent(result.message)}`);
+  redirect(`/settings?mailboxCheckError=${encodeURIComponent(result.error)}`);
 }

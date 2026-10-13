@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ClaimTable";
+import { EmailSendModeBanner } from "@/components/EmailSendModeBanner";
 import { formatUkDateTime } from "@/lib/dates";
 import { requireStaff } from "@/lib/auth/session";
 import { listCorrespondence } from "@/lib/db/queries";
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
-import { mailboxIsConnected } from "@/lib/email/microsoft-graph";
+import { emailSendBanner } from "@/lib/email/send-mode";
 
 function channelLabel(channel: string, direction: string) {
   if (channel === "whatsapp") return `${direction} WhatsApp`;
@@ -16,14 +17,16 @@ function channelLabel(channel: string, direction: string) {
 export default async function CommunicationsPage() {
   await requireStaff();
   const rows = listCorrespondence();
+  const banner = emailSendBanner();
   return (
-    <div>
+    <div className="space-y-4">
+      <EmailSendModeBanner />
       <PageHeader
         title="Communications"
         subtitle={
-          mailboxIsConnected()
+          banner.mode === "live"
             ? `Email sends from ${CAS_CLAIMS_MAILBOX} when a person clicks Send on a file. WhatsApp Business and telephony are not connected. Incoming email is not read.`
-            : `Microsoft 365 not yet connected. Email, WhatsApp and telephone are recorded against the claim file. Nothing is sent from ${CAS_CLAIMS_MAILBOX} until the mailbox credentials are set. Open a file to prepare an email.`
+            : `${banner.text}. Email, WhatsApp and telephone are recorded against the claim file. Nothing is sent from ${CAS_CLAIMS_MAILBOX}. Open a file to prepare an email.`
         }
       />
       <div className="overflow-x-auto rounded-xl border border-line bg-card">

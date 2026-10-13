@@ -22,7 +22,8 @@ import { StorageEndDateReview } from "@/components/claims/StorageEndDateReview";
 import { getHireEndDateReviews } from "@/lib/db/hire-collection-date";
 import { getStorageDateReview, getStorageEndDateReview } from "@/lib/db/storage-recovery-date";
 import { MailboxSendNotice } from "@/components/claims/SendPreparedEmailForm";
-import { mailboxIsConnected } from "@/lib/email/microsoft-graph";
+import { EmailSendModeBanner } from "@/components/EmailSendModeBanner";
+import { liveEmailSending } from "@/lib/email/send-mode";
 import { listCasInsuranceDocuments } from "@/lib/db/company-insurance";
 
 export default async function ClaimWorkScreenPage({
@@ -30,11 +31,11 @@ export default async function ClaimWorkScreenPage({
   searchParams,
 }: {
   params: Promise<{ id: string; screen: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; field?: string; whatsapp?: string; tlError?: string; tlMail?: string; mailboxError?: string; mailboxSent?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; field?: string; whatsapp?: string; tlError?: string; tlMail?: string; mailboxError?: string; mailboxSent?: string; mailboxSimulated?: string }>;
 }) {
   const { id, screen } = await params;
   await requireStaff();
-  const { saved, error, field, whatsapp, tlError, tlMail, mailboxError, mailboxSent } = await searchParams;
+  const { saved, error, field, whatsapp, tlError, tlMail, mailboxError, mailboxSent, mailboxSimulated } = await searchParams;
   const def = getClaimScreen(screen);
   if (!def) notFound();
   const data = getClaim(id);
@@ -78,7 +79,8 @@ export default async function ClaimWorkScreenPage({
       {error ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
       ) : null}
-      <MailboxSendNotice sent={mailboxSent} error={mailboxError} />
+      <EmailSendModeBanner />
+      <MailboxSendNotice sent={mailboxSent} simulated={mailboxSimulated} error={mailboxError} />
       {screen === "storage" || screen === "recovery" ? (
         <StorageDateReview
           claimId={String(data.claim.id)}
@@ -155,7 +157,7 @@ export default async function ClaimWorkScreenPage({
           chases={chases}
           hireAgreements={hireAgreements}
           preparedByKind={preparedByKind}
-          mailboxConnected={mailboxIsConnected()}
+          mailboxConnected={liveEmailSending()}
           impecuniosityBlockReason={impecuniosityGate(String(data.claim.id)).generationBlock}
         />
       ) : null}
