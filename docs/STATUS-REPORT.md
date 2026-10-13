@@ -219,14 +219,14 @@ Not working:
 
 On each file (`/claims/[id]/work/comms`) and on `/communications`:
 
-- Compose “send” email / WhatsApp: stored as `simulated_sent` with a warning. **Nothing leaves the office.** CAS client/insurer email templates can fill to/subject/body from the file first.
-- **Instruct Engineer:** generates the letter and opens a pre-filled `mailto` email to the saved engineer, for the handler to send from their own email client. **Prepared, not auto-sent.** After sending, staff mark it as sent; that logs date and handler on the file history. This is not live mailbox send from `claims@cascar.co.uk`.
+- Compose and send email: when the Microsoft 365 credentials are present, Send uses the real mailbox `claims@cascar.co.uk` (send only, set up 1–2 October 2026). It does not read incoming mail. WhatsApp remains a recorded message and does not leave the office. CAS client/insurer email templates can fill to/subject/body from the file first.
+- **Instruct Engineer:** generates the letter and opens a pre-filled `mailto` email to the saved engineer, for the handler to send from their own email client. **Prepared, not auto-sent.** After sending, staff mark it as sent; that logs date and handler on the file history. That particular action does not send from `claims@cascar.co.uk`.
 - Log incoming email / WhatsApp: saved against the file.
 - Log incoming email / WhatsApp: saved against the file.
 - Record outgoing/incoming calls: logged only; **no live dial**. Unanswered can create a call-back task.
 - Failed validation (blank to/subject) is shown as failure, not pretended success.
 
-Office mailbox (`claims@cascar.co.uk` decided), WhatsApp Business and telephony are **not connected**. Engineer instruction uses the handler's own email client.
+Office mailbox `claims@cascar.co.uk` has a real Microsoft 365 send connection, set up 1–2 October 2026. It sends only and does not read the inbox. WhatsApp Business and telephony are **not connected**. Engineer instruction uses the handler's own email client.
 
 ### Automation — **(c)** display of seeded rules; runner **(d)**
 
@@ -258,8 +258,8 @@ Allowed later; not blocking claims work; not built. No public deploy, no backups
 | Tax / MOT | **Stubbed** + GOV.UK links | Same demo plates; otherwise “confirm on GOV.UK”. |
 | MID / insurance | **Absent as a live lookup** | Staff can **record** an authorised AskMID result. One seeded manual record on TEST-0002. Do not scrape AskMID. |
 | Google Maps | **Link only** | Builds a maps search URL from the accident location. No Maps API key. |
-| Email | **Stubbed** / **mailto for engineer instruction** | `SimulatedEmailGateway` for compose-on-file. Instruct Engineer is prepared mailto, not auto-sent. |
-| Microsoft 365 / IMAP | **Absent** | Mailbox **claims@cascar.co.uk** decided; not connected. |
+| Email | **Live send from claims@cascar.co.uk** / **mailto for engineer instruction** | General Send uses Microsoft 365 when the three credentials are set (send only, not read), set up 1–2 October 2026. Without them, compose-on-file stays simulated. Instruct Engineer is prepared mailto, not auto-sent. |
+| Microsoft 365 / IMAP | **Send only** | Scoped to **claims@cascar.co.uk**. No inbox read. IMAP is not used. |
 | Hosting / backups | **Absent** | Local prototype only |
 
 `.env` is gitignored. There is no committed secrets file.
