@@ -565,10 +565,25 @@ Blocked: per-file permissions, shared hosting, live DVLA. Incoming mail is not b
 - This computer is set to simulate in the local `.env`, which is not committed. Tests mock the network. They do not send.
 - Tests: `tests/email-send-mode.test.ts`. Full suite: 352 passing, 0 failing.
 
+## Repair steps on the hire and repair chronology (13 October 2026)
+
+- The hire and repair chronology still lists every step it already showed: accident, recovery completed, engineer instructed, both initial insurer letters, the engineer's report received, each chaser marked as sent, hire ended, and storage ended. Generated only and Sent still come only from the note already stored on that line.
+- Two repair steps are now included, from `claim_events`, when the file is being repaired. **Repairs started** is the event `repairs_started`. **Repairs complete** is the event `repairs_complete` (repair completed). They take their place by the stored `occurred_at`, then `recorded_at`, then id. The list does not put them in a fixed order and does not invent a date.
+- Repair applies when the file is not a total loss and an engineer has been instructed, or a repair event is already on the file. A total loss shows none of these repair steps. A file with no engineer and no repair event, including a fault file that never went to repair, shows none of them either.
+- Where repair applies and one of those two events is missing, the chronology says that step is not recorded. That line has no date and sits after the dated steps.
+- Inspection date is still not recorded by the system. There is no dated history line for it, and it was not added.
+- The report sent to the insurer is still not recorded. The engineer's report received is a different step and was already on the list. Sending that report on to the insurer is not a stored event, and it was not added.
+- The vehicle received for repair is still not recorded. `repairs_started` is the start of the repairs, not the date the vehicle was received. A handover that collects the customer's vehicle is collection for repair, not receipt at the repairer. Neither was used as that milestone.
+- Parts ordered is still not recorded. It was not added.
+- The hidden loss-of-use screen still stores typed dates in `claim_screen_data` only. Saving it does not write `claim_events`. Those dates are notes, not history. None of them was copied into this chronology. The repair start date on that screen is not the `repairs_started` history line.
+- The list remains read-only.
+- A lapsed insurer offer stays on the vehicle damage offer list. It is not the current offer. Claimed, agreed and received are unchanged. That uses the same action as withdraw and reject.
+- Tests: `tests/justification-chronology.test.ts` and `tests/vehicle-offers.test.ts`. Full suite: 358 passing, 0 failing.
+
 ## Not yet claimed
 
 - The same offer list, kept separate from the agreed figure, is still to be added on Hire and on Recovery & Storage.
 - Financial summary and the Assessed damage notes fields remain non-authoritative working notes, pending a later decision on whether to keep them.
-- Loss-of-use is earmarked for redesign into an automated chronology. Its current fields stay in place until that stage. The hire and repair chronology on the claim overview does not read those fields.
-- Inspection date, the report sent to the insurer, the vehicle received for repair, parts ordered, and repair completed are not on the hire and repair chronology. They are the next two stages.
+- Loss-of-use is earmarked for redesign into an automated chronology. Its current fields stay in place until that stage. They are typed notes on the hidden screen. The hire and repair chronology does not read them.
+- Inspection date, the report sent to the insurer, the vehicle received for repair, and parts ordered are still not recorded as dated events. The hire and repair chronology does not show them. Repairs started and repairs complete are on that chronology when the file is being repaired, because those two are already stored on `claim_events`.
 - Stages 2–5 (finer permissions, live integrations, payment packs from CAS templates, litigation issue, backups/restore/deploy). Working dashboard is not production readiness.

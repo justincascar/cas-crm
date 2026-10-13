@@ -322,4 +322,52 @@ describe("vehicle damage offers", () => {
     });
     db.close();
   });
+
+  it("keeps a lapsed offer on the list and does not treat it as the current offer", () => {
+    const db = seeded();
+    withDatabase(db, () => {
+      listVehicleOffers("c6", "repairs");
+      recordVehicleOffer({
+        claimId: "c6",
+        actorId: "staff-justin",
+        head: "repairs",
+        amountPence: 800000,
+        offeredOn: "2026-03-01",
+        note: "",
+      });
+      const later = recordVehicleOffer({
+        claimId: "c6",
+        actorId: "staff-justin",
+        head: "repairs",
+        amountPence: 920000,
+        offeredOn: "2026-04-02",
+        note: "Open until it expires",
+      });
+      const before = money(db, "c6", "repairs");
+      markVehicleOffer({
+        claimId: "c6",
+        actorId: "staff-justin",
+        head: "repairs",
+        offerId: later,
+        status: "lapsed",
+      });
+      const offers = listVehicleOffers("c6", "repairs");
+      const after = money(db, "c6", "repairs");
+      assert.equal(offers.length, 2);
+      assert.equal(offers[0].id, later);
+      assert.equal(offers[0].status, "lapsed");
+      assert.equal(offers[0].amountPence, 920000);
+      assert.equal(offers[1].status, "open");
+      assert.equal(offers[1].amountPence, 800000);
+      assert.equal(after.offered_pence, 800000);
+      assert.notEqual(after.offered_pence, offers[0].amountPence);
+      assert.equal(after.claimed_pence, before.claimed_pence);
+      assert.equal(after.agreed_pence, before.agreed_pence);
+      assert.equal(after.received_pence, before.received_pence);
+      assert.equal(after.claimed_pence, 240000);
+      assert.equal(after.agreed_pence, 0);
+      assert.equal(after.received_pence, 0);
+    });
+    db.close();
+  });
 });

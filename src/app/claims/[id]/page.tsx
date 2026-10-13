@@ -230,7 +230,10 @@ export default async function ClaimDetailPage({
         </p>
       ) : null}
 
-      <JustificationChronology events={data.events} />
+      <JustificationChronology
+        events={data.events}
+        totalLoss={Number(claim.total_loss) === 1 || Number(claim.later_declared_total_loss) === 1}
+      />
 
       <FileHistory
         claimId={String(claim.id)}
