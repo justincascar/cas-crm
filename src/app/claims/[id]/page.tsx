@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { actionAddNote, actionAddTask, actionCompleteTask, actionUpdateClaim } from "@/app/actions";
 import { actionRecordAgreedRepair } from "@/app/chase-actions";
 import { FileHistory } from "@/components/FileHistory";
+import { JustificationChronology } from "@/components/claims/JustificationChronology";
 import { ClaimWorkflowStatus } from "@/components/ClaimWorkflowStatus";
 import { ChasePanel } from "@/components/ChasePanel";
 import { PageHeader } from "@/components/ClaimTable";
@@ -225,6 +226,8 @@ export default async function ClaimDetailPage({
           {claim.police_ref ? ` · Police ref: ${String(claim.police_ref)}` : ""}
         </p>
       ) : null}
+
+      <JustificationChronology events={data.events} />
 
       <FileHistory
         claimId={String(claim.id)}

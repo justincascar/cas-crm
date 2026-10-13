@@ -546,9 +546,19 @@ Blocked: per-file permissions, shared hosting, live DVLA. Incoming mail is not b
 - Hire’s ledger still has no offer history. Recovery and storage do not have that list either.
 - Tests: `tests/ledger-signpost.test.ts`. Full suite: 340 passing, 0 failing.
 
+## Hire and repair chronology (13 October 2026)
+
+- Each claim overview now has a Hire and repair chronology. It lists, in date order, only history lines the file already has: accident, recovery completed, engineer instructed, the initial letter to the third-party insurer, the initial letter to the client's own insurer, the engineer's report received, each chaser that was marked as sent, hire ended, and storage ended.
+- It reads `claim_events`. It does not write a second log, and it does not change history or automations. A claim with only some of those steps shows those steps. A claim with none says so. It does not invent the missing ones.
+- Where the stored note says the letter was generated (`Recorded from generated …`), the line is marked Generated only. Where the stored note says it was sent (`Marked as sent`, `Sent from`, `sent from`, `Sent by`, or the mailbox `sent to … from …` wording), the line is marked Sent. A note that says neither is shown as stored, and is not labelled sent.
+- Inspection date, the report sent to the insurer, the vehicle received for repair, parts ordered, and repair completed are deliberately not on this list. They are not reliable history lines yet, and they are queued for the next two stages.
+- The hidden loss-of-use dates are not used here.
+- Tests: `tests/justification-chronology.test.ts`. Full suite: 344 passing, 0 failing.
+
 ## Not yet claimed
 
 - The same offer list, kept separate from the agreed figure, is still to be added on Hire and on Recovery & Storage.
 - Financial summary and the Assessed damage notes fields remain non-authoritative working notes, pending a later decision on whether to keep them.
-- Loss-of-use is earmarked for redesign into an automated chronology. Its current fields stay in place until that stage.
+- Loss-of-use is earmarked for redesign into an automated chronology. Its current fields stay in place until that stage. The hire and repair chronology on the claim overview does not read those fields.
+- Inspection date, the report sent to the insurer, the vehicle received for repair, parts ordered, and repair completed are not on the hire and repair chronology. They are the next two stages.
 - Stages 2–5 (finer permissions, live integrations, payment packs from CAS templates, litigation issue, backups/restore/deploy). Working dashboard is not production readiness.
