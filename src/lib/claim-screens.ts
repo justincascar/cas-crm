@@ -246,7 +246,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
     key: "damage",
     label: "Vehicle damage",
     group: "case",
-    hint: "Mark panels on the diagram. AI does not certify roadworthiness.",
+    hint: "Mark panels on the diagram. AI does not certify roadworthiness. Claimed, offered, agreed and received are on the vehicle damage ledger.",
     sections: [
       {
         title: "Initial assessment",
@@ -634,11 +634,17 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
     key: "assessed-damage",
     label: "Assessed damage",
     group: "works",
-    hint: "Staff-verified figures from the engineer. Offers are not receipts.",
+    hint: "The valuation, labour, parts, VAT and total reserve below are the engineer's notes. They do not update claimed, offered, agreed or received. When this file is a total loss, the section above those notes updates the vehicle damage ledger. Offers are not receipts.",
     sections: [
       {
+        title: "Engineer's notes",
         fields: [
-          { name: "totalLoss", label: "Total loss", type: "checkbox" },
+          {
+            name: "totalLoss",
+            label: "Total loss",
+            type: "checkbox",
+            hint: "Ticking this marks the file as a total loss. It does not set claimed, offered, agreed or received.",
+          },
           { name: "assessedRepair", label: "Assessed repair", type: "checkbox" },
           { name: "salvageCategory", label: "Salvage category" },
           { name: "salvageValue", label: "Salvage value", type: "gbp" },
@@ -662,7 +668,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
     label: "Loss of use dates",
     group: "works",
     hidden: true,
-    hint: "These dates also feed letters. Missing dates stay unknown.",
+    hint: "Dates kept on this screen only. Saving them does not write the file chronology. Missing dates stay unknown.",
     sections: [
       {
         fields: [
@@ -785,7 +791,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
     key: "financial-summary",
     label: "Financial summary / interim payments",
     group: "money",
-    hint: "Invoice amount, received and outstanding are kept separate. An offer is not a payment.",
+    hint: "Working notes only. Nothing entered here updates the live ledgers or feeds automatic chasing. An offer is not a payment.",
     sections: [
       {
         title: "Invoices raised",

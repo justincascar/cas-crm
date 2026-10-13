@@ -6,6 +6,7 @@ import { HireVehiclePanel, ReserveHirePanel } from "@/components/claim-file/Hire
 import { ScreenForm } from "@/components/claim-file/ScreenForm";
 import { PageHeader } from "@/components/ClaimTable";
 import { CLAIM_SCREENS, getClaimScreen, screensByGroup } from "@/lib/claim-screens";
+import { headScreenPath } from "@/lib/domain/head-screen";
 import { requireStaff } from "@/lib/auth/session";
 import { getClaim, listFleet, listKnownAgents, listKnownInsurers, listReservations } from "@/lib/db/queries";
 import { findPreparedEngineerInstruction, getEngineer, listActiveEngineers } from "@/lib/db/engineers";
@@ -92,14 +93,25 @@ export default async function ClaimWorkScreenPage({
           returnTo={`/claims/${data.claim.id}/work/storage`}
         />
       ) : null}
-      {screen === "assessed-damage" ? (
-        <TotalLossPanel
-          claimId={String(data.claim.id)}
-          totalLoss={Number(data.claim.total_loss) === 1}
-          returnTo={`/claims/${data.claim.id}/work/assessed-damage`}
-          error={tlError}
-          openMailId={tlMail}
-        />
+      {screen === "assessed-damage" && Number(data.claim.total_loss) === 1 ? (
+        <div className="space-y-3">
+          <div className="rounded-md border border-teal/40 bg-[#e8f4f2] px-4 py-3 text-sm">
+            <p className="font-semibold text-navy-deep">This section updates the vehicle damage ledger.</p>
+            <p className="mt-1">
+              Pre-accident value, salvage and the insurer offer saved in the panel below are written to that ledger. The engineer&apos;s notes further down are not.
+            </p>
+            <Link href={headScreenPath(String(data.claim.id), "repairs")} className="mt-2 inline-block font-semibold text-teal-dark underline">
+              Open the vehicle damage ledger
+            </Link>
+          </div>
+          <TotalLossPanel
+            claimId={String(data.claim.id)}
+            totalLoss
+            returnTo={`/claims/${data.claim.id}/work/assessed-damage`}
+            error={tlError}
+            openMailId={tlMail}
+          />
+        </div>
       ) : null}
       {screen === "delivery-collection" ? (
         <HireEndDateReview

@@ -5,7 +5,6 @@ import { dobConfirmName, dobKindForField, dobSaveError, isDobFieldName } from ".
 import { isMobileFieldName, mobileNumberError } from "../phone-number";
 import { formatTypedValue } from "../text";
 import { get, all, getDb, newId, run } from "./connection";
-import { recordClaimEvent } from "./chronology";
 import { normaliseGtaGroup } from "../documents/gta";
 import { poundsToPence } from "./intake";
 import { INDICATIVE_DEFAULTS } from "../constants";
@@ -294,33 +293,6 @@ function applySideEffects(claimId: string, screenKey: string, values: ScreenValu
 
   if (screenKey === "assessed-damage" && values.totalLoss === "yes") {
     run(`UPDATE claims SET total_loss = 1 WHERE id = ?`, [claimId]);
-  }
-
-  if (screenKey === "loss-of-use") {
-    const map: Array<[string, string]> = [
-      ["firstNotificationTpi", "initial_letter_tp_insurer"],
-      ["engineerInstructed", "engineer_instructed"],
-      ["repairAuthorised", "repairs_authorised"],
-      ["repairStart", "repairs_started"],
-      ["hireOut", "hire_started"],
-      ["hireBack", "hire_ended"],
-    ];
-    for (const [field, eventType] of map) {
-      if (!values[field]) continue;
-      const existing = get<{ id: string }>(
-        `SELECT id FROM claim_events WHERE claim_id = ? AND event_type = ? LIMIT 1`,
-        [claimId, eventType],
-      );
-      if (existing) continue;
-      recordClaimEvent({
-        claimId,
-        eventType,
-        occurredAt: values[field],
-        details: "Recorded from loss of use dates.",
-        actorId,
-        source: "staff",
-      });
-    }
   }
 }
 

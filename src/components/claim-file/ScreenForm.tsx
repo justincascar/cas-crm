@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRef, useState } from "react";
 import { actionSaveClaimScreen } from "@/app/actions";
 import { AccidentDateField } from "@/components/AccidentDateField";
@@ -16,6 +17,7 @@ import { RecoveryCharges } from "@/components/claim-file/RecoveryCharges";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { dobKindForField, isDobFieldName } from "@/lib/age";
 import type { ClaimScreenDef, ScreenField } from "@/lib/claim-screens";
+import { headScreenPath } from "@/lib/domain/head-screen";
 import { displayValue } from "@/lib/screen-display";
 import type { ScreenValues } from "@/lib/db/screens";
 import type { KnownInsurer } from "@/lib/insurers";
@@ -194,7 +196,54 @@ export function ScreenForm({
       <input type="hidden" name="screenKey" value={def.key} />
       <input type="hidden" name="actorId" value={actorId} />
 
+      {def.key === "damage" ? (
+        <div className="rounded-xl border border-teal/40 bg-[#e8f4f2] px-4 py-3 text-sm">
+          <p className="font-semibold text-navy-deep">This page is the damage diagram.</p>
+          <p className="mt-1">
+            Claimed, offered, agreed and received are kept on the vehicle damage ledger. The diagram does not change those figures.
+          </p>
+          <Link href={headScreenPath(claimId, "repairs")} className="mt-2 inline-block font-semibold text-teal-dark underline">
+            Open the vehicle damage ledger
+          </Link>
+        </div>
+      ) : null}
+
       {def.key === "damage" ? <DamageDiagram clientPanels={values.clientPanels} tpPanels={values.tpPanels} /> : null}
+
+      {def.key === "assessed-damage" ? (
+        <p className="rounded-md border border-line bg-paper px-4 py-3 text-sm">
+          These figures are saved as notes only — they do not update claimed, offered, agreed or received.{" "}
+          <Link href={headScreenPath(claimId, "repairs")} className="font-semibold text-teal-dark underline">
+            Open the vehicle damage ledger
+          </Link>
+        </p>
+      ) : null}
+
+      {def.key === "financial-summary" ? (
+        <div className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">
+          <p className="font-semibold text-navy-deep">
+            Nothing entered here updates the live ledgers or feeds automatic chasing.
+          </p>
+          <p className="mt-1">Record a real figure on the head screen for that part of the claim.</p>
+          <ul className="mt-2 space-y-1">
+            <li>
+              <Link href={headScreenPath(claimId, "repairs")} className="font-semibold text-teal-dark underline">
+                Vehicle damage ledger
+              </Link>
+            </li>
+            <li>
+              <Link href={headScreenPath(claimId, "hire")} className="font-semibold text-teal-dark underline">
+                Hire ledger
+              </Link>
+            </li>
+            <li>
+              <Link href={headScreenPath(claimId, "recovery")} className="font-semibold text-teal-dark underline">
+                Recovery and storage ledger
+              </Link>
+            </li>
+          </ul>
+        </div>
+      ) : null}
 
       {def.sections.map((section, index) => (
         <fieldset key={section.title || index} className="space-y-3 rounded-xl border border-line bg-card p-5">

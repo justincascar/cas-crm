@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { screensByGroup } from "@/lib/claim-screens";
+import { headScreenPath } from "@/lib/domain/head-screen";
 
 const DOT: Record<string, string> = {
   comms: "bg-teal",
@@ -51,6 +52,21 @@ export function ScreenNav({
                   </li>
                 );
               })}
+              {group.key === "works" ? (
+                <li>
+                  <Link
+                    href={headScreenPath(claimId, "repairs")}
+                    className={`flex items-center gap-2 rounded-md px-2 py-1 text-sm ${
+                      path === headScreenPath(claimId, "repairs")
+                        ? "bg-[#e8f4f2] font-semibold text-teal-dark"
+                        : "text-ink hover:bg-paper"
+                    }`}
+                  >
+                    <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${DOT.works}`} />
+                    <span className="min-w-0 flex-1 leading-snug">Vehicle damage ledger</span>
+                  </Link>
+                </li>
+              ) : null}
             </ul>
           </div>
         ))}

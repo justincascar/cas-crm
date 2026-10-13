@@ -16,7 +16,7 @@ Implemented:
 - Hire Pack data collection and generation from the CAS Hire Pack.doc structure (hirer, additional driver, hire vehicle vs own vehicle, charges, mitigation including financial means, handover, cancellation notice). Storage & Recovery is generated as a standalone document, not as a hire-agreement page. Signatures are not fabricated. The 89-day pack wording versus 88-day CRM alerts is flagged for Justin; neither figure has been changed.
 - Staff intake form covering client (owner/driver/owner/driver split), vehicle lookup, tax/MOT/insurance recording, damage, accident (maps link, police, witnesses, speeds, photographs taken at the scene with a simulated WhatsApp send-in), recovery charges, storage starting the same day as recovery, and up to three third parties with insurer autocomplete (generic telephone/email/address only) and TPI agent fields.
 - Claim file screens matching the current CRM viewing pane (client, hire, damage diagram, fleet reserve, recovery, storage, loss of use dates, financial summary). Values persist in SQLite. Opening a file or reserving a vehicle still does not start charges.
-- Duplicate Alpha screens (navigation, hire-car register, extra-charges, loss-of-use dates as a second chronology) are hidden. Communications sit on the file: simulated send/receive email and WhatsApp, recorded calls, and letter generation from file dates.
+- Duplicate Alpha screens (navigation, hire-car register, extra-charges, loss-of-use dates) are hidden. Saving loss-of-use dates stores them on that screen only and does not write the file chronology. Communications sit on the file: simulated send/receive email and WhatsApp, recorded calls, and letter generation from file dates.
 - Simulated postcode and registration lookups, clearly labelled.
 - Distinct claimed / offered / agreed / received totals.
 - Tests in `tests/` for the behavioural rules in the brief that can be checked without live integrations.
@@ -535,7 +535,20 @@ Blocked: per-file permissions, shared hosting, live DVLA. Incoming mail is not b
 - Hire, recovery and storage do not have this offer list yet.
 - Tests: `tests/vehicle-offers.test.ts`. Full suite before this stage: 327 passing, 0 failing. After this correction: 335 passing, 0 failing.
 
+## Live ledgers labelled (13 October 2026)
+
+- The head screens remain the record of claimed, offered, agreed and received. Assessed damage and Financial summary were not rebuilt and still store what they stored before.
+- On Assessed damage, the engineer’s valuation, labour, parts, VAT and total reserve are labelled as notes only. They do not update claimed, offered, agreed or received. Ticking Total loss still marks the file as a total loss. When the file is a total loss, the engineer’s report panel above those notes is labelled as the section that updates the vehicle damage ledger.
+- Financial summary says plainly that nothing entered there updates the live ledgers or feeds automatic chasing, and links to the vehicle damage, hire, and recovery and storage ledgers.
+- File screens, under Engineering / repairs, now includes **Vehicle damage ledger**. The vehicle damage diagram has the same link. Both open `/claims/[id]/heads/vehicle`, which shows repairs on a repairable file and total loss on a total-loss file.
+- The hidden loss-of-use page still has the same fields. Saving it no longer writes dates into the file chronology. It is left as it is for the next stage, which is to turn it into an automated chronology.
+- Financial summary and the Assessed damage notes stay as working notes, not the record of truth, until a later decision.
+- Hire’s ledger still has no offer history. Recovery and storage do not have that list either.
+- Tests: `tests/ledger-signpost.test.ts`. Full suite: 340 passing, 0 failing.
+
 ## Not yet claimed
 
 - The same offer list, kept separate from the agreed figure, is still to be added on Hire and on Recovery & Storage.
+- Financial summary and the Assessed damage notes fields remain non-authoritative working notes, pending a later decision on whether to keep them.
+- Loss-of-use is earmarked for redesign into an automated chronology. Its current fields stay in place until that stage.
 - Stages 2–5 (finer permissions, live integrations, payment packs from CAS templates, litigation issue, backups/restore/deploy). Working dashboard is not production readiness.
