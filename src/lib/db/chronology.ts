@@ -143,6 +143,12 @@ function applyEventSideEffects(claimId: string, eventType: ClaimEventType, occur
   if (eventType === "repairs_complete") {
     run(`UPDATE claims SET repairs_complete = 1, repair_status = CASE WHEN repaired_vehicle_returned = 1 THEN 'complete' ELSE 'awaiting_return' END WHERE id = ?`, [claimId]);
   }
+  if (eventType === "vehicle_returned") {
+    run(
+      `UPDATE claims SET repaired_vehicle_returned = 1, repair_status = CASE WHEN repairs_complete = 1 THEN 'complete' ELSE repair_status END WHERE id = ?`,
+      [claimId],
+    );
+  }
   if (
     eventType === "initial_letter_tp_insurer" ||
     eventType === "initial_letter_own_insurer" ||
@@ -224,8 +230,7 @@ function letterContext(claimId: string, letterDate: string = nowUtcIso(), engine
   if (claim.accident_at) dates.accident = String(claim.accident_at);
 
   const hireStart = hire?.started_at ? String(hire.started_at) : pack?.date_out ? String(pack.date_out) : dates.hire_started || null;
-  const hireEnd =
-    hire?.billing_end_at ? String(hire.billing_end_at) : pack?.date_in ? String(pack.date_in) : dates.hire_ended || dates.vehicle_returned || null;
+  const hireEnd = hire?.billing_end_at ? String(hire.billing_end_at) : null;
   const dailyRate = Number(pack?.daily_rate_pence || hire?.rate_pence_per_day || 0) || null;
   const hireDays = hireStart && hireEnd ? agreementDayNumber(hireStart, hireEnd) : null;
   const hireClaimed = lines
@@ -238,21 +243,10 @@ function letterContext(claimId: string, letterDate: string = nowUtcIso(), engine
   const claimed = lines.reduce((sum, line) => sum + (line.claimed_pence || 0), 0);
   const outstanding = Math.max(0, claimed - received);
   const confirmedHireEnd = hire?.billing_end_at ? String(hire.billing_end_at) : null;
-  const scheduledOffHire = claim.off_hire_scheduled_on ? String(claim.off_hire_scheduled_on) : null;
-  const cessationSource = dates.total_loss_cessation_sent || confirmedHireEnd || scheduledOffHire || null;
-  const cessation = hireChargesAccrualEnd({
-    vehicleReturnedAt: dates.vehicle_returned || null,
-    totalLossCessationAt: cessationSource,
-  });
-  const cessationBasis = !cessation
-    ? ""
-    : dates.vehicle_returned && (!cessationSource || String(dates.vehicle_returned) <= cessationSource)
-      ? "the earlier of vehicle return and the recorded total-loss cessation date"
-      : dates.total_loss_cessation_sent
-        ? "the recorded total-loss cessation date"
-        : confirmedHireEnd
-          ? "the confirmed hire end date"
-          : "the scheduled off-hire date";
+  const cessation = hireChargesAccrualEnd({ storedHireEndAt: confirmedHireEnd });
+  const cessationBasis = cessation
+    ? "the stored chargeable hire end date"
+    : "Hire continuing — no chargeable hire end is stored";
   const handlerId = String(claim.handler_id || claim.handler_staff_id || "");
   const selectedEngineerId = (engineerId || String(claim.engineer_id || "")).trim();
   const engineer = selectedEngineerId ? getEngineer(selectedEngineerId) : undefined;

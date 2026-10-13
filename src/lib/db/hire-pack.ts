@@ -12,6 +12,7 @@ import { formatHandoverMileage, handoverReadingsForClaim, type HandoverReading }
 import { dobSaveError } from "../age";
 import { FieldValidationError } from "../form-validation";
 import { mobileNumberError } from "../phone-number";
+import { chargeableHireEndLabel } from "../domain/rules";
 import { formatGbp } from "../money";
 import { all, get, newId, run } from "./connection";
 import { MITIGATION_QUESTIONNAIRE } from "../domain/impecuniosity";
@@ -378,6 +379,7 @@ export function renderHirePack(pack: NonNullable<ReturnType<typeof getHirePack>>
   const address = pack.ctx.hirerAddress || "Unknown";
   const hireVehicle = `${v(hire?.hire_make)} ${v(hire?.hire_model)}`.replace("Unknown Unknown", "Unknown");
   const dateOut = s.date_out ? formatUkDate(String(s.date_out)) : formatUkDate(hire?.started_at ? String(hire.started_at) : null);
+  const chargeableHireEnd = chargeableHireEndLabel(hire?.billing_end_at ? String(hire.billing_end_at) : null);
   const missingBanner =
     pack.missing.length > 0
       ? `<p class="missing">Missing from CRM (shown as Unknown — not invented): ${pack.missing.join(", ")}</p>`
@@ -453,7 +455,7 @@ ${impecuniosityMeansHtml(pack)}
 <p>Make: ${escape(v(hire?.hire_make))} &nbsp; Model: ${escape(v(hire?.hire_model))} &nbsp; Reg: ${escape(v(hire?.hire_reg))}<br/>
 Transmission: ${escape(v(hire?.hire_transmission))} &nbsp; Fuel: ${escape(v(s.hire_fuel || hire?.hire_fuel))}<br/>
 Vehicle group: ${escape(v(s.vehicle_group))} &nbsp; Group charged: ${escape(v(s.group_charged))}<br/>
-Date out: ${escape(dateOut)} &nbsp; Date in: ${escape(s.date_in ? formatUkDate(String(s.date_in)) : "Unknown")}</p>
+Date out: ${escape(dateOut)} &nbsp; Date in: ${escape(chargeableHireEnd)}</p>
 <h3>Charges</h3>
 <table>
 <tr><td>Daily rate</td><td>${money(s.daily_rate_pence)}</td><td>Sat navigation</td><td>${money(s.sat_nav_pence)}</td></tr>

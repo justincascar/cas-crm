@@ -204,9 +204,8 @@ function writeStorageEnd(claimId: string, day: string) {
 }
 
 /**
- * Use the actual date from a completed "Return client's vehicle after repair" job as the storage end,
- * unless a storage end date is already on the file and falls on a different day.
- * Rates, VAT and the hire end date are not touched.
+ * The return of the client's own vehicle is a physical return. It does not set the chargeable
+ * storage end. That end is the confirmed repair-authorisation date, or a date staff type with a reason.
  */
 export function applyClientReturnActualDate(input: {
   claimId: string;
@@ -218,32 +217,16 @@ export function applyClientReturnActualDate(input: {
   const claim = readStorageEnd(input.claimId);
   if (!claim) throw new Error("File not found.");
   const storageEndDay = calendarDay(claim.storage_billing_end_on);
-  if (storageEndDay && storageEndDay !== jobDate) {
-    run(`UPDATE claims SET storage_end_review_on = ? WHERE id = ?`, [jobDate, input.claimId]);
-    recordClaimEvent({
-      claimId: input.claimId,
-      eventType: "storage_end_date_review",
-      occurredAt: input.actualOccurredAt,
-      actorId: input.actorId,
-      details: `The Return client's vehicle after repair job says ${ukDay(jobDate)}. Storage end on the file is ${ukDay(storageEndDay)}. The end date was left as it is. A person needs to choose which day storage stops. This is a CAS charging check, not a legal conclusion.`,
-      source: "staff",
-    });
-    return { status: "review", review: { jobDate, storageEndDay } };
-  }
-  if (!storageEndDay) {
-    writeStorageEnd(input.claimId, jobDate);
-    run(`UPDATE claims SET storage_end_review_on = NULL WHERE id = ?`, [input.claimId]);
-    recordClaimEvent({
-      claimId: input.claimId,
-      eventType: "storage_ended",
-      occurredAt: input.actualOccurredAt,
-      actorId: input.actorId,
-      details: `Storage ends on ${ukDay(jobDate)}, the day the client's vehicle was returned after repair. Taken from the Return client's vehicle after repair job. The daily rate was left as it is. This is a CAS charging rule for a person to check, not a legal conclusion.`,
-      source: "staff",
-    });
-    return { status: "applied", date: jobDate };
-  }
-  run(`UPDATE claims SET storage_end_review_on = NULL WHERE id = ?`, [input.claimId]);
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "vehicle_returned",
+    occurredAt: input.actualOccurredAt,
+    actorId: input.actorId,
+    details: storageEndDay
+      ? `The client's vehicle was returned on ${ukDay(jobDate)}. This is the physical return. Chargeable storage end stays ${ukDay(storageEndDay)}.`
+      : `The client's vehicle was returned on ${ukDay(jobDate)}. This is the physical return. No chargeable storage end was written.`,
+    source: "staff",
+  });
   return { status: "already_matches", date: jobDate };
 }
 

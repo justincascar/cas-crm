@@ -65,7 +65,8 @@ describe("hire ends on the day the hire car is collected", () => {
       const after = snapshot(db, "c3", "h-c3");
       assert.equal(after.episode?.billing_end_at, "2026-09-18");
       assert.equal(after.episode?.hire_end_review_on, null);
-      assert.equal(after.episode?.collection_at, before.episode?.collection_at);
+      assert.equal(after.episode?.collection_at, "2026-09-18");
+      assert.equal(before.episode?.collection_at, null);
       assert.equal(after.episode?.rate_pence_per_day, before.episode?.rate_pence_per_day);
       assert.deepEqual(after.claim, before.claim);
       assert.deepEqual(after.lines, before.lines);

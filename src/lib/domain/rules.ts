@@ -1,5 +1,5 @@
 import { TOTAL_LOSS_HIRE_DAYS_AFTER_QUALIFYING_PAYMENT } from "../constants";
-import { addCalendarDaysIso, daysBetweenLondon, londonDateIso } from "../dates";
+import { addCalendarDaysIso, daysBetweenLondon, formatUkDate, londonDateIso } from "../dates";
 
 export type ReservationInput = {
   vehicleId: string;
@@ -50,11 +50,9 @@ export function faultCourtesyCreatesCreditHire(creditHireFlag: boolean): boolean
   return creditHireFlag === true;
 }
 
-export function repairableHireMayEnd(opts: {
-  repairsComplete: boolean;
-  repairedVehicleReturned: boolean;
-}): boolean {
-  return opts.repairsComplete && opts.repairedVehicleReturned;
+/** On a repairable claim, hire may end when CAS has collected the hire car. */
+export function repairableHireMayEnd(opts: { hireCarCollected: boolean }): boolean {
+  return opts.hireCarCollected === true;
 }
 
 export function totalLossOffHireDate(opts: {
@@ -251,14 +249,18 @@ export function hirePackChaseDecision(opts: {
   return { send: false, next: null, reason: "Chase clock has not started." };
 }
 
-/** Hire charges stop accruing at whichever comes first: vehicle return, or total-loss cessation. */
-export function hireChargesAccrualEnd(opts: {
-  vehicleReturnedAt: string | null;
-  totalLossCessationAt: string | null;
-}): string | null {
-  const dates = [opts.vehicleReturnedAt, opts.totalLossCessationAt].filter((value): value is string => Boolean(value));
-  if (dates.length === 0) return null;
-  return dates.sort()[0];
+export const HIRE_CONTINUING = "Hire continuing";
+
+/** The chargeable hire end is the date stored on the hire booking. Nothing else is substituted. */
+export function hireChargesAccrualEnd(opts: { storedHireEndAt: string | null }): string | null {
+  const value = (opts.storedHireEndAt || "").trim();
+  return value || null;
+}
+
+export function chargeableHireEndLabel(storedHireEndAt: string | null): string {
+  const stored = hireChargesAccrualEnd({ storedHireEndAt });
+  if (!stored) return HIRE_CONTINUING;
+  return formatUkDate(stored);
 }
 
 export function chaseFileStateFromPosition(opts: {

@@ -13,6 +13,7 @@ import { rememberAgentOn, rememberInsurerOn } from "./insurers";
 import { displayValue } from "../screen-display";
 import { updateClaimAudatexCodes, updateClaimWorkflowStatus, suggestAudatexCodesForClaim } from "./queries";
 import { getStorageDateReview, getStorageEndDateReview } from "./storage-recovery-date";
+import { flagStorageEndOnTotalLoss, recordManualStorageEndReason, storageEndManualMessage } from "./storage-authorisation-end";
 import { normalizeLiabilityStatus, normalizeRoadworthiness } from "../domain/claim-status";
 
 export type ScreenValues = Record<string, string>;
@@ -79,6 +80,10 @@ export function screenSaveFieldError(
   if (screenKey === "recovery") {
     const extra = somethingElseSaveError(values);
     if (extra) return extra;
+  }
+  if (screenKey === "storage") {
+    const storageEnd = storageEndManualMessage(claimId, values.endDate || "", values.endDateReason || "");
+    if (storageEnd) return { field: "endDateReason", message: storageEnd };
   }
   if (screenKey === "accident") {
     const accident = accidentDateError(values.accidentDate);
@@ -248,6 +253,10 @@ function applySideEffects(claimId: string, screenKey: string, values: ScreenValu
   }
 
   if (screenKey === "storage") {
+    const beforeEnd = get<{ storage_billing_end_on: string | null }>(
+      `SELECT storage_billing_end_on FROM claims WHERE id = ?`,
+      [claimId],
+    );
     run(
       `UPDATE claims SET storage_started_on = ?, storage_billing_end_on = ?, storage_rate_pence = ?,
         storage_status = CASE WHEN ? != '' THEN 'active' ELSE storage_status END
@@ -260,6 +269,15 @@ function applySideEffects(claimId: string, screenKey: string, values: ScreenValu
         claimId,
       ],
     );
+    const reason = (values.endDateReason || "").trim();
+    if (reason && (values.endDate || "") !== (beforeEnd?.storage_billing_end_on || "")) {
+      recordManualStorageEndReason({
+        claimId,
+        actorId,
+        typedEnd: values.endDate || "",
+        reason,
+      });
+    }
     getStorageDateReview(claimId);
     getStorageEndDateReview(claimId);
   }
@@ -292,7 +310,9 @@ function applySideEffects(claimId: string, screenKey: string, values: ScreenValu
   if (screenKey === "tp2") updateThirdParty(claimId, 2, values);
 
   if (screenKey === "assessed-damage" && values.totalLoss === "yes") {
+    const before = get<{ total_loss: number | null }>(`SELECT total_loss FROM claims WHERE id = ?`, [claimId]);
     run(`UPDATE claims SET total_loss = 1 WHERE id = ?`, [claimId]);
+    if (Number(before?.total_loss) !== 1) flagStorageEndOnTotalLoss(claimId, actorId);
   }
 }
 

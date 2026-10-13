@@ -14,7 +14,6 @@ import { createStaffAccount } from "../src/lib/db/staff-admin.ts";
 import {
   applyClientRecoveryActualDate,
   applyClientReturnActualDate,
-  confirmStorageEndDate,
   confirmStorageRecoveryDate,
   getStorageDateReview,
   getStorageEndDateReview,
@@ -178,7 +177,7 @@ describe("storage charged from the actual recovery date", () => {
       assert.equal(money(db).claim.storage_started_on, null);
       assert.equal(
         (db.prepare(`SELECT storage_billing_end_on FROM claims WHERE id = 'c3'`).get() as { storage_billing_end_on: string | null }).storage_billing_end_on,
-        "2026-09-21",
+        null,
       );
 
       recordVehicleHandover({
@@ -197,7 +196,7 @@ describe("storage charged from the actual recovery date", () => {
       assert.equal(money(db).claim.storage_rate_pence, 1500);
       assert.equal(
         (db.prepare(`SELECT storage_billing_end_on FROM claims WHERE id = 'c3'`).get() as { storage_billing_end_on: string | null }).storage_billing_end_on,
-        "2026-09-21",
+        null,
       );
     });
     db.close();
@@ -221,8 +220,8 @@ function endState(db: DatabaseSync) {
   return { claim, recovery, lines };
 }
 
-describe("storage ends on the day the client's vehicle is returned after repair", () => {
-  it("uses the return job date when the file has no storage end date, and leaves rate, VAT and hire end alone", () => {
+describe("returning the client's vehicle does not set the chargeable storage end", () => {
+  it("records the physical return and leaves the chargeable end, rate and VAT alone", () => {
     const db = prepared();
     const before = withDatabase(db, () => {
       clearDates(db);
@@ -231,23 +230,27 @@ describe("storage ends on the day the client's vehicle is returned after repair"
     withDatabase(db, () => {
       const occurred = requireLondonDateTime("2026-09-18T16:30");
       const result = applyClientReturnActualDate({ claimId: "c3", actualOccurredAt: occurred, actorId: "staff-sian" });
-      assert.equal(result.status, "applied");
+      assert.equal(result.status, "already_matches");
       const after = endState(db);
-      assert.equal(after.claim.storage_billing_end_on, "2026-09-18");
+      assert.equal(after.claim.storage_billing_end_on, null);
       assert.equal(after.claim.storage_started_on, null);
       assert.equal(after.claim.storage_rate_pence, 1500);
       assert.equal(after.claim.storage_status, before.claim.storage_status);
       assert.equal(after.claim.off_hire_scheduled_on, before.claim.off_hire_scheduled_on);
       assert.equal(after.claim.storage_end_review_on, null);
       assert.equal(after.recovery.charge_pence, 4000);
-      assert.deepEqual(after.lines, before.lines);
+      assert.equal(after.lines.length, before.lines.length);
       assert.equal(getScreenData("c3", "storage").vat, "12.50");
       assert.equal(getStorageEndDateReview("c3"), null);
+      const returned = db.prepare(`SELECT repaired_vehicle_returned FROM claims WHERE id = 'c3'`).get() as {
+        repaired_vehicle_returned: number;
+      };
+      assert.equal(returned.repaired_vehicle_returned, 1);
     });
     db.close();
   });
 
-  it("flags a manually entered end date instead of overwriting it, until staff confirm", () => {
+  it("leaves a storage end already on the file when the vehicle is returned", () => {
     const db = prepared();
     withDatabase(db, () => {
       clearDates(db);
@@ -258,38 +261,23 @@ describe("storage ends on the day the client's vehicle is returned after repair"
         "staff-justin",
       );
       assert.equal(endState(db).claim.storage_billing_end_on, "2026-09-22");
-      assert.equal(getStorageEndDateReview("c3"), null);
       const before = endState(db);
       const occurred = requireLondonDateTime("2026-09-18T16:30");
-      const result = applyClientReturnActualDate({ claimId: "c3", actualOccurredAt: occurred, actorId: "staff-sian" });
-      assert.equal(result.status, "review");
+      applyClientReturnActualDate({ claimId: "c3", actualOccurredAt: occurred, actorId: "staff-sian" });
       const flagged = endState(db);
       assert.equal(flagged.claim.storage_billing_end_on, "2026-09-22");
+      assert.equal(flagged.claim.storage_end_review_on, null);
       assert.equal(flagged.claim.storage_rate_pence, before.claim.storage_rate_pence);
       assert.equal(flagged.claim.off_hire_scheduled_on, before.claim.off_hire_scheduled_on);
       assert.equal(flagged.recovery.charge_pence, before.recovery.charge_pence);
-      assert.deepEqual(flagged.lines, before.lines);
-      assert.equal(getScreenData("c3", "storage").vat, "12.50");
-      assert.equal(getStorageEndDateReview("c3")?.jobDate, "2026-09-18");
-      assert.equal(getStorageEndDateReview("c3")?.storageEndDay, "2026-09-22");
-
-      confirmStorageEndDate({ claimId: "c3", choice: "file", actorId: "staff-justin" });
-      assert.equal(endState(db).claim.storage_billing_end_on, "2026-09-22");
-      assert.equal(endState(db).claim.storage_rate_pence, 1500);
-      assert.equal(getStorageEndDateReview("c3"), null);
-
-      applyClientReturnActualDate({ claimId: "c3", actualOccurredAt: occurred, actorId: "staff-sian" });
-      confirmStorageEndDate({ claimId: "c3", choice: "job", actorId: "staff-justin" });
-      assert.equal(endState(db).claim.storage_billing_end_on, "2026-09-18");
-      assert.equal(endState(db).claim.storage_rate_pence, 1500);
-      assert.equal(endState(db).claim.off_hire_scheduled_on, before.claim.off_hire_scheduled_on);
+      assert.equal(flagged.lines.length, before.lines.length);
       assert.equal(getScreenData("c3", "storage").vat, "12.50");
       assert.equal(getStorageEndDateReview("c3"), null);
     });
     db.close();
   });
 
-  it("sets the end date from a completed return job and from a handover, and a recovery job does not set it", () => {
+  it("does not set the chargeable end from a completed return job or handover", () => {
     const db = prepared();
     withDatabase(db, () => {
       clearDates(db);
@@ -315,7 +303,7 @@ describe("storage ends on the day the client's vehicle is returned after repair"
       });
       assert.equal(assigned.storageEndReview, false);
       assert.equal(assigned.storageDateReview, false);
-      assert.equal(endState(db).claim.storage_billing_end_on, "2026-09-18");
+      assert.equal(endState(db).claim.storage_billing_end_on, null);
       assert.equal(endState(db).claim.storage_started_on, null);
       assert.equal(endState(db).claim.storage_rate_pence, 1500);
       assert.equal(endState(db).claim.off_hire_scheduled_on, null);
@@ -349,7 +337,7 @@ describe("storage ends on the day the client's vehicle is returned after repair"
         actualDriverId: created.id,
         actualOccurredAt: "2026-09-18T16:30",
       });
-      assert.equal(endState(db).claim.storage_billing_end_on, "2026-09-18");
+      assert.equal(endState(db).claim.storage_billing_end_on, null);
       assert.equal(endState(db).claim.storage_started_on, null);
       assert.equal(endState(db).claim.storage_rate_pence, 1500);
       assert.equal(getScreenData("c3", "storage").vat, "12.50");

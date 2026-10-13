@@ -2,7 +2,7 @@ import { FILE_REFERENCE_PREFIX_DEFAULT, HEAD_LABELS, type HeadOfLoss } from "../
 import { listDueChases, type ChaseView } from "./chase";
 import { listPaymentAttention } from "./payment-review";
 import { dueFollowUpChases } from "./follow-up-chases";
-import { accidentDateError, isBeforeLondonDay, isSameLondonDay, londonDateIso, nowUtcIso } from "../dates";
+import { accidentDateError, isBeforeLondonDay, isSameLondonDay, londonDateIso, londonTodayIso, nowUtcIso } from "../dates";
 import { formatGbp, sumDistinctHeads } from "../money";
 import { all, dbPath, get, getDb, newId, resetSqlStatementCount, run, sqlStatementCount } from "./connection";
 import { canReserveVehicle, chaseFileStateFromPosition, chaseStopReason, nextFileReference, parseFileReferenceNumber } from "../domain/rules";
@@ -55,6 +55,7 @@ export const QUEUE_LABELS: Record<string, string> = {
   tasks_overdue: "Overdue tasks",
   active_hire: "Active hire",
   storage: "Vehicles in storage",
+  storage_chargeable: "Chargeable storage",
   fleet_available: "Fleet availability",
   liability: "Awaited liability responses",
   engineer: "Awaited engineer reports",
@@ -138,6 +139,14 @@ function queueWhere(queue: string): { sql: string; params: unknown[] } {
       return { sql: "c.hire_status IN ('active', 'approaching_off_hire')", params: [] };
     case "storage":
       return { sql: "c.storage_status = 'active'", params: [] };
+    case "storage_chargeable":
+      return {
+        sql: `c.storage_status = 'active' AND (
+          c.storage_billing_end_on IS NULL OR trim(c.storage_billing_end_on) = ''
+          OR substr(c.storage_billing_end_on, 1, 10) >= ?
+        )`,
+        params: [londonTodayIso()],
+      };
     case "liability":
       return { sql: "c.insurer_liability_position = 'pending'", params: [] };
     case "engineer":
@@ -264,6 +273,7 @@ export function getDashboard() {
     { key: "tasks_overdue", label: "Overdue tasks", count: overdue.length, tone: "bad", href: "/tasks?when=overdue" },
     { key: "active_hire", label: "Active hire", count: countClaims("active_hire"), tone: "info" },
     { key: "storage", label: "Vehicles in storage", count: countClaims("storage"), tone: "info" },
+    { key: "storage_chargeable", label: "Chargeable storage", count: countClaims("storage_chargeable"), tone: "info" },
     { key: "fleet_available", label: "Fleet available", count: Number(fleetMap.available || 0), tone: "ok", href: "/hire" },
     { key: "liability", label: "Awaited liability responses", count: countClaims("liability"), tone: "warn" },
     { key: "engineer", label: "Awaited engineer reports", count: countClaims("engineer"), tone: "warn" },

@@ -21,6 +21,8 @@ import { StorageDateReview } from "@/components/claims/StorageDateReview";
 import { StorageEndDateReview } from "@/components/claims/StorageEndDateReview";
 import { getHireEndDateReviews } from "@/lib/db/hire-collection-date";
 import { getStorageDateReview, getStorageEndDateReview } from "@/lib/db/storage-recovery-date";
+import { claimStorageChargeEnded, storageAuthorisationEndForClaim } from "@/lib/db/storage-authorisation-end";
+import { ChargeableStorageNote, StorageAuthorisationEndPanel } from "@/components/claims/StorageAuthorisationEnd";
 import { MailboxSendNotice } from "@/components/claims/SendPreparedEmailForm";
 import { EmailSendModeBanner } from "@/components/EmailSendModeBanner";
 import { liveEmailSending } from "@/lib/email/send-mode";
@@ -89,11 +91,22 @@ export default async function ClaimWorkScreenPage({
         />
       ) : null}
       {screen === "storage" ? (
-        <StorageEndDateReview
-          claimId={String(data.claim.id)}
-          review={getStorageEndDateReview(String(data.claim.id))}
-          returnTo={`/claims/${data.claim.id}/work/storage`}
-        />
+        <div className="space-y-3">
+          <StorageEndDateReview
+            claimId={String(data.claim.id)}
+            review={getStorageEndDateReview(String(data.claim.id))}
+            returnTo={`/claims/${data.claim.id}/work/storage`}
+          />
+          <StorageAuthorisationEndPanel
+            claimId={String(data.claim.id)}
+            decision={storageAuthorisationEndForClaim(String(data.claim.id))}
+            returnTo={`/claims/${data.claim.id}/work/storage`}
+          />
+          <ChargeableStorageNote
+            ended={claimStorageChargeEnded(String(data.claim.id))}
+            endDay={data.claim.storage_billing_end_on ? String(data.claim.storage_billing_end_on) : null}
+          />
+        </div>
       ) : null}
       {screen === "assessed-damage" && Number(data.claim.total_loss) === 1 ? (
         <div className="space-y-3">

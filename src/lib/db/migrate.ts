@@ -74,6 +74,7 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["storage_rate_pence", "INTEGER"],
     ["storage_date_review_on", "TEXT"],
     ["storage_end_review_on", "TEXT"],
+    ["storage_authorisation_review", "TEXT"],
     ["own_insurer_address", "TEXT"],
     ["own_insurer_postcode", "TEXT"],
     ["audatex_network_code", "TEXT"],

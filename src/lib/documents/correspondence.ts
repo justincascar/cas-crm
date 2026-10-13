@@ -1,5 +1,6 @@
 import { formatUkDate } from "../dates";
 import { CAS_CLAIMS_MAILBOX } from "../constants";
+import { HIRE_CONTINUING, chargeableHireEndLabel } from "../domain/rules";
 import { resolveVehicleLocation } from "../domain/vehicle-location";
 import { CAS_COMPANY } from "./cas-hire-terms";
 import type { ChronologyDateMap } from "../domain/events";
@@ -361,7 +362,7 @@ export function correspondenceVars(ctx: CorrespondenceContext): Record<string, s
     site_contact_phone: textOrUnknown(ctx.siteContactPhone),
     report_turnaround_days: textOrUnknown(ctx.reportTurnaroundDays),
     hire_start_date: dateOrUnknown(ctx.hireStartAt),
-    hire_end_date: dateOrUnknown(ctx.hireEndAt),
+    hire_end_date: chargeableHireEndLabel(ctx.hireEndAt),
     daily_rate: moneyOrUnknown(ctx.dailyRatePence),
     total_hire_days: daysOrUnknown(ctx.totalHireDays),
     total_hire_charge: moneyOrUnknown(hireCharge),
@@ -381,7 +382,7 @@ export function correspondenceVars(ctx: CorrespondenceContext): Record<string, s
     their_objection_summary: textOrUnknown(ctx.theirObjectionSummary),
     disclosure_documents_summary: textOrUnknown(ctx.disclosureDocumentsSummary),
     disclosure_response_option_a_or_b: textOrUnknown(ctx.disclosureResponse),
-    hire_cessation_date: dateOrUnknown(ctx.hireCessationDate),
+    hire_cessation_date: chargeableHireEndLabel(ctx.hireCessationDate),
     cessation_basis: textOrUnknown(ctx.cessationBasis),
     ownership_or_finance_next_steps: textOrUnknown(ctx.ownershipOrFinanceNextSteps),
     current_stage_label: textOrUnknown(ctx.currentStageLabel),
@@ -413,7 +414,8 @@ export function missingFromSpec(required: readonly string[], vars: Record<string
   const missing: string[] = [];
   for (const key of required) {
     const value = vars[key];
-    if (!value || value === "Unknown" || value === "Unknown vehicle") {
+    const hirePeriodMissing = (key === "hire_end_date" || key === "hire_cessation_date") && value === HIRE_CONTINUING;
+    if (!value || value === "Unknown" || value === "Unknown vehicle" || hirePeriodMissing) {
       missing.push(VAR_LABELS[key] || key.replaceAll("_", " "));
     }
   }

@@ -10,6 +10,7 @@ import {
   standardDailyRatePence,
 } from "../documents/gta";
 import { formatUkDate, formatUkDateTime, nowUtcIso } from "../dates";
+import { HIRE_CONTINUING } from "../domain/rules";
 import { formatGbp } from "../money";
 import { get, newId, run } from "./connection";
 import { recordClaimEvent } from "./chronology";
@@ -139,7 +140,8 @@ export function renderHireAgreement(view: HireAgreementView): string {
   const warnings = hireAgreementWarnings(view);
   const agreement = escape(view.agreementNumber);
   const dateOut = view.dateOut ? formatUkDate(view.dateOut) : "";
-  const dateIn = view.dateIn ? formatUkDate(view.dateIn) : "";
+  const dateIn =
+    view.dateIn === HIRE_CONTINUING ? HIRE_CONTINUING : view.dateIn ? formatUkDate(view.dateIn) : "";
   const missingBanner = missing.length
     ? `<p class="missing">Missing from the file (not guessed): ${escape(missing.join("; "))}.</p>`
     : "";
@@ -398,7 +400,7 @@ export function buildHireAgreementView(
     clientGroup: normaliseGtaGroup(String(pack.claim.client_gta_group || "")),
     groupCharged: normaliseGtaGroup(String(s.group_charged || pack.claim.client_gta_group || "")),
     dateOut: String(s.date_out || hire?.started_at || ""),
-    dateIn: String(s.date_in || ""),
+    dateIn: hire?.billing_end_at ? String(hire.billing_end_at) : HIRE_CONTINUING,
     dailyRatePence,
     hireMileage: pack.handoverReadings?.hireDelivery ? formatHandoverMileage(pack.handoverReadings.hireDelivery.mileage) : "",
     hireFuelLevel: pack.handoverReadings?.hireDelivery?.fuelLabel || "",

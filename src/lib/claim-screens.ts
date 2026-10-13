@@ -698,7 +698,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
     key: "storage",
     label: "Storage",
     group: "recovery",
-    hint: "Storage billing end is an explicit date. Days are not invented without start and end.",
+    hint: "On a repairable file, storage is charged up to the repair authorisation date once that date is confirmed. A typed end date that is not the authorisation date needs a reason. The vehicle can stay here after charging stops. Storage billing end is an explicit date.",
     sections: [
       {
         fields: [
@@ -711,6 +711,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
           { name: "invoiceNo", label: "Invoice no." },
           { name: "startDate", label: "Storage start date", type: "date" },
           { name: "endDate", label: "Storage end date", type: "date" },
+          { name: "endDateReason", label: "Reason, if this end date is not the repair authorisation date", type: "textarea", span: 2 },
           { name: "dailyRate", label: "Storage daily rate", type: "gbp" },
           { name: "days", label: "Storage days", type: "number" },
           { name: "netAmount", label: "Net amount", type: "gbp" },

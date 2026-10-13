@@ -580,6 +580,32 @@ Blocked: per-file permissions, shared hosting, live DVLA. Incoming mail is not b
 - A lapsed insurer offer stays on the vehicle damage offer list. It is not the current offer. Claimed, agreed and received are unchanged. That uses the same action as withdraw and reject.
 - Tests: `tests/justification-chronology.test.ts` and `tests/vehicle-offers.test.ts`. Full suite: 358 passing, 0 failing.
 
+## Hire and storage end dates (13 October 2026)
+
+Three decisions, confirmed:
+
+1. On a repairable claim, hire is charged up to the date CAS collects the hire car. That already worked. Completing the hire-collection job still writes `hire_episodes.billing_end_at`. That trigger was not changed.
+2. On a repairable claim, storage of the client's own vehicle is charged up to the date the repair is authorised. The date is proposed on the claim. It is stored only when a handler confirms it, in the same way as the total-loss hire-end confirmation. A chase asking for authorisation does not close storage. A repair payment does not close storage.
+3. Total-loss hire is unchanged. Hire still ends seven days after the qualifying payment, and only once a handler confirms that suggestion. `confirmTotalLossOffHire` was not changed.
+
+Repair authorisation is already stored. There is no separate authorisation column. The date is the `occurred_at` of the history line `repairs_authorised` ("Repair authorisation received"). Authority and payment are separate events: `repairs_authorised` and `repair_payment_received`. If authorisation is withdrawn, the line is `repairs_authorised_cleared`. The latest unretracted authorisation is the date that is proposed. Nothing new was invented for that date.
+
+Letters, the hire-pack agreement and the hire agreement take the hire period from the stored chargeable hire end (`hire_episodes.billing_end_at`). If that date is empty they say "Hire continuing" and the letter is flagged as missing that date. They do not fall back to the vehicle-return date, the collection date, the pack "Date in" note, or the scheduled off-hire date. There is no generated schedule of loss. The only schedule of loss in the system is a document title already on a seeded file. It was not given a hire period.
+
+When the repaired vehicle has been returned and the hire car has been collected on a different Europe/London day, the claim shows both dates and a warning such as "Hire charged 2 days beyond vehicle return". The warning does not change the hire charge.
+
+The physical return ("Repaired vehicle returned to customer") now sets `repaired_vehicle_returned`. It does not write the chargeable storage end. The car can still be at CAS after storage charging stops. "Vehicles in storage" still counts a vehicle that is physically on site. "Chargeable storage" drops it once the confirmed end date has passed. The end date itself is still a chargeable day.
+
+A handler can type a different storage end. If it is not the authorisation date, a reason is required. Saving without that reason is refused. A confirmed date is not overwritten when authorisation is revised or withdrawn, or when the file is later marked a total loss. Those cases are flagged for review. The date already on the file stays until someone chooses.
+
+Seeded hire and storage end dates already in the database were not rewritten. Reading a file only flags a mismatch.
+
+`hire_episodes.collection_at` existed but the application never wrote it. Completing a hire-collection job now records that day when the field is empty, so the gap warning can compare it with the vehicle-return date. An existing collection date is left as it is. The hire charge is still `billing_end_at`.
+
+Still not stored, so not used: inspection date, the report sent on to the insurer, the date the vehicle was received for repair, and parts ordered. The hidden loss-of-use screen is still notes only.
+
+Tests: `tests/hire-storage-end.test.ts`. Full suite: 369 passing, 0 failing.
+
 ## Not yet claimed
 
 - The same offer list, kept separate from the agreed figure, is still to be added on Hire and on Recovery & Storage.

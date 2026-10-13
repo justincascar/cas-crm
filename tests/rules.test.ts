@@ -49,9 +49,9 @@ describe("hire start and end rules", () => {
     assert.equal(faultCourtesyCreatesCreditHire(false), false);
   });
 
-  it("ends repairable hire only after completion and customer return", () => {
-    assert.equal(repairableHireMayEnd({ repairsComplete: true, repairedVehicleReturned: false }), false);
-    assert.equal(repairableHireMayEnd({ repairsComplete: true, repairedVehicleReturned: true }), true);
+  it("ends repairable hire when the hire car has been collected", () => {
+    assert.equal(repairableHireMayEnd({ hireCarCollected: false }), false);
+    assert.equal(repairableHireMayEnd({ hireCarCollected: true }), true);
   });
 
   it("starts total-loss off-hire only after a qualifying payment", () => {
@@ -255,14 +255,9 @@ describe("financials and chasers", () => {
     assert.equal(paid.send, false);
   });
 
-  it("stops hire charges at the earlier of vehicle return and total-loss cessation", () => {
-    assert.equal(
-      hireChargesAccrualEnd({
-        vehicleReturnedAt: "2026-09-20T09:00:00.000Z",
-        totalLossCessationAt: "2026-09-18T09:00:00.000Z",
-      }),
-      "2026-09-18T09:00:00.000Z",
-    );
-    assert.equal(hireChargesAccrualEnd({ vehicleReturnedAt: null, totalLossCessationAt: null }), null);
+  it("uses only the stored hire end and does not fall back to another date", () => {
+    assert.equal(hireChargesAccrualEnd({ storedHireEndAt: "2026-09-20" }), "2026-09-20");
+    assert.equal(hireChargesAccrualEnd({ storedHireEndAt: null }), null);
+    assert.equal(hireChargesAccrualEnd({ storedHireEndAt: "  " }), null);
   });
 });

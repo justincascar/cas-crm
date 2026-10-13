@@ -37,6 +37,12 @@ import { isPaymentReviewHead } from "@/lib/domain/payment-review";
 import { headScreenPath } from "@/lib/domain/head-screen";
 import { getHireEndDateReviews } from "@/lib/db/hire-collection-date";
 import { getStorageDateReview, getStorageEndDateReview } from "@/lib/db/storage-recovery-date";
+import {
+  claimStorageChargeEnded,
+  hireGapForClaim,
+  storageAuthorisationEndForClaim,
+} from "@/lib/db/storage-authorisation-end";
+import { ChargeableStorageNote, HireReturnGapNotice, StorageAuthorisationEndPanel } from "@/components/claims/StorageAuthorisationEnd";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
@@ -433,6 +439,16 @@ export default async function ClaimDetailPage({
             <StorageDateReview claimId={String(claim.id)} review={getStorageDateReview(String(claim.id))} returnTo={`/claims/${claim.id}`} />
             <StorageEndDateReview claimId={String(claim.id)} review={getStorageEndDateReview(String(claim.id))} returnTo={`/claims/${claim.id}`} />
             <HireEndDateReview claimId={String(claim.id)} reviews={getHireEndDateReviews(String(claim.id))} returnTo={`/claims/${claim.id}`} />
+            <StorageAuthorisationEndPanel
+              claimId={String(claim.id)}
+              decision={storageAuthorisationEndForClaim(String(claim.id))}
+              returnTo={`/claims/${claim.id}`}
+            />
+            <HireReturnGapNotice gap={hireGapForClaim(String(claim.id))} />
+            <ChargeableStorageNote
+              ended={claimStorageChargeEnded(String(claim.id))}
+              endDay={claim.storage_billing_end_on ? String(claim.storage_billing_end_on) : null}
+            />
           </div>
           <AgreementParts claim={claim} hire={data.hire} recoveryJobs={data.recoveryJobs} reservations={data.reservations} />
           <ul className="mt-3 space-y-1 text-sm">

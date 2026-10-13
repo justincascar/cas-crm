@@ -49,6 +49,13 @@ function writeHireEnd(episodeId: string, day: string) {
   run(`UPDATE hire_episodes SET billing_end_at = ?, hire_end_review_on = NULL WHERE id = ?`, [day, episodeId]);
 }
 
+/** Record the collection day when none is stored. An existing collection date is left as it is. */
+function noteCollectionDay(episodeId: string, day: string) {
+  const row = get<{ collection_at: string | null }>(`SELECT collection_at FROM hire_episodes WHERE id = ?`, [episodeId]);
+  if (!row || calendarDay(row.collection_at)) return;
+  run(`UPDATE hire_episodes SET collection_at = ? WHERE id = ?`, [day, episodeId]);
+}
+
 function clearReview(episodeId: string) {
   run(`UPDATE hire_episodes SET hire_end_review_on = NULL WHERE id = ?`, [episodeId]);
 }
@@ -74,6 +81,7 @@ export function applyHireCollectionActualDate(input: {
   if (Number(claim.total_loss) === 1) return { status: "skipped" };
   const episode = readEpisode(episodeId);
   if (!episode || episode.claim_id !== input.claimId) return { status: "skipped" };
+  noteCollectionDay(episode.id, jobDate);
   const hireEndDay = calendarDay(episode.billing_end_at);
   if (hireEndDay && hireEndDay !== jobDate) {
     run(`UPDATE hire_episodes SET hire_end_review_on = ? WHERE id = ?`, [jobDate, episode.id]);

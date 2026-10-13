@@ -196,15 +196,17 @@ describe("total-loss hire end suggestion", () => {
     withDatabase(db, () => {
       db.prepare(`UPDATE claims SET off_hire_scheduled_on = '2026-09-01', hire_status = 'approaching_off_hire' WHERE id = 'c9'`).run();
       const scheduledOnly = letterPreview("c9", "total_loss_cessation");
-      assert.match(scheduledOnly.text, /01\/09\/2026/);
-      assert.match(scheduledOnly.text, /scheduled off-hire date/);
+      assert.match(scheduledOnly.text, /Hire continuing/);
+      assert.match(scheduledOnly.text, /no chargeable hire end is stored/);
+      assert.doesNotMatch(scheduledOnly.text, /01\/09\/2026/);
       assert.equal(listClaims({ queue: "off_hire" }).some((row) => row.id === "c9"), true);
 
       db.prepare(`UPDATE hire_episodes SET billing_end_at = '2026-10-08' WHERE id = 'h-c9'`).run();
       const confirmed = letterPreview("c9", "total_loss_cessation");
       assert.match(confirmed.text, /08\/10\/2026/);
-      assert.match(confirmed.text, /confirmed hire end date/);
+      assert.match(confirmed.text, /stored chargeable hire end date/);
       assert.doesNotMatch(confirmed.text, /01\/09\/2026/);
+      assert.doesNotMatch(confirmed.text, /Hire continuing/);
       assert.equal(listClaims({ queue: "off_hire" }).some((row) => row.id === "c9"), false);
       const scheduled = db.prepare(`SELECT off_hire_scheduled_on FROM claims WHERE id = 'c9'`).get() as { off_hire_scheduled_on: string };
       assert.equal(scheduled.off_hire_scheduled_on, "2026-09-01");
