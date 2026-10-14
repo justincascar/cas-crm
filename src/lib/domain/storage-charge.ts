@@ -4,9 +4,18 @@ import { normaliseRecoveryScreen } from "./recovery-charges";
 import { londonCalendarDayGap } from "./storage-authorisation-end";
 import { formatGbp, grossFromNet } from "../money";
 
-/** Justin has not confirmed this. Both the first day and the last day are counted. */
+/** Confirmed 14/10/2026. Both the first day and the last day are counted. */
 export const STORAGE_INCLUSIVE_DAY_NOTE =
-  "Days count both the first day and the last day. Justin has not confirmed this counting rule.";
+  "Days count both the first day and the last day. Confirmed 14/10/2026. Storage from 22/09/2026 to 01/10/2026 is 10 days.";
+
+/**
+ * The same inclusive count applies when a hire charge is built from days.
+ * Hire money is not calculated from days yet.
+ */
+export const HIRE_INCLUSIVE_DAY_NOTE =
+  "When hire is calculated from days, count both the first day and the last day. Confirmed 14/10/2026. Hire is not calculated from days yet.";
+
+export type StorageCountBasis = "confirmed" | "proposed" | "today";
 
 export type StorageLocationFields = {
   name: string;
@@ -23,6 +32,8 @@ export type StorageCharge =
       status: "calculated";
       days: number;
       provisional: boolean;
+      basis: StorageCountBasis;
+      label: string | null;
       ratePence: number;
       netPence: number;
       vatPence: number;
@@ -39,23 +50,46 @@ export function inclusiveStorageDays(startDay: string, endDay: string): number |
   return gap + 1;
 }
 
+export function ukDayLabel(isoDay: string): string {
+  const [year, month, day] = isoDay.split("-");
+  return `${day}/${month}/${year}`;
+}
+
+export function storageProvisionalLabel(basis: StorageCountBasis, countedTo: string): string | null {
+  if (basis === "confirmed") return null;
+  if (basis === "proposed") {
+    return `Provisional, to proposed end ${ukDayLabel(countedTo)}, awaiting confirmation`;
+  }
+  return "Provisional to today";
+}
+
+function isoDay(value: string | null | undefined): string | null {
+  const day = String(value || "").slice(0, 10);
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null;
+}
+
 export function storageCharge(input: {
   startDay: string | null;
   confirmedEndDay: string | null;
+  proposedEndDay?: string | null;
   today: string;
   ratePence: number;
   vatRate?: number;
 }): StorageCharge {
   if (!input.startDay) return { status: "missing_start" };
-  const provisional = !input.confirmedEndDay;
-  const countedTo = input.confirmedEndDay || input.today;
+  const confirmed = isoDay(input.confirmedEndDay);
+  const proposed = confirmed ? null : isoDay(input.proposedEndDay);
+  const basis: StorageCountBasis = confirmed ? "confirmed" : proposed ? "proposed" : "today";
+  const countedTo = confirmed || proposed || input.today;
   const days = inclusiveStorageDays(input.startDay, countedTo);
   if (days == null) return { status: "end_before_start" };
   const priced = grossFromNet(days * input.ratePence, input.vatRate ?? INDICATIVE_DEFAULTS.vat_rate);
   return {
     status: "calculated",
     days,
-    provisional,
+    provisional: basis !== "confirmed",
+    basis,
+    label: storageProvisionalLabel(basis, countedTo),
     ratePence: input.ratePence,
     netPence: priced.net,
     vatPence: priced.vat,

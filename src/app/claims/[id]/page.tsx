@@ -554,7 +554,12 @@ export default async function ClaimDetailPage({
                       label
                     )}
                   </td>
-                  <td className="tabular">{formatGbp(claimed)}</td>
+                  <td className="tabular">
+                    {formatGbp(claimed)}
+                    {head === "storage" && String(line.description || "").toLowerCase().includes("provisional")
+                      ? " — provisional"
+                      : ""}
+                  </td>
                   <td className="tabular">{agreed == null ? "Not set" : formatGbp(agreed)}</td>
                   <td className="tabular">{formatGbp(Number(line.offered_pence))}</td>
                   <td className="tabular">{formatGbp(received)}</td>

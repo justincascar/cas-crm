@@ -3,6 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, it } from "node:test";
+import { letterPreview } from "../src/lib/db/chronology.ts";
 import { withDatabase, get, run } from "../src/lib/db/connection.ts";
 import { migrate } from "../src/lib/db/migrate.ts";
 import { recordAgreedHeadFigure, recordHeadPayment } from "../src/lib/db/payment-ledger.ts";
@@ -27,6 +28,8 @@ import {
   storageCharge,
   storageLocationFromSetting,
 } from "../src/lib/domain/storage-charge.ts";
+import { PAYMENT_CHASE_HEADS, STORAGE_PAYMENT_REQUEST_BLOCK, isPaymentChaseHead } from "../src/lib/domain/payment-chase.ts";
+import { summariseLossesClaimed } from "../src/lib/documents/correspondence.ts";
 import { FieldValidationError } from "../src/lib/form-validation.ts";
 
 const schema = fs.readFileSync(path.join(process.cwd(), "src/lib/db/schema.sql"), "utf8");
@@ -72,28 +75,50 @@ describe("storage and recovery pages", () => {
     assert.equal(span.totalPence, 107640);
   });
 
-  it("treats a proposed end as provisional to today, and a confirmed end as final", () => {
-    const provisional = storageCharge({
+  it("counts a proposed end to that date, counts to today only when there is no end, and treats a confirmed end as final", () => {
+    const proposed = storageCharge({
+      startDay: "2026-09-22",
+      confirmedEndDay: null,
+      proposedEndDay: "2026-10-01",
+      today: "2026-10-14",
+      ratePence: 3900,
+    });
+    assert.equal(proposed.status, "calculated");
+    if (proposed.status === "calculated") {
+      assert.equal(proposed.provisional, true);
+      assert.equal(proposed.basis, "proposed");
+      assert.equal(proposed.countedTo, "2026-10-01");
+      assert.equal(proposed.days, 10);
+      assert.equal(proposed.netPence, 39000);
+      assert.equal(proposed.vatPence, 7800);
+      assert.equal(proposed.totalPence, 46800);
+      assert.equal(proposed.label, "Provisional, to proposed end 01/10/2026, awaiting confirmation");
+    }
+    const open = storageCharge({
       startDay: "2026-09-22",
       confirmedEndDay: null,
       today: "2026-10-14",
       ratePence: 3900,
     });
-    assert.equal(provisional.status, "calculated");
-    if (provisional.status === "calculated") {
-      assert.equal(provisional.provisional, true);
-      assert.equal(provisional.countedTo, "2026-10-14");
-      assert.equal(provisional.days, 23);
+    assert.equal(open.status, "calculated");
+    if (open.status === "calculated") {
+      assert.equal(open.basis, "today");
+      assert.equal(open.countedTo, "2026-10-14");
+      assert.equal(open.days, 23);
+      assert.equal(open.label, "Provisional to today");
     }
     const finalCharge = storageCharge({
       startDay: "2026-09-22",
       confirmedEndDay: "2026-10-01",
-      today: "2026-10-14",
+      proposedEndDay: "2026-10-14",
+      today: "2026-12-01",
       ratePence: 3900,
     });
     assert.equal(finalCharge.status, "calculated");
     if (finalCharge.status === "calculated") {
       assert.equal(finalCharge.provisional, false);
+      assert.equal(finalCharge.basis, "confirmed");
+      assert.equal(finalCharge.label, null);
       assert.equal(finalCharge.countedTo, "2026-10-01");
       assert.equal(finalCharge.days, 10);
     }
@@ -286,6 +311,38 @@ describe("storage and recovery pages", () => {
       const proposal = storageAuthorisationEndForClaim("c5");
       assert.equal(proposal.kind, "suggest");
       if (proposal.kind === "suggest") assert.equal(proposal.date, "2026-10-01");
+      const charge = syncStorageClaimed("c5", "2026-10-14");
+      assert.equal(charge?.status, "calculated");
+      if (charge?.status === "calculated") {
+        assert.equal(charge.days, 10);
+        assert.equal(charge.netPence, 39000);
+        assert.equal(charge.vatPence, 7800);
+        assert.equal(charge.totalPence, 46800);
+        assert.equal(charge.label, "Provisional, to proposed end 01/10/2026, awaiting confirmation");
+      }
+      assert.equal(
+        get<{ storage_billing_end_on: string | null }>(`SELECT storage_billing_end_on FROM claims WHERE id = 'c5'`)
+          ?.storage_billing_end_on,
+        null,
+      );
+      const stored = get<{ description: string; claimed_pence: number }>(
+        `SELECT description, claimed_pence FROM financial_lines WHERE claim_id = 'c5' AND head_of_loss = 'storage'`,
+      );
+      assert.equal(stored?.claimed_pence, 46800);
+      assert.match(String(stored?.description), /provisional, to proposed end 01\/10\/2026, awaiting confirmation/);
+      syncRecoveryClaimed("c5");
+      const cessation = letterPreview("c5", "total_loss_cessation");
+      const pack = letterPreview("c5", "hire_pack_cover");
+      assert.equal(cessation.text.includes("£468.00"), false);
+      assert.equal(pack.text.includes("£468.00"), false);
+      assert.match(cessation.text, /£474\.00/);
+      assert.equal(isPaymentChaseHead("storage"), false);
+      assert.equal(PAYMENT_CHASE_HEADS.includes("storage" as never), false);
+      assert.match(STORAGE_PAYMENT_REQUEST_BLOCK, /not chased/);
+      assert.match(
+        summariseLossesClaimed([{ head_of_loss: "storage", claimed_pence: 46800 }], false, { storageProvisional: true }),
+        /provisional/,
+      );
       const job = get<{ location: string; recovered_at: string }>(
         `SELECT location, recovered_at FROM recovery_jobs WHERE claim_id = 'c5'`,
       );

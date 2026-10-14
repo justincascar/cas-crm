@@ -43,7 +43,12 @@ export default async function FinancialsPage() {
                     {String(l.file_reference)}
                   </Link>
                 </td>
-                <td>{HEAD_LABELS[String(l.head_of_loss) as HeadOfLoss] || String(l.head_of_loss)}</td>
+                <td>
+                  {HEAD_LABELS[String(l.head_of_loss) as HeadOfLoss] || String(l.head_of_loss)}
+                  {String(l.head_of_loss) === "storage" && String(l.description || "").toLowerCase().includes("provisional")
+                    ? " — provisional"
+                    : ""}
+                </td>
                 <td className="tabular">
                   {l.quantity ?? "—"} {String(l.unit || "")}
                 </td>

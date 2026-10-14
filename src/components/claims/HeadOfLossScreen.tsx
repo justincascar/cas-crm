@@ -13,11 +13,13 @@ export function HeadOfLossScreen({
   section,
   canAccept,
   actions,
+  claimedNote,
 }: {
   claimId: string;
   section: HeadSectionModel;
   canAccept: boolean;
   actions?: ReactNode;
+  claimedNote?: string | null;
 }) {
   return (
     <section className="rounded-xl border border-line bg-card p-5" aria-label={section.title}>
@@ -36,7 +38,10 @@ export function HeadOfLossScreen({
         <dl className="mt-4 grid gap-3 sm:grid-cols-2">
           <div>
             <dt className="text-sm text-slate">Claimed</dt>
-            <dd className="font-semibold tabular">{formatGbp(section.claimedPence)}</dd>
+            <dd className="font-semibold tabular">
+              {formatGbp(section.claimedPence)}
+              {claimedNote ? <span className="mt-1 block text-sm font-normal text-slate">{claimedNote}</span> : null}
+            </dd>
           </div>
           <div>
             <dt className="text-sm text-slate">{section.agreedCaption}</dt>

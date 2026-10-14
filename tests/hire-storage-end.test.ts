@@ -366,6 +366,10 @@ describe("returned status, existing dates, and total-loss hire", () => {
       assert.equal(storageRow("c8").storage_billing_end_on, c8);
       assert.equal(storageRow("c10").storage_billing_end_on, c10Storage);
       assert.equal(hireRow("c10").billing_end_at, c10Hire);
+      run(`UPDATE claims SET storage_billing_end_on = '2026-09-14' WHERE id = 'c3'`);
+      storageAuthorisationEndForClaim("c3");
+      hireGapForClaim("c3");
+      assert.equal(storageRow("c3").storage_billing_end_on, "2026-09-14");
       assert.equal(storageAuthorisationEndForClaim("c7").kind, "open");
       assert.equal(storageAuthorisationEndForClaim("c10").kind, "open");
     });

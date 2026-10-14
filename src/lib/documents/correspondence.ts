@@ -235,9 +235,13 @@ const LOSS_PHRASES: Record<string, string> = {
   other: "other uninsured losses",
 };
 
+export const PROVISIONAL_STORAGE_LOSS_PHRASE =
+  "storage charges (provisional, awaiting a confirmed end — not a final figure)";
+
 export function summariseLossesClaimed(
   lines: Array<{ head_of_loss: string; claimed_pence: number }>,
   creditHire: boolean,
+  options?: { storageProvisional?: boolean },
 ): string {
   const claimed = lines.filter((line) => (line.claimed_pence || 0) > 0);
   const phrases: string[] = [];
@@ -247,7 +251,12 @@ export function summariseLossesClaimed(
   else if (has("hire")) phrases.push(LOSS_PHRASES.hire!);
   const ordered = ["courtesy", "recovery", "storage", "gate_fee", "cdw", "additional_driver", "delivery_collection", "engineers_fees", "salvage_shortfall", "other"];
   for (const head of ordered) {
-    if (has(head)) phrases.push(LOSS_PHRASES[head]!);
+    if (!has(head)) continue;
+    if (head === "storage" && options?.storageProvisional) {
+      phrases.push(PROVISIONAL_STORAGE_LOSS_PHRASE);
+      continue;
+    }
+    phrases.push(LOSS_PHRASES[head]!);
   }
   const used = new Set(["repairs", "vehicle_damage", "hire", "credit_hire", ...ordered]);
   for (const line of claimed) {

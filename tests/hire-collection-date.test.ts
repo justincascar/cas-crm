@@ -4,6 +4,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, it } from "node:test";
 import { withDatabase } from "../src/lib/db/connection.ts";
+import { clearFalseDemonstrationHireCollection } from "../src/lib/db/demo-jobs.ts";
 import {
   applyHireCollectionActualDate,
   confirmHireEndDate,
@@ -196,6 +197,28 @@ describe("hire ends on the day the hire car is collected", () => {
       assert.equal(afterLoss.claim.off_hire_scheduled_on, beforeLoss.claim.off_hire_scheduled_on);
       assert.equal(afterLoss.claim.payment_qualifies_off_hire, beforeLoss.claim.payment_qualifies_off_hire);
       assert.equal(getHireEndDateReviews("c10").length, 0);
+    });
+    db.close();
+  });
+
+  it("removes a hire collection date on TEST-0003 that was never logged, and leaves a real collection", () => {
+    const db = prepared();
+    withDatabase(db, () => {
+      assert.equal(snapshot(db, "c3", "h-c3").episode?.collection_at, null);
+      assert.equal(snapshot(db, "c3", "h-c3").episode?.billing_end_at, null);
+      db.prepare(`UPDATE hire_episodes SET collection_at = '2026-10-03', billing_end_at = NULL WHERE id = 'h-c3'`).run();
+      clearFalseDemonstrationHireCollection(db);
+      assert.equal(snapshot(db, "c3", "h-c3").episode?.collection_at, null);
+      assert.equal(snapshot(db, "c3", "h-c3").episode?.billing_end_at, null);
+
+      db.prepare(`UPDATE hire_episodes SET collection_at = '2026-10-03', billing_end_at = '2026-10-03' WHERE id = 'h-c3'`).run();
+      clearFalseDemonstrationHireCollection(db);
+      assert.equal(snapshot(db, "c3", "h-c3").episode?.collection_at, "2026-10-03");
+      assert.equal(snapshot(db, "c3", "h-c3").episode?.billing_end_at, "2026-10-03");
+
+      db.prepare(`UPDATE hire_episodes SET collection_at = '2026-10-04', billing_end_at = NULL WHERE id = 'h-c3'`).run();
+      clearFalseDemonstrationHireCollection(db);
+      assert.equal(snapshot(db, "c3", "h-c3").episode?.collection_at, "2026-10-04");
     });
     db.close();
   });

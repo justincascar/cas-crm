@@ -8,6 +8,7 @@ import {
   hirePackChaseDecision,
   faultCourtesyCreatesCreditHire,
   nextFileReference,
+  inclusiveHireDays,
   repairableHireMayEnd,
   reservationStartsCharges,
   storageBillingEnd,
@@ -52,6 +53,11 @@ describe("hire start and end rules", () => {
   it("ends repairable hire when the hire car has been collected", () => {
     assert.equal(repairableHireMayEnd({ hireCarCollected: false }), false);
     assert.equal(repairableHireMayEnd({ hireCarCollected: true }), true);
+  });
+
+  it("counts hire days inclusively when hire is calculated, and does not price hire from them yet", () => {
+    assert.equal(inclusiveHireDays("2026-09-22", "2026-10-01"), 10);
+    assert.equal(inclusiveHireDays("2026-09-22", "2026-09-22"), 1);
   });
 
   it("starts total-loss off-hire only after a qualifying payment", () => {

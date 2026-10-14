@@ -5,6 +5,40 @@ function id(prefix: string): string {
   return `${prefix}_${crypto.randomUUID()}`;
 }
 
+/**
+ * TEST-0003 once showed a hire car collected on 03/10/2026 with no hire end.
+ * That date was not written by the seed or by the Hire car collection job, which records the collection and the hire end together.
+ * Only that stray date is removed, and only when no hire end, no completed collection job, and no hire-collected handover exist.
+ * Any other collection date is left as it is. The renewal chase still treats a real collection date as hire ended.
+ */
+export function clearFalseDemonstrationHireCollection(db: DatabaseSync) {
+  const episode = db.prepare(`SELECT collection_at, billing_end_at FROM hire_episodes WHERE id = 'h-c3'`).get() as
+    | { collection_at: string | null; billing_end_at: string | null }
+    | undefined;
+  if (!episode?.collection_at || episode.billing_end_at) return;
+  if (!String(episode.collection_at).startsWith("2026-10-03")) return;
+  let job: unknown;
+  let handover: unknown;
+  try {
+    job = db
+      .prepare(
+        `SELECT id FROM day_assignments WHERE claim_id = 'c3' AND job_kind = 'hire_collection' AND completed_at IS NOT NULL LIMIT 1`,
+      )
+      .get();
+  } catch {
+    job = undefined;
+  }
+  try {
+    handover = db
+      .prepare(`SELECT id FROM vehicle_handovers WHERE claim_id = 'c3' AND event_kind = 'hire_collected' LIMIT 1`)
+      .get();
+  } catch {
+    handover = undefined;
+  }
+  if (job || handover) return;
+  db.prepare(`UPDATE hire_episodes SET collection_at = NULL WHERE id = 'h-c3' AND billing_end_at IS NULL`).run();
+}
+
 /** Demonstration driver and mechanic always have TEST-0003 for today, so a phone trial has a job. */
 export function ensureDemoDayJobs(db: DatabaseSync) {
   db.exec(`

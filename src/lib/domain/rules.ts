@@ -1,5 +1,6 @@
 import { TOTAL_LOSS_HIRE_DAYS_AFTER_QUALIFYING_PAYMENT } from "../constants";
 import { addCalendarDaysIso, daysBetweenLondon, formatUkDate, londonDateIso } from "../dates";
+import { londonCalendarDayGap } from "./storage-authorisation-end";
 
 export type ReservationInput = {
   vehicleId: string;
@@ -69,6 +70,17 @@ export function storageBillingEnd(explicitEnd: string | null): string | null {
 
 export function agreementDayNumber(startOn: string, asAt: string): number {
   return daysBetweenLondon(startOn, asAt) + 1;
+}
+
+/**
+ * Hire day count for when a hire charge is built. Both the start day and the end day.
+ * Hire money is not calculated from this yet. Renewal alerts do not use it.
+ */
+export function inclusiveHireDays(startDay: string, endDay: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDay) || !/^\d{4}-\d{2}-\d{2}$/.test(endDay)) return null;
+  const gap = londonCalendarDayGap(startDay, endDay);
+  if (gap < 0) return null;
+  return gap + 1;
 }
 
 export function agreementNeedsRenewalPrep(opts: {

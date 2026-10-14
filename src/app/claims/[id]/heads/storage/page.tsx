@@ -195,7 +195,7 @@ export default async function StorageHeadPage({
               <dt className="text-slate">Days</dt>
               <dd className="font-semibold">
                 {charge.days}
-                {charge.provisional ? " — Provisional to today" : ""}
+                {charge.label ? ` — ${charge.label}` : ""}
               </dd>
             </div>
             <div>
@@ -238,6 +238,7 @@ export default async function StorageHeadPage({
       <HeadOfLossScreen
         claimId={id}
         section={section}
+        claimedNote={charge?.status === "calculated" ? charge.label : null}
         canAccept={accountCanAcceptPaymentSettlement(staff.id, staff.role)}
         actions={
           <>

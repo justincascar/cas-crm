@@ -242,11 +242,14 @@ export function getDashboard() {
 
   const lines = all<{
     head_of_loss: string;
+    description: string | null;
     claimed_pence: number;
     offered_pence: number;
     agreed_pence: number;
     received_pence: number;
-  }>("SELECT head_of_loss, claimed_pence, offered_pence, agreed_pence, received_pence FROM financial_lines");
+  }>(
+    "SELECT head_of_loss, description, claimed_pence, offered_pence, agreed_pence, received_pence FROM financial_lines",
+  );
 
   const byHead: Record<string, ReturnType<typeof sumDistinctHeads>> = {};
   for (const line of lines) {
@@ -258,6 +261,9 @@ export function getDashboard() {
     byHead[key].received += line.received_pence || 0;
   }
   const totals = sumDistinctHeads(lines);
+  const provisionalStorageClaimed = lines
+    .filter((line) => line.head_of_loss === "storage" && String(line.description || "").toLowerCase().includes("provisional"))
+    .reduce((sum, line) => sum + (line.claimed_pence || 0), 0);
 
   const chasesDueByKind = {
     liability_response: chasesDue.filter((row) => row.kind === "liability_response"),
@@ -304,7 +310,10 @@ export function getDashboard() {
     fleetMap,
     byHead,
     totals,
-    headLabels: HEAD_LABELS as Record<string, string>,
+    headLabels: {
+      ...(HEAD_LABELS as Record<string, string>),
+      ...(provisionalStorageClaimed > 0 ? { storage: "Storage (includes provisional, not a final charge)" } : {}),
+    },
     chasesDue,
     chasesDueByKind,
     awaitingDecisions: paymentAttention.awaiting,

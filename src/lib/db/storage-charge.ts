@@ -11,6 +11,7 @@ import { londonTodayIso, nowUtcIso } from "../dates";
 import { recordClaimEvent } from "./chronology";
 import { get, run } from "./connection";
 import { getScreenData } from "./screens";
+import { storageAuthorisationEndForClaim } from "./storage-authorisation-end";
 import { calendarDay } from "./storage-recovery-date";
 
 export function officeFinancialError(role: string | null | undefined): string | null {
@@ -65,6 +66,13 @@ export function effectiveStorageRatePence(storedRate: number | null | undefined)
   return { pence: getStorageDailyRatePence(), overridden: false };
 }
 
+/** A live proposal only. A stored end, a conflict, or a review flag is not a proposal to charge to. */
+export function proposedStorageEndDay(claimId: string): string | null {
+  const decision = storageAuthorisationEndForClaim(claimId);
+  if (decision.kind === "suggest") return decision.date;
+  return null;
+}
+
 export function storageChargeForClaim(claimId: string, today = londonTodayIso()): StorageCharge | null {
   const claim = storageRow(claimId);
   if (!claim) return null;
@@ -72,6 +80,7 @@ export function storageChargeForClaim(claimId: string, today = londonTodayIso())
   return storageCharge({
     startDay: calendarDay(claim.storage_started_on),
     confirmedEndDay: calendarDay(claim.storage_billing_end_on),
+    proposedEndDay: proposedStorageEndDay(claimId),
     today,
     ratePence: rate.pence,
   });
@@ -111,9 +120,10 @@ function writeClaimed(input: {
   if (existing) {
     run(
       `UPDATE financial_lines
-       SET claimed_pence = ?, net_pence = ?, vat_pence = ?, gross_pence = ?, rate_pence = ?, quantity = ?, unit = ?
+       SET description = ?, claimed_pence = ?, net_pence = ?, vat_pence = ?, gross_pence = ?, rate_pence = ?, quantity = ?, unit = ?
        WHERE id = ?`,
       [
+        input.description,
         input.claimedPence,
         input.netPence,
         input.vatPence,
@@ -158,7 +168,7 @@ export function syncStorageClaimed(claimId: string, today = londonTodayIso()) {
   writeClaimed({
     claimId,
     head: "storage",
-    description: charge.provisional ? "Storage, provisional to today" : "Storage",
+    description: charge.label ? `Storage, ${charge.label.charAt(0).toLowerCase()}${charge.label.slice(1)}` : "Storage",
     claimedPence: charge.totalPence,
     netPence: charge.netPence,
     vatPence: charge.vatPence,

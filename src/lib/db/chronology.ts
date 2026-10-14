@@ -8,6 +8,8 @@ import { scenePhotosWhatsAppBody, scenePhotosWhatsAppSubject } from "../whatsapp
 import { CAS_CLAIMS_MAILBOX, ENGINEER_CHASER_INTERVAL_DAYS_DEFAULT } from "../constants";
 import { eventLabel, latestDates, type ClaimEventType } from "../domain/events";
 import { agreementDayNumber, hireChargesAccrualEnd } from "../domain/rules";
+import { repairAuthorisationState } from "../domain/storage-authorisation-end";
+import { storageCharge } from "../domain/storage-charge";
 import { channelForTemplate, eventTypeForTemplate, isDocumentTemplateKey, type DocumentTemplateKey } from "../documents/catalog";
 import {
   CAS_TEMPLATE_NOTICE,
@@ -19,7 +21,7 @@ import {
 } from "../documents/correspondence";
 import { generateEmail, isEmailTemplateKey } from "../documents/email-templates";
 import { generateLetter, isLetterTemplateKey, type LetterTemplateKey } from "../documents/templates";
-import { addCalendarDaysIso, formatUkDate, londonDateIso, nowUtcIso, occurredFromForm } from "../dates";
+import { addCalendarDaysIso, formatUkDate, londonDateIso, londonTodayIso, nowUtcIso, occurredFromForm } from "../dates";
 import { blankInsurerField } from "../insurers";
 import { textAssertsImpecuniosity, templateReliesOnImpecuniosity } from "../domain/impecuniosity";
 import { all, get, getDb, newId, run } from "./connection";
@@ -181,6 +183,15 @@ function applyEventSideEffects(claimId: string, eventType: ClaimEventType, occur
   }
 }
 
+function londonDay(value: string | null | undefined): string | null {
+  const text = String(value || "").trim();
+  if (!text) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+  const parsed = new Date(text);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return londonDateIso(parsed);
+}
+
 function letterContext(claimId: string, letterDate: string = nowUtcIso(), engineerId?: string): CorrespondenceContext {
   const claim = get<Record<string, string | number | null>>(
     `SELECT c.*, s.name AS handler_name, s.id AS handler_staff_id,
@@ -226,7 +237,8 @@ function letterContext(claimId: string, letterDate: string = nowUtcIso(), engine
     [claimId],
   );
   const settings = get<{ value: string }>(`SELECT value FROM settings WHERE key = 'chaser_interval_days'`);
-  const dates = latestDates(listClaimEvents(claimId));
+  const history = listClaimEvents(claimId);
+  const dates = latestDates(history);
   if (claim.accident_at) dates.accident = String(claim.accident_at);
 
   const hireStart = hire?.started_at ? String(hire.started_at) : pack?.date_out ? String(pack.date_out) : dates.hire_started || null;
@@ -239,8 +251,23 @@ function letterContext(claimId: string, letterDate: string = nowUtcIso(), engine
   const repairClaimed = lines
     .filter((line) => line.head_of_loss === "repairs" || line.head_of_loss === "vehicle_damage")
     .reduce((sum, line) => sum + (line.claimed_pence || 0), 0);
-  const received = lines.reduce((sum, line) => sum + (line.received_pence || 0), 0);
-  const claimed = lines.reduce((sum, line) => sum + (line.claimed_pence || 0), 0);
+  const authorisation = repairAuthorisationState(history, (occurredAt) => londonDay(occurredAt));
+  const proposalStands =
+    Number(claim.total_loss) !== 1 && claim.storage_authorisation_review !== "total_loss" && !authorisation.withdrawn;
+  const storageMoney = storageCharge({
+    startDay: londonDay(claim.storage_started_on ? String(claim.storage_started_on) : null),
+    confirmedEndDay: londonDay(claim.storage_billing_end_on ? String(claim.storage_billing_end_on) : null),
+    proposedEndDay: proposalStands ? authorisation.day : null,
+    today: londonTodayIso(),
+    ratePence: Number(claim.storage_rate_pence) || 0,
+  });
+  const storageClaimedOnFile = lines.some((line) => line.head_of_loss === "storage" && (line.claimed_pence || 0) > 0);
+  const storageProvisional =
+    !londonDay(claim.storage_billing_end_on ? String(claim.storage_billing_end_on) : null) &&
+    (storageClaimedOnFile || (storageMoney.status === "calculated" && storageMoney.provisional));
+  const letterLines = storageProvisional ? lines.filter((line) => line.head_of_loss !== "storage") : lines;
+  const received = letterLines.reduce((sum, line) => sum + (line.received_pence || 0), 0);
+  const claimed = letterLines.reduce((sum, line) => sum + (line.claimed_pence || 0), 0);
   const outstanding = Math.max(0, claimed - received);
   const confirmedHireEnd = hire?.billing_end_at ? String(hire.billing_end_at) : null;
   const cessation = hireChargesAccrualEnd({ storedHireEndAt: confirmedHireEnd });
@@ -331,7 +358,7 @@ function letterContext(claimId: string, letterDate: string = nowUtcIso(), engine
     tpVehicleModel: String(tp?.tp_model || ""),
     tpVehicleReg: String(tp?.tp_reg || ""),
     tpPolicyNumber: String(tp?.policy_number || ""),
-    lossesClaimed: summariseLossesClaimed(lines, creditHire),
+    lossesClaimed: summariseLossesClaimed(lines, creditHire, { storageProvisional }),
     creditHire,
     courtesyAllocated: Boolean(courtesyReservation),
   };
