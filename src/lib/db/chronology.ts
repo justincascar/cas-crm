@@ -56,7 +56,8 @@ import {
 import { classifyPaymentReply, paymentRequestCopy } from "../domain/payment-chase";
 import { BANK_DETAILS_MISSING_SETTINGS, paymentDetailsComplete } from "../domain/payment-details";
 import { getInsurerPaymentDetails } from "./payment-details";
-import { findPreparedChase, getAgreementMaxDays, getChaseIntervalDays, getInsurerPaymentTermDays, pauseChase, restartChaseClock, startChase, chaseForClaim, chaseRow } from "./chase";
+import { findPreparedChase, getAgreementMaxDays, getChaseIntervalDays, pauseChase, restartChaseClock, startChase, chaseForClaim, chaseRow } from "./chase";
+import { paymentTermForClaim } from "./insurers";
 import { ENGINEER_REPORT_CHASE_TEMPLATE } from "../constants";
 import { findKnownInsurerOn } from "./insurers";
 import { vehicleLocationForClaim } from "./vehicle-location";
@@ -1194,7 +1195,7 @@ function preparePaymentRequestChase(input: { claimId: string; actorId: string; k
     outstandingPence: view.payment.outstandingPence,
     salvageProceedsPence: view.payment.salvageProceedsPence,
     bank: getInsurerPaymentDetails(),
-    paymentTermDays: getInsurerPaymentTermDays(),
+    paymentTerm: paymentTermForClaim(input.claimId),
     asAt: nowUtcIso(),
     hirePackSentOn: ctx.dates.hire_pack_sent || null,
     firstChaseOn: firstAt,
@@ -1214,7 +1215,6 @@ function preparePaymentRequestChase(input: { claimId: string; actorId: string; k
       to,
       subject: copy.subject,
       body: copy.body,
-      dueDateUnset: copy.dueDateUnset,
       packMissing: view.payment.packMissing,
     };
   }
@@ -1242,7 +1242,6 @@ function preparePaymentRequestChase(input: { claimId: string; actorId: string; k
     to,
     subject: copy.subject,
     body: copy.body,
-    dueDateUnset: copy.dueDateUnset,
     packMissing: view.payment.packMissing,
   };
 }

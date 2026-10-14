@@ -17,7 +17,7 @@ import {
   actionResumeChase,
   actionSaveChaseOverride,
 } from "@/app/chase-actions";
-import { CAS_CLAIMS_MAILBOX, PAYMENT_TERM_NOT_SET_LABEL } from "@/lib/constants";
+import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
 import { SIMULATED_EMAIL_BANNER } from "@/lib/email/send-mode-copy";
 import { formatGbp } from "@/lib/money";
 import { paymentComparisonLabel } from "@/lib/domain/storage-charge";
@@ -267,11 +267,7 @@ export function ChasePanel({
             <p className="mt-2 rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2 font-semibold">Bank details missing in Settings</p>
           ) : null}
           <p className="mt-1">{chase.payment.bankLine}</p>
-          {chase.payment.dueDateUnset ? (
-            <p className="mt-2 rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2 font-semibold">{PAYMENT_TERM_NOT_SET_LABEL}</p>
-          ) : (
-            <p className="mt-1">Payment term: {chase.payment.paymentTermDays} days. The reminder interval is separate.</p>
-          )}
+          <p className="mt-1">Payment term: {chase.payment.paymentTermLabel}. The reminder interval is separate.</p>
           {chase.payment.partPaid ? (
             <p className="mt-2 font-semibold">Part-payment recorded. This is not paid. The chase uses the reduced balance.</p>
           ) : null}

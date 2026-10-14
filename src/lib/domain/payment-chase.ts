@@ -1,6 +1,5 @@
 import {
   HIRE_PAYMENT_CHASE_DUE_LABEL,
-  PAYMENT_TERM_NOT_SET_LABEL,
   RECOVERY_PAYMENT_CHASE_DUE_LABEL,
   REPAIR_PAYMENT_CHASE_DUE_LABEL,
   REPAIR_PAYMENT_REQUEST_LABEL,
@@ -8,7 +7,8 @@ import {
   SETTLEMENT_PAYMENT_REQUEST_LABEL,
   STORAGE_PAYMENT_CHASE_DUE_LABEL,
 } from "../constants";
-import { addCalendarDaysIso, formatUkDate } from "../dates";
+import { formatUkDate } from "../dates";
+import { paymentTermLine } from "./payment-term";
 import { chaseClockDecision, type ChaseClockDecision, type ChaseHandlerState } from "./chase";
 import { PAYMENT_DETAILS_MISSING, paymentDetailsLetterLine, type InsurerPaymentDetails } from "./payment-details";
 import { formatGbp } from "../money";
@@ -130,12 +130,9 @@ export function classifyPaymentReply(text: string): PaymentReplyClass {
   return "uncertain";
 }
 
-export function paymentDueDateLine(paymentTermDays: number | null, asAt: string): { text: string; unset: boolean } {
-  if (paymentTermDays == null || paymentTermDays < 1) {
-    return { text: PAYMENT_TERM_NOT_SET_LABEL, unset: true };
-  }
-  const due = addCalendarDaysIso(asAt, paymentTermDays);
-  return { text: `Please pay by ${formatUkDate(due)}.`, unset: false };
+/** Default is Due on receipt. A stored insurer term is printed as that term. No day count is invented. */
+export function paymentDueDateLine(paymentTerm: string | null): { text: string } {
+  return { text: paymentTermLine(paymentTerm) };
 }
 
 export function paymentRequestCopy(input: {
@@ -149,12 +146,13 @@ export function paymentRequestCopy(input: {
   outstandingPence: number;
   salvageProceedsPence?: number;
   bank: InsurerPaymentDetails;
-  paymentTermDays: number | null;
+  /** Null uses Due on receipt. A string is that insurer's stored term. */
+  paymentTerm: string | null;
   asAt: string;
   hirePackSentOn: string | null;
   firstChaseOn: string | null;
   handlerName: string;
-}): { subject: string; body: string; dueDateUnset: boolean } {
+}): { subject: string; body: string } {
   const fileRef = input.fileReference.trim() || "this file";
   const their = input.theirRef.trim();
   const theirLine = !their || their === "Unknown" ? "not yet on file" : their;
@@ -172,7 +170,7 @@ export function paymentRequestCopy(input: {
   const figurePence = input.agreedPence > 0 ? input.agreedPence : Math.max(0, Math.trunc(input.claimedPence || 0));
   const agreed = formatGbp(figurePence);
   const received = formatGbp(input.receivedPence);
-  const due = paymentDueDateLine(input.paymentTermDays, input.asAt);
+  const due = paymentDueDateLine(input.paymentTerm);
   const bankLine = paymentDetailsLetterLine(input.bank);
   const packOn = input.hirePackSentOn ? formatUkDate(input.hirePackSentOn) : null;
   const opening =
@@ -216,7 +214,7 @@ export function paymentRequestCopy(input: {
     input.handlerName.trim() || "Claims handler",
     "Complete Accident Solutions Ltd",
   ].join("\n");
-  return { subject, body, dueDateUnset: due.unset };
+  return { subject, body };
 }
 
 function dueLabelFor(head: AnyPaymentHead): string {

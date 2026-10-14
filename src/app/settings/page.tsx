@@ -1,13 +1,16 @@
 import { PageHeader } from "@/components/ClaimTable";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import Link from "next/link";
-import { actionSaveAgreementLimits, actionSaveChaseIntervals, actionSaveDefaultVehicleLocation, actionSaveGtaMarkup, actionSavePaymentTerm, actionSaveStorageDailyRate, actionTestMailboxConnection } from "@/app/settings-actions";
+import { actionSaveAgreementLimits, actionSaveChaseIntervals, actionSaveDefaultVehicleLocation, actionSaveGtaMarkup, actionSaveStorageDailyRate, actionTestMailboxConnection } from "@/app/settings-actions";
 import { isAdministrator } from "@/lib/auth/roles";
 import { requireStaff } from "@/lib/auth/session";
 import { dbLocation, getSettings, listStaff } from "@/lib/db/queries";
 import { getDefaultVehicleLocation } from "@/lib/db/vehicle-location";
 import { getStorageDailyRatePence } from "@/lib/db/storage-charge";
-import { getAgreementApproachingDay, getAgreementMaxDays, getChaseIntervalDays, getInsurerPaymentTermDays } from "@/lib/db/chase";
+import { getAgreementApproachingDay, getAgreementMaxDays, getChaseIntervalDays } from "@/lib/db/chase";
+import { listInsurerPaymentTerms } from "@/lib/db/insurers";
+import { accountCanManageBankDetails } from "@/lib/db/permissions";
+import { PAYMENT_DUE_ON_RECEIPT, PAYMENT_DUE_ON_RECEIPT_SENTENCE } from "@/lib/constants";
 import { getGtaMarkupPercent } from "@/lib/db/hire-agreement";
 import { getInsurerPaymentDetails } from "@/lib/db/payment-details";
 import { GTA_RATE_PERIOD_LABEL } from "@/lib/documents/gta";
@@ -36,7 +39,8 @@ export default async function SettingsPage({
   const liabilityChaseIntervalDays = getChaseIntervalDays("liability_response");
   const repairChaseIntervalDays = getChaseIntervalDays("repair_authorisation");
   const paymentChaseIntervalDays = getChaseIntervalDays("repair_payment");
-  const insurerPaymentTermDays = getInsurerPaymentTermDays();
+  const canManageBank = accountCanManageBankDetails(staffUser.id, staffUser.role);
+  const insurerTerms = listInsurerPaymentTerms();
   const agreementRenewalAlertDay = getChaseIntervalDays("hire_agreement_renewal");
   const agreementRenewalApproachingDay = getAgreementApproachingDay();
   const agreementMaxDays = getAgreementMaxDays();
@@ -153,33 +157,40 @@ export default async function SettingsPage({
               autoComplete="off"
             />
           </label>
-          <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white sm:col-span-3">
-            Save payment details
-          </button>
+          {canManageBank ? (
+            <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white sm:col-span-3">
+              Save payment details
+            </button>
+          ) : (
+            <p className="text-sm sm:col-span-3">Only Justin can change the bank details.</p>
+          )}
         </form>
         <h3 className="mt-6 font-semibold text-navy">Insurer payment term</h3>
         <p className="mt-1 text-sm text-slate">
-          How many days an insurer has to pay once a payment request is sent. This is not set. Nothing is filled in until you confirm the number.
-          An empty box stays empty. It is not the chase reminder interval.
+          CAS’s default is {PAYMENT_DUE_ON_RECEIPT}. Invoices and payment requests say: {PAYMENT_DUE_ON_RECEIPT_SENTENCE} A different term can be
+          saved for one insurer. It is not shown as a number of days, and it is not the chase reminder interval.
         </p>
-        <p className="mt-2 text-sm font-semibold">{insurerPaymentTermDays == null ? "Not set" : `${insurerPaymentTermDays} days`}</p>
-        <ValidatedForm action={actionSavePaymentTerm} className="mt-3 flex flex-wrap items-end gap-3">
-          <label className="text-sm">
-            Days
-            <input
-              name="insurerPaymentTermDays"
-              type="number"
-              min={1}
-              step={1}
-              className="mt-1 w-32 rounded-md border border-line bg-white px-3 py-2 text-sm"
-              defaultValue={insurerPaymentTermDays ?? ""}
-              placeholder="Not set"
-            />
+        <form method="post" action="/settings/insurer-payment-term" className="mt-3 grid gap-3 sm:grid-cols-3 sm:items-end">
+          <label className="text-sm sm:col-span-1">
+            Insurer
+            <select name="insurerName" className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" defaultValue="">
+              <option value="">Choose</option>
+              {insurerTerms.map((row) => (
+                <option key={row.name} value={row.name}>
+                  {row.name}
+                  {row.paymentTerm ? ` — ${row.paymentTerm}` : ""}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-sm sm:col-span-1">
+            Term for this insurer
+            <input name="paymentTerm" className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" placeholder={PAYMENT_DUE_ON_RECEIPT} />
           </label>
           <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
-            Save payment term
+            Save this insurer’s term
           </button>
-        </ValidatedForm>
+        </form>
       </section>
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">CAS insurance certificate</h2>
@@ -301,7 +312,7 @@ export default async function SettingsPage({
         <p className="mt-1 text-sm text-slate">
           After an outstanding request is marked as sent, the file is flagged if the outcome has not been logged within
           this many calendar days. Each type has its own default. The payment reminder uses the same three-day demonstration
-          default. It is not the insurer payment term, which stays unset until you confirm it. A longer interval can still be set on an individual
+          default. It is not the insurer payment term. The default is due on receipt unless that insurer has its own term. A longer interval can still be set on an individual
           file (for example where an insurer has agreed a slower chase). Reminders only — no email is sent
           automatically. Changing these numbers later does not reopen a chase that has already been cancelled, paused,
           or cleared by a logged outcome, and does not overwrite a per-file override.

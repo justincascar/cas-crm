@@ -1,6 +1,6 @@
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { DEMO_STAFF, demoPasswordFor } from "../auth/demo-staff";
-import { ACCEPT_PAYMENT_SETTLEMENT, OVERRIDE_PREHIRE_CHECKS } from "../auth/roles";
+import { ACCEPT_PAYMENT_SETTLEMENT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS } from "../auth/roles";
 import { hashPasswordSync } from "../auth/passwords";
 import {
   FILE_REFERENCE_PREFIX_DEFAULT,
@@ -69,6 +69,10 @@ export function seed(db: DatabaseSync) {
   run(db, `INSERT OR IGNORE INTO staff_permissions(staff_id, permission) VALUES (?, ?)`, [
     "staff-justin",
     ACCEPT_PAYMENT_SETTLEMENT,
+  ]);
+  run(db, `INSERT OR IGNORE INTO staff_permissions(staff_id, permission) VALUES (?, ?)`, [
+    "staff-justin",
+    MANAGE_BANK_DETAILS,
   ]);
 
   const people: Array<Record<string, string | null>> = [
@@ -489,7 +493,7 @@ export function seed(db: DatabaseSync) {
   fin("f-c4-c", "c4", "courtesy", "Courtesy vehicle — no credit-hire rate applied", 3, "days", 0, 0, 0, 0, 0, null);
   fin("f-c6-rep", "c6", "repairs", "Estimated repairs (staff-verified engineer figure)", 1, "job", pence(2400), pence(2400), 0, 0, 0, null);
   fin("f-c7-hire", "c7", "hire", "Hire during repairs", 18, "days", 7200, pence(1296), 0, pence(900), 0, null);
-  fin("f-c8-hire", "c8", "hire", "Hire until repaired vehicle returned", 24, "days", 7900, pence(1896), 0, pence(1896), 0, null);
+  fin("f-c8-hire", "c8", "hire", "Hire until repaired vehicle returned", 24, "days", 7900, pence(1896), 0, 0, 0, null);
   fin("f-c9-hire", "c9", "hire", "Total-loss hire (countdown not started — payment not qualifying yet)", 16, "days", 12500, pence(2000), pence(800), 0, 0, "awaiting_review");
   fin("f-c9-vd", "c9", "vehicle_damage", "Gross PAV claimed", 1, "item", pence(14500), pence(14500), pence(12000), 0, 0, "awaiting_review");
   fin("f-c9-sal", "c9", "salvage_shortfall", "Salvage deduction proposed — proceeds not double-counted", 1, "item", pence(1800), pence(1800), 0, 0, 0, null);

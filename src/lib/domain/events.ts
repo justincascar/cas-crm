@@ -114,6 +114,7 @@ export const CLAIM_EVENT_TYPES = [
   { key: "storage_recovery_date_review", label: "Recovery date needs a check" },
   { key: "storage_recovery_date_confirmed", label: "Recovery date confirmed" },
   { key: "storage_end_date_review", label: "Storage end date needs a check" },
+  { key: "storage_start_missing_review", label: "Storage start date missing, review" },
   { key: "storage_end_date_confirmed", label: "Storage end date confirmed" },
   { key: "storage_ended", label: "Storage ended" },
   { key: "outgoing_email", label: "Email sent" },

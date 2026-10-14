@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { formatUkDate } from "@/lib/dates";
-import { offerComparedWithClaimed } from "@/lib/domain/figure-resolution";
+import { offerComparisonText } from "@/lib/domain/figure-resolution";
 import { formatGbp } from "@/lib/money";
 import type { VehicleOffer, VehicleOfferStatus } from "@/lib/db/vehicle-offers";
 
@@ -36,6 +36,7 @@ export function VehicleOffers({
   returnPath,
   offerHead,
   claimedPence = null,
+  claimedUnderReview = false,
   showDayRate = false,
 }: {
   claimId: string;
@@ -47,6 +48,7 @@ export function VehicleOffers({
   returnPath?: string;
   offerHead?: string;
   claimedPence?: number | null;
+  claimedUnderReview?: boolean;
   showDayRate?: boolean;
 }) {
   const [amount, setAmount] = useState("");
@@ -122,7 +124,7 @@ export function VehicleOffers({
                     {closed && offer.closedAt ? ` · ${formatUkDate(offer.closedAt)}` : ""}
                   </p>
                   {claimedPence != null ? (
-                    <p className="mt-1">{offerComparedWithClaimed(offer.amountPence, claimedPence).label}</p>
+                    <p className="mt-1">{offerComparisonText(offer.amountPence, claimedPence, claimedUnderReview)}</p>
                   ) : null}
                   {offer.offeredDays != null && offer.offeredDailyRatePence != null ? (
                     <p className="mt-1">

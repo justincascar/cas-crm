@@ -93,8 +93,11 @@ export const PAYMENT_CHASE_INTERVAL_DAYS_DEFAULT = ENGINEER_CHASER_INTERVAL_DAYS
  * Empty until CAS confirms the number. There is no default.
  */
 export const SETTING_INSURER_PAYMENT_TERM_DAYS = "insurer_payment_term_days";
-export const PAYMENT_TERM_NOT_SET_LABEL =
-  "Insurer payment term: not set. No payment due date until CAS confirms how many days.";
+/** CAS default, confirmed by Justin on 14 October 2026. Never shown as 0 days. */
+export const PAYMENT_DUE_ON_RECEIPT = "Due on receipt";
+export const PAYMENT_DUE_ON_RECEIPT_SENTENCE = "Payment is due immediately upon receipt of this invoice.";
+export const STORAGE_START_MISSING_REVIEW = "Storage start date missing, review";
+export const CLAIMED_UNDER_REVIEW_NOTE = "Claimed figure under review, comparison may change";
 export const REPAIR_PAYMENT_CHASE_RULE = "repair_payment_chase";
 export const REPAIR_PAYMENT_CHASE_TEMPLATE = "repair_payment_chase";
 export const REPAIR_PAYMENT_CHASE_DUE_LABEL = "Repair invoice payment chase due";

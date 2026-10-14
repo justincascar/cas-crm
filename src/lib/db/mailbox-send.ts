@@ -2,7 +2,7 @@ import { nowUtcIso } from "../dates";
 import { loadClaimEmailAttachments } from "./email-attachments";
 import { CHASE_KINDS, chaseDefinition } from "../domain/chase";
 import { isChargePaymentHead } from "../domain/payment-chase";
-import { BANK_DETAILS_MISSING_SETTINGS, paymentDetailsComplete } from "../domain/payment-details";
+import { BANK_DETAILS_MISSING_SETTINGS, paymentDetailsComplete, refreshPaymentBankLine } from "../domain/payment-details";
 import { isDocumentChaseKind } from "../domain/follow-up-chases";
 import { sendOutboundEmail } from "../email/gateway";
 import { MailboxSendError } from "../email/microsoft-graph";
@@ -54,10 +54,19 @@ export async function sendPreparedCorrespondence(input: {
   }
   const to = String(row.to_address || "").trim();
   const subject = String(row.subject || "").trim();
-  const body = String(row.body || "").trim();
+  let body = String(row.body || "").trim();
   if (!to || !subject || !body) throw new Error("This prepared email is missing a recipient, subject or message. Nothing was sent.");
   const loaded = loadClaimEmailAttachments(input.claimId, input.attachmentIds || []);
   if (!loaded.ok) throw new Error(loaded.error);
+  const paymentTemplate = CHASE_KINDS.find((kind) => {
+    const def = chaseDefinition(kind);
+    return def.templateKey === row.template_key && Boolean(def.paymentHead);
+  });
+  if (paymentTemplate) {
+    const bank = getInsurerPaymentDetails();
+    body = refreshPaymentBankLine(body, bank);
+    getDb().prepare(`UPDATE correspondence SET body = ?, preview = ? WHERE id = ?`).run(body, body.slice(0, 180), row.id);
+  }
   const paymentKind = CHASE_KINDS.find((kind) => {
     const def = chaseDefinition(kind);
     return def.templateKey === row.template_key && Boolean(def.paymentHead && isChargePaymentHead(def.paymentHead));

@@ -1,11 +1,13 @@
 import type { DatabaseSync } from "node:sqlite";
 import { nowUtcIso } from "../dates";
+import { normaliseInsurerPaymentTerm } from "../domain/payment-term";
 import {
   blankInsurerField,
   isUsableInsurerName,
   insurerNameKey,
   type KnownInsurer,
 } from "../insurers";
+import { all, get, run } from "./connection";
 
 /** Fictional demonstration contacts only. Not live insurer switchboard numbers. */
 const DEMONSTRATION_INSURERS: KnownInsurer[] = [
@@ -71,6 +73,13 @@ const DEMONSTRATION_AGENTS: KnownInsurer[] = [
   },
 ];
 
+function ensurePaymentTermColumn(db: DatabaseSync) {
+  const columns = db.prepare(`PRAGMA table_info(known_insurers)`).all() as Array<{ name: string }>;
+  if (columns.length > 0 && !columns.some((column) => column.name === "payment_term")) {
+    db.exec(`ALTER TABLE known_insurers ADD COLUMN payment_term TEXT`);
+  }
+}
+
 export function ensureKnownInsurers(db: DatabaseSync) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS known_insurers (
@@ -84,6 +93,7 @@ export function ensureKnownInsurers(db: DatabaseSync) {
       updated_at TEXT NOT NULL
     );
   `);
+  ensurePaymentTermColumn(db);
   for (const row of DEMONSTRATION_INSURERS) {
     rememberInsurerOn(db, row, { fillBlanksOnly: true });
   }
@@ -366,4 +376,42 @@ export function listKnownAgentsOn(db: DatabaseSync): KnownInsurer[] {
     handlerEmail: row.handler_email || "",
     handlerTel: row.handler_tel || "",
   }));
+}
+
+export type InsurerPaymentTermRow = { name: string; paymentTerm: string | null };
+
+/** Blank payment_term means Due on receipt. The stored text is that insurer's own term. */
+export function listInsurerPaymentTerms(): InsurerPaymentTermRow[] {
+  return all<{ name: string; payment_term: string | null }>(
+    `SELECT name, payment_term FROM known_insurers ORDER BY name COLLATE NOCASE`,
+  ).map((row) => ({ name: row.name, paymentTerm: String(row.payment_term || "").trim() || null }));
+}
+
+export function paymentTermForInsurerName(name: string): string | null {
+  const key = insurerNameKey(name);
+  if (!key) return null;
+  const row = get<{ payment_term: string | null }>(`SELECT payment_term FROM known_insurers WHERE name_key = ?`, [key]);
+  const text = String(row?.payment_term || "").trim();
+  return text || null;
+}
+
+/** The third-party insurer on the file. No stored term means the CAS default. */
+export function paymentTermForClaim(claimId: string): string | null {
+  const party = get<{ insurer_name: string | null }>(
+    `SELECT insurer_name FROM claim_third_parties
+     WHERE claim_id = ? AND insurer_name IS NOT NULL AND trim(insurer_name) != ''
+     ORDER BY id LIMIT 1`,
+    [claimId],
+  );
+  if (!party?.insurer_name) return null;
+  return paymentTermForInsurerName(String(party.insurer_name));
+}
+
+export function setInsurerPaymentTerm(name: string, raw: string) {
+  if (!isUsableInsurerName(name)) throw new Error("Choose the insurer.");
+  const term = normaliseInsurerPaymentTerm(raw);
+  const key = insurerNameKey(name);
+  const existing = get<{ id: string }>(`SELECT id FROM known_insurers WHERE name_key = ?`, [key]);
+  if (!existing) throw new Error("That insurer is not on the saved list yet.");
+  run(`UPDATE known_insurers SET payment_term = ?, updated_at = ? WHERE id = ?`, [term, nowUtcIso(), existing.id]);
 }

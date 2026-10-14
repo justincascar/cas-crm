@@ -8,7 +8,7 @@ import type { ChaseView } from "@/lib/db/chase";
 import type { PaymentAttentionRow } from "@/lib/db/payment-review";
 import { chaseStageRowClass, chaseStageShortLabel, chaseStageTextClass } from "@/lib/domain/chase";
 import { BANK_DETAILS_MISSING_SETTINGS, paymentDetailsComplete } from "@/lib/domain/payment-details";
-import { getInsurerPaymentDetails } from "@/lib/db/payment-details";
+import { getInsurerPaymentDetails, latestBankDetailsChange } from "@/lib/db/payment-details";
 
 const toneClass: Record<string, string> = {
   info: "border-l-teal",
@@ -126,6 +126,7 @@ export default async function DashboardPage() {
   const data = getDashboard();
   const path = dbLocation();
   const bankDetailsMissing = !paymentDetailsComplete(getInsurerPaymentDetails());
+  const bankChange = latestBankDetailsChange();
 
   return (
     <div>
@@ -144,6 +145,11 @@ export default async function DashboardPage() {
 
       {bankDetailsMissing ? (
         <p className="mt-4 rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm font-semibold">{BANK_DETAILS_MISSING_SETTINGS}</p>
+      ) : null}
+      {bankChange ? (
+        <p className="mt-4 rounded-md border border-line bg-card px-4 py-3 text-sm">
+          Bank details changed on {formatUkDate(bankChange.at)} by {bankChange.actorName}
+        </p>
       ) : null}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -198,7 +204,7 @@ export default async function DashboardPage() {
       />
       <ChaseDueTable
         title="Repair invoice payments"
-        hint="Follows the agreed repair invoice only. Storage is not included. The first email is prepared for you to send. After that, a reminder is due on the payment reminder interval (three days unless this file has an override). A part-payment pauses it. Nothing is sent until you click Send. The insurer payment term is separate and is not set until CAS confirms it."
+        hint="Follows the agreed repair invoice only. Storage is not included. The first email is prepared for you to send. After that, a reminder is due on the payment reminder interval (three days unless this file has an override). A part-payment pauses it. Nothing is sent until you click Send. Payment is due on receipt unless that insurer has its own term."
         rows={data.chasesDue.filter((row) => row.kind === "repair_payment")}
       />
       <ChaseDueTable
@@ -208,12 +214,12 @@ export default async function DashboardPage() {
       />
       <ChaseDueTable
         title="Hire payment chases due"
-        hint="Starts only after the hire end is confirmed and a hire payment request has been recorded as sent. It follows the agreed figure, or the confirmed claimed figure if nothing is agreed. A part-payment pauses it. Nothing is sent until you click Send, and nothing is sent while bank details are missing in Settings."
+        hint="Starts only after the replacement has been handed over, the hire end is confirmed, and a hire payment request has been recorded as sent. With no handover there is no figure and no chase. It follows the agreed figure, or the confirmed claimed figure if nothing is agreed. A part-payment pauses it. Nothing is sent until you click Send, and nothing is sent while bank details are missing in Settings."
         rows={data.chasesDue.filter((row) => row.kind === "hire_payment")}
       />
       <ChaseDueTable
         title="Storage payment chases due"
-        hint="Starts only after the storage end is confirmed and a storage payment request has been recorded as sent. It follows the agreed figure, or the confirmed claimed figure if nothing is agreed. A part-payment pauses it. Full payment flags the other charges for review and does not close them. Nothing is sent until you click Send."
+        hint="Starts only after a storage start date exists, the storage end is confirmed, and a storage payment request has been recorded as sent. With no start date there is no figure and no chase. It follows the agreed figure, or the confirmed claimed figure if nothing is agreed. A part-payment pauses it. Full payment flags the other charges for review and does not close them. Nothing is sent until you click Send."
         rows={data.chasesDue.filter((row) => row.kind === "storage_payment")}
       />
       <ChaseDueTable

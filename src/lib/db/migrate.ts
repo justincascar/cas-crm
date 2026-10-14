@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_SETTLEMENT, OVERRIDE_PREHIRE_CHECKS } from "../auth/roles";
+import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_SETTLEMENT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS } from "../auth/roles";
 
 const TABLES: Record<string, Array<[string, string]>> = {
   correspondence: [
@@ -636,4 +636,9 @@ export function migrate(db: DatabaseSync) {
      SELECT ?, ?
      WHERE EXISTS (SELECT 1 FROM staff WHERE id = ?)`,
   ).run("staff-justin", APPROVE_SETTLEMENT, "staff-justin");
+  db.prepare(
+    `INSERT OR IGNORE INTO staff_permissions(staff_id, permission)
+     SELECT ?, ?
+     WHERE EXISTS (SELECT 1 FROM staff WHERE id = ?)`,
+  ).run("staff-justin", MANAGE_BANK_DETAILS, "staff-justin");
 }

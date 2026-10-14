@@ -8,14 +8,19 @@ export async function POST(request: Request) {
   const origin = browserOrigin(request);
   const staff = await getRequestStaff();
   if (!staff) return NextResponse.redirect(new URL("/login", origin), 303);
-  if (!isOfficeRole(staff.role)) return NextResponse.redirect(new URL("/settings", origin), 303);
+  if (!isOfficeRole(staff.role)) {
+    return NextResponse.redirect(new URL("/settings?error=You%20cannot%20change%20the%20bank%20details.", origin), 303);
+  }
   const form = await request.formData();
   try {
-    saveInsurerPaymentDetails({
-      accountName: String(form.get("accountName") || ""),
-      sortCode: String(form.get("sortCode") || ""),
-      accountNumber: String(form.get("accountNumber") || ""),
-    });
+    saveInsurerPaymentDetails(
+      {
+        accountName: String(form.get("accountName") || ""),
+        sortCode: String(form.get("sortCode") || ""),
+        accountNumber: String(form.get("accountNumber") || ""),
+      },
+      { staffId: staff.id, role: staff.role },
+    );
   } catch (error) {
     const message = error instanceof Error ? error.message : "The payment details could not be saved.";
     return NextResponse.redirect(new URL(`/settings?error=${encodeURIComponent(message)}`, origin), 303);

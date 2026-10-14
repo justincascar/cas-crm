@@ -624,6 +624,7 @@ TEST-0003 had a hire collection date of 03/10/2026 on the booking with no hire e
 - Repairable storage ends on repair authorisation, confirmed by a handler.
 - Storage and hire are both charged for the start day and the end day. Confirmed 14/10/2026. Storage from 22/09/2026 to 01/10/2026 is 10 days, and hire uses the same count.
 - Hire agreement renewal alerts stay on day 70, day 80 and day 88. Day 1 of that count is the agreement start day.
+- CAS’s default insurer payment term is Due on receipt. Invoices and payment requests say “Payment is due immediately upon receipt of this invoice.” It is never shown as 0 days. Confirmed by Justin on 14 October 2026. A different term can be stored for one insurer and is shown as that insurer’s own words. If none is stored, the default applies.
 - Places that already count both the first and the last day: the storage charge, and a letter's hire day count (`total_hire_days`) when a stored hire end exists. The hire agreement and hire pack show Date in from that stored end, or "Hire continuing", and do not count days. The cessation letter uses the same stored end. The warning "Hire charged N days beyond vehicle return" is the gap between two dates, not the charge period. Renewal alerts were left on the agreement day number.
 - Tests: `tests/storage-recovery-pages.test.ts`, `tests/rules.test.ts`, `tests/hire-collection-date.test.ts`, `tests/hire-storage-end.test.ts`. Full suite: 382 passing, 0 failing.
 
@@ -669,9 +670,25 @@ Accept records the agreed figure. Accepting a figure below the claimed figure is
 
 A payment chase for hire, storage or recovery uses the existing chase. It starts only when the figure is final and a payment request for that charge has been recorded as sent. Hire and storage are final when the end date is confirmed. Recovery has no end date, so it is final once the claimed figure is on the file. The chase follows the agreed figure if there is one, otherwise the confirmed claimed figure, minus what has been received. The interval stays three days unless that file already has its own interval. A part-payment pauses the chase for review. A full payment stops that chase and flags the other charges for review without closing them. A substantive reply pauses the chase. The file is checked again immediately before a send. An outage does not produce a backlog of chasers.
 
-If CAS bank details are not entered in Settings, nothing is sent. The claim and the dashboard say "Bank details missing in Settings". Bank details are not invented. If the insurer payment term is not set, the prepared email says "not set" and does not invent a due date. `EMAIL_SEND_MODE` stays `simulate` on this PC, so a send is not a live mailbox send.
+If CAS bank details are not entered in Settings, nothing is sent. The claim and the dashboard say "Bank details missing in Settings". Bank details are not invented. The insurer payment term was left as "not set" in that stage. That is replaced by Due on receipt in the next section. `EMAIL_SEND_MODE` stays `simulate` on this PC, so a send is not a live mailbox send.
 
 TEST-0008 is the hire file to open for the offer. Its agreed hire figure is left as it was. TEST-0011 is the storage file to open for the chase, because its storage end was already confirmed. TEST-0005's proposed storage end is still unconfirmed. TEST-0003's storage end was not rewritten.
+
+## Missing start dates, offer review, payment terms and bank details (14 October 2026)
+
+A storage charge with no start date shows “Start date missing” and no claimed figure. It is not treated as one day. A storage end cannot be proposed or confirmed until a start date is on the file. A payment chase does not start, and an existing chase is paused. The confirmed end is left as it is, and the file is flagged “Storage start date missing, review”. Hire is the same: no handover means “Hire not started”, no figure and no chase. Typing a date on Delivery / collection still does not write the chargeable hire end.
+
+TEST-0011 was in that state because the demonstration data gave it a confirmed storage end and no start date, and the demonstration chase then counted one day (£39 plus VAT, £46.80) and recorded a payment request. Staff could not confirm a new end without a start on the storage screen. The remaining route, confirming a storage end from a recovery-job review when no start date is on the file, is now refused as well. The one-day figure is no longer written. TEST-0007, TEST-0008, TEST-0010, TEST-0011 and TEST-0012 each have a confirmed storage end and no start date. Each is flagged. The ends were not changed. TEST-0005’s proposed storage end is still unconfirmed. TEST-0006’s money and TEST-0007’s £800 hire figure were not changed. TEST-0009’s vehicle-damage offers were not changed.
+
+Where “Stored figure differs from calculation” is still unresolved, the offer’s difference also says “Claimed figure under review, comparison may change”. TEST-0008’s hire offer of £1,500.00 dated 01/10/2026 is still awaiting a decision. The agreed figure on that hire line is cleared. Received stays £0. The stored claimed figure and the unresolved flag are left as they are.
+
+CAS’s default insurer payment term is Due on receipt, confirmed by Justin on 14 October 2026. Invoices and payment requests say “Payment is due immediately upon receipt of this invoice.” It is never shown as 0 days, and it is not shown as “not set”. A term stored for one insurer replaces the default and is printed as that insurer’s own words.
+
+Only the permission `manageBankDetails` can change the bank details in Settings. It is on Justin’s staff row (`staff-justin`), in the same way as `approveSettlement`. It is not granted by the administrator role and not by username. The server checks it. Each change is in the audit history: who, when, and the old and new values, with only the last four digits visible. A queued chaser is checked again before it sends and uses the details then in Settings. The dashboard says “Bank details changed on [date] by [user]”. Incoming email, an attachment, a client submission and an import cannot change the bank details. The sort code must be 6 digits and the account number 8 digits. If the details are missing, chasers are still not sent, and the claim and the dashboard still say “Bank details missing in Settings”. No real bank details are stored in the code or the test data.
+
+Hire agreement renewal alerts were not changed: day 70, day 80 and day 88.
+
+Tests: `tests/start-date-bank-terms.test.ts`, with the existing charge, payment-chase, pre-hire and follow-up tests updated for the new rules. Full suite: 406 passing, 0 failing.
 
 ## Not yet claimed
 

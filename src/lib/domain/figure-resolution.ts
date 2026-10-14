@@ -1,3 +1,4 @@
+import { CLAIMED_UNDER_REVIEW_NOTE } from "../constants";
 import { formatGbp } from "../money";
 
 /** Shown until staff choose. The stored claimed figure is left as it is. */
@@ -29,6 +30,12 @@ export function offerComparedWithClaimed(offerPence: number, claimedPence: numbe
     percent,
     label: `${formatGbp(Math.abs(diff))} ${word} the claimed figure (${percent}%).`,
   };
+}
+
+/** The difference line, with the review note while the stored-figure flag is unresolved. */
+export function offerComparisonText(offerPence: number, claimedPence: number, underReview: boolean): string {
+  const label = offerComparedWithClaimed(offerPence, claimedPence).label;
+  return underReview ? `${label} ${CLAIMED_UNDER_REVIEW_NOTE}.` : label;
 }
 
 /**

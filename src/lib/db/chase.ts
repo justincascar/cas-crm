@@ -29,6 +29,8 @@ import {
   type ChaseSeverity,
 } from "../domain/chase";
 import { paymentDetailsLetterLine, type InsurerPaymentDetails } from "../domain/payment-details";
+import { paymentTermLabel } from "../domain/payment-term";
+import { insurerNameKey } from "../insurers";
 import {
   isChargePaymentHead,
   paymentChaseDecision,
@@ -92,8 +94,7 @@ export type ChaseView = {
     outstandingPence: number;
     storageOutstandingPence: number;
     bankLine: string;
-    paymentTermDays: number | null;
-    dueDateUnset: boolean;
+    paymentTermLabel: string;
     partPaid: boolean;
     paidInFull: boolean;
     salvageProceedsPence: number;
@@ -291,7 +292,7 @@ type ChaseFacts = {
   contacts: Map<string, { engineerName: string; engineerEmail: string; insurerName: string; insurerEmail: string }>;
   hire: Map<string, HireClaimFacts>;
   payment: Map<string, PaymentClaimFacts>;
-  paymentTermDays: number | null;
+  paymentTerms: Map<string, string | null>;
   bank: InsurerPaymentDetails;
 };
 
@@ -418,6 +419,35 @@ function loadHireFacts(claimIds: string[]): Map<string, HireClaimFacts> {
   return hire;
 }
 
+function loadPaymentTerms(claimIds: string[]): Map<string, string | null> {
+  const terms = new Map<string, string | null>();
+  if (claimIds.length === 0) return terms;
+  const parties = all<{ claim_id: string; insurer_name: string | null }>(
+    `SELECT claim_id, insurer_name FROM claim_third_parties
+     WHERE claim_id IN (${placeholders(claimIds.length)})
+       AND insurer_name IS NOT NULL AND trim(insurer_name) != ''
+     ORDER BY id`,
+    claimIds,
+  );
+  const keys = [...new Set(parties.map((row) => insurerNameKey(String(row.insurer_name || ""))).filter(Boolean))];
+  const stored = new Map<string, string>();
+  if (keys.length) {
+    const rows = all<{ name_key: string; payment_term: string | null }>(
+      `SELECT name_key, payment_term FROM known_insurers WHERE name_key IN (${placeholders(keys.length)})`,
+      keys,
+    );
+    for (const row of rows) {
+      const text = String(row.payment_term || "").trim();
+      if (text) stored.set(String(row.name_key), text);
+    }
+  }
+  for (const party of parties) {
+    if (terms.has(party.claim_id)) continue;
+    terms.set(party.claim_id, stored.get(insurerNameKey(String(party.insurer_name || ""))) || null);
+  }
+  return terms;
+}
+
 function loadChaseFacts(claimIds: string[]): ChaseFacts {
   const limits = loadAgreementLimits();
   const empty: ChaseFacts = {
@@ -429,7 +459,7 @@ function loadChaseFacts(claimIds: string[]): ChaseFacts {
     contacts: new Map(),
     hire: new Map(),
     payment: loadPaymentFacts(claimIds),
-    paymentTermDays: getInsurerPaymentTermDays(),
+    paymentTerms: loadPaymentTerms(claimIds),
     bank: getInsurerPaymentDetails(),
   };
   if (claimIds.length === 0) return empty;
@@ -739,9 +769,9 @@ function evaluateChase(kind: ChaseKind, claimId: string, row: ChaseRow, facts: C
   const chargeReady = !chargeHead
     ? true
     : def.paymentHead === "hire"
-      ? hireEndConfirmed(claimId) && requestMarkedSent(claimId, "hire")
+      ? hireFigureFinal(claimId) && requestMarkedSent(claimId, "hire")
       : def.paymentHead === "storage"
-        ? storageEndConfirmed(claimId) && requestMarkedSent(claimId, "storage")
+        ? storageFigureFinal(claimId) && requestMarkedSent(claimId, "storage")
         : recoveryFigureFinal(claimId, headMoney?.claimed || 0) && requestMarkedSent(claimId, "recovery");
   const decision = def.paymentHead && !chargeReady
     ? {
@@ -825,8 +855,7 @@ function evaluateChase(kind: ChaseKind, claimId: string, row: ChaseRow, facts: C
           outstandingPence: headMoney && comparison > 0 && headMoney.received < comparison ? outstanding : 0,
           storageOutstandingPence: storageOutstanding,
           bankLine,
-          paymentTermDays: facts.paymentTermDays,
-          dueDateUnset: facts.paymentTermDays == null,
+          paymentTermLabel: paymentTermLabel(facts.paymentTerms.get(claimId) || null),
           partPaid: Boolean(
             headMoney &&
               (chargeHead ? chargeTarget : headMoney.agreed) > 0 &&
@@ -883,12 +912,25 @@ function hireEndConfirmed(claimId: string): boolean {
   return Boolean(row);
 }
 
-function storageEndConfirmed(claimId: string): boolean {
-  const row = get<{ storage_billing_end_on: string | null }>(
-    `SELECT storage_billing_end_on FROM claims WHERE id = ?`,
+function hireHandoverRecorded(claimId: string): boolean {
+  const row = get<{ id: string }>(
+    `SELECT id FROM vehicle_handovers WHERE claim_id = ? AND event_kind = 'hire_delivered' LIMIT 1`,
     [claimId],
   );
-  return String(row?.storage_billing_end_on || "").trim() !== "";
+  return Boolean(row);
+}
+
+/** A hire figure is final only when the end is confirmed and the replacement was handed over. */
+function hireFigureFinal(claimId: string): boolean {
+  return hireEndConfirmed(claimId) && hireHandoverRecorded(claimId);
+}
+
+function storageFigureFinal(claimId: string): boolean {
+  const row = get<{ storage_billing_end_on: string | null; storage_started_on: string | null }>(
+    `SELECT storage_billing_end_on, storage_started_on FROM claims WHERE id = ?`,
+    [claimId],
+  );
+  return Boolean(String(row?.storage_billing_end_on || "").trim() && String(row?.storage_started_on || "").trim());
 }
 
 function recoveryFigureFinal(claimId: string, claimed: number): boolean {
@@ -1010,15 +1052,22 @@ export function syncOutstandingPaymentChases(claimIds?: string[]) {
   const facts = loadPaymentFacts(readyIds);
   const hireReady = new Set(
     all<{ claim_id: string }>(
-      `SELECT DISTINCT claim_id FROM hire_episodes
-       WHERE claim_id IN (${placeholders(readyIds.length)}) AND billing_end_at IS NOT NULL AND trim(billing_end_at) != ''`,
+      `SELECT DISTINCT he.claim_id FROM hire_episodes he
+       WHERE he.claim_id IN (${placeholders(readyIds.length)})
+         AND he.billing_end_at IS NOT NULL AND trim(he.billing_end_at) != ''
+         AND EXISTS (
+           SELECT 1 FROM vehicle_handovers vh
+           WHERE vh.claim_id = he.claim_id AND vh.event_kind = 'hire_delivered'
+         )`,
       readyIds,
     ).map((row) => row.claim_id),
   );
   const storageReady = new Set(
     all<{ id: string }>(
       `SELECT id FROM claims
-       WHERE id IN (${placeholders(readyIds.length)}) AND storage_billing_end_on IS NOT NULL AND trim(storage_billing_end_on) != ''`,
+       WHERE id IN (${placeholders(readyIds.length)})
+         AND storage_billing_end_on IS NOT NULL AND trim(storage_billing_end_on) != ''
+         AND storage_started_on IS NOT NULL AND trim(storage_started_on) != ''`,
       readyIds,
     ).map((row) => row.id),
   );

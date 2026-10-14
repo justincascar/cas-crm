@@ -7,7 +7,7 @@ import { EMAIL_SEND_MODE_ENV } from "../src/lib/email/send-mode.ts";
 import { setMailboxFetchForTests } from "../src/lib/email/microsoft-graph.ts";
 import { BANK_DETAILS_MISSING_SETTINGS } from "../src/lib/domain/payment-details.ts";
 import { paymentRequestCopy } from "../src/lib/domain/payment-chase.ts";
-import { PAYMENT_TERM_NOT_SET_LABEL } from "../src/lib/constants.ts";
+import { PAYMENT_DUE_ON_RECEIPT_SENTENCE } from "../src/lib/constants.ts";
 import { BLANK_PAYMENT_DETAILS } from "../src/lib/domain/payment-details.ts";
 import { withDatabase } from "../src/lib/db/connection.ts";
 import { migrate } from "../src/lib/db/migrate.ts";
@@ -54,7 +54,7 @@ describe("calculated hire, storage and recovery figures", () => {
     withDatabase(db, () => {
       const before = money(db, "c8", "hire");
       assert.ok(before);
-      assert.equal(before.agreed_pence, 189600);
+      assert.equal(before.agreed_pence, 0);
       assert.throws(() => useCalculatedFigure({ claimId: "c8", actorId: "staff-driver", role: "driver", head: "hire" }), /cannot open the money/i);
       assert.throws(() => keepStoredFigure({ claimId: "c3", actorId: "staff-mechanic", role: "mechanic", head: "storage", reason: "Checked" }), /cannot open the money/i);
       assert.deepEqual(money(db, "c8", "hire"), before);
@@ -68,7 +68,7 @@ describe("calculated hire, storage and recovery figures", () => {
       const stored = money(db, "c8", "hire")!;
       useCalculatedFigure({ claimId: "c8", actorId: "staff-sian", role: "staff", head: "hire" });
       const used = money(db, "c8", "hire")!;
-      assert.equal(used.agreed_pence, 189600);
+      assert.equal(used.agreed_pence, 0);
       assert.equal(used.received_pence, stored.received_pence);
       assert.equal(used.claimed_pence, target);
       const page = loadHeadSection("c8", "hire").claimedPence;
@@ -199,6 +199,11 @@ describe("calculated hire, storage and recovery figures", () => {
         assert.equal(chaseForClaim("hire_payment", "c4"), null);
         assert.equal(chaseForClaim("storage_payment", "c4"), null);
         db.prepare(`UPDATE hire_episodes SET billing_end_at = '2026-10-01T17:00:00.000Z' WHERE claim_id = 'c4'`).run();
+        db.prepare(
+          `INSERT INTO vehicle_handovers(
+            id, claim_id, event_kind, occurred_at, recorded_by, mileage, fuel_level, spare_wheel, tools_present, warning_lights_off, tyres_legal, condition_note, created_at
+          ) VALUES ('vh-c4-out', 'c4', 'hire_delivered', '2026-09-01T10:00:00.000Z', 'staff-justin', 1, 'full', 'yes', 'yes', 'yes', 'yes', '', '2026-09-01T10:00:00.000Z')`,
+        ).run();
         syncOutstandingPaymentChases(["c4"]);
         assert.equal(chaseForClaim("hire_payment", "c4"), null);
         const sentAt = isoDaysFromNow(-10);
@@ -209,7 +214,7 @@ describe("calculated hire, storage and recovery figures", () => {
         syncOutstandingPaymentChases(["c4"]);
         assert.equal(chaseRow("c4", "hire_payment")?.status, "tracking");
         assert.equal(chaseForClaim("storage_payment", "c4"), null);
-        db.prepare(`UPDATE claims SET storage_billing_end_on = '2026-09-14' WHERE id = 'c4'`).run();
+        db.prepare(`UPDATE claims SET storage_started_on = '2026-09-01', storage_billing_end_on = '2026-09-14' WHERE id = 'c4'`).run();
         syncOutstandingPaymentChases(["c4"]);
         assert.equal(chaseForClaim("storage_payment", "c4"), null);
         db.prepare(
@@ -256,15 +261,15 @@ describe("calculated hire, storage and recovery figures", () => {
           outstandingPence: 8000,
           salvageProceedsPence: 0,
           bank: BLANK_PAYMENT_DETAILS,
-          paymentTermDays: null,
+          paymentTerm: null,
           asAt: "2026-10-14T12:00:00.000Z",
           hirePackSentOn: null,
           firstChaseOn: null,
           handlerName: "Justin Roberts",
         });
-        assert.equal(copy.dueDateUnset, true);
-        assert.match(copy.body, /not set/);
-        assert.equal(copy.body.includes(PAYMENT_TERM_NOT_SET_LABEL), true);
+        assert.match(copy.body, new RegExp(PAYMENT_DUE_ON_RECEIPT_SENTENCE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+        assert.doesNotMatch(copy.body, /0 days/i);
+        assert.doesNotMatch(copy.body, /not set/i);
       });
     } finally {
       setMailboxFetchForTests(null);
@@ -285,7 +290,7 @@ describe("calculated hire, storage and recovery figures", () => {
     });
     try {
       await withDatabase(db, async () => {
-        db.prepare(`UPDATE claims SET storage_billing_end_on = '2026-09-01' WHERE id = 'c4'`).run();
+        db.prepare(`UPDATE claims SET storage_started_on = '2026-08-20', storage_billing_end_on = '2026-09-01' WHERE id = 'c4'`).run();
         db.prepare(
           `INSERT INTO financial_lines(id, claim_id, head_of_loss, description, claimed_pence, offered_pence, agreed_pence, received_pence)
            VALUES ('f-c4-st-sim', 'c4', 'storage', 'Storage', 8000, 0, 0, 0)`,

@@ -29,6 +29,7 @@ import { OutstandingSummary } from "@/components/claims/OutstandingSummary";
 import { MailboxSendNotice } from "@/components/claims/SendPreparedEmailForm";
 import { EmailSendModeBanner } from "@/components/EmailSendModeBanner";
 import { liveEmailSending } from "@/lib/email/send-mode";
+import { STORAGE_START_MISSING_REVIEW } from "@/lib/constants";
 import { BANK_DETAILS_MISSING_SETTINGS, paymentDetailsComplete } from "@/lib/domain/payment-details";
 import { getInsurerPaymentDetails } from "@/lib/db/payment-details";
 import { outstandingForClaim } from "@/lib/db/outstanding";
@@ -477,7 +478,17 @@ export default async function ClaimDetailPage({
             )}
             <li>Recovery: {pretty(claim.recovery_status)}</li>
             <li>Storage: {pretty(claim.storage_status)}</li>
-            <li>Storage started (same day as recovery): {claim.storage_started_on ? formatUkDate(String(claim.storage_started_on)) : "Not set"}</li>
+            <li>
+              Storage started (same day as recovery):{" "}
+              {claim.storage_started_on
+                ? formatUkDate(String(claim.storage_started_on))
+                : claim.storage_billing_end_on
+                  ? "Start date missing"
+                  : "Not set"}
+            </li>
+            {claim.storage_billing_end_on && !claim.storage_started_on ? (
+              <li className="font-semibold">{STORAGE_START_MISSING_REVIEW}</li>
+            ) : null}
             <li>Storage rate: {claim.storage_rate_pence ? formatGbp(Number(claim.storage_rate_pence)) : "Not set"} / day</li>
             <li>Storage billing end (explicit): {claim.storage_billing_end_on ? formatUkDate(String(claim.storage_billing_end_on)) : "Not set"}</li>
             <li>Qualifying payment for off-hire: {Number(claim.payment_qualifies_off_hire) ? "Yes" : "No"}</li>

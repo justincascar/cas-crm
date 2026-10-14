@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, it } from "node:test";
-import { PAYMENT_TERM_NOT_SET_LABEL } from "../src/lib/constants.ts";
+import { PAYMENT_DUE_ON_RECEIPT_SENTENCE } from "../src/lib/constants.ts";
 import { isoDaysFromNow } from "../src/lib/dates.ts";
 import { chaseForClaim, getInsurerPaymentTermDays, listChasesForClaim, listDueChases } from "../src/lib/db/chase.ts";
 import { withDatabase } from "../src/lib/db/connection.ts";
@@ -114,7 +114,7 @@ describe("payment chase — partial, full, reminder and backlog", () => {
       assert.match(prepared.body, /1,000\.00/);
       assert.doesNotMatch(prepared.body, /500\.00/);
       assert.match(prepared.body, /Payment details not yet on file/);
-      assert.match(prepared.body, new RegExp(PAYMENT_TERM_NOT_SET_LABEL.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      assert.match(prepared.body, new RegExp(PAYMENT_DUE_ON_RECEIPT_SENTENCE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
       assert.doesNotMatch(prepared.body, /\b14\b/);
       assert.doesNotMatch(prepared.body, /\b28\b/);
       const stored = db.prepare(`SELECT sent_status FROM correspondence WHERE id = ?`).get(prepared.correspondenceId) as {
@@ -305,7 +305,7 @@ describe("payment chase — partial, full, reminder and backlog", () => {
 });
 
 describe("payment chase — term and templates", () => {
-  it("has no payment-term default and does not offer the old templates in the picker", () => {
+  it("uses Due on receipt when no insurer term is stored and does not offer the old templates in the picker", () => {
     const db = seeded();
     withDatabase(db, () => {
       assert.equal(getInsurerPaymentTermDays(), null);
@@ -320,13 +320,14 @@ describe("payment chase — term and templates", () => {
       receivedPence: 0,
       outstandingPence: 100_000,
       bank: BLANK_PAYMENT_DETAILS,
-      paymentTermDays: null,
+      paymentTerm: null,
       asAt: "2026-10-09T12:00:00.000Z",
       hirePackSentOn: null,
       firstChaseOn: null,
       handlerName: "Justin Roberts",
     });
-    assert.equal(copy.dueDateUnset, true);
+    assert.match(copy.body, new RegExp(PAYMENT_DUE_ON_RECEIPT_SENTENCE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.doesNotMatch(copy.body, /0 days/i);
     assert.match(copy.body, /£1,000\.00/);
     assert.match(copy.body, /Payment details not yet on file/);
     assert.doesNotMatch(copy.body, /\b14\b/);

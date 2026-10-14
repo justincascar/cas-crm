@@ -211,6 +211,7 @@ export default async function HireHeadPage({
         head="hire"
         offers={listChargeOffers(id, "hire")}
         claimedPence={claimedForMoney}
+        claimedUnderReview={flag.differs}
         agreedOn={agreedOnFor(id, "hire")}
         hasAgreed={(section.agreedPence || 0) > 0}
       />

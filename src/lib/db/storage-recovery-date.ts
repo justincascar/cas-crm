@@ -200,6 +200,10 @@ function readStorageEnd(claimId: string) {
 }
 
 function writeStorageEnd(claimId: string, day: string) {
+  const started = get<{ storage_started_on: string | null }>(`SELECT storage_started_on FROM claims WHERE id = ?`, [claimId]);
+  if (!calendarDay(started?.storage_started_on)) {
+    throw new Error("Start date missing. A storage end cannot be proposed or confirmed.");
+  }
   run(`UPDATE claims SET storage_billing_end_on = ? WHERE id = ?`, [day, claimId]);
 }
 
@@ -231,6 +235,8 @@ export function applyClientReturnActualDate(input: {
 }
 
 export function getStorageEndDateReview(claimId: string): StorageEndDateReview | null {
+  const started = get<{ storage_started_on: string | null }>(`SELECT storage_started_on FROM claims WHERE id = ?`, [claimId]);
+  if (!calendarDay(started?.storage_started_on)) return null;
   const claim = readStorageEnd(claimId);
   const jobDate = calendarDay(claim?.storage_end_review_on);
   if (!claim || !jobDate) return null;
@@ -244,6 +250,10 @@ export function getStorageEndDateReview(claimId: string): StorageEndDateReview |
 }
 
 export function confirmStorageEndDate(input: { claimId: string; choice: "job" | "file"; actorId: string }) {
+  const started = get<{ storage_started_on: string | null }>(`SELECT storage_started_on FROM claims WHERE id = ?`, [input.claimId]);
+  if (!calendarDay(started?.storage_started_on)) {
+    throw new Error("Start date missing. A storage end cannot be proposed or confirmed.");
+  }
   const claim = readStorageEnd(input.claimId);
   if (!claim) throw new Error("File not found.");
   const jobDate = calendarDay(claim.storage_end_review_on);

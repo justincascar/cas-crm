@@ -11,6 +11,7 @@ import { StorageDateReview } from "@/components/claims/StorageDateReview";
 import { StorageEndDateReview } from "@/components/claims/StorageEndDateReview";
 import { ChargeableStorageNote, StorageAuthorisationEndPanel } from "@/components/claims/StorageAuthorisationEnd";
 import { requireStaff } from "@/lib/auth/session";
+import { STORAGE_START_MISSING_REVIEW } from "@/lib/constants";
 import { formatUkDate } from "@/lib/dates";
 import { headScreenPath } from "@/lib/domain/head-screen";
 import {
@@ -114,6 +115,7 @@ export default async function StorageHeadPage({
         {startDay ? <StorageAuthorisationEndPanel claimId={id} decision={decision} returnTo={returnTo} /> : (
           <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">
             Start date missing. A storage end cannot be proposed or confirmed.
+            {endDay ? ` ${STORAGE_START_MISSING_REVIEW}.` : ""}
           </p>
         )}
         <dl className="grid gap-3 text-sm sm:grid-cols-2">
@@ -290,6 +292,7 @@ export default async function StorageHeadPage({
         head="storage"
         offers={listChargeOffers(id, "storage")}
         claimedPence={section.claimedPence}
+        claimedUnderReview={flag.differs}
         agreedOn={agreedOnFor(id, "storage")}
         hasAgreed={(section.agreedPence || 0) > 0}
       />

@@ -176,6 +176,7 @@ export default async function RecoveryHeadPage({
         head="recovery"
         offers={listChargeOffers(id, "recovery")}
         claimedPence={section.claimedPence}
+        claimedUnderReview={flag.differs}
         agreedOn={agreedOnFor(id, "recovery")}
         hasAgreed={(section.agreedPence || 0) > 0}
       />

@@ -225,12 +225,13 @@ describe("client paper and total-loss payment chases", () => {
     const db = prepared();
     withDatabase(db, () => {
       assert.deepEqual(getInsurerPaymentDetails(), { accountName: "", sortCode: "", accountNumber: "" });
-      assert.throws(() => saveInsurerPaymentDetails({ accountName: "CAS", sortCode: "12-34", accountNumber: "" }), /all three/);
+      const justin = { staffId: "staff-justin", role: "administrator" as const };
+      assert.throws(() => saveInsurerPaymentDetails({ accountName: "CAS", sortCode: "12-34", accountNumber: "" }, justin), /all three/);
       const saved = saveInsurerPaymentDetails({
         accountName: "Complete Accident Solutions Ltd",
         sortCode: "12 34 56",
         accountNumber: "12345678",
-      });
+      }, justin);
       const filled = totalLossNoticeBody({
         fileReference: "TEST-0099",
         insurerReference: null,
@@ -241,7 +242,7 @@ describe("client paper and total-loss payment chases", () => {
       assert.match(filled.body, /12-34-56/);
       assert.match(filled.body, /12345678/);
       assert.doesNotMatch(filled.body, new RegExp(PAYMENT_DETAILS_MISSING));
-      saveInsurerPaymentDetails({ accountName: "", sortCode: "", accountNumber: "" });
+      saveInsurerPaymentDetails({ accountName: "", sortCode: "", accountNumber: "" }, justin);
       const cleared = totalLossNoticeBody({
         fileReference: "TEST-0099",
         insurerReference: null,

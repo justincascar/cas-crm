@@ -6,7 +6,7 @@ import { requireStaff } from "@/lib/auth/session";
 import { setDefaultVehicleLocation } from "@/lib/db/vehicle-location";
 import { setStorageDailyRatePence } from "@/lib/db/storage-charge";
 import { poundsFieldToPence } from "@/lib/domain/recovery-charges";
-import { setChaseIntervalDays, setAgreementMaxDays, setAgreementApproachingDay, setInsurerPaymentTermDays } from "@/lib/db/chase";
+import { setChaseIntervalDays, setAgreementMaxDays, setAgreementApproachingDay } from "@/lib/db/chase";
 import { testMailboxConnection } from "@/lib/email/microsoft-graph";
 
 function revalidateSettings() {
@@ -74,18 +74,6 @@ export async function actionSaveAgreementLimits(formData: FormData) {
     setAgreementMaxDays(String(formData.get("agreementMaxDays") || ""));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not save the agreement limits.";
-    redirect(`/settings?error=${encodeURIComponent(message)}`);
-  }
-  revalidateSettings();
-  redirect("/settings?saved=1");
-}
-
-export async function actionSavePaymentTerm(formData: FormData) {
-  await requireStaff();
-  try {
-    setInsurerPaymentTermDays(String(formData.get("insurerPaymentTermDays") || ""));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Could not save the insurer payment term.";
     redirect(`/settings?error=${encodeURIComponent(message)}`);
   }
   revalidateSettings();

@@ -7,6 +7,7 @@ export function ChargeOffers({
   head,
   offers,
   claimedPence,
+  claimedUnderReview = false,
   agreedOn,
   hasAgreed,
 }: {
@@ -14,6 +15,7 @@ export function ChargeOffers({
   head: "hire" | "storage" | "recovery";
   offers: VehicleOffer[];
   claimedPence: number;
+  claimedUnderReview?: boolean;
   agreedOn: string | null;
   hasAgreed: boolean;
 }) {
@@ -28,6 +30,7 @@ export function ChargeOffers({
       returnPath={`/claims/${claimId}/heads/${head}`}
       offerHead={head}
       claimedPence={claimedPence}
+      claimedUnderReview={claimedUnderReview}
       showDayRate={head === "hire" || head === "storage"}
     />
   );
