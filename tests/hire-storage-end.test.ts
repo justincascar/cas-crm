@@ -63,6 +63,13 @@ function hireRow(claimId: string) {
   return row;
 }
 
+function ensureStart(claimId: string) {
+  run(
+    `UPDATE claims SET storage_started_on = '2026-09-01' WHERE id = ? AND (storage_started_on IS NULL OR trim(storage_started_on) = '')`,
+    [claimId],
+  );
+}
+
 function authorise(claimId: string, at: string) {
   recordClaimEvent({
     claimId,
@@ -101,6 +108,7 @@ describe("repairable storage end from authorisation", () => {
       if (proposed.kind === "suggest") assert.equal(proposed.date, "2026-09-10");
       assert.equal(storageRow("c3").storage_billing_end_on, null);
       assert.equal(storageRow("c3").storage_status, "active");
+      ensureStart("c3");
       confirmStorageAuthorisationEnd({ claimId: "c3", actorId: "staff-tom", choice: "suggested" });
       const after = storageRow("c3");
       assert.equal(after.storage_billing_end_on, "2026-09-10");
@@ -144,6 +152,7 @@ describe("repairable storage end from authorisation", () => {
     withDatabase(db, () => {
       warmup();
       authorise("c3", "2026-09-10T10:00");
+      ensureStart("c3");
       confirmStorageAuthorisationEnd({ claimId: "c3", actorId: "staff-tom", choice: "suggested" });
       assert.equal(storageRow("c3").storage_billing_end_on, "2026-09-10");
       saveScreenData("c3", "assessed-damage", { totalLoss: "yes" }, "staff-tom");
@@ -170,6 +179,7 @@ describe("repairable storage end from authorisation", () => {
     withDatabase(db, () => {
       warmup();
       authorise("c3", "2026-09-10T10:00");
+      ensureStart("c3");
       confirmStorageAuthorisationEnd({ claimId: "c3", actorId: "staff-tom", choice: "suggested" });
       authorise("c3", "2026-09-15T11:00");
       const revised = storageAuthorisationEndForClaim("c3");
@@ -180,7 +190,9 @@ describe("repairable storage end from authorisation", () => {
       }
       assert.equal(storageRow("c3").storage_billing_end_on, "2026-09-10");
 
+      run(`DELETE FROM claim_events WHERE claim_id = 'c5' AND event_type = 'repairs_authorised'`);
       authorise("c5", "2026-09-12T10:00");
+      ensureStart("c5");
       confirmStorageAuthorisationEnd({ claimId: "c5", actorId: "staff-tom", choice: "suggested" });
       assert.equal(storageRow("c5").storage_billing_end_on, "2026-09-12");
       recordClaimEvent({
@@ -202,6 +214,7 @@ describe("repairable storage end from authorisation", () => {
     withDatabase(db, () => {
       warmup();
       authorise("c3", "2026-09-10T10:00");
+      ensureStart("c3");
       saveScreenData("c3", "storage", storageForm("c3", "2026-09-10"), "staff-tom");
       assert.equal(storageRow("c3").storage_billing_end_on, "2026-09-10");
       assert.throws(

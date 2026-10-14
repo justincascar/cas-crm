@@ -35,8 +35,8 @@ describe("head of loss screens", () => {
       assert.notEqual(recovery.claimedPence, storage.claimedPence);
       assert.equal(recovery.receivedPence, 0);
       assert.equal(storage.receivedPence, 0);
-      assert.equal(headScreenPath("c3", "recovery"), "/claims/c3/heads/recovery-storage");
-      assert.equal(headScreenPath("c3", "storage"), "/claims/c3/heads/recovery-storage");
+      assert.equal(headScreenPath("c3", "recovery"), "/claims/c3/heads/recovery");
+      assert.equal(headScreenPath("c3", "storage"), "/claims/c3/heads/storage");
     });
     db.close();
   });

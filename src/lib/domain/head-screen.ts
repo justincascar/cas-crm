@@ -1,7 +1,7 @@
 import { formatGbp } from "../money";
 import type { PaymentReviewHead } from "./payment-review";
 
-export type HeadScreenKey = "recovery-storage" | "hire" | "vehicle";
+export type HeadScreenKey = "recovery" | "storage" | "hire" | "vehicle";
 
 /** The vehicle-damage screen shows repairs, or total loss, whichever the file is now. Never both. */
 export function applicableVehicleHead(totalLoss: boolean): "repairs" | "vehicle_damage" {
@@ -9,7 +9,8 @@ export function applicableVehicleHead(totalLoss: boolean): "repairs" | "vehicle_
 }
 
 export function headScreenKey(head: PaymentReviewHead): HeadScreenKey {
-  if (head === "recovery" || head === "storage") return "recovery-storage";
+  if (head === "recovery") return "recovery";
+  if (head === "storage") return "storage";
   if (head === "hire") return "hire";
   return "vehicle";
 }

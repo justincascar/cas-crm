@@ -144,7 +144,10 @@ describe("agreed figures on hire, recovery and storage", () => {
 
   it("puts record-payment and record-agreed on each head screen, using the existing actions", () => {
     const hire = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/heads/hire/page.tsx"), "utf8");
-    const recovery = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/heads/recovery-storage/page.tsx"), "utf8");
+    const recovery = [
+      fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/heads/recovery/page.tsx"), "utf8"),
+      fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/heads/storage/page.tsx"), "utf8"),
+    ].join("\n");
     const vehicle = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/heads/vehicle/page.tsx"), "utf8");
     const payment = fs.readFileSync(path.join(process.cwd(), "src/components/claims/PaymentReviewPanel.tsx"), "utf8");
     const agreed = fs.readFileSync(path.join(process.cwd(), "src/components/claims/HeadAgreedForm.tsx"), "utf8");
@@ -154,8 +157,8 @@ describe("agreed figures on hire, recovery and storage", () => {
     assert.match(hire, /lockedHead=\{\{ head: "hire"/);
     assert.match(recovery, /head="recovery"/);
     assert.match(recovery, /head="storage"/);
-    assert.match(recovery, /lockedHead=\{\{ head: "recovery"/);
-    assert.match(recovery, /lockedHead=\{\{ head: "storage"/);
+    assert.match(recovery, /lockedHead=\{\{[\s\S]*?head: "recovery"/);
+    assert.match(recovery, /lockedHead=\{\{[\s\S]*?head: "storage"/);
     assert.match(vehicle, /VehicleOffers/);
     assert.doesNotMatch(vehicle, /HeadAgreedForm/);
     assert.match(vehicle, /TotalLossAgreedForm/);

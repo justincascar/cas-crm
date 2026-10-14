@@ -82,8 +82,22 @@ export function screenSaveFieldError(
     if (extra) return extra;
   }
   if (screenKey === "storage") {
+    if ((values.endDate || "").trim() && !(values.startDate || "").trim()) {
+      return { field: "startDate", message: "Start date missing. A storage end cannot be proposed or confirmed." };
+    }
     const storageEnd = storageEndManualMessage(claimId, values.endDate || "", values.endDateReason || "");
     if (storageEnd) return { field: "endDateReason", message: storageEnd };
+    if (Object.prototype.hasOwnProperty.call(values, "dailyRate")) {
+      const claim = get<{ storage_rate_pence: number | null }>(
+        `SELECT storage_rate_pence FROM claims WHERE id = ?`,
+        [claimId],
+      );
+      const next = values.dailyRate ? Number.parseInt(values.dailyRate, 10) || null : null;
+      const current = claim?.storage_rate_pence ?? null;
+      if (next !== current && !(values.rateReason || "").trim()) {
+        return { field: "rateReason", message: "Record a reason before changing the daily rate on this file." };
+      }
+    }
   }
   if (screenKey === "accident") {
     const accident = accidentDateError(values.accidentDate);
@@ -253,18 +267,26 @@ function applySideEffects(claimId: string, screenKey: string, values: ScreenValu
   }
 
   if (screenKey === "storage") {
-    const beforeEnd = get<{ storage_billing_end_on: string | null }>(
-      `SELECT storage_billing_end_on FROM claims WHERE id = ?`,
+    const beforeEnd = get<{ storage_billing_end_on: string | null; storage_rate_pence: number | null }>(
+      `SELECT storage_billing_end_on, storage_rate_pence FROM claims WHERE id = ?`,
       [claimId],
     );
+    const hasDaily = Object.prototype.hasOwnProperty.call(values, "dailyRate");
+    const nextRate = hasDaily ? (values.dailyRate ? Number.parseInt(values.dailyRate, 10) || null : null) : null;
+    const rateChanges = hasDaily && nextRate !== (beforeEnd?.storage_rate_pence ?? null);
+    const hasEnd = Object.prototype.hasOwnProperty.call(values, "endDate");
     run(
-      `UPDATE claims SET storage_started_on = ?, storage_billing_end_on = ?, storage_rate_pence = ?,
+      `UPDATE claims SET storage_started_on = ?,
+        storage_billing_end_on = CASE WHEN ? = 1 THEN ? ELSE storage_billing_end_on END,
+        storage_rate_pence = CASE WHEN ? = 1 THEN ? ELSE storage_rate_pence END,
         storage_status = CASE WHEN ? != '' THEN 'active' ELSE storage_status END
        WHERE id = ?`,
       [
         values.startDate || null,
+        hasEnd ? 1 : 0,
         values.endDate || null,
-        values.dailyRate ? Number.parseInt(values.dailyRate, 10) || null : null,
+        rateChanges ? 1 : 0,
+        nextRate,
         values.startDate || "",
         claimId,
       ],

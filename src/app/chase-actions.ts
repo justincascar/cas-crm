@@ -27,7 +27,8 @@ function refreshClaim(claimId: string) {
   revalidatePath(`/claims/${claimId}/work/comms`);
   revalidatePath(`/claims/${claimId}/work/history`);
   revalidatePath(`/claims/${claimId}/heads/hire`);
-  revalidatePath(`/claims/${claimId}/heads/recovery-storage`);
+  revalidatePath(`/claims/${claimId}/heads/recovery`);
+  revalidatePath(`/claims/${claimId}/heads/storage`);
   revalidatePath(`/claims/${claimId}/heads/vehicle`);
   revalidatePath("/claims");
   revalidatePath("/");

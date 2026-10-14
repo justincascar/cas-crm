@@ -1,11 +1,12 @@
 import { PageHeader } from "@/components/ClaimTable";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import Link from "next/link";
-import { actionSaveAgreementLimits, actionSaveChaseIntervals, actionSaveDefaultVehicleLocation, actionSaveGtaMarkup, actionSavePaymentTerm, actionTestMailboxConnection } from "@/app/settings-actions";
+import { actionSaveAgreementLimits, actionSaveChaseIntervals, actionSaveDefaultVehicleLocation, actionSaveGtaMarkup, actionSavePaymentTerm, actionSaveStorageDailyRate, actionTestMailboxConnection } from "@/app/settings-actions";
 import { isAdministrator } from "@/lib/auth/roles";
 import { requireStaff } from "@/lib/auth/session";
 import { dbLocation, getSettings, listStaff } from "@/lib/db/queries";
 import { getDefaultVehicleLocation } from "@/lib/db/vehicle-location";
+import { getStorageDailyRatePence } from "@/lib/db/storage-charge";
 import { getAgreementApproachingDay, getAgreementMaxDays, getChaseIntervalDays, getInsurerPaymentTermDays } from "@/lib/db/chase";
 import { getGtaMarkupPercent } from "@/lib/db/hire-agreement";
 import { getInsurerPaymentDetails } from "@/lib/db/payment-details";
@@ -30,6 +31,7 @@ export default async function SettingsPage({
   const staff = listStaff();
   const admin = isAdministrator(staffUser.role);
   const defaultVehicleLocation = getDefaultVehicleLocation();
+  const storageDailyRate = getStorageDailyRatePence();
   const engineerChaseIntervalDays = getChaseIntervalDays("engineer_report");
   const liabilityChaseIntervalDays = getChaseIntervalDays("liability_response");
   const repairChaseIntervalDays = getChaseIntervalDays("repair_authorisation");
@@ -355,6 +357,27 @@ export default async function SettingsPage({
           </label>
           <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white sm:col-span-3">
             Save chase intervals
+          </button>
+        </ValidatedForm>
+      </section>
+      <section className="rounded-xl border border-line bg-card p-5">
+        <h2 className="font-serif text-xl text-navy-deep">Storage daily rate</h2>
+        <p className="mt-1 text-sm text-slate">
+          Used when a file has no rate of its own. The standard is £39 a day. Changing this does not change a rate already stored on a file.
+        </p>
+        <ValidatedForm action={actionSaveStorageDailyRate} className="mt-4 flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            Daily rate (£)
+            <input
+              name="storageDailyRate"
+              inputMode="decimal"
+              required
+              defaultValue={(storageDailyRate / 100).toFixed(2)}
+              className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
+            />
+          </label>
+          <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
+            Save storage rate
           </button>
         </ValidatedForm>
       </section>

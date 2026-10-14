@@ -6,6 +6,7 @@ import {
   FILE_REFERENCE_PREFIX_DEFAULT,
   DEFAULT_VEHICLE_LOCATION,
   SETTING_DEFAULT_VEHICLE_LOCATION,
+  SETTING_STORAGE_DAILY_RATE_PENCE,
   ENGINEER_INSTRUCTION_CHASE_RULE,
   LIABILITY_RESPONSE_CHASE_RULE,
   REPAIR_AUTHORISATION_CHASE_RULE,
@@ -43,6 +44,7 @@ export function seed(db: DatabaseSync) {
   run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", [SETTING_LIABILITY_CHASE_INTERVAL_DAYS, "3"]);
   run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", [SETTING_REPAIR_AUTH_CHASE_INTERVAL_DAYS, "3"]);
   run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", [SETTING_DEFAULT_VEHICLE_LOCATION, DEFAULT_VEHICLE_LOCATION]);
+  run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", [SETTING_STORAGE_DAILY_RATE_PENCE, "3900"]);
 
   for (const person of DEMO_STAFF) {
     run(
@@ -592,6 +594,38 @@ export function seed(db: DatabaseSync) {
     ('au1', ?, 'system', 'seed', 'database', 'prototype', 'Fictional TEST claims loaded. Prototype — fictional test data.')`,
     [now]);
 
+  run(
+    db,
+    `UPDATE claims SET storage_started_on = '2026-09-22', storage_status = 'active', recovery_status = 'complete' WHERE id = 'c5'`,
+  );
+  run(
+    db,
+    `INSERT INTO recovery_jobs(
+      id, claim_id, location, recovered_at, charge_pence, winch_pence, ooh_pence, environmental_pence,
+      forklift_pence, mileage_pence, manual_pence, inherited
+    ) VALUES ('rec-c5','c5','Caerleon Road, Newport','2026-09-22', 39500, 0, 0, 0, 0, 0, 0, 0)`,
+  );
+  run(
+    db,
+    `INSERT INTO claim_screen_data(claim_id, screen_key, data_json, updated_at) VALUES ('c5', 'recovery', ?, ?)`,
+    [
+      JSON.stringify({
+        name: "Demo Driver",
+        location: "Caerleon Road, Newport",
+        recoveryDate: "2026-09-22",
+        standardCharge: "39500",
+      }),
+      now,
+    ],
+  );
+  run(
+    db,
+    `INSERT INTO day_assignments(
+      id, assignee_id, job_kind, claim_id, work_date, created_by, created_at, completed_at, actual_driver_id, actual_occurred_at
+    ) VALUES ('job-c5-recovery','staff-driver','client_recovery','c5','2026-09-22','staff-sian', ?, ?, 'staff-driver', '2026-09-22T10:00:00.000Z')`,
+    [now, now],
+  );
+
   insertPrototypeChronology(db);
 }
 
@@ -644,6 +678,15 @@ function insertPrototypeChronology(db: DatabaseSync) {
 
   ev("ev-c5-letter", "c5", "initial_letter_tp_insurer", "Initial letter to third-party insurer", "Notification to Aviva. Simulated send.", -5, 10, "staff-sian", "email");
   ev("ev-c5-eng", "c5", "engineer_instructed", "Engineer instructed", "Inspection arranged; report not yet in.", -7, 11, "staff-sian", "email");
+  run(
+    db,
+    `INSERT OR IGNORE INTO claim_events(
+      id, claim_id, event_type, title, details, occurred_at, recorded_at, actor_id, channel, source
+    ) VALUES ('ev-c5-auth','c5','repairs_authorised','Repair authorisation received',
+      'Repair authorisation received. Stored so the storage end can be proposed. Not confirmed.',
+      '2026-10-01T09:00:00.000Z', ?, 'staff-sian', 'system', 'staff')`,
+    [now],
+  );
 
   ev("ev-c6-letter", "c6", "initial_letter_tp_insurer", "Initial letter to third-party insurer", "Ageas notified.", -16, 9, "staff-tom", "email");
   ev("ev-c6-eng", "c6", "engineer_instructed", "Engineer instructed", "Engineer instructed.", -8, 10, "staff-tom", "email");

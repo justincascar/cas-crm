@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/auth/session";
 import { setDefaultVehicleLocation } from "@/lib/db/vehicle-location";
+import { setStorageDailyRatePence } from "@/lib/db/storage-charge";
+import { poundsFieldToPence } from "@/lib/domain/recovery-charges";
 import { setChaseIntervalDays, setAgreementMaxDays, setAgreementApproachingDay, setInsurerPaymentTermDays } from "@/lib/db/chase";
 import { testMailboxConnection } from "@/lib/email/microsoft-graph";
 
@@ -19,6 +21,18 @@ export async function actionSaveDefaultVehicleLocation(formData: FormData) {
     setDefaultVehicleLocation(String(formData.get("defaultVehicleLocation") || ""));
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not save the default vehicle location.";
+    redirect(`/settings?error=${encodeURIComponent(message)}`);
+  }
+  revalidateSettings();
+  redirect("/settings?saved=1");
+}
+
+export async function actionSaveStorageDailyRate(formData: FormData) {
+  await requireStaff();
+  try {
+    setStorageDailyRatePence(poundsFieldToPence(String(formData.get("storageDailyRate") || "")));
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not save the storage daily rate.";
     redirect(`/settings?error=${encodeURIComponent(message)}`);
   }
   revalidateSettings();

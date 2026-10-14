@@ -6,6 +6,8 @@ import { backfillChronologyIfEmpty, seedIfEmpty } from "./seed";
 import { ensureEngineers } from "./engineers";
 import { ensureKnownInsurers } from "./insurers";
 import { ensureDefaultVehicleLocationSetting } from "./vehicle-location";
+import { ensureStorageDailyRateSetting } from "./storage-charge";
+import { ensureTest0005StorageDemonstration } from "./test-0005-storage";
 import { ensureChaseSettings, ensureDemoChases } from "./chase";
 import { ensureRealFleet } from "./fleet";
 import { ensureDemoDayJobs } from "./demo-jobs";
@@ -36,11 +38,13 @@ function openDatabase(): DatabaseSync {
   ensureKnownInsurers(db);
   ensureEngineers(db);
   ensureDefaultVehicleLocationSetting(db);
+  ensureStorageDailyRateSetting(db);
   ensureChaseSettings(db);
   ensureDemoChases(db);
   ensureStaffAuth(db);
   ensureDemoDayJobs(db);
   ensureRealFleet(db);
+  ensureTest0005StorageDemonstration(db, { financialLines: true });
   backfillChronologyIfEmpty(db);
   preparedDatabases.add(db);
   return db;
@@ -52,10 +56,12 @@ function prepareExistingDatabase(db: DatabaseSync) {
   ensureKnownInsurers(db);
   ensureEngineers(db);
   ensureDefaultVehicleLocationSetting(db);
+  ensureStorageDailyRateSetting(db);
   ensureChaseSettings(db);
   ensureDemoChases(db);
   ensureStaffAuth(db);
   ensureDemoDayJobs(db);
+  ensureTest0005StorageDemonstration(db);
   backfillChronologyIfEmpty(db);
   preparedDatabases.add(db);
 }

@@ -606,6 +606,22 @@ Still not stored, so not used: inspection date, the report sent on to the insure
 
 Tests: `tests/hire-storage-end.test.ts`. Full suite: 369 passing, 0 failing.
 
+## Storage and recovery pages (14 October 2026)
+
+Storage and recovery each have their own page. Storage is `/claims/[id]/heads/storage`. Recovery is `/claims/[id]/heads/recovery`. The old combined address `/claims/[id]/heads/recovery-storage` redirects: recovery when the link says so, otherwise storage. The old Storage and Recovery file-screen addresses redirect to those pages.
+
+The storage charge is calculated. Days run from the start date to the confirmed chargeable end. While the end is only proposed, or not set, the days run to today (Europe/London) and are labelled "Provisional to today". Both the first day and the last day are counted. Justin has not confirmed this counting rule. The daily rate starts at £39 (3900 pence) from Settings. A file with no rate of its own uses the current setting. Changing the setting does not change a rate already stored on a file. Changing the rate on one file needs a reason. Net is days times the rate. VAT is 20%, which was already the configured rate. The total is net plus VAT, in pence, shown as GBP. Staff do not type the net, VAT or total. That total is written as the claimed figure. Agreed and received are not changed when the days or the rate change.
+
+A missing start date shows "Start date missing" and no figure. A storage end cannot be proposed or confirmed until a start date is on the file. A proposed end is still only stored when a handler confirms it. TEST-0005 has a storage start of 22/09/2026 and a recovery on that day from Caerleon Road, Newport, carried out by Demo Driver. The proposed storage end of 01/10/2026 is still unconfirmed. TEST-0003's storage end was not rewritten.
+
+Recovery and storage were already separate rows in `financial_lines` (`recovery` and `storage`). They shared one screen, not one money row. Nothing was merged or split, and no received or agreed figure was moved. The recovery claimed figure is the total the recovery screen already calculates (standard charge, extras and card fee, plus VAT). It is not a second £395 on top. Where that screen has not been saved, and a claimed figure is already on the file, that figure is left as it is.
+
+A blank storage location is filled from the CAS premises default (Complete Accident Solutions Ltd, 171 Cwmgarw Road, Brynamman, Ammanford SA18 1DG, with the telephone and email already held for the company). A location someone has typed is not overwritten. The payment box says how much has been received against the agreed figure when there is one, otherwise against the claimed figure. If neither exists it says there is no figure to compare against yet. Driver and mechanic are refused the money routes on the server.
+
+Hire was inspected and not changed. Hire dates sit on the delivery and collection screen and on the hire booking. Hire money sits on the hire head screen. That claimed figure is the amount stored on the hire line. It is not calculated from the days and the daily rate.
+
+If two people save Storage at the same time, the later save is kept. The CRM does not warn that someone else changed it. There is no new lock.
+
 ## Not yet claimed
 
 - The same offer list, kept separate from the agreed figure, is still to be added on Hire and on Recovery & Storage.

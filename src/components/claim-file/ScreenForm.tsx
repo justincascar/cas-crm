@@ -238,7 +238,12 @@ export function ScreenForm({
             </li>
             <li>
               <Link href={headScreenPath(claimId, "recovery")} className="font-semibold text-teal-dark underline">
-                Recovery and storage ledger
+                Recovery ledger
+              </Link>
+            </li>
+            <li>
+              <Link href={headScreenPath(claimId, "storage")} className="font-semibold text-teal-dark underline">
+                Storage ledger
               </Link>
             </li>
           </ul>

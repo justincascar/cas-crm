@@ -257,7 +257,7 @@ describe("returning the client's vehicle does not set the chargeable storage end
       saveScreenData(
         "c3",
         "storage",
-        { endDate: "2026-09-22", dailyRate: "1500", vat: "12.50", netAmount: "62.50", days: "5" },
+        { startDate: "2026-09-01", endDate: "2026-09-22", dailyRate: "1500", vat: "12.50", netAmount: "62.50", days: "5" },
         "staff-justin",
       );
       assert.equal(endState(db).claim.storage_billing_end_on, "2026-09-22");

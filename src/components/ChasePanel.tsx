@@ -20,6 +20,7 @@ import {
 import { CAS_CLAIMS_MAILBOX, PAYMENT_TERM_NOT_SET_LABEL } from "@/lib/constants";
 import { SIMULATED_EMAIL_BANNER } from "@/lib/email/send-mode-copy";
 import { formatGbp } from "@/lib/money";
+import { paymentComparisonLabel } from "@/lib/domain/storage-charge";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import { buildMailtoHref } from "@/lib/email/mailto";
 import { SendPreparedEmailForm } from "@/components/claims/SendPreparedEmailForm";
@@ -468,8 +469,15 @@ export function ChasePanel({
               Amount received on this head (£)
               <input name="amount" inputMode="decimal" className={field} required />
               <span className="mt-1 block text-slate">
-                Added to the amount already received on this head. If it does not cover the figure, the chase pauses and Awaiting
-                decision stays on this file until you open it.
+                Added to the amount already received on this head.{" "}
+                {chase.payment
+                  ? paymentComparisonLabel({
+                      receivedPence: chase.payment.receivedPence,
+                      agreedPence: chase.payment.agreedPence,
+                      claimedPence: 0,
+                    })
+                  : "No figure to compare against yet"}
+                . If it does not cover that figure, the chase pauses and Awaiting decision stays on this file until you open it.
               </span>
             </label>
             <label className="text-sm">

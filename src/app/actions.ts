@@ -32,6 +32,7 @@ import { generateHireAgreementDocument, getGtaMarkupPercent, prepareHireRating }
 import { hireAgreementPrehireBlock } from "@/lib/db/prehire-checks";
 import { normaliseGtaGroup, standardDailyRatePence } from "@/lib/documents/gta";
 import { saveScreenData, valuesFromForm } from "@/lib/db/screens";
+import { syncRecoveryClaimed, syncStorageClaimed } from "@/lib/db/storage-charge";
 import { isoDaysFromNow } from "@/lib/dates";
 import { postcodeLookup } from "@/lib/lookups/postcode";
 import { VEHICLE_MANUAL_HINT, vehicleLookup } from "@/lib/lookups/vehicle";
@@ -186,14 +187,22 @@ export async function actionSaveClaimScreen(formData: FormData) {
   const screenKey = String(formData.get("screenKey"));
   try {
     saveScreenData(claimId, screenKey, valuesFromForm(formData, screenKey), String(formData.get("actorId") || "staff-sian"));
+    if (screenKey === "recovery") syncRecoveryClaimed(claimId);
+    if (screenKey === "storage") syncStorageClaimed(claimId);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Could not save this screen.";
     const field = error instanceof FieldValidationError ? error.field : undefined;
-    redirect(`/claims/${claimId}/work/${screenKey}${errorQuery(message, field)}`);
+    redirect(`${screenReturnPath(claimId, screenKey)}${errorQuery(message, field)}`);
   }
   revalidatePath(`/claims/${claimId}`);
   revalidatePath(`/claims/${claimId}/work/${screenKey}`);
-  redirect(`/claims/${claimId}/work/${screenKey}?saved=1`);
+  revalidatePath(`/claims/${claimId}/heads/${screenKey}`);
+  redirect(`${screenReturnPath(claimId, screenKey)}?saved=1`);
+}
+
+function screenReturnPath(claimId: string, screenKey: string) {
+  if (screenKey === "recovery" || screenKey === "storage") return `/claims/${claimId}/heads/${screenKey}`;
+  return `/claims/${claimId}/work/${screenKey}`;
 }
 
 export async function actionRequestScenePhotosWhatsApp(formData: FormData) {

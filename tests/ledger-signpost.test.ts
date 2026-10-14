@@ -85,8 +85,8 @@ describe("ledger signposts", () => {
     assert.match(nav, /headScreenPath\(claimId, "repairs"\)/);
     assert.equal(headScreenPath("c4", "repairs"), "/claims/c4/heads/vehicle");
     assert.equal(headScreenPath("c4", "hire"), "/claims/c4/heads/hire");
-    assert.equal(headScreenPath("c4", "recovery"), "/claims/c4/heads/recovery-storage");
-    assert.equal(headScreenPath("c4", "storage"), "/claims/c4/heads/recovery-storage");
+    assert.equal(headScreenPath("c4", "recovery"), "/claims/c4/heads/recovery");
+    assert.equal(headScreenPath("c4", "storage"), "/claims/c4/heads/storage");
     const totalLossTick = assessed?.sections[0]?.fields.find((field) => field.name === "totalLoss");
     assert.match(totalLossTick?.hint || "", /marks the file as a total loss/);
     assert.match(totalLossTick?.hint || "", /does not set claimed, offered, agreed or received/);
@@ -205,7 +205,18 @@ describe("ledger signposts", () => {
     const after = moneySnapshot(db, "c5");
     assert.equal(Number((after.claim as { total_loss: number }).total_loss), 1);
     assert.deepEqual(after.lines, before.lines);
-    assert.deepEqual(after.events, before.events);
+    const beforeEvents = before.events as Array<{ id: string; event_type: string }>;
+    const afterEvents = after.events as Array<{ id: string; event_type: string }>;
+    const added = afterEvents.filter((event) => !beforeEvents.some((prior) => prior.id === event.id));
+    assert.deepEqual(
+      added.map((event) => event.event_type),
+      ["storage_end_date_review"],
+    );
+    assert.equal(
+      (db.prepare(`SELECT storage_billing_end_on FROM claims WHERE id = 'c5'`).get() as { storage_billing_end_on: string | null })
+        .storage_billing_end_on,
+      null,
+    );
     assert.deepEqual(after.automations, before.automations);
     db.close();
   });

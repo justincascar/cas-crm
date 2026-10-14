@@ -35,6 +35,7 @@ import { PaymentReviewPanel } from "@/components/claims/PaymentReviewPanel";
 import { AwaitingDecisionList } from "@/components/claims/AwaitingDecisionList";
 import { isPaymentReviewHead } from "@/lib/domain/payment-review";
 import { headScreenPath } from "@/lib/domain/head-screen";
+import { loadHeadSection } from "@/lib/db/head-screen";
 import { getHireEndDateReviews } from "@/lib/db/hire-collection-date";
 import { getStorageDateReview, getStorageEndDateReview } from "@/lib/db/storage-recovery-date";
 import {
@@ -125,8 +126,11 @@ export default async function ClaimDetailPage({
       <MailboxSendNotice sent={mailboxSent} simulated={mailboxSimulated} error={mailboxError} />
 
       <nav aria-label="Heads of loss" className="flex flex-wrap gap-2">
-        <Link href={`/claims/${claimId}/heads/recovery-storage`} className="rounded-md border border-navy px-4 py-2 text-sm font-semibold text-navy">
-          Recovery and storage
+        <Link href={headScreenPath(claimId, "recovery")} className="rounded-md border border-navy px-4 py-2 text-sm font-semibold text-navy">
+          Recovery
+        </Link>
+        <Link href={headScreenPath(claimId, "storage")} className="rounded-md border border-navy px-4 py-2 text-sm font-semibold text-navy">
+          Storage
         </Link>
         <Link href={`/claims/${claimId}/heads/hire`} className="rounded-md border border-navy px-4 py-2 text-sm font-semibold text-navy">
           Hire
@@ -517,14 +521,28 @@ export default async function ClaimDetailPage({
               <tr>
                 <th>Head</th>
                 <th>Claimed</th>
+                <th>Agreed</th>
                 <th>Offered</th>
                 <th>Received</th>
+                <th>Outstanding</th>
               </tr>
             </thead>
             <tbody>
               {data.financials.map((line) => {
                 const head = String(line.head_of_loss);
                 const label = HEAD_LABELS[head as HeadOfLoss] || head;
+                const claimed = Number(line.claimed_pence) || 0;
+                const agreedRaw = Number(line.agreed_pence) || 0;
+                const received = Number(line.received_pence) || 0;
+                const review = isPaymentReviewHead(head) ? loadHeadSection(claimId, head) : null;
+                const agreed = review ? review.agreedPence : agreedRaw > 0 ? agreedRaw : null;
+                const outstanding = review
+                  ? review.outstandingPence
+                  : agreedRaw > 0
+                    ? Math.max(0, agreedRaw - received)
+                    : claimed > 0
+                      ? Math.max(0, claimed - received)
+                      : null;
                 return (
                 <tr key={String(line.id)}>
                   <td>
@@ -536,9 +554,11 @@ export default async function ClaimDetailPage({
                       label
                     )}
                   </td>
-                  <td className="tabular">{formatGbp(Number(line.claimed_pence))}</td>
+                  <td className="tabular">{formatGbp(claimed)}</td>
+                  <td className="tabular">{agreed == null ? "Not set" : formatGbp(agreed)}</td>
                   <td className="tabular">{formatGbp(Number(line.offered_pence))}</td>
-                  <td className="tabular">{formatGbp(Number(line.received_pence))}</td>
+                  <td className="tabular">{formatGbp(received)}</td>
+                  <td className="tabular">{outstanding == null ? "Not set" : formatGbp(outstanding)}</td>
                 </tr>
                 );
               })}

@@ -88,6 +88,7 @@ export const CLAIM_EVENT_TYPES = [
   { key: "client_status_update_sent", label: "Client status update sent" },
   { key: "recovery_completed", label: "Recovery completed" },
   { key: "storage_started", label: "Vehicle entered storage" },
+  { key: "storage_rate_changed", label: "Storage daily rate changed" },
   { key: "storage_recovery_date_review", label: "Recovery date needs a check" },
   { key: "storage_recovery_date_confirmed", label: "Recovery date confirmed" },
   { key: "storage_end_date_review", label: "Storage end date needs a check" },

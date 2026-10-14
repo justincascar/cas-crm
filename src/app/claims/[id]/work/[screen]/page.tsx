@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { CommsDesk } from "@/components/claim-file/CommsDesk";
 import { FileHistory } from "@/components/FileHistory";
 import { HireVehiclePanel, ReserveHirePanel } from "@/components/claim-file/HireVehiclePanels";
@@ -36,6 +36,7 @@ export default async function ClaimWorkScreenPage({
   searchParams: Promise<{ saved?: string; error?: string; field?: string; whatsapp?: string; tlError?: string; tlMail?: string; mailboxError?: string; mailboxSent?: string; mailboxSimulated?: string }>;
 }) {
   const { id, screen } = await params;
+  if (screen === "storage" || screen === "recovery") redirect(headScreenPath(id, screen));
   await requireStaff();
   const { saved, error, field, whatsapp, tlError, tlMail, mailboxError, mailboxSent, mailboxSimulated } = await searchParams;
   const def = getClaimScreen(screen);

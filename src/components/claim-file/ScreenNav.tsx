@@ -35,7 +35,10 @@ export function ScreenNav({
             <p className="mb-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-slate">{group.label}</p>
             <ul className="space-y-0.5">
               {group.screens.map((screen) => {
-                const href = `/claims/${claimId}/work/${screen.key}`;
+                const href =
+                  screen.key === "storage" || screen.key === "recovery"
+                    ? headScreenPath(claimId, screen.key)
+                    : `/claims/${claimId}/work/${screen.key}`;
                 const active = path === href;
                 return (
                   <li key={screen.key}>

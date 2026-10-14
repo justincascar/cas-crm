@@ -227,10 +227,10 @@ describe("vehicle damage offers", () => {
       assert.equal(section.receivedPence, 0);
       assert.equal(section.outstandingPence, 1450000);
       const hire = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/heads/hire/page.tsx"), "utf8");
-      const recovery = fs.readFileSync(
-        path.join(process.cwd(), "src/app/claims/[id]/heads/recovery-storage/page.tsx"),
-        "utf8",
-      );
+      const recovery = [
+        fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/heads/recovery/page.tsx"), "utf8"),
+        fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/heads/storage/page.tsx"), "utf8"),
+      ].join("\n");
       assert.doesNotMatch(hire, /VehicleOffers/);
       assert.doesNotMatch(recovery, /VehicleOffers/);
       const screen = fs.readFileSync(path.join(process.cwd(), "src/components/claims/VehicleOffers.tsx"), "utf8");

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { actionLogHeadPayment } from "@/app/chase-actions";
 import type { PayableHead } from "@/lib/db/payment-review";
+import { paymentComparisonLabel } from "@/lib/domain/storage-charge";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
@@ -14,11 +15,22 @@ export function PaymentReviewPanel({
 }: {
   claimId: string;
   payableHeads?: PayableHead[];
-  lockedHead?: { head: string; label: string };
+  lockedHead?: { head: string; label: string; receivedPence: number; agreedPence: number; claimedPence: number };
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [selectedHead, setSelectedHead] = useState(payableHeads[0]?.head || "");
+  const selected = payableHeads.find((head) => head.head === selectedHead) || payableHeads[0];
+  const comparison = lockedHead
+    ? paymentComparisonLabel(lockedHead)
+    : selected
+      ? paymentComparisonLabel({
+          receivedPence: selected.receivedPence,
+          agreedPence: selected.agreedPence,
+          claimedPence: selected.claimedPence,
+        })
+      : "No figure to compare against yet";
 
   if (!lockedHead && payableHeads.length === 0) return null;
 
@@ -41,9 +53,8 @@ export function PaymentReviewPanel({
       <div>
         <h2 className="font-serif text-xl text-navy-deep">Record a payment</h2>
         <p className="mt-1 text-sm text-slate">
-          {lockedHead
-            ? `Amount on ${lockedHead.label} only. This records the money only. If it does not cover the figure, Awaiting decision appears on this file and on the dashboard. That choice is made later.`
-            : "Amount on one head. This records the money only. If it does not cover the figure, Awaiting decision appears on this file and on the dashboard. That choice is made later."}
+          {lockedHead ? `Amount on ${lockedHead.label} only. ` : "Amount on one head. "}
+          {comparison}. This records the money only. If it does not cover that figure, Awaiting decision appears on this file and on the dashboard. That choice is made later.
         </p>
       </div>
 
@@ -64,7 +75,13 @@ export function PaymentReviewPanel({
         ) : (
           <label className="text-sm">
             Head of loss
-            <select name="head" className={field} required defaultValue={payableHeads[0]?.head || ""}>
+            <select
+              name="head"
+              className={field}
+              required
+              value={selected?.head || ""}
+              onChange={(event) => setSelectedHead(event.target.value)}
+            >
               {payableHeads.map((head) => (
                 <option key={head.head} value={head.head}>
                   {head.label}

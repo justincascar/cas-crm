@@ -77,6 +77,13 @@ export function confirmStorageAuthorisationEnd(input: {
   actorId: string;
   choice: "suggested" | "keep";
 }) {
+  const started = get<{ storage_started_on: string | null }>(
+    `SELECT storage_started_on FROM claims WHERE id = ?`,
+    [input.claimId],
+  );
+  if (!calendarDay(started?.storage_started_on)) {
+    throw new Error("Start date missing. A storage end cannot be proposed or confirmed.");
+  }
   const view = storageAuthorisationEndForClaim(input.claimId);
   if (view.kind !== "suggest" && view.kind !== "conflict") {
     throw new Error("There is no storage-end suggestion to confirm.");

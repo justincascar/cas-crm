@@ -52,6 +52,8 @@ export const INDICATIVE_DEFAULTS = {
 
 /** Where a recovered vehicle is taken unless a claim records a different location. Editable in Settings. */
 export const SETTING_DEFAULT_VEHICLE_LOCATION = "default_vehicle_location";
+/** Net pence per storage day. A claim that already has storage_rate_pence keeps that figure when this changes. */
+export const SETTING_STORAGE_DAILY_RATE_PENCE = "storage_daily_rate_pence";
 export const DEFAULT_VEHICLE_LOCATION =
   "Complete Accident Solutions Ltd, 171 Cwmgarw Road, Brynamman, Ammanford SA18 1DG";
 
