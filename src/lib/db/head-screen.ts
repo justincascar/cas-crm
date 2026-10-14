@@ -71,6 +71,9 @@ export type HeadSectionModel = {
 function chaseKindFor(head: PaymentReviewHead): ChaseKind | null {
   if (head === "repairs") return "repair_payment";
   if (head === "vehicle_damage") return "settlement_payment";
+  if (head === "hire") return "hire_payment";
+  if (head === "storage") return "storage_payment";
+  if (head === "recovery") return "recovery_payment";
   return null;
 }
 

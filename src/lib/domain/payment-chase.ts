@@ -1,17 +1,22 @@
 import {
+  HIRE_PAYMENT_CHASE_DUE_LABEL,
   PAYMENT_TERM_NOT_SET_LABEL,
+  RECOVERY_PAYMENT_CHASE_DUE_LABEL,
   REPAIR_PAYMENT_CHASE_DUE_LABEL,
   REPAIR_PAYMENT_REQUEST_LABEL,
   SETTLEMENT_PAYMENT_CHASE_DUE_LABEL,
   SETTLEMENT_PAYMENT_REQUEST_LABEL,
+  STORAGE_PAYMENT_CHASE_DUE_LABEL,
 } from "../constants";
 import { addCalendarDaysIso, formatUkDate } from "../dates";
 import { chaseClockDecision, type ChaseClockDecision, type ChaseHandlerState } from "./chase";
 import { PAYMENT_DETAILS_MISSING, paymentDetailsLetterLine, type InsurerPaymentDetails } from "./payment-details";
 import { formatGbp } from "../money";
 
-/** Heads a payment chase may follow. Storage is never one of them. */
+/** Repair invoice and total-loss settlement. Hire, storage and recovery use their own chase kinds. */
 export const PAYMENT_CHASE_HEADS = ["repairs", "vehicle_damage"] as const;
+
+export type ChargePaymentHead = "hire" | "storage" | "recovery";
 
 /** A storage figure is not requested as a final charge while the end date is only proposed. */
 export const STORAGE_PAYMENT_REQUEST_BLOCK =
@@ -21,6 +26,11 @@ export const STORAGE_PAYMENT_REQUEST_BLOCK =
 export const HIRE_PAYMENT_REQUEST_BLOCK =
   "An unconfirmed hire figure is not put into a payment request as a final charge. Hire is not chased.";
 export type PaymentChaseHead = (typeof PAYMENT_CHASE_HEADS)[number];
+export type AnyPaymentHead = PaymentChaseHead | ChargePaymentHead;
+
+export function isChargePaymentHead(value: string): value is ChargePaymentHead {
+  return value === "hire" || value === "storage" || value === "recovery";
+}
 
 /** A second figure logged this soon after the last one, and marked as a correction, replaces that figure. */
 export const PAYMENT_CORRECTION_WINDOW_MS = 2 * 60 * 1000;
@@ -132,8 +142,9 @@ export function paymentRequestCopy(input: {
   stage: "first" | "reminder";
   fileReference: string;
   theirRef: string;
-  head: PaymentChaseHead;
+  head: AnyPaymentHead;
   agreedPence: number;
+  claimedPence?: number;
   receivedPence: number;
   outstandingPence: number;
   salvageProceedsPence?: number;
@@ -147,9 +158,19 @@ export function paymentRequestCopy(input: {
   const fileRef = input.fileReference.trim() || "this file";
   const their = input.theirRef.trim();
   const theirLine = !their || their === "Unknown" ? "not yet on file" : their;
-  const headName = input.head === "repairs" ? "repair invoice" : "agreed total-loss settlement";
+  const headName =
+    input.head === "repairs"
+      ? "repair invoice"
+      : input.head === "vehicle_damage"
+        ? "agreed total-loss settlement"
+        : input.head === "hire"
+          ? "hire charge"
+          : input.head === "storage"
+            ? "storage charge"
+            : "recovery charge";
   const outstanding = formatGbp(input.outstandingPence);
-  const agreed = formatGbp(input.agreedPence);
+  const figurePence = input.agreedPence > 0 ? input.agreedPence : Math.max(0, Math.trunc(input.claimedPence || 0));
+  const agreed = formatGbp(figurePence);
   const received = formatGbp(input.receivedPence);
   const due = paymentDueDateLine(input.paymentTermDays, input.asAt);
   const bankLine = paymentDetailsLetterLine(input.bank);
@@ -166,10 +187,12 @@ export function paymentRequestCopy(input: {
     input.head === "vehicle_damage" && salvage > 0
       ? ` Salvage proceeds of ${formatGbp(salvage)} are already recorded, so the amount to pay is ${formatGbp(net)}.`
       : "";
+  const figureWord = input.agreedPence > 0 ? "agreed figure" : "confirmed claimed figure";
+  const storageNote = input.head === "repairs" || input.head === "vehicle_damage" ? " Storage is not included in this figure." : "";
   const receivedLine =
     input.receivedPence > 0
-      ? `The agreed figure is ${agreed}.${salvageSentence} ${received} has been received. The balance still to pay is ${outstanding}. Storage is not included in this figure.`
-      : `The agreed figure is ${agreed}.${salvageSentence} Nothing has been received against it. Storage is not included in this figure.`;
+      ? `The ${figureWord} is ${agreed}.${salvageSentence} ${received} has been received. The balance still to pay is ${outstanding}.${storageNote}`
+      : `The ${figureWord} is ${agreed}.${salvageSentence} Nothing has been received against it.${storageNote}`;
   const ask =
     input.stage === "reminder"
       ? `We have still not received payment of ${outstanding}, nor a substantive response setting out any dispute. This is a further reminder. Please pay ${outstanding}, or reply with the reasons for disputing that figure.`
@@ -196,8 +219,16 @@ export function paymentRequestCopy(input: {
   return { subject, body, dueDateUnset: due.unset };
 }
 
+function dueLabelFor(head: AnyPaymentHead): string {
+  if (head === "repairs") return REPAIR_PAYMENT_CHASE_DUE_LABEL;
+  if (head === "hire") return HIRE_PAYMENT_CHASE_DUE_LABEL;
+  if (head === "storage") return STORAGE_PAYMENT_CHASE_DUE_LABEL;
+  if (head === "recovery") return RECOVERY_PAYMENT_CHASE_DUE_LABEL;
+  return SETTLEMENT_PAYMENT_CHASE_DUE_LABEL;
+}
+
 export function paymentChaseDecision(input: {
-  head: PaymentChaseHead;
+  head: AnyPaymentHead;
   agreedPence: number;
   receivedPence: number;
   startedAt: string | null;
@@ -208,11 +239,17 @@ export function paymentChaseDecision(input: {
   pausedReason: string | null;
   /** Agreed figure after salvage proceeds, when that applies. Defaults to the agreed figure. */
   comparisonPence?: number;
+  /** Hire, storage and recovery may chase the confirmed claimed figure when nothing is agreed. */
+  claimedPence?: number;
+  useConfirmedClaimed?: boolean;
 }): ChaseClockDecision {
-  const dueLabel = input.head === "repairs" ? REPAIR_PAYMENT_CHASE_DUE_LABEL : SETTLEMENT_PAYMENT_CHASE_DUE_LABEL;
+  const dueLabel = dueLabelFor(input.head);
   const firstLabel = input.head === "repairs" ? REPAIR_PAYMENT_REQUEST_LABEL : SETTLEMENT_PAYMENT_REQUEST_LABEL;
-  const comparison = input.comparisonPence ?? input.agreedPence;
-  const paid = input.agreedPence > 0 && comparison > 0 && input.receivedPence === comparison;
+  const claimedBase =
+    input.useConfirmedClaimed && input.agreedPence <= 0 ? Math.max(0, Math.trunc(input.claimedPence || 0)) : 0;
+  const chaseBase = input.agreedPence > 0 ? input.agreedPence : claimedBase;
+  const comparison = input.agreedPence > 0 ? (input.comparisonPence ?? input.agreedPence) : chaseBase;
+  const paid = chaseBase > 0 && comparison > 0 && input.receivedPence === comparison;
   const clock = chaseClockDecision({
     startedAt: input.startedAt,
     lastChaseSentAt: input.lastChaseSentAt,
@@ -225,7 +262,7 @@ export function paymentChaseDecision(input: {
     notStartedReason: "No payment request has been marked as sent.",
     outcomeOnFileReason: "Paid in full on this head. The chase has stopped. Hire and storage are not closed.",
   });
-  if (input.agreedPence <= 0) {
+  if (chaseBase <= 0) {
     return {
       ...clock,
       active: false,
@@ -233,7 +270,9 @@ export function paymentChaseDecision(input: {
       outcomeOnFile: false,
       label: null,
       severity: null,
-      reason: "No agreed figure on this head. Claimed and offered amounts are not chased.",
+      reason: input.useConfirmedClaimed
+        ? "No agreed or confirmed claimed figure on this head."
+        : "No agreed figure on this head. Claimed and offered amounts are not chased.",
     };
   }
   if (comparison <= 0) {

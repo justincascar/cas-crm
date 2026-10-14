@@ -1,12 +1,16 @@
 import { nowUtcIso } from "../dates";
 import { loadClaimEmailAttachments } from "./email-attachments";
 import { CHASE_KINDS, chaseDefinition } from "../domain/chase";
+import { isChargePaymentHead } from "../domain/payment-chase";
+import { BANK_DETAILS_MISSING_SETTINGS, paymentDetailsComplete } from "../domain/payment-details";
 import { isDocumentChaseKind } from "../domain/follow-up-chases";
 import { sendOutboundEmail } from "../email/gateway";
 import { MailboxSendError } from "../email/microsoft-graph";
 import { CAS_CLAIMS_MAILBOX } from "../constants";
 import { mailboxSentDetails } from "../email/sent-wording";
 import { get, getDb } from "./connection";
+import { chaseForClaim } from "./chase";
+import { getInsurerPaymentDetails } from "./payment-details";
 import { recordClaimEvent, markEngineerInstructionSent, markOutstandingChaseSent } from "./chronology";
 import {
   CORRESPONDENCE_SENDING,
@@ -54,6 +58,19 @@ export async function sendPreparedCorrespondence(input: {
   if (!to || !subject || !body) throw new Error("This prepared email is missing a recipient, subject or message. Nothing was sent.");
   const loaded = loadClaimEmailAttachments(input.claimId, input.attachmentIds || []);
   if (!loaded.ok) throw new Error(loaded.error);
+  const paymentKind = CHASE_KINDS.find((kind) => {
+    const def = chaseDefinition(kind);
+    return def.templateKey === row.template_key && Boolean(def.paymentHead && isChargePaymentHead(def.paymentHead));
+  });
+  if (paymentKind) {
+    if (!paymentDetailsComplete(getInsurerPaymentDetails())) {
+      throw new Error(BANK_DETAILS_MISSING_SETTINGS);
+    }
+    const fresh = chaseForClaim(paymentKind, input.claimId);
+    if (!fresh?.payment || fresh.payment.outstandingPence <= 0 || (!fresh.active && !fresh.due)) {
+      throw new Error(fresh?.reason || "Nothing is outstanding on this head. No payment email was sent.");
+    }
+  }
 
   const claimed = getDb()
     .prepare(`UPDATE correspondence SET sent_status = ? WHERE id = ? AND claim_id = ? AND sent_status = ?`)

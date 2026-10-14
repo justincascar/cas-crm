@@ -249,12 +249,18 @@ export function getDashboard() {
     agreed_pence: number;
     received_pence: number;
     hire_unconfirmed: number;
+    storage_unconfirmed: number;
   }>(
     `SELECT claim_id, head_of_loss, description, claimed_pence, offered_pence, agreed_pence, received_pence,
             CASE WHEN head_of_loss IN ('hire', 'credit_hire') AND NOT EXISTS (
               SELECT 1 FROM hire_episodes he
               WHERE he.claim_id = financial_lines.claim_id AND he.billing_end_at IS NOT NULL AND trim(he.billing_end_at) != ''
-            ) THEN 1 ELSE 0 END AS hire_unconfirmed
+            ) THEN 1 ELSE 0 END AS hire_unconfirmed,
+            CASE WHEN head_of_loss = 'storage' AND EXISTS (
+              SELECT 1 FROM claims c
+              WHERE c.id = financial_lines.claim_id
+                AND (c.storage_billing_end_on IS NULL OR trim(c.storage_billing_end_on) = '')
+            ) THEN 1 ELSE 0 END AS storage_unconfirmed
      FROM financial_lines`,
   );
 
@@ -269,7 +275,7 @@ export function getDashboard() {
   }
   const totals = sumDistinctHeads(lines);
   const provisionalStorageClaimed = lines
-    .filter((line) => line.head_of_loss === "storage" && String(line.description || "").toLowerCase().includes("provisional"))
+    .filter((line) => line.head_of_loss === "storage" && Number(line.storage_unconfirmed) === 1 && (line.claimed_pence || 0) > 0)
     .reduce((sum, line) => sum + (line.claimed_pence || 0), 0);
   const provisionalHireClaimed = lines
     .filter(

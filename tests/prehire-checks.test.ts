@@ -219,7 +219,7 @@ describe("pre-hire check overrides", () => {
     withDatabase(db, () => {
       const justin = db.prepare(`SELECT role FROM staff WHERE id = 'staff-justin'`).get() as { role: string };
       assert.equal(justin.role, "administrator");
-      assert.deepEqual(listStaffPermissions("staff-justin"), ["acceptPaymentSettlement", "overridePreHireChecks"]);
+      assert.deepEqual(listStaffPermissions("staff-justin"), ["acceptPaymentSettlement", "approveSettlement", "overridePreHireChecks"]);
       assert.deepEqual(listStaffPermissions("staff-sian"), []);
 
       const created = createStaffAccount({
@@ -377,7 +377,7 @@ describe("pre-hire check overrides", () => {
       .all() as { permission: string }[];
     assert.deepEqual(
       permissions.map((row) => row.permission),
-      ["acceptPaymentSettlement", "overridePreHireChecks"],
+      ["acceptPaymentSettlement", "approveSettlement", "overridePreHireChecks"],
     );
     const sian = db.prepare(`SELECT COUNT(*) AS n FROM staff_permissions WHERE staff_id = 'staff-sian'`).get() as { n: number };
     assert.equal(sian.n, 0);

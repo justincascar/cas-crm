@@ -1,4 +1,4 @@
-import { canAcceptPaymentSettlement, canOverridePreHireChecks } from "../auth/roles";
+import { canAcceptPaymentSettlement, canApproveSettlement, canOverridePreHireChecks } from "../auth/roles";
 import { all, getDb } from "./connection";
 import { migrate } from "./migrate";
 
@@ -25,4 +25,8 @@ export function accountCanOverridePreHireChecks(staffId: string, role: string | 
 
 export function accountCanAcceptPaymentSettlement(staffId: string, role: string | null | undefined): boolean {
   return canAcceptPaymentSettlement({ role, permissions: listStaffPermissions(staffId) });
+}
+
+export function accountCanApproveSettlement(staffId: string, role: string | null | undefined): boolean {
+  return canApproveSettlement({ role, permissions: listStaffPermissions(staffId) });
 }

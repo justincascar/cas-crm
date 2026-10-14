@@ -1,5 +1,8 @@
 export const PAYMENT_DETAILS_MISSING = "Payment details not yet on file.";
 
+/** Shown on the file and the dashboard when Settings has no CAS account. Nothing is invented. */
+export const BANK_DETAILS_MISSING_SETTINGS = "Bank details missing in Settings";
+
 export type InsurerPaymentDetails = {
   accountName: string;
   sortCode: string;

@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ClaimTable";
+import { ChargeDecisionPanel } from "@/components/claims/ChargeDecisionPanel";
+import { ChargeOffers } from "@/components/claims/ChargeOffers";
+import { FigureResolution } from "@/components/claims/FigureResolution";
 import { HeadAgreedForm } from "@/components/claims/HeadAgreedForm";
 import { HeadOfLossScreen } from "@/components/claims/HeadOfLossScreen";
 import { PaymentReviewPanel } from "@/components/claims/PaymentReviewPanel";
@@ -17,7 +20,9 @@ import {
   storageLocationWasBlank,
 } from "@/lib/domain/storage-charge";
 import { formatGbp } from "@/lib/money";
-import { accountCanAcceptPaymentSettlement } from "@/lib/db/permissions";
+import { latestChargeDecision } from "@/lib/db/charge-decision";
+import { figureFlag, refreshFollowedFigure } from "@/lib/db/figure-resolution";
+import { accountCanAcceptPaymentSettlement, accountCanApproveSettlement } from "@/lib/db/permissions";
 import { getClaim } from "@/lib/db/queries";
 import { getScreenData } from "@/lib/db/screens";
 import { claimStorageChargeEnded, storageAuthorisationEndForClaim } from "@/lib/db/storage-authorisation-end";
@@ -30,6 +35,7 @@ import {
 import { getStorageDateReview, getStorageEndDateReview } from "@/lib/db/storage-recovery-date";
 import { getDefaultVehicleLocation } from "@/lib/db/vehicle-location";
 import { loadHeadSection } from "@/lib/db/head-screen";
+import { agreedOnFor, listChargeOffers } from "@/lib/db/vehicle-offers";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
@@ -47,13 +53,14 @@ export default async function StorageHeadPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; figureError?: string; offerError?: string; decisionError?: string }>;
 }) {
   const staff = await requireStaff();
   const { id } = await params;
   const query = await searchParams;
   const data = getClaim(id);
   if (!data) notFound();
+  refreshFollowedFigure(id, "storage");
   syncStorageClaimed(id);
   const saved = getScreenData(id, "storage");
   const defaults = storageLocationFromSetting(getDefaultVehicleLocation());
@@ -67,6 +74,9 @@ export default async function StorageHeadPage({
   const manualReason = latestManualStorageEndReason(id);
   const proposed = decision.kind === "suggest" ? decision.date : decision.kind === "conflict" ? decision.suggestedDate : null;
   const section = loadHeadSection(id, "storage");
+  const calculated = charge?.status === "calculated" ? charge.totalPence : null;
+  const flag = figureFlag(id, "storage", section.claimedPence, calculated);
+  const provisional = !endDay && section.claimedPence > 0;
   const returnTo = headScreenPath(id, "storage");
 
   return (
@@ -189,6 +199,9 @@ export default async function StorageHeadPage({
         {charge?.status === "end_before_start" ? (
           <p className="text-sm">The chargeable end is before the start date. No figure is shown, and the claimed figure has not been changed.</p>
         ) : null}
+        {query.figureError ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.figureError}</p> : null}
+        {query.offerError ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.offerError}</p> : null}
+        {query.decisionError ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.decisionError}</p> : null}
         {charge?.status === "calculated" ? (
           <dl className="grid gap-3 text-sm sm:grid-cols-2">
             <div>
@@ -219,6 +232,14 @@ export default async function StorageHeadPage({
             </div>
           </dl>
         ) : null}
+        <FigureResolution
+          claimId={id}
+          head="storage"
+          differs={flag.differs}
+          keptLabel={flag.mode === "kept" ? flag.label : null}
+          storedPence={section.claimedPence}
+          calculatedPence={calculated}
+        />
         <form method="post" action={`/claims/${id}/storage-rate`} className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm">
             Daily rate on this file (£)
@@ -238,7 +259,7 @@ export default async function StorageHeadPage({
       <HeadOfLossScreen
         claimId={id}
         section={section}
-        claimedNote={charge?.status === "calculated" ? charge.label : null}
+        claimedNote={provisional ? "Provisional until the storage end is confirmed." : charge?.status === "calculated" ? charge.label : null}
         canAccept={accountCanAcceptPaymentSettlement(staff.id, staff.role)}
         actions={
           <>
@@ -257,6 +278,20 @@ export default async function StorageHeadPage({
             </div>
           </>
         }
+      />
+      <ChargeDecisionPanel
+        claimId={id}
+        head="storage"
+        decision={latestChargeDecision(id, "storage")}
+        canApproveSettlement={accountCanApproveSettlement(staff.id, staff.role)}
+      />
+      <ChargeOffers
+        claimId={id}
+        head="storage"
+        offers={listChargeOffers(id, "storage")}
+        claimedPence={section.claimedPence}
+        agreedOn={agreedOnFor(id, "storage")}
+        hasAgreed={(section.agreedPence || 0) > 0}
       />
     </div>
   );

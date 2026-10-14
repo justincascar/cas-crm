@@ -532,7 +532,7 @@ Blocked: per-file permissions, shared hosting, live DVLA. Incoming mail is not b
 - **Use this figure** fills the agreed amount and date, brings those boxes into view, and highlights them. They were already being filled; they sit further down the page, so a press at the top did not show that anything had changed.
 - **Reject** records that CAS declined the offer. An optional note is kept with it. The row stays, labelled Rejected, with the date. **Use this figure** remains available until Reject is pressed, and is not offered once the offer is Rejected, Withdrawn or Lapsed. Withdrawn means the insurer pulled it back. Lapsed means it expired.
 - Pressing **Record offer** once does not insert two rows. A second save of the same amount, date and note, while that offer is still open, is ignored for one minute. That is what produced the two identical £13,000 rows on TEST-0009: two separate saves, 37 seconds apart, with the page loading again between them. It was not the development server inserting twice from one press.
-- Hire, recovery and storage do not have this offer list yet.
+- Hire, storage and recovery use this same offer list. Recording an offer does not change claimed, agreed or received.
 - Tests: `tests/vehicle-offers.test.ts`. Full suite before this stage: 327 passing, 0 failing. After this correction: 335 passing, 0 failing.
 
 ## Live ledgers labelled (13 October 2026)
@@ -645,7 +645,7 @@ Days run from that handover to the confirmed hire end. A confirmed end is final.
 
 A renewal is the same hire. Each day is counted once. If the renewed agreement records a different rate and the day that rate started, each agreement is its own line. The changeover day is not counted twice. If the file does not record the rate or the day it changed, the days are not split. A vehicle swap does not add a day and does not change the rate. Collision damage waiver, delivery and collection, and an additional driver are added only when the signed agreement records a rate for that extra. VAT is 20%.
 
-A stored hire claimed figure that does not match the calculation is shown as well as the calculation, and flagged "Stored figure differs from calculation, review". It is not overwritten. Agreed and received are not changed. A new file with no stored hire claimed figure can take the calculation as claimed when the Hire page is saved.
+A stored hire, storage or recovery claimed figure that does not match the calculation is flagged "Stored figure differs from calculation, review". Any signed-in member of staff except a driver or a mechanic can resolve it. "Use calculated figure" makes claimed follow the calculation from then on, including when the days change, and the history records the old stored figure, who did it, and when. "Keep stored figure" needs a reason. Claimed stays fixed and the flag becomes "Stored figure kept: [reason]". Where no stored figure exists, claimed is the calculation. Neither choice changes agreed or received. The claim overview, Financials and the dashboard use that same claimed figure. It is labelled provisional until the hire end or the storage end is confirmed. Recovery has no end date.
 
 An unconfirmed hire total is left out of letter and payment-pack totals, in the same way as unconfirmed storage. The claim overview, the Financials page and the dashboard still show the figure, labelled provisional, until the end is confirmed. A letter about hire that is still running can show the daily rate and "Hire continuing". It does not state a total.
 
@@ -659,9 +659,22 @@ Confirmed, and already tested in `tests/hire-storage-end.test.ts`:
 - `asks for review when authorisation is revised or withdrawn, and does not overwrite a confirmed date` — authorisation revised or withdrawn after the storage end was confirmed.
 - `refuses a manual storage date that differs from authorisation unless a reason is recorded` — a manual storage end with no reason is refused.
 
+## Hire, storage and recovery offers and payment chases (14 October 2026)
+
+Hire, storage and recovery use the existing insurer offer list. A dated offer can have a note. Withdrawn, lapsed and rejected offers stay on the list. "Use this figure" only fills the agreed boxes. It does not save the agreed figure. Recording an offer does not change claimed, agreed or received. The same offer submitted again within one minute is not recorded twice. Each offer is shown against the claimed figure, as a difference in pounds and as a percentage. Hire and storage can also record the insurer's offered days and offered daily rate. If both are entered and they do not multiply to the offer, the mismatch is flagged and the offer is still recorded.
+
+Each of those three charges has its own decision: Awaiting decision, Accept, or Dispute. A dispute needs a reason (rate, period, need, or the staff member's own words). The charge stays open. Hire and storage are not closed. Accepting or disputing one charge does not change another.
+
+Accept records the agreed figure. Accepting a figure below the claimed figure is a reduced settlement. That needs the permission `approveSettlement`, stored on the staff permissions table and granted only to Justin's staff row (`staff-justin`). It is not granted by the administrator role and it is not granted by username. Anyone else can propose acceptance. That waits for Justin and does not write the agreed figure until it is approved. A direct save without the permission is refused.
+
+A payment chase for hire, storage or recovery uses the existing chase. It starts only when the figure is final and a payment request for that charge has been recorded as sent. Hire and storage are final when the end date is confirmed. Recovery has no end date, so it is final once the claimed figure is on the file. The chase follows the agreed figure if there is one, otherwise the confirmed claimed figure, minus what has been received. The interval stays three days unless that file already has its own interval. A part-payment pauses the chase for review. A full payment stops that chase and flags the other charges for review without closing them. A substantive reply pauses the chase. The file is checked again immediately before a send. An outage does not produce a backlog of chasers.
+
+If CAS bank details are not entered in Settings, nothing is sent. The claim and the dashboard say "Bank details missing in Settings". Bank details are not invented. If the insurer payment term is not set, the prepared email says "not set" and does not invent a due date. `EMAIL_SEND_MODE` stays `simulate` on this PC, so a send is not a live mailbox send.
+
+TEST-0008 is the hire file to open for the offer. Its agreed hire figure is left as it was. TEST-0011 is the storage file to open for the chase, because its storage end was already confirmed. TEST-0005's proposed storage end is still unconfirmed. TEST-0003's storage end was not rewritten.
+
 ## Not yet claimed
 
-- The same offer list, kept separate from the agreed figure, is still to be added on Hire and on Recovery & Storage.
 - Financial summary and the Assessed damage notes fields remain non-authoritative working notes, pending a later decision on whether to keep them.
 - Loss-of-use is earmarked for redesign into an automated chronology. Its current fields stay in place until that stage. They are typed notes on the hidden screen. The hire and repair chronology does not read them.
 - Inspection date, the report sent to the insurer, the vehicle received for repair, and parts ordered are still not recorded as dated events. The hire and repair chronology does not show them. Repairs started and repairs complete are on that chronology when the file is being repaired, because those two are already stored on `claim_events`.

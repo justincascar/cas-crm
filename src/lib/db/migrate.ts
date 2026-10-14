@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import { ACCEPT_PAYMENT_SETTLEMENT, OVERRIDE_PREHIRE_CHECKS } from "../auth/roles";
+import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_SETTLEMENT, OVERRIDE_PREHIRE_CHECKS } from "../auth/roles";
 
 const TABLES: Record<string, Array<[string, string]>> = {
   correspondence: [
@@ -37,7 +37,11 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["v5c_source_file", "TEXT"],
   ],
   financial_lines: [["agreed_on", "TEXT"]],
-  insurer_offers: [["closed_note", "TEXT"]],
+  insurer_offers: [
+    ["closed_note", "TEXT"],
+    ["offered_days", "INTEGER"],
+    ["offered_daily_rate_pence", "INTEGER"],
+  ],
   documents: [
     ["body_html", "TEXT"],
     ["template_key", "TEXT"],
@@ -613,4 +617,23 @@ export function migrate(db: DatabaseSync) {
      SELECT ?, ?
      WHERE EXISTS (SELECT 1 FROM staff WHERE id = ?)`,
   ).run("staff-justin", ACCEPT_PAYMENT_SETTLEMENT, "staff-justin");
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS charge_decisions (
+      id TEXT PRIMARY KEY,
+      claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+      head_of_loss TEXT NOT NULL,
+      decision TEXT NOT NULL,
+      agreed_pence INTEGER,
+      reason TEXT,
+      recorded_by TEXT NOT NULL REFERENCES staff(id),
+      recorded_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_charge_decisions
+      ON charge_decisions(claim_id, head_of_loss, recorded_at);
+  `);
+  db.prepare(
+    `INSERT OR IGNORE INTO staff_permissions(staff_id, permission)
+     SELECT ?, ?
+     WHERE EXISTS (SELECT 1 FROM staff WHERE id = ?)`,
+  ).run("staff-justin", APPROVE_SETTLEMENT, "staff-justin");
 }

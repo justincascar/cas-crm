@@ -1,18 +1,24 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ClaimTable";
+import { ChargeDecisionPanel } from "@/components/claims/ChargeDecisionPanel";
+import { ChargeOffers } from "@/components/claims/ChargeOffers";
+import { FigureResolution } from "@/components/claims/FigureResolution";
 import { HeadAgreedForm } from "@/components/claims/HeadAgreedForm";
 import { HeadOfLossScreen } from "@/components/claims/HeadOfLossScreen";
 import { PaymentReviewPanel } from "@/components/claims/PaymentReviewPanel";
 import { requireStaff } from "@/lib/auth/session";
 import { formatUkDate } from "@/lib/dates";
-import { HIRE_INCLUSIVE_DAY_NOTE, HIRE_NOT_STARTED, FAULT_COURTESY_NOT_CREDIT_HIRE, STORED_HIRE_DIFFERS } from "@/lib/domain/hire-charge";
+import { HIRE_INCLUSIVE_DAY_NOTE, HIRE_NOT_STARTED, FAULT_COURTESY_NOT_CREDIT_HIRE } from "@/lib/domain/hire-charge";
 import { ukDayLabel } from "@/lib/domain/storage-charge";
 import { formatGbp } from "@/lib/money";
-import { accountCanAcceptPaymentSettlement } from "@/lib/db/permissions";
+import { latestChargeDecision } from "@/lib/db/charge-decision";
+import { figureFlag, refreshFollowedFigure } from "@/lib/db/figure-resolution";
+import { accountCanAcceptPaymentSettlement, accountCanApproveSettlement } from "@/lib/db/permissions";
 import { getClaim } from "@/lib/db/queries";
 import { adoptHireClaimedIfNone, hireChargeForClaim } from "@/lib/db/hire-charge";
 import { loadHeadSection } from "@/lib/db/head-screen";
+import { agreedOnFor, listChargeOffers } from "@/lib/db/vehicle-offers";
 
 function shownDay(value: string | null) {
   if (!value) return "";
@@ -20,16 +26,27 @@ function shownDay(value: string | null) {
   return formatUkDate(value);
 }
 
-export default async function HireHeadPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function HireHeadPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ figureError?: string; offerError?: string; decisionError?: string }>;
+}) {
   const staff = await requireStaff();
   const { id } = await params;
+  const query = await searchParams;
   const data = getClaim(id);
   if (!data) notFound();
+  refreshFollowedFigure(id, "hire");
   adoptHireClaimedIfNone(id);
   const view = hireChargeForClaim(id);
   const section = loadHeadSection(id, "hire");
   const charge = view.charge;
+  const calculated = charge.status === "calculated" ? charge.totalPence : null;
+  const flag = figureFlag(id, "hire", view.stored.claimedPence, calculated);
   const claimedForMoney = section.claimedPence;
+  const provisional = !view.confirmedEndDay && claimedForMoney > 0;
 
   return (
     <div className="space-y-6">
@@ -42,6 +59,9 @@ export default async function HireHeadPage({ params }: { params: Promise<{ id: s
           Back to the file
         </Link>
       </p>
+      {query.figureError ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.figureError}</p> : null}
+      {query.offerError ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.offerError}</p> : null}
+      {query.decisionError ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.decisionError}</p> : null}
 
       <section className="space-y-4 rounded-xl border border-line bg-card p-5" aria-label="Hire details">
         <h2 className="font-serif text-xl text-navy-deep">Hire details</h2>
@@ -142,25 +162,31 @@ export default async function HireHeadPage({ params }: { params: Promise<{ id: s
             {charge.notes.map((note) => (
               <p key={note}>{note}</p>
             ))}
-            {view.differs ? (
-              <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3">
-                {STORED_HIRE_DIFFERS}. Stored claimed {formatGbp(view.stored.claimedPence)}. Calculation {formatGbp(charge.totalPence)}. The
-                stored claimed figure has not been replaced.
-              </p>
-            ) : null}
+            <FigureResolution
+              claimId={id}
+              head="hire"
+              differs={flag.differs}
+              keptLabel={flag.mode === "kept" ? flag.label : null}
+              storedPence={view.stored.claimedPence}
+              calculatedPence={calculated}
+            />
           </div>
-        ) : view.differs ? (
-          <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">
-            {STORED_HIRE_DIFFERS}. Stored claimed {formatGbp(view.stored.claimedPence)}. There is no calculated figure. The stored claimed
-            figure has not been replaced.
-          </p>
-        ) : null}
+        ) : (
+          <FigureResolution
+            claimId={id}
+            head="hire"
+            differs={flag.differs}
+            keptLabel={flag.mode === "kept" ? flag.label : null}
+            storedPence={view.stored.claimedPence}
+            calculatedPence={calculated}
+          />
+        )}
       </section>
 
       <HeadOfLossScreen
         claimId={id}
         section={section}
-        claimedNote={charge.status === "calculated" && !view.differs ? charge.label : null}
+        claimedNote={provisional ? "Provisional until the hire end is confirmed." : charge.status === "calculated" ? charge.label : null}
         canAccept={accountCanAcceptPaymentSettlement(staff.id, staff.role)}
         actions={
           <>
@@ -173,6 +199,20 @@ export default async function HireHeadPage({ params }: { params: Promise<{ id: s
             </div>
           </>
         }
+      />
+      <ChargeDecisionPanel
+        claimId={id}
+        head="hire"
+        decision={latestChargeDecision(id, "hire")}
+        canApproveSettlement={accountCanApproveSettlement(staff.id, staff.role)}
+      />
+      <ChargeOffers
+        claimId={id}
+        head="hire"
+        offers={listChargeOffers(id, "hire")}
+        claimedPence={claimedForMoney}
+        agreedOn={agreedOnFor(id, "hire")}
+        hasAgreed={(section.agreedPence || 0) > 0}
       />
     </div>
   );

@@ -15,6 +15,7 @@ import {
 } from "../domain/payment-review";
 import { formatGbp } from "../money";
 import { chaseRow, pauseChase, syncOutstandingPaymentChases } from "./chase";
+import { accountCanApproveSettlement } from "./permissions";
 import { recordClaimEvent } from "./chronology";
 import { all, get, run } from "./connection";
 import { comparisonForHead, headDisputeStands } from "./payment-review";
@@ -28,6 +29,9 @@ type MoneyLine = { id: string; agreed_pence: number; received_pence: number; cla
 function reviewKind(head: PaymentReviewHead): ChaseKind | null {
   if (head === "repairs") return "repair_payment";
   if (head === "vehicle_damage") return "settlement_payment";
+  if (head === "hire") return "hire_payment";
+  if (head === "storage") return "storage_payment";
+  if (head === "recovery") return "recovery_payment";
   return null;
 }
 
@@ -180,6 +184,11 @@ export function recordAgreedHeadFigure(input: { claimId: string; actorId: string
   const existing = moneyLine(input.claimId, input.head);
   const receivedBefore = existing?.received_pence || 0;
   const claimedBefore = existing?.claimed_pence || 0;
+  if (claimedBefore > 0 && input.agreedPence < claimedBefore && !accountCanApproveSettlement(input.actorId, null)) {
+    throw new Error(
+      "Accepting a figure below the claimed figure needs the approveSettlement permission. The agreed figure was not saved.",
+    );
+  }
   const label = input.head === "hire" ? "hire" : input.head === "recovery" ? "recovery" : "storage";
   if (existing) {
     run(`UPDATE financial_lines SET agreed_pence = ? WHERE id = ?`, [input.agreedPence, existing.id]);
@@ -417,7 +426,19 @@ export function recordHeadPayment(input: {
     );
   }
   if (paid) {
-    flagHireStorage(input.claimId, input.actorId, input.head, totalLoss);
+    if (input.head === "hire" || input.head === "storage" || input.head === "recovery") {
+      recordClaimEvent({
+        claimId: input.claimId,
+        eventType: "payment_hire_storage_review",
+        occurredAt: nowUtcIso(),
+        actorId: input.actorId,
+        details: `head=${input.head} Full payment recorded. The other charges are flagged for review and have not been closed. No hire end date was set. The storage end date was not changed.`,
+        source: "staff",
+        channel: "file",
+      });
+    } else {
+      flagHireStorage(input.claimId, input.actorId, input.head, totalLoss);
+    }
   }
   return {
     allocated: true as const,

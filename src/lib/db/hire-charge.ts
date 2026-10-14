@@ -224,10 +224,8 @@ function hireLine(claimId: string) {
   );
 }
 
-/** Writes the calculation as claimed only when the file has no hire claimed figure yet. */
-export function adoptHireClaimedIfNone(claimId: string, today = londonTodayIso()): boolean {
-  const stored = storedHireMoney(claimId);
-  if (stored.claimedPence > 0) return false;
+/** Writes the calculation as claimed. Agreed, offered and received stay as they are. */
+export function writeCalculatedHireClaimed(claimId: string, today = londonTodayIso()): boolean {
   const view = hireChargeForClaim(claimId, today);
   if (view.charge.status !== "calculated") return false;
   const charge = view.charge;
@@ -263,6 +261,13 @@ export function adoptHireClaimedIfNone(claimId: string, today = londonTodayIso()
     throw new Error("The hire claimed figure could not be saved without changing agreed, offered or received.");
   }
   return true;
+}
+
+/** Writes the calculation as claimed only when the file has no hire claimed figure yet. */
+export function adoptHireClaimedIfNone(claimId: string, today = londonTodayIso()): boolean {
+  const stored = storedHireMoney(claimId);
+  if (stored.claimedPence > 0) return false;
+  return writeCalculatedHireClaimed(claimId, today);
 }
 
 /** Claims whose hire end is not confirmed. Their hire claimed figure is provisional on lists. */

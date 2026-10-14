@@ -30,8 +30,9 @@ import {
 } from "../domain/chase";
 import { paymentDetailsLetterLine, type InsurerPaymentDetails } from "../domain/payment-details";
 import {
+  isChargePaymentHead,
   paymentChaseDecision,
-  type PaymentChaseHead,
+  type AnyPaymentHead,
 } from "../domain/payment-chase";
 import { chaseComparisonPence, recordedSalvageProceedsPence } from "../domain/payment-review";
 import type { InsurerSalvageInterest, SalvageDisposal } from "../domain/total-loss";
@@ -84,8 +85,9 @@ export type ChaseView = {
   agreementApproachingDay?: number | null;
   canClearHireRenewal?: boolean;
   payment?: {
-    head: PaymentChaseHead;
+    head: AnyPaymentHead;
     agreedPence: number;
+    claimedPence: number;
     receivedPence: number;
     outstandingPence: number;
     storageOutstandingPence: number;
@@ -264,12 +266,14 @@ type HireClaimFacts = {
   agreementCount: number;
 };
 
-type HeadMoney = { agreed: number; received: number };
+type HeadMoney = { agreed: number; received: number; claimed: number };
 
 type PaymentClaimFacts = {
   repairs: HeadMoney;
   vehicleDamage: HeadMoney;
   storage: HeadMoney;
+  hire: HeadMoney;
+  recovery: HeadMoney;
   totalLoss: boolean;
   salvageProceedsPence: number;
   vehicleDamageAccepted: boolean;
@@ -488,7 +492,7 @@ function loadChaseFacts(claimIds: string[]): ChaseFacts {
 }
 
 function blankMoney(): HeadMoney {
-  return { agreed: 0, received: 0 };
+  return { agreed: 0, received: 0, claimed: 0 };
 }
 
 function blankPaymentFacts(totalLoss: boolean): PaymentClaimFacts {
@@ -496,6 +500,8 @@ function blankPaymentFacts(totalLoss: boolean): PaymentClaimFacts {
     repairs: blankMoney(),
     vehicleDamage: blankMoney(),
     storage: blankMoney(),
+    hire: blankMoney(),
+    recovery: blankMoney(),
     totalLoss,
     salvageProceedsPence: 0,
     vehicleDamageAccepted: false,
@@ -558,14 +564,15 @@ function loadPaymentFacts(claimIds: string[]): Map<string, PaymentClaimFacts> {
     head_of_loss: string;
     agreed_pence: number;
     received_pence: number;
+    claimed_pence: number;
     total_loss: number | null;
     later_declared_total_loss: number | null;
   }>(
-    `SELECT fl.claim_id, fl.head_of_loss, fl.agreed_pence, fl.received_pence, c.total_loss, c.later_declared_total_loss
+    `SELECT fl.claim_id, fl.head_of_loss, fl.agreed_pence, fl.received_pence, fl.claimed_pence, c.total_loss, c.later_declared_total_loss
      FROM financial_lines fl
      JOIN claims c ON c.id = fl.claim_id
      WHERE fl.claim_id IN (${placeholders(claimIds.length)})
-       AND fl.head_of_loss IN ('repairs', 'vehicle_damage', 'storage')
+       AND fl.head_of_loss IN ('repairs', 'vehicle_damage', 'storage', 'hire', 'recovery')
      ORDER BY fl.id`,
     claimIds,
   );
@@ -577,10 +584,16 @@ function loadPaymentFacts(claimIds: string[]): Map<string, PaymentClaimFacts> {
     const fact =
       map.get(row.claim_id) || blankPaymentFacts(Number(row.total_loss) === 1 || Number(row.later_declared_total_loss) === 1);
     fact.totalLoss = Number(row.total_loss) === 1 || Number(row.later_declared_total_loss) === 1;
-    const money = { agreed: Number(row.agreed_pence) || 0, received: Number(row.received_pence) || 0 };
+    const money = {
+      agreed: Number(row.agreed_pence) || 0,
+      received: Number(row.received_pence) || 0,
+      claimed: Number(row.claimed_pence) || 0,
+    };
     if (row.head_of_loss === "repairs") fact.repairs = money;
     if (row.head_of_loss === "vehicle_damage") fact.vehicleDamage = money;
     if (row.head_of_loss === "storage") fact.storage = money;
+    if (row.head_of_loss === "hire") fact.hire = money;
+    if (row.head_of_loss === "recovery") fact.recovery = money;
     map.set(row.claim_id, fact);
   }
   const claimsMissing = claimIds.filter((id) => !map.has(id));
@@ -698,23 +711,54 @@ function evaluateChase(kind: ChaseKind, claimId: string, row: ChaseRow, facts: C
   });
   const hire = facts.hire.get(claimId);
   const money = facts.payment.get(claimId);
-  const headMoney =
-    def.paymentHead === "repairs" ? money?.repairs : def.paymentHead === "vehicle_damage" ? money?.vehicleDamage : null;
-  const comparison = def.paymentHead
-    ? chaseComparisonPence({
-        head: def.paymentHead,
-        agreedPence: headMoney?.agreed || 0,
-        salvageProceedsPence: def.paymentHead === "vehicle_damage" ? money?.salvageProceedsPence || 0 : 0,
-        acceptedAsFinal: def.paymentHead === "vehicle_damage" && Boolean(money?.vehicleDamageAccepted),
-      })
-    : 0;
+  const headMoney = !def.paymentHead
+    ? null
+    : def.paymentHead === "repairs"
+      ? money?.repairs
+      : def.paymentHead === "vehicle_damage"
+        ? money?.vehicleDamage
+        : def.paymentHead === "hire"
+          ? money?.hire
+          : def.paymentHead === "storage"
+            ? money?.storage
+            : money?.recovery;
+  const chargeHead = Boolean(def.paymentHead && isChargePaymentHead(def.paymentHead));
+  const chargeTarget =
+    (headMoney?.agreed || 0) > 0 ? headMoney?.agreed || 0 : headMoney?.claimed || 0;
+  const comparison = !def.paymentHead
+    ? 0
+    : chargeHead
+      ? chargeTarget
+      : chaseComparisonPence({
+          head: def.paymentHead === "vehicle_damage" ? "vehicle_damage" : "repairs",
+          agreedPence: headMoney?.agreed || 0,
+          salvageProceedsPence: def.paymentHead === "vehicle_damage" ? money?.salvageProceedsPence || 0 : 0,
+          acceptedAsFinal: def.paymentHead === "vehicle_damage" && Boolean(money?.vehicleDamageAccepted),
+        });
   const authorisation = kind === "repair_authorisation" ? repairAuthorisationPresentation(Boolean(money?.totalLoss)) : null;
-  const decision = def.paymentHead
+  const chargeReady = !chargeHead
+    ? true
+    : def.paymentHead === "hire"
+      ? hireEndConfirmed(claimId) && requestMarkedSent(claimId, "hire")
+      : def.paymentHead === "storage"
+        ? storageEndConfirmed(claimId) && requestMarkedSent(claimId, "storage")
+        : recoveryFigureFinal(claimId, headMoney?.claimed || 0) && requestMarkedSent(claimId, "recovery");
+  const decision = def.paymentHead && !chargeReady
+    ? {
+        due: false,
+        reason: "The chase has not started. The figure is not final, or the payment request has not been recorded as sent.",
+        nextDueAt: null,
+        intervalDays: effective.days,
+        daysOverdue: 0,
+      }
+    : def.paymentHead
     ? paymentChaseDecision({
         head: def.paymentHead,
         agreedPence: headMoney?.agreed || 0,
         receivedPence: headMoney?.received || 0,
         comparisonPence: comparison,
+        claimedPence: headMoney?.claimed || 0,
+        useConfirmedClaimed: chargeHead,
         startedAt: startedAtFromFacts(facts, claimId, kind),
         lastChaseSentAt: lastChaseSentFromFacts(facts, claimId, kind),
         handlerState,
@@ -776,14 +820,25 @@ function evaluateChase(kind: ChaseKind, claimId: string, row: ChaseRow, facts: C
       ? {
           head: def.paymentHead,
           agreedPence: headMoney?.agreed || 0,
+          claimedPence: headMoney?.claimed || 0,
           receivedPence: headMoney?.received || 0,
           outstandingPence: headMoney && comparison > 0 && headMoney.received < comparison ? outstanding : 0,
           storageOutstandingPence: storageOutstanding,
           bankLine,
           paymentTermDays: facts.paymentTermDays,
           dueDateUnset: facts.paymentTermDays == null,
-          partPaid: Boolean(headMoney && headMoney.agreed > 0 && headMoney.received > 0 && headMoney.received < comparison),
-          paidInFull: Boolean(headMoney && headMoney.agreed > 0 && comparison > 0 && headMoney.received === comparison),
+          partPaid: Boolean(
+            headMoney &&
+              (chargeHead ? chargeTarget : headMoney.agreed) > 0 &&
+              headMoney.received > 0 &&
+              headMoney.received < comparison,
+          ),
+          paidInFull: Boolean(
+            headMoney &&
+              (chargeHead ? chargeTarget : headMoney.agreed) > 0 &&
+              comparison > 0 &&
+              headMoney.received === comparison,
+          ),
           salvageProceedsPence: def.paymentHead === "vehicle_damage" && !money?.vehicleDamageAccepted ? money?.salvageProceedsPence || 0 : 0,
           reviewNote: money?.reviewNote || null,
           packMissing: money?.packMissing || [],
@@ -811,7 +866,62 @@ function ensurePaymentRow(claimId: string, kind: ChaseKind) {
   );
 }
 
-/** One row per outstanding head. Storage never gets a row. An existing pause or cancellation is left as it is. */
+function requestMarkedSent(claimId: string, head: "hire" | "storage" | "recovery"): boolean {
+  const row = get<{ id: string }>(
+    `SELECT id FROM claim_events WHERE claim_id = ? AND event_type = ? LIMIT 1`,
+    [claimId, `${head}_payment_request_sent`],
+  );
+  return Boolean(row);
+}
+
+function hireEndConfirmed(claimId: string): boolean {
+  const row = get<{ id: string }>(
+    `SELECT id FROM hire_episodes
+     WHERE claim_id = ? AND billing_end_at IS NOT NULL AND trim(billing_end_at) != '' LIMIT 1`,
+    [claimId],
+  );
+  return Boolean(row);
+}
+
+function storageEndConfirmed(claimId: string): boolean {
+  const row = get<{ storage_billing_end_on: string | null }>(
+    `SELECT storage_billing_end_on FROM claims WHERE id = ?`,
+    [claimId],
+  );
+  return String(row?.storage_billing_end_on || "").trim() !== "";
+}
+
+function recoveryFigureFinal(claimId: string, claimed: number): boolean {
+  if (claimed <= 0) return false;
+  const resolution = get<{ event_type: string }>(
+    `SELECT event_type FROM claim_events
+     WHERE claim_id = ? AND event_type IN ('stored_figure_use_calculated', 'stored_figure_kept') AND details LIKE '%head=recovery%'
+     ORDER BY occurred_at DESC, recorded_at DESC LIMIT 1`,
+    [claimId],
+  );
+  if (resolution) return true;
+  const screen = get<{ data_json: string }>(
+    `SELECT data_json FROM claim_screen_data WHERE claim_id = ? AND screen_key = 'recovery'`,
+    [claimId],
+  );
+  if (!screen?.data_json) return true;
+  try {
+    const values = JSON.parse(screen.data_json) as Record<string, string>;
+    const total = Number.parseInt(String(values.total || ""), 10);
+    if (!Number.isFinite(total) || total <= 0) return true;
+    return total === claimed;
+  } catch {
+    return true;
+  }
+}
+
+function chargeBalanceOutstanding(money: { agreed: number; claimed: number; received: number } | undefined): boolean {
+  if (!money) return false;
+  const target = money.agreed > 0 ? money.agreed : money.claimed;
+  return target > 0 && money.received < target;
+}
+
+/** One row per outstanding head. An existing pause or cancellation is left as it is. */
 export function syncOutstandingPaymentChases(claimIds?: string[]) {
   const limited = Boolean(claimIds && claimIds.length);
   const filter = limited ? ` AND fl.claim_id IN (${placeholders(claimIds!.length)})` : "";
@@ -887,6 +997,83 @@ export function syncOutstandingPaymentChases(claimIds?: string[]) {
   }
   for (const claimId of repairs) ensurePaymentRow(claimId, "repair_payment");
   for (const claimId of settlements) ensurePaymentRow(claimId, "settlement_payment");
+
+  const eventFilter = limited ? ` AND claim_id IN (${placeholders(claimIds!.length)})` : "";
+  const sentRows = all<{ claim_id: string; event_type: string }>(
+    `SELECT DISTINCT claim_id, event_type FROM claim_events
+     WHERE event_type IN ('hire_payment_request_sent', 'storage_payment_request_sent', 'recovery_payment_request_sent')${eventFilter}`,
+    limited ? claimIds! : [],
+  );
+  if (sentRows.length === 0) return;
+  const sent = new Set(sentRows.map((row) => `${row.claim_id}:${row.event_type}`));
+  const readyIds = [...new Set(sentRows.map((row) => row.claim_id))];
+  const facts = loadPaymentFacts(readyIds);
+  const hireReady = new Set(
+    all<{ claim_id: string }>(
+      `SELECT DISTINCT claim_id FROM hire_episodes
+       WHERE claim_id IN (${placeholders(readyIds.length)}) AND billing_end_at IS NOT NULL AND trim(billing_end_at) != ''`,
+      readyIds,
+    ).map((row) => row.claim_id),
+  );
+  const storageReady = new Set(
+    all<{ id: string }>(
+      `SELECT id FROM claims
+       WHERE id IN (${placeholders(readyIds.length)}) AND storage_billing_end_on IS NOT NULL AND trim(storage_billing_end_on) != ''`,
+      readyIds,
+    ).map((row) => row.id),
+  );
+  const recoveryResolved = new Set(
+    all<{ claim_id: string }>(
+      `SELECT DISTINCT claim_id FROM claim_events
+       WHERE claim_id IN (${placeholders(readyIds.length)})
+         AND event_type IN ('stored_figure_use_calculated', 'stored_figure_kept')
+         AND details LIKE '%head=recovery%'`,
+      readyIds,
+    ).map((row) => row.claim_id),
+  );
+  const recoveryScreens = new Map(
+    all<{ claim_id: string; data_json: string }>(
+      `SELECT claim_id, data_json FROM claim_screen_data
+       WHERE claim_id IN (${placeholders(readyIds.length)}) AND screen_key = 'recovery'`,
+      readyIds,
+    ).map((row) => [row.claim_id, row.data_json]),
+  );
+  for (const claimId of readyIds) {
+    const money = facts.get(claimId);
+    if (sent.has(`${claimId}:hire_payment_request_sent`) && hireReady.has(claimId) && chargeBalanceOutstanding(money?.hire)) {
+      ensurePaymentRow(claimId, "hire_payment");
+    }
+    if (sent.has(`${claimId}:storage_payment_request_sent`) && storageReady.has(claimId) && chargeBalanceOutstanding(money?.storage)) {
+      ensurePaymentRow(claimId, "storage_payment");
+    }
+    if (
+      sent.has(`${claimId}:recovery_payment_request_sent`) &&
+      recoveryReadyFromBatch(claimId, money?.recovery.claimed || 0, recoveryResolved, recoveryScreens) &&
+      chargeBalanceOutstanding(money?.recovery)
+    ) {
+      ensurePaymentRow(claimId, "recovery_payment");
+    }
+  }
+}
+
+function recoveryReadyFromBatch(
+  claimId: string,
+  claimed: number,
+  resolved: Set<string>,
+  screens: Map<string, string>,
+): boolean {
+  if (claimed <= 0) return false;
+  if (resolved.has(claimId)) return true;
+  const raw = screens.get(claimId);
+  if (!raw) return true;
+  try {
+    const values = JSON.parse(raw) as Record<string, string>;
+    const total = Number.parseInt(String(values.total || ""), 10);
+    if (!Number.isFinite(total) || total <= 0) return true;
+    return total === claimed;
+  } catch {
+    return true;
+  }
 }
 
 export function listChasesForClaim(claimId: string, asAt: string = nowUtcIso()): ChaseView[] {

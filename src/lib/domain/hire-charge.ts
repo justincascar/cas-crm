@@ -5,7 +5,7 @@ import { grossFromNet } from "../money";
 
 export { HIRE_INCLUSIVE_DAY_NOTE } from "./storage-charge";
 
-export const STORED_HIRE_DIFFERS = "Stored figure differs from calculation, review";
+export { STORED_FIGURE_DIFFERS as STORED_HIRE_DIFFERS } from "./figure-resolution";
 export const HIRE_NOT_STARTED = "Hire not started";
 export const FAULT_COURTESY_NOT_CREDIT_HIRE = "Fault courtesy is not credit hire.";
 

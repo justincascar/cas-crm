@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { formatUkDate } from "@/lib/dates";
+import { offerComparedWithClaimed } from "@/lib/domain/figure-resolution";
 import { formatGbp } from "@/lib/money";
 import type { VehicleOffer, VehicleOfferStatus } from "@/lib/db/vehicle-offers";
 
@@ -32,6 +33,10 @@ export function VehicleOffers({
   undatedOfferPence,
   agreedOn,
   hasAgreed,
+  returnPath,
+  offerHead,
+  claimedPence = null,
+  showDayRate = false,
 }: {
   claimId: string;
   totalLoss: boolean;
@@ -39,6 +44,10 @@ export function VehicleOffers({
   undatedOfferPence: number | null;
   agreedOn: string | null;
   hasAgreed: boolean;
+  returnPath?: string;
+  offerHead?: string;
+  claimedPence?: number | null;
+  showDayRate?: boolean;
 }) {
   const [amount, setAmount] = useState("");
   const [agreedOnDraft, setAgreedOnDraft] = useState("");
@@ -49,7 +58,7 @@ export function VehicleOffers({
   const agreedPanel = useRef<HTMLFormElement>(null);
   const agreedAmount = useRef<HTMLInputElement>(null);
   const action = `/claims/${claimId}/vehicle-offers`;
-  const returnTo = `/claims/${claimId}/heads/vehicle`;
+  const returnTo = returnPath || `/claims/${claimId}/heads/vehicle`;
   const primaryId = offers.find((offer) => offer.status === "open")?.id ?? null;
   const justFilled = filledTick > 0;
 
@@ -112,6 +121,19 @@ export function VehicleOffers({
                     {closed ? ` · ${closed}` : ""}
                     {closed && offer.closedAt ? ` · ${formatUkDate(offer.closedAt)}` : ""}
                   </p>
+                  {claimedPence != null ? (
+                    <p className="mt-1">{offerComparedWithClaimed(offer.amountPence, claimedPence).label}</p>
+                  ) : null}
+                  {offer.offeredDays != null && offer.offeredDailyRatePence != null ? (
+                    <p className="mt-1">
+                      Insurer offered {offer.offeredDays} days at {formatGbp(offer.offeredDailyRatePence)} a day.
+                    </p>
+                  ) : null}
+                  {offer.rateMismatch ? (
+                    <p className="mt-1 font-semibold">
+                      The offered days times the offered daily rate does not equal this offer. The offer is still recorded.
+                    </p>
+                  ) : null}
                   {offer.note ? <p className="mt-1">{offer.note}</p> : null}
                   {offer.status === "rejected" && offer.closedNote ? <p className="mt-1">Rejection note: {offer.closedNote}</p> : null}
                   {offer.status === "open" ? (
@@ -125,6 +147,7 @@ export function VehicleOffers({
                       </button>
                       <form method="post" action={action}>
                         <input type="hidden" name="returnTo" value={returnTo} />
+                        {offerHead ? <input type="hidden" name="head" value={offerHead} /> : null}
                         <input type="hidden" name="intent" value="withdraw" />
                         <input type="hidden" name="offerId" value={offer.id} />
                         <button className="rounded-md border border-line bg-white px-3 py-1.5 text-sm" type="submit">
@@ -133,6 +156,7 @@ export function VehicleOffers({
                       </form>
                       <form method="post" action={action}>
                         <input type="hidden" name="returnTo" value={returnTo} />
+                        {offerHead ? <input type="hidden" name="head" value={offerHead} /> : null}
                         <input type="hidden" name="intent" value="lapse" />
                         <input type="hidden" name="offerId" value={offer.id} />
                         <button className="rounded-md border border-line bg-white px-3 py-1.5 text-sm" type="submit">
@@ -141,6 +165,7 @@ export function VehicleOffers({
                       </form>
                       <form method="post" action={action} className="flex flex-wrap items-end gap-2">
                         <input type="hidden" name="returnTo" value={returnTo} />
+                        {offerHead ? <input type="hidden" name="head" value={offerHead} /> : null}
                         <input type="hidden" name="intent" value="reject" />
                         <input type="hidden" name="offerId" value={offer.id} />
                         <label className="block text-sm">
@@ -160,6 +185,7 @@ export function VehicleOffers({
         ) : null}
         <form method="post" action={action} className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={onRecordOffer}>
           <input type="hidden" name="returnTo" value={returnTo} />
+          {offerHead ? <input type="hidden" name="head" value={offerHead} /> : null}
           <input type="hidden" name="intent" value="record_offer" />
           <label className="block text-sm">
             Amount (£)
@@ -169,6 +195,20 @@ export function VehicleOffers({
             Date of the offer
             <input name="offeredOn" type="date" required className={field} />
           </label>
+          {showDayRate ? (
+            <>
+              <label className="block text-sm">
+                Insurer&apos;s offered days
+                <input name="offeredDays" inputMode="numeric" className={field} />
+                <span className="mt-1 block text-slate">Optional. Leave blank if the insurer did not state the days.</span>
+              </label>
+              <label className="block text-sm">
+                Insurer&apos;s offered daily rate (£)
+                <input name="offeredDailyRate" inputMode="decimal" className={field} />
+                <span className="mt-1 block text-slate">Optional. If both are entered and they do not multiply to the offer, the mismatch is flagged. The offer is still recorded.</span>
+              </label>
+            </>
+          ) : null}
           <label className="block text-sm sm:col-span-2">
             Note
             <input name="note" className={field} placeholder="For example, subject to the engineer’s report" />
@@ -189,6 +229,7 @@ export function VehicleOffers({
         className="scroll-mt-24 rounded-md border border-line bg-white p-3"
       >
         <input type="hidden" name="returnTo" value={returnTo} />
+        {offerHead ? <input type="hidden" name="head" value={offerHead} /> : null}
         <input type="hidden" name="intent" value="record_agreed" />
         <h3 className="font-serif text-lg text-navy-deep">Agreed</h3>
         {justFilled ? (

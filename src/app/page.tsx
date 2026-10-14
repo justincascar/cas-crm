@@ -7,6 +7,8 @@ import { formatUkDate } from "@/lib/dates";
 import type { ChaseView } from "@/lib/db/chase";
 import type { PaymentAttentionRow } from "@/lib/db/payment-review";
 import { chaseStageRowClass, chaseStageShortLabel, chaseStageTextClass } from "@/lib/domain/chase";
+import { BANK_DETAILS_MISSING_SETTINGS, paymentDetailsComplete } from "@/lib/domain/payment-details";
+import { getInsurerPaymentDetails } from "@/lib/db/payment-details";
 
 const toneClass: Record<string, string> = {
   info: "border-l-teal",
@@ -123,6 +125,7 @@ export default async function DashboardPage() {
   await requireStaff();
   const data = getDashboard();
   const path = dbLocation();
+  const bankDetailsMissing = !paymentDetailsComplete(getInsurerPaymentDetails());
 
   return (
     <div>
@@ -138,6 +141,10 @@ export default async function DashboardPage() {
           </div>
         }
       />
+
+      {bankDetailsMissing ? (
+        <p className="mt-4 rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm font-semibold">{BANK_DETAILS_MISSING_SETTINGS}</p>
+      ) : null}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
         {data.cards.map((card) => (
@@ -198,6 +205,21 @@ export default async function DashboardPage() {
         title="Total-loss settlement payments"
         hint="Follows the agreed total-loss settlement. A part-payment pauses this chase and is not treated as paid. Full payment stops it and flags hire and storage for review. Nothing is sent until you click Send."
         rows={data.chasesDue.filter((row) => row.kind === "settlement_payment")}
+      />
+      <ChaseDueTable
+        title="Hire payment chases due"
+        hint="Starts only after the hire end is confirmed and a hire payment request has been recorded as sent. It follows the agreed figure, or the confirmed claimed figure if nothing is agreed. A part-payment pauses it. Nothing is sent until you click Send, and nothing is sent while bank details are missing in Settings."
+        rows={data.chasesDue.filter((row) => row.kind === "hire_payment")}
+      />
+      <ChaseDueTable
+        title="Storage payment chases due"
+        hint="Starts only after the storage end is confirmed and a storage payment request has been recorded as sent. It follows the agreed figure, or the confirmed claimed figure if nothing is agreed. A part-payment pauses it. Full payment flags the other charges for review and does not close them. Nothing is sent until you click Send."
+        rows={data.chasesDue.filter((row) => row.kind === "storage_payment")}
+      />
+      <ChaseDueTable
+        title="Recovery payment chases due"
+        hint="Starts once the recovery claimed figure is on the file and a recovery payment request has been recorded as sent. Recovery has no end date. Nothing is sent until you click Send."
+        rows={data.chasesDue.filter((row) => row.kind === "recovery_payment")}
       />
       <ChaseDueTable
         title="Hire agreement renewals"

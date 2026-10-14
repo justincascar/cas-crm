@@ -41,6 +41,7 @@ import {
   startEngineerInstructionChase,
 } from "./engineer-chase";
 import {
+  CHASE_KINDS,
   chaseDefinition,
   chaseKindForChaseSentEvent,
   chaseKindForStartEvent,
@@ -53,6 +54,7 @@ import {
   type ChaseKind,
 } from "../domain/chase";
 import { classifyPaymentReply, paymentRequestCopy } from "../domain/payment-chase";
+import { BANK_DETAILS_MISSING_SETTINGS, paymentDetailsComplete } from "../domain/payment-details";
 import { getInsurerPaymentDetails } from "./payment-details";
 import { findPreparedChase, getAgreementMaxDays, getChaseIntervalDays, getInsurerPaymentTermDays, pauseChase, restartChaseClock, startChase, chaseForClaim, chaseRow } from "./chase";
 import { ENGINEER_REPORT_CHASE_TEMPLATE } from "../constants";
@@ -597,11 +599,17 @@ export function logIncomingEmail(input: {
 
 function applyPaymentReply(input: { claimId: string; actorId: string; subject: string; body: string; occurredAt: string }) {
   const klass = classifyPaymentReply(`${input.subject}\n${input.body}`);
-  for (const kind of ["repair_payment", "settlement_payment"] as const) {
+  for (const kind of CHASE_KINDS) {
+    if (!isPaymentChaseKind(kind)) continue;
     const row = chaseRow(input.claimId, kind);
     if (!row || row.status === "cancelled") continue;
     const view = chaseForClaim(kind, input.claimId, input.occurredAt);
-    if (!view?.payment || view.payment.paidInFull || view.payment.agreedPence <= 0) continue;
+    const target = view?.payment
+      ? view.payment.agreedPence > 0
+        ? view.payment.agreedPence
+        : view.payment.claimedPence
+      : 0;
+    if (!view?.payment || view.payment.paidInFull || target <= 0) continue;
     const head = view.payment.head;
     if (klass === "acknowledgement") continue;
     if (klass === "substantive") {
@@ -1181,6 +1189,7 @@ function preparePaymentRequestChase(input: { claimId: string; actorId: string; k
     theirRef: String(ctx.tpPolicyOrClaimRef || ""),
     head: def.paymentHead,
     agreedPence: view.payment.agreedPence,
+    claimedPence: view.payment.claimedPence,
     receivedPence: view.payment.receivedPence,
     outstandingPence: view.payment.outstandingPence,
     salvageProceedsPence: view.payment.salvageProceedsPence,

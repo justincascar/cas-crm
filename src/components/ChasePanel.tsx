@@ -92,6 +92,7 @@ export function ChasePanel({
   mailboxConnected = false,
   returnTo,
   awaitingDecisionHref = null,
+  bankDetailsMissing = false,
 }: {
   claimId: string;
   chase: ChaseView;
@@ -100,6 +101,7 @@ export function ChasePanel({
   mailboxConnected?: boolean;
   returnTo?: string;
   awaitingDecisionHref?: string | null;
+  bankDetailsMissing?: boolean;
 }) {
   const router = useRouter();
   const sendBack = returnTo || `/claims/${claimId}`;
@@ -252,12 +254,18 @@ export function ChasePanel({
       {chase.payment ? (
         <div className="mt-3 rounded-md border border-line bg-white px-4 py-3 text-sm">
           <p>
-            Agreed {formatGbp(chase.payment.agreedPence)} · Received {formatGbp(chase.payment.receivedPence)} · Still to pay{" "}
-            {formatGbp(chase.payment.outstandingPence)}
+            {chase.payment.agreedPence > 0 ? "Agreed" : "Confirmed claimed"}{" "}
+            {formatGbp(chase.payment.agreedPence > 0 ? chase.payment.agreedPence : chase.payment.claimedPence)} · Received{" "}
+            {formatGbp(chase.payment.receivedPence)} · Still to pay {formatGbp(chase.payment.outstandingPence)}
           </p>
-          <p className="mt-1 text-slate">
-            Storage still outstanding {formatGbp(chase.payment.storageOutstandingPence)} is not part of this figure and is not chased here.
-          </p>
+          {chase.payment.head === "repairs" || chase.payment.head === "vehicle_damage" ? (
+            <p className="mt-1 text-slate">
+              Storage still outstanding {formatGbp(chase.payment.storageOutstandingPence)} is not part of this figure and is not chased here.
+            </p>
+          ) : null}
+          {bankDetailsMissing ? (
+            <p className="mt-2 rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2 font-semibold">Bank details missing in Settings</p>
+          ) : null}
           <p className="mt-1">{chase.payment.bankLine}</p>
           {chase.payment.dueDateUnset ? (
             <p className="mt-2 rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2 font-semibold">{PAYMENT_TERM_NOT_SET_LABEL}</p>

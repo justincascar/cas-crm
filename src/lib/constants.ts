@@ -103,6 +103,15 @@ export const SETTLEMENT_PAYMENT_CHASE_RULE = "settlement_payment_chase";
 export const SETTLEMENT_PAYMENT_CHASE_TEMPLATE = "settlement_payment_chase";
 export const SETTLEMENT_PAYMENT_CHASE_DUE_LABEL = "Total-loss settlement payment chase due";
 export const SETTLEMENT_PAYMENT_REQUEST_LABEL = "Total-loss settlement payment request ready";
+export const HIRE_PAYMENT_CHASE_RULE = "hire_payment_chase";
+export const HIRE_PAYMENT_CHASE_TEMPLATE = "hire_payment_chase";
+export const HIRE_PAYMENT_CHASE_DUE_LABEL = "Hire payment chase due";
+export const STORAGE_PAYMENT_CHASE_RULE = "storage_payment_chase";
+export const STORAGE_PAYMENT_CHASE_TEMPLATE = "storage_payment_chase";
+export const STORAGE_PAYMENT_CHASE_DUE_LABEL = "Storage payment chase due";
+export const RECOVERY_PAYMENT_CHASE_RULE = "recovery_payment_chase";
+export const RECOVERY_PAYMENT_CHASE_TEMPLATE = "recovery_payment_chase";
+export const RECOVERY_PAYMENT_CHASE_DUE_LABEL = "Recovery payment chase due";
 export const FILE_REFERENCE_PREFIX_DEFAULT = "TEST-";
 
 /** Confirmed Microsoft 365 claims mailbox. A real send happens only when EMAIL_SEND_MODE is exactly live. */

@@ -685,11 +685,27 @@ CREATE TABLE IF NOT EXISTS insurer_offers (
   recorded_by TEXT NOT NULL REFERENCES staff(id),
   closed_at TEXT,
   closed_by TEXT,
-  closed_note TEXT
+  closed_note TEXT,
+  offered_days INTEGER,
+  offered_daily_rate_pence INTEGER
 );
 
 CREATE INDEX IF NOT EXISTS idx_insurer_offers_claim
   ON insurer_offers(claim_id, head_of_loss, offered_on);
+
+CREATE TABLE IF NOT EXISTS charge_decisions (
+  id TEXT PRIMARY KEY,
+  claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+  head_of_loss TEXT NOT NULL,
+  decision TEXT NOT NULL,
+  agreed_pence INTEGER,
+  reason TEXT,
+  recorded_by TEXT NOT NULL REFERENCES staff(id),
+  recorded_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_charge_decisions
+  ON charge_decisions(claim_id, head_of_loss, recorded_at);
 
 CREATE INDEX IF NOT EXISTS idx_claims_handler ON claims(handler_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_staff ON sessions(staff_id);

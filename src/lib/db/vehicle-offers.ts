@@ -1,10 +1,11 @@
 import { applicableVehicleHead } from "../domain/head-screen";
+import { dayRateMismatchesOffer } from "../domain/figure-resolution";
 import { formatGbp } from "../money";
 import { nowUtcIso } from "../dates";
 import { get, all, newId, run } from "./connection";
 import { recordClaimEvent } from "./chronology";
 
-export type VehicleOfferHead = "repairs" | "vehicle_damage";
+export type VehicleOfferHead = "repairs" | "vehicle_damage" | "hire" | "storage" | "recovery";
 export type VehicleOfferStatus = "open" | "withdrawn" | "lapsed" | "rejected";
 
 export type VehicleOffer = {
@@ -16,6 +17,9 @@ export type VehicleOffer = {
   recordedAt: string;
   closedNote: string;
   closedAt: string | null;
+  offeredDays: number | null;
+  offeredDailyRatePence: number | null;
+  rateMismatch: boolean;
 };
 
 /** A second save of the same open offer inside this window is the same press, not a new offer. */
@@ -43,6 +47,10 @@ export function vehicleOfferHead(claimId: string): VehicleOfferHead {
   return applicableVehicleHead(Number(claim.total_loss) === 1 || Number(claim.later_declared_total_loss) === 1);
 }
 
+export function listChargeOffers(claimId: string, head: "hire" | "storage" | "recovery"): VehicleOffer[] {
+  return listVehicleOffers(claimId, head);
+}
+
 export function listVehicleOffers(claimId: string, head: VehicleOfferHead): VehicleOffer[] {
   return all<{
     id: string;
@@ -53,22 +61,32 @@ export function listVehicleOffers(claimId: string, head: VehicleOfferHead): Vehi
     recorded_at: string;
     closed_note: string | null;
     closed_at: string | null;
+    offered_days: number | null;
+    offered_daily_rate_pence: number | null;
   }>(
-    `SELECT id, amount_pence, offered_on, note, status, recorded_at, closed_note, closed_at
+    `SELECT id, amount_pence, offered_on, note, status, recorded_at, closed_note, closed_at, offered_days, offered_daily_rate_pence
      FROM insurer_offers
      WHERE claim_id = ? AND head_of_loss = ?
      ORDER BY offered_on DESC, recorded_at DESC`,
     [claimId, head],
-  ).map((row) => ({
-    id: row.id,
-    amountPence: Number(row.amount_pence) || 0,
-    offeredOn: row.offered_on,
-    note: row.note || "",
-    status: offerStatus(row.status),
-    recordedAt: row.recorded_at,
-    closedNote: row.closed_note || "",
-    closedAt: row.closed_at || null,
-  }));
+  ).map((row) => {
+    const amountPence = Number(row.amount_pence) || 0;
+    const offeredDays = row.offered_days == null ? null : Number(row.offered_days);
+    const offeredDailyRatePence = row.offered_daily_rate_pence == null ? null : Number(row.offered_daily_rate_pence);
+    return {
+      id: row.id,
+      amountPence,
+      offeredOn: row.offered_on,
+      note: row.note || "",
+      status: offerStatus(row.status),
+      recordedAt: row.recorded_at,
+      closedNote: row.closed_note || "",
+      closedAt: row.closed_at || null,
+      offeredDays,
+      offeredDailyRatePence,
+      rateMismatch: dayRateMismatchesOffer(offeredDays, offeredDailyRatePence, amountPence),
+    };
+  });
 }
 
 /** An offered figure already stored on the financial line, when this screen has no dated offers yet. */
@@ -99,6 +117,8 @@ export function recordVehicleOffer(input: {
   amountPence: number;
   offeredOn: string;
   note: string;
+  offeredDays?: number | null;
+  offeredDailyRatePence?: number | null;
 }) {
   if (!Number.isInteger(input.amountPence) || input.amountPence <= 0) {
     throw new Error("Enter the amount the insurer offered. It is not taken from the claimed or agreed figure.");
@@ -106,11 +126,14 @@ export function recordVehicleOffer(input: {
   const offeredOn = requireCalendarDate(input.offeredOn, "the date of the offer");
   const note = input.note.trim();
   if (note.length > NOTE_LIMIT) throw new Error("The note is too long.");
+  const offeredDays = optionalPositiveInt(input.offeredDays, "offered days");
+  const offeredDailyRatePence = optionalPositiveInt(input.offeredDailyRatePence, "offered daily rate");
   const existing = get<{ id: string; recorded_at: string }>(
     `SELECT id, recorded_at FROM insurer_offers
      WHERE claim_id = ? AND head_of_loss = ? AND amount_pence = ? AND offered_on = ? AND note = ? AND status = 'open'
+       AND offered_days IS ? AND offered_daily_rate_pence IS ?
      ORDER BY recorded_at DESC LIMIT 1`,
-    [input.claimId, input.head, input.amountPence, offeredOn, note],
+    [input.claimId, input.head, input.amountPence, offeredOn, note, offeredDays, offeredDailyRatePence],
   );
   if (existing && sameOfferStillOpen(existing.recorded_at)) return existing.id;
   const before = moneySnapshot(input.claimId, input.head);
@@ -118,9 +141,9 @@ export function recordVehicleOffer(input: {
   const at = nowUtcIso();
   run(
     `INSERT INTO insurer_offers(
-      id, claim_id, head_of_loss, amount_pence, offered_on, note, status, recorded_at, recorded_by
-    ) VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?)`,
-    [id, input.claimId, input.head, input.amountPence, offeredOn, note, at, input.actorId],
+      id, claim_id, head_of_loss, amount_pence, offered_on, note, status, recorded_at, recorded_by, offered_days, offered_daily_rate_pence
+    ) VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`,
+    [id, input.claimId, input.head, input.amountPence, offeredOn, note, at, input.actorId, offeredDays, offeredDailyRatePence],
   );
   syncCurrentOffer(input.claimId, input.head, before);
   const noted = note ? ` Note: ${note}` : "";
@@ -176,6 +199,13 @@ export function markVehicleOffer(input: {
     source: "staff",
     channel: "file",
   });
+}
+
+function optionalPositiveInt(value: number | null | undefined, label: string): number | null {
+  if (value == null) return null;
+  const n = Math.trunc(Number(value));
+  if (!Number.isInteger(n) || n <= 0) throw new Error(`Enter the ${label} as a whole number, or leave it blank.`);
+  return n;
 }
 
 function offerStatus(status: string): VehicleOfferStatus {

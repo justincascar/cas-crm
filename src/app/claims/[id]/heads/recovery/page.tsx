@@ -2,6 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ClaimTable";
 import { ScreenForm } from "@/components/claim-file/ScreenForm";
+import { ChargeDecisionPanel } from "@/components/claims/ChargeDecisionPanel";
+import { ChargeOffers } from "@/components/claims/ChargeOffers";
+import { FigureResolution } from "@/components/claims/FigureResolution";
 import { HeadAgreedForm } from "@/components/claims/HeadAgreedForm";
 import { HeadOfLossScreen } from "@/components/claims/HeadOfLossScreen";
 import { PaymentReviewPanel } from "@/components/claims/PaymentReviewPanel";
@@ -10,13 +13,16 @@ import { getClaimScreen } from "@/lib/claim-screens";
 import { formatUkDate } from "@/lib/dates";
 import { headScreenPath } from "@/lib/domain/head-screen";
 import { formatGbp } from "@/lib/money";
+import { latestChargeDecision } from "@/lib/db/charge-decision";
+import { figureFlag, refreshFollowedFigure } from "@/lib/db/figure-resolution";
 import { loadHeadSection } from "@/lib/db/head-screen";
-import { accountCanAcceptPaymentSettlement } from "@/lib/db/permissions";
+import { accountCanAcceptPaymentSettlement, accountCanApproveSettlement } from "@/lib/db/permissions";
 import { getClaim, listKnownAgents, listKnownInsurers } from "@/lib/db/queries";
 import { seedScreenDefaults } from "@/lib/db/screens";
 import { recoveryCarrierName, recoveryClaimForClaim, recoveryJobForClaim, syncRecoveryClaimed } from "@/lib/db/storage-charge";
 import { getDefaultVehicleLocation } from "@/lib/db/vehicle-location";
 import { getScreenData } from "@/lib/db/screens";
+import { agreedOnFor, listChargeOffers } from "@/lib/db/vehicle-offers";
 
 function shownDay(value: string | null | undefined) {
   const text = String(value || "").trim();
@@ -33,7 +39,7 @@ export default async function RecoveryHeadPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; field?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; field?: string; figureError?: string; offerError?: string; decisionError?: string }>;
 }) {
   const staff = await requireStaff();
   const { id } = await params;
@@ -42,6 +48,7 @@ export default async function RecoveryHeadPage({
   if (!data) notFound();
   const def = getClaimScreen("recovery");
   if (!def) notFound();
+  refreshFollowedFigure(id, "recovery");
   const decision = syncRecoveryClaimed(id);
   const job = recoveryJobForClaim(id);
   const screen = getScreenData(id, "recovery");
@@ -51,6 +58,8 @@ export default async function RecoveryHeadPage({
   const who = recoveryCarrierName(id) || String(screen.name || "").trim();
   const date = job?.recovered_at || screen.recoveryDate || "";
   const section = loadHeadSection(id, "recovery");
+  const calculated = decision.totalPence > 0 ? decision.totalPence : null;
+  const flag = figureFlag(id, "recovery", section.claimedPence, calculated);
   const values = seedScreenDefaults(id, "recovery");
   const chargeNote =
     decision.source === "screen"
@@ -109,6 +118,17 @@ export default async function RecoveryHeadPage({
         <p className="text-sm font-semibold tabular">
           Net {formatGbp(decision.netPence)} · VAT {formatGbp(decision.vatPence)} · Total {formatGbp(decision.totalPence)}
         </p>
+        {query.figureError ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.figureError}</p> : null}
+        {query.offerError ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.offerError}</p> : null}
+        {query.decisionError ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.decisionError}</p> : null}
+        <FigureResolution
+          claimId={id}
+          head="recovery"
+          differs={flag.differs}
+          keptLabel={flag.mode === "kept" ? flag.label : null}
+          storedPence={section.claimedPence}
+          calculatedPence={calculated}
+        />
         <ScreenForm
           claimId={id}
           actorId={staff.id}
@@ -144,6 +164,20 @@ export default async function RecoveryHeadPage({
             </div>
           </>
         }
+      />
+      <ChargeDecisionPanel
+        claimId={id}
+        head="recovery"
+        decision={latestChargeDecision(id, "recovery")}
+        canApproveSettlement={accountCanApproveSettlement(staff.id, staff.role)}
+      />
+      <ChargeOffers
+        claimId={id}
+        head="recovery"
+        offers={listChargeOffers(id, "recovery")}
+        claimedPence={section.claimedPence}
+        agreedOn={agreedOnFor(id, "recovery")}
+        hasAgreed={(section.agreedPence || 0) > 0}
       />
     </div>
   );

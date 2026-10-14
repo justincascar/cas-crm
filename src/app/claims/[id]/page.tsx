@@ -29,6 +29,8 @@ import { OutstandingSummary } from "@/components/claims/OutstandingSummary";
 import { MailboxSendNotice } from "@/components/claims/SendPreparedEmailForm";
 import { EmailSendModeBanner } from "@/components/EmailSendModeBanner";
 import { liveEmailSending } from "@/lib/email/send-mode";
+import { BANK_DETAILS_MISSING_SETTINGS, paymentDetailsComplete } from "@/lib/domain/payment-details";
+import { getInsurerPaymentDetails } from "@/lib/db/payment-details";
 import { outstandingForClaim } from "@/lib/db/outstanding";
 import { listOpenPaymentReviews, listPayableHeads, listPaymentsAfterSettlement } from "@/lib/db/payment-review";
 import { PaymentReviewPanel } from "@/components/claims/PaymentReviewPanel";
@@ -78,6 +80,7 @@ export default async function ClaimDetailPage({
   const hireAgreements = listHireAgreements(String(claim.id));
   const claimId = String(claim.id);
   if (paymentDecision && isPaymentReviewHead(paymentDecision)) redirect(headScreenPath(claimId, paymentDecision));
+  const bankDetailsMissing = !paymentDetailsComplete(getInsurerPaymentDetails());
   const reviews = listOpenPaymentReviews(claimId);
   const settledPayments = listPaymentsAfterSettlement(claimId);
   const preparedByKind = Object.fromEntries(
@@ -148,6 +151,10 @@ export default async function ClaimDetailPage({
         roadworthiness={String(claim.roadworthiness || "")}
       />
 
+      {bankDetailsMissing ? (
+        <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm font-semibold">{BANK_DETAILS_MISSING_SETTINGS}</p>
+      ) : null}
+
       <OutstandingSummary items={outstandingForClaim(claimId)} />
 
       <PaymentReviewPanel claimId={claimId} payableHeads={listPayableHeads(claimId)} />
@@ -160,6 +167,7 @@ export default async function ClaimDetailPage({
           prepared={preparedByKind[chase.kind] || null}
           agreements={chase.kind === "hire_agreement_renewal" ? hireAgreements : undefined}
           mailboxConnected={liveEmailSending()}
+          bankDetailsMissing={bankDetailsMissing}
           returnTo={`/claims/${claim.id}`}
           awaitingDecisionHref={
             chase.payment && reviews.some((item) => item.head === chase.payment?.head)
@@ -556,7 +564,9 @@ export default async function ClaimDetailPage({
                   </td>
                   <td className="tabular">
                     {formatGbp(claimed)}
-                    {head === "storage" && String(line.description || "").toLowerCase().includes("provisional")
+                    {head === "storage" &&
+                    claimed > 0 &&
+                    !String(data.claim.storage_billing_end_on || "").trim()
                       ? " — provisional"
                       : ""}
                     {(head === "hire" || head === "credit_hire") &&

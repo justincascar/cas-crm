@@ -9,7 +9,7 @@ import {
 } from "../domain/storage-charge";
 import { londonTodayIso, nowUtcIso } from "../dates";
 import { recordClaimEvent } from "./chronology";
-import { get, run } from "./connection";
+import { all, get, run } from "./connection";
 import { getScreenData } from "./screens";
 import { storageAuthorisationEndForClaim } from "./storage-authorisation-end";
 import { calendarDay } from "./storage-recovery-date";
@@ -17,6 +17,14 @@ import { calendarDay } from "./storage-recovery-date";
 export function officeFinancialError(role: string | null | undefined): string | null {
   if (isOfficeRole(role)) return null;
   return "You cannot open the money on this file.";
+}
+
+export function unconfirmedStorageClaimIds(): Set<string> {
+  return new Set(
+    all<{ id: string }>(
+      `SELECT id FROM claims WHERE storage_billing_end_on IS NULL OR trim(storage_billing_end_on) = ''`,
+    ).map((row) => row.id),
+  );
 }
 
 export function ensureStorageDailyRateSetting(db: DatabaseSync) {
@@ -161,10 +169,25 @@ function writeClaimed(input: {
   }
 }
 
+function figureMode(claimId: string, head: "storage" | "recovery"): "follow" | "kept" | null {
+  const row = get<{ event_type: string }>(
+    `SELECT event_type FROM claim_events
+     WHERE claim_id = ? AND event_type IN ('stored_figure_use_calculated', 'stored_figure_kept') AND details LIKE ?
+     ORDER BY occurred_at DESC, recorded_at DESC LIMIT 1`,
+    [claimId, `%head=${head}%`],
+  );
+  if (!row) return null;
+  return row.event_type === "stored_figure_kept" ? "kept" : "follow";
+}
+
 /** Recalculates the storage claimed figure only. Payments and the agreed figure stay as they are. Dates are not written. */
-export function syncStorageClaimed(claimId: string, today = londonTodayIso()) {
+export function syncStorageClaimed(claimId: string, today = londonTodayIso(), options?: { force?: boolean }) {
   const charge = storageChargeForClaim(claimId, today);
   if (!charge || charge.status !== "calculated") return charge;
+  const mode = figureMode(claimId, "storage");
+  if (mode === "kept") return charge;
+  const stored = Number(headLine(claimId, "storage")?.claimed_pence) || 0;
+  if (stored > 0 && stored !== charge.totalPence && mode !== "follow" && !options?.force) return charge;
   writeClaimed({
     claimId,
     head: "storage",
@@ -194,7 +217,7 @@ export function setClaimStorageRate(input: { claimId: string; actorId: string; r
   ) {
     throw new Error("Changing the daily rate must not change a storage date.");
   }
-  syncStorageClaimed(input.claimId);
+  syncStorageClaimed(input.claimId, undefined, { force: true });
   const receivedAfter = Number(headLine(input.claimId, "storage")?.received_pence) || 0;
   if (receivedAfter !== receivedBefore) throw new Error("Changing the daily rate must not change a payment.");
   recordClaimEvent({
@@ -251,9 +274,15 @@ export function recoveryClaimForClaim(claimId: string) {
 }
 
 /** Writes the recovery claimed figure from the existing calculation. Agreed, offered and received stay as they are. */
-export function syncRecoveryClaimed(claimId: string) {
+export function syncRecoveryClaimed(claimId: string, options?: { force?: boolean }) {
   const decision = recoveryClaimForClaim(claimId);
   if (!decision.write) return decision;
+  const mode = figureMode(claimId, "recovery");
+  if (mode === "kept") return { ...decision, write: false };
+  const stored = Number(headLine(claimId, "recovery")?.claimed_pence) || 0;
+  if (stored > 0 && stored !== decision.totalPence && mode !== "follow" && !options?.force) {
+    return { ...decision, write: false };
+  }
   writeClaimed({
     claimId,
     head: "recovery",

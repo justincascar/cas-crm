@@ -22,6 +22,12 @@ import {
   TOTAL_LOSS_AGREEMENT_CHASE_TITLE,
   REPAIR_AUTHORISATION_CHASE_RULE,
   REPAIR_AUTHORISATION_CHASE_TEMPLATE,
+  HIRE_PAYMENT_CHASE_DUE_LABEL,
+  HIRE_PAYMENT_CHASE_RULE,
+  HIRE_PAYMENT_CHASE_TEMPLATE,
+  RECOVERY_PAYMENT_CHASE_DUE_LABEL,
+  RECOVERY_PAYMENT_CHASE_RULE,
+  RECOVERY_PAYMENT_CHASE_TEMPLATE,
   REPAIR_PAYMENT_CHASE_DUE_LABEL,
   REPAIR_PAYMENT_CHASE_RULE,
   REPAIR_PAYMENT_CHASE_TEMPLATE,
@@ -33,6 +39,9 @@ import {
   SETTLEMENT_PAYMENT_CHASE_DUE_LABEL,
   SETTLEMENT_PAYMENT_CHASE_RULE,
   SETTLEMENT_PAYMENT_CHASE_TEMPLATE,
+  STORAGE_PAYMENT_CHASE_DUE_LABEL,
+  STORAGE_PAYMENT_CHASE_RULE,
+  STORAGE_PAYMENT_CHASE_TEMPLATE,
 } from "../constants";
 import type { PaymentChaseHead } from "./payment-chase";
 
@@ -43,6 +52,9 @@ export const CHASE_KINDS = [
   "hire_agreement_renewal",
   "repair_payment",
   "settlement_payment",
+  "hire_payment",
+  "storage_payment",
+  "recovery_payment",
 ] as const;
 export type ChaseKind = (typeof CHASE_KINDS)[number];
 
@@ -75,8 +87,8 @@ export type ChaseKindDefinition = {
   ignoreLastChaseSent?: boolean;
   approachingLabel?: string;
   overdueLabel?: string;
-  /** When set, the chase follows this head's agreed balance. Storage is never a head. */
-  paymentHead?: PaymentChaseHead;
+  /** When set, the chase follows this head. Hire, storage and recovery start only once the figure is final and a payment request has been marked sent. */
+  paymentHead?: PaymentChaseHead | "hire" | "storage" | "recovery";
 };
 
 const DEFAULT_INTERVAL = ENGINEER_CHASER_INTERVAL_DAYS_DEFAULT;
@@ -199,6 +211,78 @@ export const CHASE_KIND_DEFINITIONS: Record<ChaseKind, ChaseKindDefinition> = {
     outcomeOnFileReason: "The agreed total-loss settlement has been paid in full. Hire and storage are not closed.",
     paymentHead: "vehicle_damage",
   },
+  hire_payment: {
+    kind: "hire_payment",
+    ruleKey: HIRE_PAYMENT_CHASE_RULE,
+    track: "hire_payment",
+    settingKey: SETTING_PAYMENT_CHASE_INTERVAL_DAYS,
+    defaultIntervalDays: PAYMENT_CHASE_INTERVAL_DAYS_DEFAULT,
+    templateKey: HIRE_PAYMENT_CHASE_TEMPLATE,
+    dueLabel: HIRE_PAYMENT_CHASE_DUE_LABEL,
+    title: "Hire payment",
+    waitingReason: "Waiting for payment of the hire charge. Reminder only — not auto-sent.",
+    startEventTypes: ["hire_payment_request_sent"],
+    startTemplateKeys: [],
+    chaseSentEventType: "hire_payment_reminder_sent",
+    extraChaseSentEventTypes: [],
+    outcomeReceivedEventTypes: [],
+    outcomeClearedEventType: "hire_payment_chase_cleared",
+    pauseEventType: "hire_payment_chase_paused",
+    resumeEventType: "hire_payment_chase_resumed",
+    cancelEventType: "hire_payment_chase_cancelled",
+    recipient: "insurer",
+    notStartedReason: "Hire is not chased until the hire end is confirmed and a hire payment request has been marked as sent.",
+    outcomeOnFileReason: "The hire charge has been paid in full. The other charges are not closed.",
+    paymentHead: "hire",
+  },
+  storage_payment: {
+    kind: "storage_payment",
+    ruleKey: STORAGE_PAYMENT_CHASE_RULE,
+    track: "storage_payment",
+    settingKey: SETTING_PAYMENT_CHASE_INTERVAL_DAYS,
+    defaultIntervalDays: PAYMENT_CHASE_INTERVAL_DAYS_DEFAULT,
+    templateKey: STORAGE_PAYMENT_CHASE_TEMPLATE,
+    dueLabel: STORAGE_PAYMENT_CHASE_DUE_LABEL,
+    title: "Storage payment",
+    waitingReason: "Waiting for payment of the storage charge. Reminder only — not auto-sent.",
+    startEventTypes: ["storage_payment_request_sent"],
+    startTemplateKeys: [],
+    chaseSentEventType: "storage_payment_reminder_sent",
+    extraChaseSentEventTypes: [],
+    outcomeReceivedEventTypes: [],
+    outcomeClearedEventType: "storage_payment_chase_cleared",
+    pauseEventType: "storage_payment_chase_paused",
+    resumeEventType: "storage_payment_chase_resumed",
+    cancelEventType: "storage_payment_chase_cancelled",
+    recipient: "insurer",
+    notStartedReason: "Storage is not chased until the storage end is confirmed and a storage payment request has been marked as sent.",
+    outcomeOnFileReason: "The storage charge has been paid in full. The other charges are not closed.",
+    paymentHead: "storage",
+  },
+  recovery_payment: {
+    kind: "recovery_payment",
+    ruleKey: RECOVERY_PAYMENT_CHASE_RULE,
+    track: "recovery_payment",
+    settingKey: SETTING_PAYMENT_CHASE_INTERVAL_DAYS,
+    defaultIntervalDays: PAYMENT_CHASE_INTERVAL_DAYS_DEFAULT,
+    templateKey: RECOVERY_PAYMENT_CHASE_TEMPLATE,
+    dueLabel: RECOVERY_PAYMENT_CHASE_DUE_LABEL,
+    title: "Recovery payment",
+    waitingReason: "Waiting for payment of the recovery charge. Reminder only — not auto-sent.",
+    startEventTypes: ["recovery_payment_request_sent"],
+    startTemplateKeys: [],
+    chaseSentEventType: "recovery_payment_reminder_sent",
+    extraChaseSentEventTypes: [],
+    outcomeReceivedEventTypes: [],
+    outcomeClearedEventType: "recovery_payment_chase_cleared",
+    pauseEventType: "recovery_payment_chase_paused",
+    resumeEventType: "recovery_payment_chase_resumed",
+    cancelEventType: "recovery_payment_chase_cancelled",
+    recipient: "insurer",
+    notStartedReason: "Recovery is not chased until the claimed figure is on the file and a recovery payment request has been marked as sent.",
+    outcomeOnFileReason: "The recovery charge has been paid in full. The other charges are not closed.",
+    paymentHead: "recovery",
+  },
   hire_agreement_renewal: {
     kind: "hire_agreement_renewal",
     ruleKey: HIRE_AGREEMENT_RENEWAL_CHASE_RULE,
@@ -235,6 +319,9 @@ export const CHASE_KIND_ORDER: ChaseKind[] = [
   "hire_agreement_renewal",
   "repair_payment",
   "settlement_payment",
+  "hire_payment",
+  "storage_payment",
+  "recovery_payment",
 ];
 
 export function isPaymentChaseKind(kind: ChaseKind): boolean {
