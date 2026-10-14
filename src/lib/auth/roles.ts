@@ -129,7 +129,10 @@ export function pathAllowedForRole(role: string | null | undefined, pathname: st
     );
   }
   if (role === MECHANIC_ROLE) {
-    return /^\/claims\/[^/]+\/repair$/.test(path) || /^\/documents\/[^/]+(\/file|\/preview|\/preview\/\d+)?$/.test(path);
+    return (
+      /^\/claims\/[^/]+\/repair(\/step)?$/.test(path) ||
+      /^\/documents\/[^/]+(\/file|\/preview|\/preview\/\d+)?$/.test(path)
+    );
   }
   return false;
 }

@@ -234,7 +234,8 @@ export function CommsDesk({
             return;
           }
           const result = await actionSendEmail(formData);
-          setEmailMsg(result.ok ? result.warning : result.error);
+          const reportNotice = result.ok && "engineerReportNotice" in result ? result.engineerReportNotice : "";
+          setEmailMsg(result.ok ? [reportNotice, result.warning].filter(Boolean).join(" ") : result.error);
           router.refresh();
         }}
       >

@@ -11,7 +11,14 @@ import { mailboxSentDetails } from "../email/sent-wording";
 import { get, getDb } from "./connection";
 import { chaseForClaim } from "./chase";
 import { getInsurerPaymentDetails } from "./payment-details";
-import { recordClaimEvent, markEngineerInstructionSent, markOutstandingChaseSent } from "./chronology";
+import {
+  claimHasEngineerReportAttachment,
+  markEngineerInstructionSent,
+  markOutstandingChaseSent,
+  recordClaimEvent,
+  recordEngineerReportSentFromLiveSend,
+} from "./chronology";
+import { SIMULATED_REPORT_NOT_RECORDED } from "../domain/repair-progress";
 import {
   CORRESPONDENCE_SENDING,
   ENGINEER_INSTRUCTION_MARKED_SENT,
@@ -110,6 +117,7 @@ export async function sendPreparedCorrespondence(input: {
     });
     throw new MailboxSendError("rejected", result.error);
   }
+  const reportAttached = claimHasEngineerReportAttachment(input.claimId, input.attachmentIds || []);
   if (result.status === "simulated_sent") {
     getDb().prepare(`UPDATE correspondence SET sent_status = ? WHERE id = ?`).run("simulated_sent", row.id);
     recordClaimEvent({
@@ -122,7 +130,19 @@ export async function sendPreparedCorrespondence(input: {
       correspondenceId: row.id,
       source: "staff",
     });
-    return { simulated: true as const };
+    return {
+      simulated: true as const,
+      engineerReportNotice: reportAttached ? SIMULATED_REPORT_NOT_RECORDED : undefined,
+    };
+  }
+
+  if (reportAttached) {
+    recordEngineerReportSentFromLiveSend({
+      claimId: input.claimId,
+      actorId: input.actorId,
+      recipient: to,
+      occurredAt: nowUtcIso(),
+    });
   }
 
   try {

@@ -27,6 +27,8 @@ Nothing below has been invented as a live connection. Prototype behaviour is lab
 
 ## Policy confirmations
 
+- Repair-step recording by role, proposed 14 October 2026 and awaiting Justin’s confirmation. Office staff can record an inspection booking, an inspection attendance and the engineer’s report sent to the insurer. A bodyshop / mechanic login can record the workshop steps (vehicle received for repair, parts ordered, parts delayed, repairs started and repairs complete) and cannot record the inspection or insurer steps. The server checks the role. This split is proposed, not a confirmed rule.
+- Repair-progress gap of 15 inclusive days, proposed 14 October 2026 and awaiting Justin’s confirmation. Both the first day and the last day count. An inclusive gap of 15 days is flagged. 14 is not. It comes from the project’s legal research note as a review prompt, not a legal rule and not a legal limit. Staff explain the gap in their own words. The number is the setting `repair_progress_gap_days`.
 - Storage billing end date practice (payment day vs a few days after) — CRM stores an explicit date rather than inventing a grace period.
 - Qualifying-payment rule for total-loss off-hire countdown (implemented as a handler-confirmed event as a safeguard).
 - Live chaser scheduling: demonstration uses **3 calendar days**; confirm business days and sending hours before activation.

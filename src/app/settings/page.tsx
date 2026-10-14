@@ -8,6 +8,7 @@ import { dbLocation, getSettings, listStaff } from "@/lib/db/queries";
 import { getDefaultVehicleLocation } from "@/lib/db/vehicle-location";
 import { getStorageDailyRatePence } from "@/lib/db/storage-charge";
 import { getAgreementApproachingDay, getAgreementMaxDays, getChaseIntervalDays } from "@/lib/db/chase";
+import { getRepairGapThresholdDays } from "@/lib/db/repair-progress";
 import { listInsurerPaymentTerms } from "@/lib/db/insurers";
 import { accountCanManageBankDetails } from "@/lib/db/permissions";
 import { PAYMENT_DUE_ON_RECEIPT, PAYMENT_DUE_ON_RECEIPT_SENTENCE } from "@/lib/constants";
@@ -44,6 +45,7 @@ export default async function SettingsPage({
   const agreementRenewalAlertDay = getChaseIntervalDays("hire_agreement_renewal");
   const agreementRenewalApproachingDay = getAgreementApproachingDay();
   const agreementMaxDays = getAgreementMaxDays();
+  const repairProgressGapDays = getRepairGapThresholdDays();
   const gtaMarkupPercent = getGtaMarkupPercent();
   const paymentDetails = getInsurerPaymentDetails();
   const casInsurance = currentCasInsuranceDocument();
@@ -120,6 +122,31 @@ export default async function SettingsPage({
             Save agreement day limits
           </button>
         </ValidatedForm>
+      </section>
+      <section className="rounded-xl border border-line bg-card p-5">
+        <h2 className="font-serif text-xl text-navy-deep">Repair progress gap — review prompt</h2>
+        <p className="mt-2 text-sm">
+          An inclusive gap of this many days between two recorded repair steps is flagged until someone explains it. 14
+          days is not flagged. {repairProgressGapDays} is. This is a review prompt awaiting confirmation. It is not a
+          legal limit, and it does not change hire agreement renewal days.
+        </p>
+        <form method="post" action="/settings/repair-gap" className="mt-4 flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            Days
+            <input
+              name="repairProgressGapDays"
+              type="number"
+              min={1}
+              step={1}
+              required
+              className="mt-1 w-32 rounded-md border border-line bg-white px-3 py-2 text-sm"
+              defaultValue={repairProgressGapDays}
+            />
+          </label>
+          <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
+            Save review prompt
+          </button>
+        </form>
       </section>
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Payment details for insurers</h2>

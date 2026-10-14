@@ -1,17 +1,21 @@
 import { CHASE_KIND_DEFINITIONS } from "./chase";
 import { eventLabel } from "./events";
 import { DOCUMENT_CHASE_SENT_EVENT, TOTAL_LOSS_PAYMENT_CHASE_SENT_EVENT } from "./follow-up-chases";
+import {
+  REPAIR_PROGRESS_SEQUENCE,
+  missingRepairProgressSteps,
+  repairProgressExpectsSteps,
+} from "./repair-progress";
 
 /**
  * Hire and repair chronology. A filter of claim_events already on the file.
  * It does not write history, automations, or screen data.
  *
- * Repairs started and repairs complete are included when this file is being
- * repaired. They use the date already stored on the event.
- *
- * Inspection date, the report sent on to the insurer, the vehicle received
- * for repair, and parts ordered are not stored as dated events. They are
- * not invented here. Typed loss-of-use dates are not read.
+ * Repair progress steps use the date already stored on the event. A missing
+ * required step on an open repairable file is stated afterwards, without a
+ * date. Parts delayed is shown only when it was recorded. A total loss does
+ * not gain blank workshop lines. A workshop step already recorded stays.
+ * Typed loss-of-use dates are not read.
  */
 
 const MILESTONE_TYPES = [
@@ -26,10 +30,11 @@ const MILESTONE_TYPES = [
 ] as const;
 
 /**
- * Dated repair steps the file can already record. Shown only when repair
- * applies. A missing one is stated afterwards, without a date.
+ * Dated repair steps. Shown when repair applies, and also when already
+ * recorded on a file that later became a total loss. A missing required
+ * step is stated afterwards, without a date, only while repair applies.
  */
-export const REPAIR_PIPELINE_TYPES = ["repairs_started", "repairs_complete"] as const;
+export const REPAIR_PIPELINE_TYPES = REPAIR_PROGRESS_SEQUENCE.map((step) => step.type);
 
 /**
  * Other history that shows the file went into repair, even with no engineer
@@ -37,9 +42,9 @@ export const REPAIR_PIPELINE_TYPES = ["repairs_started", "repairs_complete"] as 
  */
 const REPAIR_SIGNAL_TYPES = new Set<string>([
   ...REPAIR_PIPELINE_TYPES,
-  "repairs_authorised",
   "repair_authorisation_requested",
   "vehicle_returned",
+  "repair_step_correction",
 ]);
 
 /** Steps whose note is a fact, not a generated-or-sent letter. */
@@ -47,9 +52,17 @@ const NO_DISPATCH = new Set<string>([
   "accident",
   "recovery_completed",
   "engineer_report_received",
+  "engineer_inspection_booked",
+  "engineer_inspection_attended",
+  "engineer_report_sent_to_insurer",
+  "repairs_authorised",
+  "vehicle_received_for_repair",
+  "parts_ordered",
+  "parts_delayed",
   "hire_ended",
   "storage_ended",
   "repairs_complete",
+  "repair_step_correction",
 ]);
 
 const EXTRA_CHASE_SENT_TYPES = [
@@ -87,7 +100,7 @@ export type JustificationRepairGap = {
 };
 
 export type JustificationChronologyOptions = {
-  /** A total loss does not show the repair steps, including a file later declared a total loss. */
+  /** A total loss does not expect missing workshop steps. Steps already recorded stay on the list. */
   totalLoss?: boolean;
 };
 
@@ -125,27 +138,22 @@ export function dispatchFromHistoryNote(details: string | null | undefined): Jus
 /**
  * Repair applies on a file that is not a total loss, once an engineer has
  * been instructed or any repair event is already stored. A fault file that
- * never went to repair does not apply.
+ * never went to repair does not apply. A total loss does not expect the
+ * workshop steps.
  */
 export function repairChronologyApplies(
   events: JustificationSourceEvent[],
   options?: JustificationChronologyOptions,
 ): boolean {
   if (options?.totalLoss) return false;
-  if (events.some((event) => event.event_type === "engineer_instructed")) return true;
-  return events.some((event) => REPAIR_SIGNAL_TYPES.has(event.event_type));
+  return repairProgressExpectsSteps(events, options);
 }
 
 export function justificationRepairGaps(
   events: JustificationSourceEvent[],
   options?: JustificationChronologyOptions,
 ): JustificationRepairGap[] {
-  if (!repairChronologyApplies(events, options)) return [];
-  const present = new Set(events.map((event) => event.event_type));
-  return REPAIR_PIPELINE_TYPES.filter((type) => !present.has(type)).map((type) => ({
-    eventType: type,
-    label: eventLabel(type),
-  }));
+  return missingRepairProgressSteps(events, options);
 }
 
 export function justificationChronology(
@@ -155,6 +163,17 @@ export function justificationChronology(
   const allowed = new Set(justificationEventTypes());
   if (repairChronologyApplies(events, options)) {
     for (const type of REPAIR_PIPELINE_TYPES) allowed.add(type);
+    allowed.add("repair_step_correction");
+  } else {
+    for (const event of events) {
+      if (
+        REPAIR_SIGNAL_TYPES.has(event.event_type) &&
+        event.event_type !== "repair_authorisation_requested" &&
+        event.event_type !== "vehicle_returned"
+      ) {
+        allowed.add(event.event_type);
+      }
+    }
   }
   const kept = events.filter((event) => allowed.has(event.event_type));
   kept.sort((a, b) => {

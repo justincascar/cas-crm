@@ -16,6 +16,7 @@ import {
 } from "../constants";
 import { isoDateFromNow, isoDaysFromNow, nowUtcIso } from "../dates";
 import { ensureTest0008HireDemonstration } from "./test-0008-hire";
+import { ensureRepairProgressDemonstration } from "./repair-progress-demo";
 import { pence, vatOnNet } from "../money";
 
 function run(db: DatabaseSync, sql: string, params: unknown[] = []) {
@@ -716,5 +717,6 @@ function insertPrototypeChronology(db: DatabaseSync) {
   ev("ev-c12-offer", "c12", "offer_received", "Offer received", "Without-prejudice offer awaiting review.", -1, 10, "staff-megan", "email");
 
   ensureTest0008HireDemonstration(db);
+  ensureRepairProgressDemonstration(db);
 }
 

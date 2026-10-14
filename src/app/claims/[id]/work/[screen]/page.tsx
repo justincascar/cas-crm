@@ -24,6 +24,7 @@ import { getStorageDateReview, getStorageEndDateReview } from "@/lib/db/storage-
 import { claimStorageChargeEnded, storageAuthorisationEndForClaim } from "@/lib/db/storage-authorisation-end";
 import { ChargeableStorageNote, StorageAuthorisationEndPanel } from "@/components/claims/StorageAuthorisationEnd";
 import { MailboxSendNotice } from "@/components/claims/SendPreparedEmailForm";
+import { RecordRepairSteps } from "@/components/claims/RecordRepairSteps";
 import { EmailSendModeBanner } from "@/components/EmailSendModeBanner";
 import { liveEmailSending } from "@/lib/email/send-mode";
 import { listCasInsuranceDocuments } from "@/lib/db/company-insurance";
@@ -33,12 +34,12 @@ export default async function ClaimWorkScreenPage({
   searchParams,
 }: {
   params: Promise<{ id: string; screen: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; field?: string; whatsapp?: string; tlError?: string; tlMail?: string; mailboxError?: string; mailboxSent?: string; mailboxSimulated?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; field?: string; whatsapp?: string; tlError?: string; tlMail?: string; mailboxError?: string; mailboxSent?: string; mailboxSimulated?: string; mailboxReport?: string; stepError?: string; stepSaved?: string }>;
 }) {
   const { id, screen } = await params;
   if (screen === "storage" || screen === "recovery") redirect(headScreenPath(id, screen));
   await requireStaff();
-  const { saved, error, field, whatsapp, tlError, tlMail, mailboxError, mailboxSent, mailboxSimulated } = await searchParams;
+  const { saved, error, field, whatsapp, tlError, tlMail, mailboxError, mailboxSent, mailboxSimulated, mailboxReport, stepError, stepSaved } = await searchParams;
   const def = getClaimScreen(screen);
   if (!def) notFound();
   const data = getClaim(id);
@@ -83,7 +84,7 @@ export default async function ClaimWorkScreenPage({
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
       ) : null}
       <EmailSendModeBanner />
-      <MailboxSendNotice sent={mailboxSent} simulated={mailboxSimulated} error={mailboxError} />
+      <MailboxSendNotice sent={mailboxSent} simulated={mailboxSimulated} error={mailboxError} reportNotice={mailboxReport} />
       {screen === "storage" || screen === "recovery" ? (
         <StorageDateReview
           claimId={String(data.claim.id)}
@@ -108,6 +109,16 @@ export default async function ClaimWorkScreenPage({
             endDay={data.claim.storage_billing_end_on ? String(data.claim.storage_billing_end_on) : null}
           />
         </div>
+      ) : null}
+      {screen === "assessed-damage" ? (
+        <RecordRepairSteps
+          claimId={String(data.claim.id)}
+          mode="inspection"
+          returnTo={`/claims/${data.claim.id}/work/assessed-damage`}
+          error={stepError}
+          saved={stepSaved}
+          showSimulatedReport={!liveEmailSending()}
+        />
       ) : null}
       {screen === "assessed-damage" && Number(data.claim.total_loss) === 1 ? (
         <div className="space-y-3">

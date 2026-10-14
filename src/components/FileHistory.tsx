@@ -4,6 +4,7 @@ import {
 import { DocumentGenerateForm } from "@/components/DocumentGenerateForm";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { CLAIM_EVENT_TYPES } from "@/lib/domain/events";
+import { STRUCTURED_REPAIR_RECORD_TYPES } from "@/lib/domain/repair-progress";
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
 import { impecuniosityGate } from "@/lib/db/impecuniosity";
 import { liveEmailSending } from "@/lib/email/send-mode";
@@ -95,7 +96,9 @@ export function FileHistory({
           <label className="block text-sm">
             What happened
             <select name="eventType" className={field} defaultValue="initial_letter_tp_insurer">
-              {CLAIM_EVENT_TYPES.filter((t) => t.key !== "document_generated").map((t) => (
+              {CLAIM_EVENT_TYPES.filter(
+                (t) => t.key !== "document_generated" && !(STRUCTURED_REPAIR_RECORD_TYPES as readonly string[]).includes(t.key),
+              ).map((t) => (
                 <option key={t.key} value={t.key}>
                   {t.label}
                 </option>

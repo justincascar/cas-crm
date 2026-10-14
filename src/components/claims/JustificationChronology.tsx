@@ -4,27 +4,47 @@ import {
   justificationRepairGaps,
   type JustificationSourceEvent,
 } from "@/lib/domain/justification-chronology";
+import {
+  explainedGapWording,
+  unexplainedGapWording,
+  type RepairProgressGap,
+} from "@/lib/domain/repair-progress";
 
 export function JustificationChronology({
   events,
   totalLoss = false,
+  claimId,
+  progressGaps = [],
+  stepError,
+  stepSaved,
 }: {
   events: JustificationSourceEvent[];
   totalLoss?: boolean;
+  claimId?: string;
+  progressGaps?: RepairProgressGap[];
+  stepError?: string;
+  stepSaved?: string;
 }) {
   const lines = justificationChronology(events, { totalLoss });
   const gaps = justificationRepairGaps(events, { totalLoss });
+  const unexplained = progressGaps.filter((gap) => !gap.explained);
+  const explained = progressGaps.filter((gap) => gap.explained);
   return (
     <section id="hire-repair-chronology" className="space-y-3 rounded-xl border border-line bg-card p-5">
       <div>
         <h2 className="font-serif text-2xl text-navy-deep">Hire and repair chronology</h2>
         <p className="text-sm text-slate">
           Dated steps already on this file. A letter that was only generated is marked Generated only. If this vehicle
-          is going through repair and a repair step is not on the file, that is stated underneath, without a date. This
-          list is taken from the file history and does not change it.
+          is going through repair and a repair step is not on the file, that is stated underneath, without a date. A
+          long gap between two recorded steps is flagged until someone explains it. This list is taken from the file
+          history and does not change it.
         </p>
       </div>
-      {lines.length === 0 && gaps.length === 0 ? (
+      {stepError ? <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{stepError}</p> : null}
+      {stepSaved === "gap" ? (
+        <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm text-ok">Explanation saved.</p>
+      ) : null}
+      {lines.length === 0 && gaps.length === 0 && progressGaps.length === 0 ? (
         <p className="text-sm text-slate">No steps of this kind are on the file yet.</p>
       ) : null}
       {lines.length > 0 ? (
@@ -49,6 +69,43 @@ export function JustificationChronology({
             </li>
           ))}
         </ol>
+      ) : null}
+      {progressGaps.length > 0 ? (
+        <div className="space-y-3">
+          {explained.map((gap) => (
+            <p key={`${gap.fromEventId}-${gap.toEventId}-explained`} className="text-sm text-navy-deep">
+              {explainedGapWording(gap)}
+            </p>
+          ))}
+          {unexplained.map((gap) => (
+            <form
+              key={`${gap.fromEventId}-${gap.toEventId}`}
+              method="post"
+              action={claimId ? `/claims/${claimId}/repair-gap` : undefined}
+              className="space-y-2 rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3"
+            >
+              <p className="text-sm font-semibold text-navy-deep">{unexplainedGapWording(gap)}</p>
+              {claimId ? (
+                <>
+                  <input type="hidden" name="fromEventId" value={gap.fromEventId} />
+                  <input type="hidden" name="toEventId" value={gap.toEventId} />
+                  <label className="block text-sm">
+                    Explanation
+                    <input
+                      name="note"
+                      required
+                      className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
+                      placeholder="For example, awaiting parts"
+                    />
+                  </label>
+                  <button type="submit" className="min-h-11 rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white">
+                    Save explanation
+                  </button>
+                </>
+              ) : null}
+            </form>
+          ))}
+        </div>
       ) : null}
       {gaps.length > 0 ? (
         <div className="space-y-1">

@@ -707,6 +707,20 @@ CREATE TABLE IF NOT EXISTS charge_decisions (
 CREATE INDEX IF NOT EXISTS idx_charge_decisions
   ON charge_decisions(claim_id, head_of_loss, recorded_at);
 
+CREATE TABLE IF NOT EXISTS repair_gap_explanations (
+  id TEXT PRIMARY KEY,
+  claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+  from_event_id TEXT NOT NULL,
+  to_event_id TEXT NOT NULL,
+  inclusive_days INTEGER NOT NULL,
+  note TEXT NOT NULL,
+  actor_id TEXT,
+  recorded_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_repair_gap_explanations
+  ON repair_gap_explanations(claim_id, recorded_at);
+
 CREATE INDEX IF NOT EXISTS idx_claims_handler ON claims(handler_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_staff ON sessions(staff_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);

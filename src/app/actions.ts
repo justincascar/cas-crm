@@ -27,6 +27,7 @@ import {
   requestScenePhotosWhatsApp,
   sendClaimWhatsApp,
 } from "@/lib/db/chronology";
+import { guardGenericHistoryRepairStep } from "@/lib/db/repair-progress";
 import { generateHirePackDocument, generateStorageRecoveryDocument, getHirePack, saveHirePack } from "@/lib/db/hire-pack";
 import { generateHireAgreementDocument, getGtaMarkupPercent, prepareHireRating } from "@/lib/db/hire-agreement";
 import { hireAgreementPrehireBlock } from "@/lib/db/prehire-checks";
@@ -267,9 +268,11 @@ export async function actionLookupCompliance(registration: string) {
 export async function actionRecordEvent(formData: FormData) {
   await requireStaff();
   const claimId = String(formData.get("claimId"));
+  const eventType = String(formData.get("eventType") || "other");
+  guardGenericHistoryRepairStep(claimId, eventType);
   recordClaimEvent({
     claimId,
-    eventType: String(formData.get("eventType") || "other"),
+    eventType,
     occurredAt: String(formData.get("occurredAt") || ""),
     details: String(formData.get("details") || "").trim() || undefined,
     actorId: String(formData.get("actorId") || "staff-sian"),

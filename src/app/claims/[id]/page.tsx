@@ -12,6 +12,7 @@ import { ValidatedForm } from "@/components/ValidatedForm";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import { requireStaff } from "@/lib/auth/session";
 import { getClaim, listStaff } from "@/lib/db/queries";
+import { gapsForClaim } from "@/lib/db/repair-progress";
 import { THIRD_PARTY_VEHICLE_EMPTY, vehicleIsRecorded, vehicleSummary } from "@/lib/domain/vehicle-display";
 import { findPreparedChase, listChasesForClaim } from "@/lib/db/chase";
 import { listHireAgreements } from "@/lib/db/chronology";
@@ -67,11 +68,14 @@ export default async function ClaimDetailPage({
     mailboxError?: string;
     mailboxSent?: string;
     mailboxSimulated?: string;
+    mailboxReport?: string;
     paymentDecision?: string;
+    stepError?: string;
+    stepSaved?: string;
   }>;
 }) {
   const { id } = await params;
-  const { error, tlError, tlMail, mailboxError, mailboxSent, mailboxSimulated, paymentDecision } = await searchParams;
+  const { error, tlError, tlMail, mailboxError, mailboxSent, mailboxSimulated, mailboxReport, paymentDecision, stepError, stepSaved } = await searchParams;
   await requireStaff();
   const data = getClaim(id);
   if (!data) notFound();
@@ -127,7 +131,7 @@ export default async function ClaimDetailPage({
 
       {error ? <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p> : null}
       <EmailSendModeBanner />
-      <MailboxSendNotice sent={mailboxSent} simulated={mailboxSimulated} error={mailboxError} />
+      <MailboxSendNotice sent={mailboxSent} simulated={mailboxSimulated} error={mailboxError} reportNotice={mailboxReport} />
 
       <nav aria-label="Heads of loss" className="flex flex-wrap gap-2">
         <Link href={headScreenPath(claimId, "recovery")} className="rounded-md border border-navy px-4 py-2 text-sm font-semibold text-navy">
@@ -252,6 +256,13 @@ export default async function ClaimDetailPage({
       <JustificationChronology
         events={data.events}
         totalLoss={Number(claim.total_loss) === 1 || Number(claim.later_declared_total_loss) === 1}
+        claimId={String(claim.id)}
+        progressGaps={gapsForClaim(
+          String(claim.id),
+          Number(claim.total_loss) === 1 || Number(claim.later_declared_total_loss) === 1,
+        )}
+        stepError={stepError}
+        stepSaved={stepSaved}
       />
 
       <FileHistory

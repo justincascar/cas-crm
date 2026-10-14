@@ -7,6 +7,7 @@ import { formatGbp, sumDistinctHeads } from "../money";
 import { all, dbPath, get, getDb, newId, resetSqlStatementCount, run, sqlStatementCount } from "./connection";
 import { canReserveVehicle, chaseFileStateFromPosition, chaseStopReason, nextFileReference, parseFileReferenceNumber } from "../domain/rules";
 import { listClaimEvents, recordClaimEvent } from "./chronology";
+import { listRepairGapClaims } from "./repair-progress";
 import { listKnownAgentsOn, listKnownInsurersOn } from "./insurers";
 import { KEY_DATE_TYPES, eventLabel, latestDates } from "../domain/events";
 import {
@@ -343,6 +344,7 @@ export function getDashboard() {
     engineerChasesDue: chasesDueByKind.engineer_report,
     dashboardLoadMs: elapsedMs,
     dashboardSqlStatements: sqlStatements,
+    repairProgressGaps: listRepairGapClaims(),
   };
 }
 

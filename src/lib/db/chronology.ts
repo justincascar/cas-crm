@@ -1,3 +1,7 @@
+import {
+  ENGINEER_REPORT_DOCUMENT_TYPE,
+  SIMULATED_REPORT_NOT_RECORDED,
+} from "../domain/repair-progress";
 import { emailGateway } from "../email/gateway";
 import { loadClaimEmailAttachments } from "./email-attachments";
 import { emailSendMode } from "../email/send-mode";
@@ -551,6 +555,18 @@ async function deliverClaimEmail(input: {
     correspondenceId,
     source: "staff",
   });
+  const reportAttached = claimHasEngineerReportAttachment(input.claimId, input.attachmentIds || []);
+  let engineerReportNotice: string | undefined;
+  if (reportAttached && result.ok && result.status === "sent") {
+    recordEngineerReportSentFromLiveSend({
+      claimId: input.claimId,
+      actorId: input.actorId,
+      recipient: input.to,
+      occurredAt: when,
+    });
+  } else if (reportAttached && result.ok && result.status === "simulated_sent") {
+    engineerReportNotice = SIMULATED_REPORT_NOT_RECORDED;
+  }
   if (result.ok && input.templateKey && isDocumentTemplateKey(input.templateKey)) {
     const specific = eventTypeForTemplate(input.templateKey);
     if (specific !== "document_generated") {
@@ -566,7 +582,45 @@ async function deliverClaimEmail(input: {
       });
     }
   }
-  return { ...result, correspondenceId };
+  return { ...result, correspondenceId, engineerReportNotice };
+}
+
+export function claimHasEngineerReportAttachment(claimId: string, documentIds: string[]): boolean {
+  const ids = [...new Set(documentIds.map((id) => id.trim()).filter(Boolean))];
+  if (ids.length === 0) return false;
+  const marks = ids.map(() => "?").join(", ");
+  const row = get<{ id: string }>(
+    `SELECT id FROM documents WHERE claim_id = ? AND document_type = ? AND id IN (${marks}) LIMIT 1`,
+    [claimId, ENGINEER_REPORT_DOCUMENT_TYPE, ...ids],
+  );
+  return Boolean(row?.id);
+}
+
+/** A successful live send only. A simulated send must not call this. */
+export function recordEngineerReportSentFromLiveSend(input: {
+  claimId: string;
+  actorId: string;
+  recipient: string;
+  occurredAt: string;
+}) {
+  const existing = get<{ id: string }>(
+    `SELECT id FROM claim_events WHERE claim_id = ? AND event_type = 'engineer_report_sent_to_insurer' LIMIT 1`,
+    [input.claimId],
+  );
+  if (existing?.id) return null;
+  const recipient = input.recipient.trim();
+  if (!recipient) return null;
+  const handler = get<{ name: string }>(`SELECT name FROM staff WHERE id = ?`, [input.actorId]);
+  const name = String(handler?.name || "").trim() || "Staff";
+  return recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "engineer_report_sent_to_insurer",
+    occurredAt: input.occurredAt,
+    details: `Sent to ${recipient}. Recorded from a live send of the engineer's report. Recorded by ${name}.`,
+    actorId: input.actorId,
+    channel: "email",
+    source: "staff",
+  });
 }
 
 export function logIncomingEmail(input: {

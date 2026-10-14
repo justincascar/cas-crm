@@ -1,6 +1,7 @@
 "use client";
 
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
+import { SIMULATED_REPORT_NOT_RECORDED } from "@/lib/domain/repair-progress";
 import { SIMULATED_EMAIL_BANNER } from "@/lib/email/send-mode-copy";
 
 export function SendPreparedEmailForm({
@@ -32,14 +33,25 @@ export function SendPreparedEmailForm({
   );
 }
 
-export function MailboxSendNotice({ sent, simulated, error }: { sent?: string; simulated?: string; error?: string }) {
+export function MailboxSendNotice({
+  sent,
+  simulated,
+  error,
+  reportNotice,
+}: {
+  sent?: string;
+  simulated?: string;
+  error?: string;
+  reportNotice?: string;
+}) {
   if (error) {
     return <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>;
   }
   if (simulated) {
+    const report = reportNotice ? ` ${SIMULATED_REPORT_NOT_RECORDED}.` : "";
     return (
       <p className="rounded-md border-4 border-navy bg-[#d9e4ef] px-4 py-3 text-sm font-bold text-navy-deep">
-        {SIMULATED_EMAIL_BANNER}. The attempt is on this file&apos;s history.
+        {SIMULATED_EMAIL_BANNER}. The attempt is on this file&apos;s history.{report}
       </p>
     );
   }

@@ -16,6 +16,25 @@ import {
   type JustificationSourceEvent,
 } from "../src/lib/domain/justification-chronology.ts";
 
+const REQUIRED_REPAIR_GAPS = [
+  ["engineer_inspection_booked", "Engineer inspection booked"],
+  ["engineer_inspection_attended", "Engineer inspection attended"],
+  ["engineer_report_received", "Engineer report received"],
+  ["engineer_report_sent_to_insurer", "Engineer's report sent to insurer"],
+  ["repairs_authorised", "Repair authorisation received"],
+  ["vehicle_received_for_repair", "Vehicle received for repair"],
+  ["parts_ordered", "Parts ordered"],
+  ["repairs_started", "Repairs started"],
+  ["repairs_complete", "Repairs complete"],
+] as const;
+
+function repairGapsExcept(...present: string[]) {
+  return REQUIRED_REPAIR_GAPS.filter(([type]) => !present.includes(type)).map(([eventType, label]) => ({
+    eventType,
+    label,
+  }));
+}
+
 function seeded() {
   const schema = fs.readFileSync(path.join(process.cwd(), "src/lib/db/schema.sql"), "utf8");
   const db = new DatabaseSync(":memory:");
@@ -192,7 +211,10 @@ describe("hire and repair chronology", () => {
     assert.equal(lines[completeAt]?.title, "Repairs complete");
     assert.equal(lines[startedAt]?.dispatch, null);
     assert.equal(lines[completeAt]?.dispatch, null);
-    assert.deepEqual(justificationRepairGaps([...chaseEvents, ...milestones]), []);
+    assert.deepEqual(
+      justificationRepairGaps([...chaseEvents, ...milestones]),
+      repairGapsExcept("engineer_report_received", "repairs_started", "repairs_complete"),
+    );
     assert.equal(types.includes("hire_started"), false);
     assert.equal(types.includes("document_generated"), false);
     assert.equal(types.includes("outgoing_email"), false);
@@ -344,10 +366,7 @@ describe("hire and repair chronology", () => {
       assert.equal(c3.some((line) => line.eventType === "hire_ended"), false);
       assert.equal(c3.some((line) => line.eventType === "storage_ended"), false);
       assert.equal(c1.map((line) => line.title).join(","), "Accident");
-      assert.deepEqual(justificationRepairGaps(listClaimEvents("c3")), [
-        { eventType: "repairs_started", label: "Repairs started" },
-        { eventType: "repairs_complete", label: "Repairs complete" },
-      ]);
+      assert.deepEqual(justificationRepairGaps(listClaimEvents("c3")), repairGapsExcept());
       assert.deepEqual(justificationRepairGaps(listClaimEvents("c1")), []);
     });
   });
@@ -429,7 +448,7 @@ describe("hire and repair chronology", () => {
     assert.equal(lines.find((line) => line.id === "done-first")?.dispatch, null);
     assert.equal(lines.find((line) => line.id === "same-late")?.dispatch, "generated");
     assert.equal(lines.find((line) => line.id === "same-early")?.dispatch, "sent");
-    assert.deepEqual(justificationRepairGaps(mixed), []);
+    assert.deepEqual(justificationRepairGaps(mixed), repairGapsExcept("repairs_started", "repairs_complete"));
     const dated = lines.map((line) => line.occurredAt);
     assert.deepEqual(dated, [...dated].sort());
     assert.ok(lines.findIndex((line) => line.id === "done-first") < lines.findIndex((line) => line.id === "started-last"));
@@ -460,10 +479,7 @@ describe("hire and repair chronology", () => {
     );
     assert.equal(waiting.some((line) => line.eventType === "repairs_started"), false);
     assert.equal(waiting.some((line) => line.eventType === "repairs_complete"), false);
-    assert.deepEqual(justificationRepairGaps(engineerOnly), [
-      { eventType: "repairs_started", label: "Repairs started" },
-      { eventType: "repairs_complete", label: "Repairs complete" },
-    ]);
+    assert.deepEqual(justificationRepairGaps(engineerOnly), repairGapsExcept());
 
     const startedOnly = [
       event({
@@ -478,9 +494,7 @@ describe("hire and repair chronology", () => {
     assert.equal(underway.length, 1);
     assert.equal(underway[0]?.title, "Repairs started");
     assert.equal(underway[0]?.occurredAt, "2026-04-10T08:00:00.000Z");
-    assert.deepEqual(justificationRepairGaps(startedOnly), [
-      { eventType: "repairs_complete", label: "Repairs complete" },
-    ]);
+    assert.deepEqual(justificationRepairGaps(startedOnly), repairGapsExcept("repairs_started"));
 
     const finishedOnly = [
       event({
@@ -494,12 +508,10 @@ describe("hire and repair chronology", () => {
     const finished = justificationChronology(finishedOnly);
     assert.equal(finished.length, 1);
     assert.equal(finished[0]?.title, "Repairs complete");
-    assert.deepEqual(justificationRepairGaps(finishedOnly), [
-      { eventType: "repairs_started", label: "Repairs started" },
-    ]);
+    assert.deepEqual(justificationRepairGaps(finishedOnly), repairGapsExcept("repairs_complete"));
   });
 
-  it("shows no repair-pipeline lines on a total loss or a file that never went to repair", () => {
+  it("keeps recorded workshop steps on a total loss and shows no blank workshop lines", () => {
     const repaired = [
       event({
         id: "eng",
@@ -533,10 +545,10 @@ describe("hire and repair chronology", () => {
     const loss = justificationChronology(repaired, { totalLoss: true });
     assert.deepEqual(
       loss.map((line) => line.eventType),
-      ["accident", "engineer_instructed"],
+      ["accident", "engineer_instructed", "repairs_started", "repairs_complete"],
     );
-    assert.equal(loss.some((line) => line.eventType === "repairs_started"), false);
-    assert.equal(loss.some((line) => line.eventType === "repairs_complete"), false);
+    assert.equal(loss.some((line) => line.eventType === "repairs_started"), true);
+    assert.equal(loss.some((line) => line.eventType === "repairs_complete"), true);
     assert.deepEqual(justificationRepairGaps(repaired, { totalLoss: true }), []);
 
     const fault = [
@@ -586,9 +598,15 @@ describe("hire and repair chronology", () => {
       const underway = justificationChronology(c7);
       assert.equal(underway.some((line) => line.title === "Repairs started"), true);
       assert.equal(underway.some((line) => line.eventType === "repairs_complete"), false);
-      assert.deepEqual(justificationRepairGaps(c7), [
-        { eventType: "repairs_complete", label: "Repairs complete" },
-      ]);
+      assert.deepEqual(
+        justificationRepairGaps(c7),
+        repairGapsExcept(
+          "engineer_inspection_booked",
+          "engineer_inspection_attended",
+          "engineer_report_received",
+          "repairs_started",
+        ),
+      );
 
       const writtenOff = justificationChronology(c9, { totalLoss: Number(loss.total_loss) === 1 });
       assert.equal(writtenOff.some((line) => line.eventType === "engineer_instructed"), true);

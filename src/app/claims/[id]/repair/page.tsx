@@ -7,6 +7,7 @@ import { isOfficeRole } from "@/lib/auth/roles";
 import { requireSignedIn } from "@/lib/auth/session";
 import { formatUkDateTime } from "@/lib/dates";
 import { REPAIR_KINDS, assertCanUploadRepair, listRepairEvidence, repairVehicleLabel } from "@/lib/db/jobs";
+import { RecordRepairSteps } from "@/components/claims/RecordRepairSteps";
 
 const field = "mt-1 w-full max-w-full rounded-md border border-line bg-white px-3 py-3 text-base";
 const photoAccept = "image/jpeg,image/png,image/webp,image/gif";
@@ -17,11 +18,11 @@ export default async function RepairEvidencePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; stepError?: string; stepSaved?: string }>;
 }) {
   const staff = await requireSignedIn();
   const { id } = await params;
-  const { error, saved } = await searchParams;
+  const { error, saved, stepError, stepSaved } = await searchParams;
   try {
     assertCanUploadRepair(staff, id);
   } catch {
@@ -56,6 +57,13 @@ export default async function RepairEvidencePage({
           </Link>
         </p>
       ) : null}
+      <RecordRepairSteps
+        claimId={id}
+        mode="workshop"
+        returnTo={`/claims/${id}/repair`}
+        error={stepError}
+        saved={stepSaved}
+      />
       {error ? <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p> : null}
       {saved ? <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm">File saved.</p> : null}
       <ValidatedForm action={actionAddRepairEvidence} encType="multipart/form-data" className="space-y-3 rounded-xl border border-line bg-card p-5">

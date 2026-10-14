@@ -10,6 +10,7 @@ import { ensureStorageDailyRateSetting } from "./storage-charge";
 import { clearFalseDemonstrationHireCollection } from "./demo-jobs";
 import { ensureTest0005StorageDemonstration } from "./test-0005-storage";
 import { ensureTest0008HireDemonstration } from "./test-0008-hire";
+import { ensureRepairProgressDemonstration } from "./repair-progress-demo";
 import { ensureChargeFigureDemonstration } from "./test-charge-figures";
 import { ensureChaseSettings, ensureDemoChases } from "./chase";
 import { ensureRealFleet } from "./fleet";
@@ -52,6 +53,7 @@ function openDatabase(): DatabaseSync {
   ensureTest0008HireDemonstration(db);
   ensureChargeFigureDemonstration(db);
   backfillChronologyIfEmpty(db);
+  ensureRepairProgressDemonstration(db);
   preparedDatabases.add(db);
   return db;
 }
@@ -72,6 +74,7 @@ function prepareExistingDatabase(db: DatabaseSync) {
   ensureTest0008HireDemonstration(db);
   ensureChargeFigureDemonstration(db);
   backfillChronologyIfEmpty(db);
+  ensureRepairProgressDemonstration(db);
   preparedDatabases.add(db);
 }
 

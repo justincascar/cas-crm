@@ -690,9 +690,24 @@ Hire agreement renewal alerts were not changed: day 70, day 80 and day 88.
 
 Tests: `tests/start-date-bank-terms.test.ts`, with the existing charge, payment-chase, pre-hire and follow-up tests updated for the new rules. Full suite: 406 passing, 0 failing.
 
+## Repair progress on the chronology (14 October 2026)
+
+The hire and repair chronology can now show the inspection booking, the inspection attendance, the engineer’s report sent to the insurer, the vehicle received for repair, and parts ordered. Parts delayed can be recorded more than once. Each is a dated `claim_events` row: the date it happened, who recorded it, and a note. Once saved, the row is not edited. A correction is a new entry, “Correction of a repair step”, and the original stays.
+
+Staff record them with Record step on Engineering (inspection booked, inspection attended, report sent to the insurer) and on Repair evidence (vehicle received, parts ordered, parts delayed, repairs started, repairs complete). A bodyshop / mechanic login can record the workshop steps and is refused the inspection and insurer steps. That split is proposed and is waiting for Justin’s confirmation. It is checked on the server.
+
+A genuine live send of the engineer’s report from the CRM records “Engineer's report sent to insurer” by itself. A simulated send does not. The screen says “Simulated, not recorded as sent”. If the report was sent outside the CRM, staff record it by hand, with who it was sent to.
+
+On an open repairable file, a missing required step is shown as “not recorded”, without a date. Parts delayed is not shown as missing. A total loss does not gain those blank lines. A step already recorded stays if the file later becomes a total loss. Steps can be saved out of order. The chronology sorts them by the date on the row.
+
+Between two consecutive recorded steps, an inclusive gap of 15 days or more is flagged until someone explains that pair. 14 inclusive days is not flagged. Both the first day and the last day count. The explanation is kept for the pair it was written for. A later or larger gap is flagged again. The 15 days is a review prompt in Settings, not a legal limit, and is waiting for Justin’s confirmation. The dashboard lists those files as “Repair progress gaps to explain”.
+
+TEST-0008 has a full demonstration repair history, including one explained gap (“awaiting parts”) between repairs started and repairs complete. TEST-0007 has an unexplained 15-day gap between the inspection booking and the inspection attendance. No other file was backfilled. Hire money, agreed figures, TEST-0006’s money, TEST-0007’s £800, TEST-0009’s vehicle-damage offers and TEST-0005’s unconfirmed storage end were not changed. Hire agreement renewal alerts stay on day 70, day 80 and day 88. No live email was sent.
+
+Tests: `tests/repair-progress.test.ts`. Full suite: 414 passing, 0 failing.
+
 ## Not yet claimed
 
 - Financial summary and the Assessed damage notes fields remain non-authoritative working notes, pending a later decision on whether to keep them.
 - Loss-of-use is earmarked for redesign into an automated chronology. Its current fields stay in place until that stage. They are typed notes on the hidden screen. The hire and repair chronology does not read them.
-- Inspection date, the report sent to the insurer, the vehicle received for repair, and parts ordered are still not recorded as dated events. The hire and repair chronology does not show them. Repairs started and repairs complete are on that chronology when the file is being repaired, because those two are already stored on `claim_events`.
 - Stages 2–5 (finer permissions, live integrations, payment packs from CAS templates, litigation issue, backups/restore/deploy). Working dashboard is not production readiness.

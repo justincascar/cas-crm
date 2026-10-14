@@ -14,16 +14,17 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const form = await request.formData();
   const returnTo = String(form.get("returnTo") || "");
   const safeReturn = returnTo.startsWith(`/claims/${id}`) ? returnTo : `/claims/${id}`;
-  const back = (name: "mailboxError" | "mailboxSent" | "mailboxSimulated", value: string) => {
+  const back = (name: "mailboxError" | "mailboxSent" | "mailboxSimulated", value: string, reportNotice?: string) => {
     const url = new URL(safeReturn, origin);
     url.searchParams.set(name, value);
+    if (reportNotice) url.searchParams.set("mailboxReport", reportNotice);
     return NextResponse.redirect(url, 303);
   };
   const correspondenceId = String(form.get("correspondenceId") || "");
   const attachmentIds = form.getAll("attachmentId").map((value) => String(value)).filter(Boolean);
   try {
     const outcome = await sendPreparedCorrespondence({ claimId: id, correspondenceId, actorId: staff.id, attachmentIds });
-    if (outcome.simulated) return back("mailboxSimulated", correspondenceId);
+    if (outcome.simulated) return back("mailboxSimulated", correspondenceId, outcome.engineerReportNotice);
     return back("mailboxSent", correspondenceId);
   } catch (error) {
     const message = error instanceof Error ? error.message : "Microsoft 365 did not send this email. Nothing was sent.";

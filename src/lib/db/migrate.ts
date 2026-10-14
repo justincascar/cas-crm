@@ -641,4 +641,18 @@ export function migrate(db: DatabaseSync) {
      SELECT ?, ?
      WHERE EXISTS (SELECT 1 FROM staff WHERE id = ?)`,
   ).run("staff-justin", MANAGE_BANK_DETAILS, "staff-justin");
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS repair_gap_explanations (
+      id TEXT PRIMARY KEY,
+      claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+      from_event_id TEXT NOT NULL,
+      to_event_id TEXT NOT NULL,
+      inclusive_days INTEGER NOT NULL,
+      note TEXT NOT NULL,
+      actor_id TEXT,
+      recorded_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_repair_gap_explanations
+      ON repair_gap_explanations(claim_id, recorded_at);
+  `);
 }

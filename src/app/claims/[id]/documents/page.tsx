@@ -32,7 +32,7 @@ export default async function ClaimDocumentsPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; mailboxError?: string; mailboxSent?: string; mailboxSimulated?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; mailboxError?: string; mailboxSent?: string; mailboxSimulated?: string; mailboxReport?: string }>;
 }) {
   await requireStaff();
   const { id } = await params;
@@ -55,7 +55,7 @@ export default async function ClaimDocumentsPage({
         <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.error}</p>
       ) : null}
       <EmailSendModeBanner />
-      <MailboxSendNotice sent={query.mailboxSent} simulated={query.mailboxSimulated} error={query.mailboxError} />
+      <MailboxSendNotice sent={query.mailboxSent} simulated={query.mailboxSimulated} error={query.mailboxError} reportNotice={query.mailboxReport} />
       {query.saved ? (
         <p className="rounded-md border border-teal/40 bg-[#eef8f6] px-4 py-3 text-sm">
           {query.saved === "chase" ? "Chase email updated. Nothing was sent automatically." : "Document stored on this file."}

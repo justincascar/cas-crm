@@ -9,6 +9,7 @@ import type { PaymentAttentionRow } from "@/lib/db/payment-review";
 import { chaseStageRowClass, chaseStageShortLabel, chaseStageTextClass } from "@/lib/domain/chase";
 import { BANK_DETAILS_MISSING_SETTINGS, paymentDetailsComplete } from "@/lib/domain/payment-details";
 import { getInsurerPaymentDetails, latestBankDetailsChange } from "@/lib/db/payment-details";
+import { getRepairGapThresholdDays } from "@/lib/db/repair-progress";
 
 const toneClass: Record<string, string> = {
   info: "border-l-teal",
@@ -127,6 +128,7 @@ export default async function DashboardPage() {
   const path = dbLocation();
   const bankDetailsMissing = !paymentDetailsComplete(getInsurerPaymentDetails());
   const bankChange = latestBankDetailsChange();
+  const repairGapDays = getRepairGapThresholdDays();
 
   return (
     <div>
@@ -227,6 +229,39 @@ export default async function DashboardPage() {
         hint="Starts once the recovery claimed figure is on the file and a recovery payment request has been recorded as sent. Recovery has no end date. Nothing is sent until you click Send."
         rows={data.chasesDue.filter((row) => row.kind === "recovery_payment")}
       />
+      <section className="mt-8 rounded-xl border border-line bg-card p-5">
+        <h2 className="font-serif text-xl text-navy-deep">Repair progress gaps to explain</h2>
+        <p className="mb-4 text-sm text-slate">
+          An open repairable file where two recorded repair steps are {repairGapDays} or more days apart, counting both
+          the first day and the last day, and nobody has explained that gap. This is a review prompt, not a legal limit.
+        </p>
+        {data.repairProgressGaps.length === 0 ? (
+          <p className="text-sm text-slate">None.</p>
+        ) : (
+          <table className="ledger-table">
+            <thead>
+              <tr>
+                <th>File</th>
+                <th>Client</th>
+                <th>Gap</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.repairProgressGaps.map((row) => (
+                <tr key={`${row.claimId}-${row.wording}`} className="bg-[#fff6e8]">
+                  <td>
+                    <Link href={`/claims/${row.claimId}#hire-repair-chronology`} className="ref text-teal-dark hover:underline">
+                      {row.fileReference}
+                    </Link>
+                  </td>
+                  <td>{row.clientName}</td>
+                  <td>{row.wording}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
       <ChaseDueTable
         title="Hire agreement renewals"
         hint="Counted from the current signed hire agreement start date, not the fleet booking dates. Amber from day 70 (approaching), red from day 80 (due), red overdue from day 88 if still not renewed. Courtesy cars are excluded unless a hire agreement is on the file. Clears only when a renewal is logged — it does not disappear just because time passes. Reminder only — no email is sent automatically."
