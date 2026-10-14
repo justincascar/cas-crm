@@ -51,7 +51,11 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["byte_size", "INTEGER"],
     ["created_by", "TEXT"],
   ],
-  hire_episodes: [["hire_end_review_on", "TEXT"]],
+  hire_episodes: [
+    ["hire_end_review_on", "TEXT"],
+    ["hire_end_proposed_on", "TEXT"],
+  ],
+  agreements: [["rate_pence_per_day", "INTEGER"]],
   total_loss_reports: [
     ["cas_request", "TEXT"],
     ["insurer_payment_promised_at", "TEXT"],

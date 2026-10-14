@@ -15,6 +15,7 @@ import {
   SETTING_AGREEMENT_RENEWAL_APPROACHING_DAY,
 } from "../constants";
 import { isoDateFromNow, isoDaysFromNow, nowUtcIso } from "../dates";
+import { ensureTest0008HireDemonstration } from "./test-0008-hire";
 import { pence, vatOnNet } from "../money";
 
 function run(db: DatabaseSync, sql: string, params: unknown[] = []) {
@@ -709,5 +710,7 @@ function insertPrototypeChronology(db: DatabaseSync) {
 
   ev("ev-c12-letter", "c12", "initial_letter_tp_insurer", "Initial letter to third-party insurer", "Aviva notified historically.", -110, 9, "staff-megan", "letter");
   ev("ev-c12-offer", "c12", "offer_received", "Offer received", "Without-prejudice offer awaiting review.", -1, 10, "staff-megan", "email");
+
+  ensureTest0008HireDemonstration(db);
 }
 

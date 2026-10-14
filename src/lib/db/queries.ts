@@ -241,14 +241,21 @@ export function getDashboard() {
   const fleetMap = Object.fromEntries(fleet.map((r) => [r.status, Number(r.c)]));
 
   const lines = all<{
+    claim_id: string;
     head_of_loss: string;
     description: string | null;
     claimed_pence: number;
     offered_pence: number;
     agreed_pence: number;
     received_pence: number;
+    hire_unconfirmed: number;
   }>(
-    "SELECT head_of_loss, description, claimed_pence, offered_pence, agreed_pence, received_pence FROM financial_lines",
+    `SELECT claim_id, head_of_loss, description, claimed_pence, offered_pence, agreed_pence, received_pence,
+            CASE WHEN head_of_loss IN ('hire', 'credit_hire') AND NOT EXISTS (
+              SELECT 1 FROM hire_episodes he
+              WHERE he.claim_id = financial_lines.claim_id AND he.billing_end_at IS NOT NULL AND trim(he.billing_end_at) != ''
+            ) THEN 1 ELSE 0 END AS hire_unconfirmed
+     FROM financial_lines`,
   );
 
   const byHead: Record<string, ReturnType<typeof sumDistinctHeads>> = {};
@@ -263,6 +270,14 @@ export function getDashboard() {
   const totals = sumDistinctHeads(lines);
   const provisionalStorageClaimed = lines
     .filter((line) => line.head_of_loss === "storage" && String(line.description || "").toLowerCase().includes("provisional"))
+    .reduce((sum, line) => sum + (line.claimed_pence || 0), 0);
+  const provisionalHireClaimed = lines
+    .filter(
+      (line) =>
+        (line.head_of_loss === "hire" || line.head_of_loss === "credit_hire") &&
+        Number(line.hire_unconfirmed) === 1 &&
+        (line.claimed_pence || 0) > 0,
+    )
     .reduce((sum, line) => sum + (line.claimed_pence || 0), 0);
 
   const chasesDueByKind = {
@@ -313,6 +328,7 @@ export function getDashboard() {
     headLabels: {
       ...(HEAD_LABELS as Record<string, string>),
       ...(provisionalStorageClaimed > 0 ? { storage: "Storage (includes provisional, not a final charge)" } : {}),
+      ...(provisionalHireClaimed > 0 ? { hire: "Hire (includes provisional, not a final charge)" } : {}),
     },
     chasesDue,
     chasesDueByKind,

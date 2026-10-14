@@ -239,7 +239,8 @@ CREATE TABLE IF NOT EXISTS hire_episodes (
   suitability_reason TEXT,
   credit_hire INTEGER NOT NULL DEFAULT 0,
   rate_pence_per_day INTEGER,
-  exception_reason TEXT
+  exception_reason TEXT,
+  hire_end_proposed_on TEXT
 );
 
 CREATE TABLE IF NOT EXISTS agreements (
@@ -253,7 +254,8 @@ CREATE TABLE IF NOT EXISTS agreements (
   signed INTEGER NOT NULL DEFAULT 0,
   signed_at TEXT,
   signature_status TEXT NOT NULL,
-  template_note TEXT
+  template_note TEXT,
+  rate_pence_per_day INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS handovers (

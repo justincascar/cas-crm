@@ -559,6 +559,10 @@ export default async function ClaimDetailPage({
                     {head === "storage" && String(line.description || "").toLowerCase().includes("provisional")
                       ? " — provisional"
                       : ""}
+                    {(head === "hire" || head === "credit_hire") &&
+                    !data.hire.some((episode) => String(episode.billing_end_at || "").trim())
+                      ? " — provisional"
+                      : ""}
                   </td>
                   <td className="tabular">{agreed == null ? "Not set" : formatGbp(agreed)}</td>
                   <td className="tabular">{formatGbp(Number(line.offered_pence))}</td>

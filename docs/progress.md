@@ -610,7 +610,7 @@ Tests: `tests/hire-storage-end.test.ts`. Full suite: 369 passing, 0 failing.
 
 Storage and recovery each have their own page. Storage is `/claims/[id]/heads/storage`. Recovery is `/claims/[id]/heads/recovery`. The old combined address `/claims/[id]/heads/recovery-storage` redirects: recovery when the link says so, otherwise storage. The old Storage and Recovery file-screen addresses redirect to those pages.
 
-The storage charge is calculated. Days run from the start date to the confirmed chargeable end. A confirmed end is final and has no provisional label. When the end is only proposed, the days run to that proposed date, not to today, and the label is "Provisional, to proposed end [UK date], awaiting confirmation". Days run to today (Europe/London), labelled "Provisional to today", only when there is no end date of any kind. Both the first day and the last day are counted. Justin confirmed this counting rule on 14/10/2026. Storage from 22/09/2026 to 01/10/2026 is 10 days. The same inclusive count will apply when a hire charge is built from days. Hire money is not calculated from days in this stage. Hire agreement renewal alerts were not changed: they still use the agreement day number, where day 1 is the agreement start day, with the amber warning on day 70, the red alert on day 80, and the maximum on day 88. The daily rate starts at £39 (3900 pence) from Settings. A file with no rate of its own uses the current setting. Changing the setting does not change a rate already stored on a file. Changing the rate on one file needs a reason. Net is days times the rate. VAT is 20%, which was already the configured rate. The total is net plus VAT, in pence, shown as GBP. Staff do not type the net, VAT or total. That total is written as the claimed figure. Agreed and received are not changed when the days or the rate change.
+The storage charge is calculated. Days run from the start date to the confirmed chargeable end. A confirmed end is final and has no provisional label. When the end is only proposed, the days run to that proposed date, not to today, and the label is "Provisional, to proposed end [UK date], awaiting confirmation". Days run to today (Europe/London), labelled "Provisional to today", only when there is no end date of any kind. Both the first day and the last day are counted. Justin confirmed this counting rule on 14/10/2026. Storage from 22/09/2026 to 01/10/2026 is 10 days. The same inclusive count applies to hire. Hire agreement renewal alerts were not changed: they still use the agreement day number, where day 1 is the agreement start day, with the amber warning on day 70, the red alert on day 80, and the maximum on day 88. The daily rate starts at £39 (3900 pence) from Settings. A file with no rate of its own uses the current setting. Changing the setting does not change a rate already stored on a file. Changing the rate on one file needs a reason. Net is days times the rate. VAT is 20%, which was already the configured rate. The total is net plus VAT, in pence, shown as GBP. Staff do not type the net, VAT or total. That total is written as the claimed figure. Agreed and received are not changed when the days or the rate change.
 
 A provisional storage figure is not put into a payment request as a final charge. Storage was never a payment-chase head (those heads are repairs and vehicle damage only). Letters and the hire-pack cover that state a money total leave an unconfirmed storage figure out of that total. Where a list of losses still has to mention storage, it says the figure is provisional and not final. The claim overview, the Financials page and the dashboard still show the figure, labelled provisional.
 
@@ -622,7 +622,7 @@ TEST-0003 had a hire collection date of 03/10/2026 on the booking with no hire e
 
 - Repairable hire ends on hire car collection.
 - Repairable storage ends on repair authorisation, confirmed by a handler.
-- Storage and hire are both charged for the start day and the end day. Storage already uses that count. Hire will use it when a hire charge is calculated from days. That calculation is not built in this stage.
+- Storage and hire are both charged for the start day and the end day. Confirmed 14/10/2026. Storage from 22/09/2026 to 01/10/2026 is 10 days, and hire uses the same count.
 - Hire agreement renewal alerts stay on day 70, day 80 and day 88. Day 1 of that count is the agreement start day.
 - Places that already count both the first and the last day: the storage charge, and a letter's hire day count (`total_hire_days`) when a stored hire end exists. The hire agreement and hire pack show Date in from that stored end, or "Hire continuing", and do not count days. The cessation letter uses the same stored end. The warning "Hire charged N days beyond vehicle return" is the gap between two dates, not the charge period. Renewal alerts were left on the agreement day number.
 - Tests: `tests/storage-recovery-pages.test.ts`, `tests/rules.test.ts`, `tests/hire-collection-date.test.ts`, `tests/hire-storage-end.test.ts`. Full suite: 382 passing, 0 failing.
@@ -636,6 +636,28 @@ A blank storage location is filled from the CAS premises default (Complete Accid
 Hire was inspected and not changed. Hire dates sit on the delivery and collection screen and on the hire booking. Hire money sits on the hire head screen. That claimed figure is the amount stored on the hire line. It is not calculated from the days and the daily rate.
 
 If two people save Storage at the same time, the later save is kept. The CRM does not warn that someone else changed it. There is no new lock.
+
+## Hire charge (14 October 2026)
+
+Hire is calculated the same way as storage. The start is the day the replacement was handed over, from the handover record. A booking or a reservation does not start hire. Fault courtesy is not credit hire. The daily rate is the rate on the signed agreement (the rate set when the agreement was generated, or the rate recorded on that agreement). It is not the group of the car that was supplied.
+
+Days run from that handover to the confirmed hire end. A confirmed end is final. When an end has only been proposed, the days run to that proposed date and the label is "Provisional, to proposed end [UK date], awaiting confirmation". Days run to today, labelled "Provisional to today", only when there is no end of any kind. Both the first day and the last day are counted. Staff do not type the days, the net, the VAT or the total.
+
+A renewal is the same hire. Each day is counted once. If the renewed agreement records a different rate and the day that rate started, each agreement is its own line. The changeover day is not counted twice. If the file does not record the rate or the day it changed, the days are not split. A vehicle swap does not add a day and does not change the rate. Collision damage waiver, delivery and collection, and an additional driver are added only when the signed agreement records a rate for that extra. VAT is 20%.
+
+A stored hire claimed figure that does not match the calculation is shown as well as the calculation, and flagged "Stored figure differs from calculation, review". It is not overwritten. Agreed and received are not changed. A new file with no stored hire claimed figure can take the calculation as claimed when the Hire page is saved.
+
+An unconfirmed hire total is left out of letter and payment-pack totals, in the same way as unconfirmed storage. The claim overview, the Financials page and the dashboard still show the figure, labelled provisional, until the end is confirmed. A letter about hire that is still running can show the daily rate and "Hire continuing". It does not state a total.
+
+The chargeable hire end is still written only by completing the Hire car collection job, or by a handler confirming the total-loss suggestion. Typing a date on Delivery / collection does not write that end. Hire agreement renewal alerts were not changed: day 70, day 80 and day 88.
+
+TEST-0008 is the file to open. It has a handover, a signed agreement, a signed renewal at another rate, and a vehicle swap. Its stored hire claimed figure is left as it was.
+
+Confirmed, and already tested in `tests/hire-storage-end.test.ts`:
+
+- `flags a confirmed or proposed storage end when the file is later marked a total loss, and does not change the date` — a repairable file changing to a total loss after authorisation.
+- `asks for review when authorisation is revised or withdrawn, and does not overwrite a confirmed date` — authorisation revised or withdrawn after the storage end was confirmed.
+- `refuses a manual storage date that differs from authorisation unless a reason is recorded` — a manual storage end with no reason is refused.
 
 ## Not yet claimed
 

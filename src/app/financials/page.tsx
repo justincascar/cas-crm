@@ -2,12 +2,14 @@ import Link from "next/link";
 import { PageHeader } from "@/components/ClaimTable";
 import { requireStaff } from "@/lib/auth/session";
 import { HEAD_LABELS, type HeadOfLoss } from "@/lib/constants";
+import { unconfirmedHireClaimIds } from "@/lib/db/hire-charge";
 import { listFinancials } from "@/lib/db/queries";
 import { formatGbp } from "@/lib/money";
 
 export default async function FinancialsPage() {
   await requireStaff();
   const { lines, totals } = listFinancials();
+  const unconfirmedHire = unconfirmedHireClaimIds();
   return (
     <div>
       <PageHeader
@@ -46,6 +48,10 @@ export default async function FinancialsPage() {
                 <td>
                   {HEAD_LABELS[String(l.head_of_loss) as HeadOfLoss] || String(l.head_of_loss)}
                   {String(l.head_of_loss) === "storage" && String(l.description || "").toLowerCase().includes("provisional")
+                    ? " — provisional"
+                    : ""}
+                  {(String(l.head_of_loss) === "hire" || String(l.head_of_loss) === "credit_hire") &&
+                  unconfirmedHire.has(String(l.claim_id))
                     ? " — provisional"
                     : ""}
                 </td>

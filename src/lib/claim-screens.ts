@@ -443,6 +443,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
     key: "delivery-collection",
     label: "Delivery / collection",
     group: "hire",
+    hint: "These dates are notes. They do not set the chargeable hire end. That end is written when the Hire car collection job is completed, or when a handler confirms a total-loss hire end.",
     sections: [
       {
         title: "Hire period",
@@ -476,7 +477,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
     key: "hire-details",
     label: "Hire details",
     group: "hire",
-    hint: "Enter actual rates. Do not add extras automatically.",
+    hint: "Enter actual rates. Do not add extras automatically. Days, net, VAT and the total are calculated on the Hire page. They are not typed here.",
     sections: [
       {
         fields: [
@@ -498,11 +499,8 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
             { value: "am", label: "AM" },
             { value: "pm", label: "PM" },
           ]},
-          { name: "netHireCharge", label: "NET hire charge", type: "gbp" },
           { name: "crossHireCostIncVat", label: "Cross hire cost inc VAT", type: "gbp" },
-          { name: "totalHireCharges", label: "Total hire charges", type: "gbp" },
           { name: "invoicePaid", label: "Invoice paid", type: "gbp" },
-          { name: "numberOfDaysHire", label: "Number of days hire", type: "number" },
           { name: "currentVehicleRef", label: "Current hire vehicle ref" },
           { name: "currentVehicleReg", label: "Reg" },
           { name: "currentVehicleMake", label: "Make" },

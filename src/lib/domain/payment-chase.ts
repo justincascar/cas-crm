@@ -16,6 +16,10 @@ export const PAYMENT_CHASE_HEADS = ["repairs", "vehicle_damage"] as const;
 /** A storage figure is not requested as a final charge while the end date is only proposed. */
 export const STORAGE_PAYMENT_REQUEST_BLOCK =
   "Storage is not chased. An unconfirmed storage figure is not put into a payment request as a final charge.";
+
+/** Hire is not a payment-chase head. An unconfirmed hire total is left out of letter and pack totals. */
+export const HIRE_PAYMENT_REQUEST_BLOCK =
+  "An unconfirmed hire figure is not put into a payment request as a final charge. Hire is not chased.";
 export type PaymentChaseHead = (typeof PAYMENT_CHASE_HEADS)[number];
 
 /** A second figure logged this soon after the last one, and marked as a correction, replaces that figure. */

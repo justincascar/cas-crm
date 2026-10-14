@@ -7,9 +7,10 @@ import { whatsappGateway } from "../whatsapp/gateway";
 import { scenePhotosWhatsAppBody, scenePhotosWhatsAppSubject } from "../whatsapp/scene-photos";
 import { CAS_CLAIMS_MAILBOX, ENGINEER_CHASER_INTERVAL_DAYS_DEFAULT } from "../constants";
 import { eventLabel, latestDates, type ClaimEventType } from "../domain/events";
-import { agreementDayNumber, hireChargesAccrualEnd } from "../domain/rules";
+import { hireChargesAccrualEnd, inclusiveHireDays } from "../domain/rules";
 import { repairAuthorisationState } from "../domain/storage-authorisation-end";
 import { storageCharge } from "../domain/storage-charge";
+import { hireChargeForClaim } from "./hire-charge";
 import { channelForTemplate, eventTypeForTemplate, isDocumentTemplateKey, type DocumentTemplateKey } from "../documents/catalog";
 import {
   CAS_TEMPLATE_NOTICE,
@@ -243,8 +244,16 @@ function letterContext(claimId: string, letterDate: string = nowUtcIso(), engine
 
   const hireStart = hire?.started_at ? String(hire.started_at) : pack?.date_out ? String(pack.date_out) : dates.hire_started || null;
   const hireEnd = hire?.billing_end_at ? String(hire.billing_end_at) : null;
-  const dailyRate = Number(pack?.daily_rate_pence || hire?.rate_pence_per_day || 0) || null;
-  const hireDays = hireStart && hireEnd ? agreementDayNumber(hireStart, hireEnd) : null;
+  const hireMoney = hireChargeForClaim(claimId);
+  const hireConfirmed = Boolean(hireMoney.confirmedEndDay);
+  const dailyRate =
+    hireMoney.continuingRatePence ||
+    Number(pack?.daily_rate_pence || hire?.rate_pence_per_day || 0) ||
+    null;
+  const hireDays =
+    hireMoney.handoverDay && hireMoney.confirmedEndDay
+      ? inclusiveHireDays(hireMoney.handoverDay, hireMoney.confirmedEndDay)
+      : null;
   const hireClaimed = lines
     .filter((line) => line.head_of_loss === "hire" || line.head_of_loss === "credit_hire")
     .reduce((sum, line) => sum + (line.claimed_pence || 0), 0);
@@ -265,7 +274,12 @@ function letterContext(claimId: string, letterDate: string = nowUtcIso(), engine
   const storageProvisional =
     !londonDay(claim.storage_billing_end_on ? String(claim.storage_billing_end_on) : null) &&
     (storageClaimedOnFile || (storageMoney.status === "calculated" && storageMoney.provisional));
-  const letterLines = storageProvisional ? lines.filter((line) => line.head_of_loss !== "storage") : lines;
+  const hireProvisional = !hireConfirmed && (hireClaimed > 0 || hireMoney.charge.status === "calculated");
+  const letterLines = lines.filter((line) => {
+    if (storageProvisional && line.head_of_loss === "storage") return false;
+    if (hireProvisional && (line.head_of_loss === "hire" || line.head_of_loss === "credit_hire")) return false;
+    return true;
+  });
   const received = letterLines.reduce((sum, line) => sum + (line.received_pence || 0), 0);
   const claimed = letterLines.reduce((sum, line) => sum + (line.claimed_pence || 0), 0);
   const outstanding = Math.max(0, claimed - received);
@@ -337,7 +351,10 @@ function letterContext(claimId: string, letterDate: string = nowUtcIso(), engine
     hireEndAt: hireEnd,
     dailyRatePence: dailyRate,
     totalHireDays: hireDays,
-    totalHireChargePence: hireClaimed || (hireDays && dailyRate ? hireDays * dailyRate : null),
+    totalHireChargePence:
+      hireMoney.charge.status === "calculated" && !hireMoney.charge.provisional
+        ? hireClaimed || hireMoney.charge.totalPence
+        : null,
     repairCostPence: repairClaimed || null,
     needSummary: String(pack?.need_reason || claim.circumstances || ""),
     needEvidenceSummary: String(pack?.need_reason || ""),
@@ -358,7 +375,7 @@ function letterContext(claimId: string, letterDate: string = nowUtcIso(), engine
     tpVehicleModel: String(tp?.tp_model || ""),
     tpVehicleReg: String(tp?.tp_reg || ""),
     tpPolicyNumber: String(tp?.policy_number || ""),
-    lossesClaimed: summariseLossesClaimed(lines, creditHire, { storageProvisional }),
+    lossesClaimed: summariseLossesClaimed(lines, creditHire, { storageProvisional, hireProvisional }),
     creditHire,
     courtesyAllocated: Boolean(courtesyReservation),
   };

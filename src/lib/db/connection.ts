@@ -9,6 +9,7 @@ import { ensureDefaultVehicleLocationSetting } from "./vehicle-location";
 import { ensureStorageDailyRateSetting } from "./storage-charge";
 import { clearFalseDemonstrationHireCollection } from "./demo-jobs";
 import { ensureTest0005StorageDemonstration } from "./test-0005-storage";
+import { ensureTest0008HireDemonstration } from "./test-0008-hire";
 import { ensureChaseSettings, ensureDemoChases } from "./chase";
 import { ensureRealFleet } from "./fleet";
 import { ensureDemoDayJobs } from "./demo-jobs";
@@ -47,6 +48,7 @@ function openDatabase(): DatabaseSync {
   ensureRealFleet(db);
   clearFalseDemonstrationHireCollection(db);
   ensureTest0005StorageDemonstration(db, { financialLines: true });
+  ensureTest0008HireDemonstration(db);
   backfillChronologyIfEmpty(db);
   preparedDatabases.add(db);
   return db;
@@ -65,6 +67,7 @@ function prepareExistingDatabase(db: DatabaseSync) {
   ensureDemoDayJobs(db);
   clearFalseDemonstrationHireCollection(db);
   ensureTest0005StorageDemonstration(db);
+  ensureTest0008HireDemonstration(db);
   backfillChronologyIfEmpty(db);
   preparedDatabases.add(db);
 }

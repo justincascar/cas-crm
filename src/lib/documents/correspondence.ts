@@ -238,16 +238,21 @@ const LOSS_PHRASES: Record<string, string> = {
 export const PROVISIONAL_STORAGE_LOSS_PHRASE =
   "storage charges (provisional, awaiting a confirmed end — not a final figure)";
 
+export const PROVISIONAL_HIRE_LOSS_PHRASE =
+  "hire charges (provisional, awaiting a confirmed end — not a final figure)";
+
 export function summariseLossesClaimed(
   lines: Array<{ head_of_loss: string; claimed_pence: number }>,
   creditHire: boolean,
-  options?: { storageProvisional?: boolean },
+  options?: { storageProvisional?: boolean; hireProvisional?: boolean },
 ): string {
   const claimed = lines.filter((line) => (line.claimed_pence || 0) > 0);
   const phrases: string[] = [];
   const has = (head: string) => claimed.some((line) => line.head_of_loss === head);
   if (has("repairs") || has("vehicle_damage")) phrases.push(LOSS_PHRASES.repairs!);
-  if (has("credit_hire") || (creditHire && has("hire"))) phrases.push(LOSS_PHRASES.credit_hire!);
+  if (options?.hireProvisional && (has("credit_hire") || has("hire"))) {
+    phrases.push(PROVISIONAL_HIRE_LOSS_PHRASE);
+  } else if (has("credit_hire") || (creditHire && has("hire"))) phrases.push(LOSS_PHRASES.credit_hire!);
   else if (has("hire")) phrases.push(LOSS_PHRASES.hire!);
   const ordered = ["courtesy", "recovery", "storage", "gate_fee", "cdw", "additional_driver", "delivery_collection", "engineers_fees", "salvage_shortfall", "other"];
   for (const head of ordered) {

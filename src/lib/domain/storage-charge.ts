@@ -8,12 +8,9 @@ import { formatGbp, grossFromNet } from "../money";
 export const STORAGE_INCLUSIVE_DAY_NOTE =
   "Days count both the first day and the last day. Confirmed 14/10/2026. Storage from 22/09/2026 to 01/10/2026 is 10 days.";
 
-/**
- * The same inclusive count applies when a hire charge is built from days.
- * Hire money is not calculated from days yet.
- */
+/** The hire charge uses this same inclusive count. Renewal alerts do not. */
 export const HIRE_INCLUSIVE_DAY_NOTE =
-  "When hire is calculated from days, count both the first day and the last day. Confirmed 14/10/2026. Hire is not calculated from days yet.";
+  "Days count both the first day and the last day. Confirmed 14/10/2026. Hire from 22/09/2026 to 01/10/2026 is 10 days.";
 
 export type StorageCountBasis = "confirmed" | "proposed" | "today";
 
