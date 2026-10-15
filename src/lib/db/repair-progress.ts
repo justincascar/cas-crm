@@ -95,27 +95,58 @@ export type RepairGapClaimRow = {
   claimId: string;
   fileReference: string;
   clientName: string;
+  handlerName: string;
   wording: string;
+  days: number;
 };
 
+/**
+ * Open, for a repair, means the repaired vehicle has not been returned and the claim is not closed.
+ * On a total loss it means the claim is not closed. That is the same test as the gap rule.
+ */
+export function repairGapClaimIsOpen(claim: {
+  total_loss: number | null;
+  later_declared_total_loss: number | null;
+  repaired_vehicle_returned: number | null;
+  closed: number | null;
+}): boolean {
+  if (Number(claim.closed) === 1) return false;
+  const totalLoss = Number(claim.total_loss) === 1 || Number(claim.later_declared_total_loss) === 1;
+  if (totalLoss) return true;
+  return Number(claim.repaired_vehicle_returned) !== 1;
+}
+
+/** Unexplained gaps on open claims. The dashboard uses this list. */
 export function listRepairGapClaims(): RepairGapClaimRow[] {
+  return listRepairGapRows("open");
+}
+
+/** Unexplained gaps once the repair is finished or the claim is closed. */
+export function listFinishedRepairGapClaims(): RepairGapClaimRow[] {
+  return listRepairGapRows("finished");
+}
+
+function listRepairGapRows(which: "open" | "finished"): RepairGapClaimRow[] {
   const threshold = getRepairGapThresholdDays();
   const claims = all<{
     id: string;
     file_reference: string;
     client_name: string | null;
+    handler_name: string | null;
     total_loss: number | null;
     later_declared_total_loss: number | null;
     repaired_vehicle_returned: number | null;
+    closed: number | null;
   }>(
-    `SELECT c.id, c.file_reference, p.full_name AS client_name, c.total_loss, c.later_declared_total_loss,
-            c.repaired_vehicle_returned
+    `SELECT c.id, c.file_reference, p.full_name AS client_name, s.name AS handler_name,
+            c.total_loss, c.later_declared_total_loss, c.repaired_vehicle_returned,
+            CASE WHEN EXISTS (
+              SELECT 1 FROM claim_events closed
+              WHERE closed.claim_id = c.id AND closed.event_type = 'case_closed'
+            ) THEN 1 ELSE 0 END AS closed
      FROM claims c
      LEFT JOIN people p ON p.id = c.client_person_id
-     WHERE NOT EXISTS (
-         SELECT 1 FROM claim_events closed
-         WHERE closed.claim_id = c.id AND closed.event_type = 'case_closed'
-       )
+     LEFT JOIN staff s ON s.id = c.handler_id
      ORDER BY c.file_reference`,
   );
   const events = all<RepairProgressEvent & { claim_id: string }>(
@@ -151,10 +182,12 @@ export function listRepairGapClaims(): RepairGapClaimRow[] {
   }
   const rows: RepairGapClaimRow[] = [];
   for (const claim of claims) {
+    const open = repairGapClaimIsOpen(claim);
+    if (which === "open" ? !open : open) continue;
     const totalLoss = Number(claim.total_loss) === 1 || Number(claim.later_declared_total_loss) === 1;
     const gaps = repairProgressGaps(byClaim.get(String(claim.id)) ?? [], {
       totalLoss,
-      closed: false,
+      closed: Number(claim.closed) === 1,
       returned: Number(claim.repaired_vehicle_returned) === 1,
       thresholdDays: threshold,
       explanations: notesByClaim.get(String(claim.id)) ?? [],
@@ -164,7 +197,9 @@ export function listRepairGapClaims(): RepairGapClaimRow[] {
         claimId: String(claim.id),
         fileReference: String(claim.file_reference),
         clientName: String(claim.client_name || "Unknown client"),
+        handlerName: String(claim.handler_name || "Unassigned"),
         wording: gapFlagWording(gap),
+        days: gap.days,
       });
     }
   }

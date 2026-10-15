@@ -1,10 +1,11 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
+import { dueTextClass, dueWording } from "@/lib/domain/due-wording";
 import type { ClaimListRow } from "@/lib/db/queries";
 import { formatVehicleRegistration } from "@/lib/text";
 
-export function ClaimTable({ rows }: { rows: ClaimListRow[] }) {
+export function ClaimTable({ rows, compact = false }: { rows: ClaimListRow[]; compact?: boolean }) {
   if (rows.length === 0) {
     return <p className="text-slate">No matching records.</p>;
   }
@@ -16,7 +17,15 @@ export function ClaimTable({ rows }: { rows: ClaimListRow[] }) {
             <p className="font-mono text-sm text-teal-dark">{row.file_reference}</p>
             <p className="mt-1 text-base">{row.client_name || "Unknown"}</p>
             {row.registration ? <p className="text-sm text-slate">{formatVehicleRegistration(row.registration)}</p> : null}
-            <p className="mt-1 text-sm text-slate">{row.current_position}</p>
+            {compact ? (
+              <>
+                <p className="mt-1 text-sm">{row.next_action || "—"}</p>
+                <DueCell value={row.next_action_due} />
+                <p className="text-sm text-slate">{row.handler_name || "Unassigned"}</p>
+              </>
+            ) : (
+              <p className="mt-1 text-sm text-slate">{row.current_position}</p>
+            )}
             <div className="mt-3 flex flex-col gap-2">
               <Link href={`/claims/${row.id}`} className="min-h-11 rounded-md border border-navy px-3 py-2 text-center text-base text-navy">
                 Open file
@@ -28,19 +37,23 @@ export function ClaimTable({ rows }: { rows: ClaimListRow[] }) {
           </li>
         ))}
       </ul>
-      <div className="hidden overflow-x-auto rounded-xl border border-line bg-card md:block">
-      <table className="ledger-table">
+      <div className={compact ? "hidden rounded-xl border border-line bg-card md:block" : "hidden overflow-x-auto rounded-xl border border-line bg-card md:block"}>
+      <table className={compact ? "ledger-table ledger-fit" : "ledger-table"}>
         <thead>
           <tr>
             <th>File</th>
             <th>Client</th>
-            <th>Insurer</th>
-            <th>Position</th>
-            <th>Last correspondence</th>
+            {compact ? null : (
+              <>
+                <th>Insurer</th>
+                <th>Position</th>
+                <th>Last correspondence</th>
+              </>
+            )}
             <th>Next action</th>
-            <th>Due</th>
+            <th>{compact ? "When" : "Due"}</th>
             <th>Handler</th>
-            <th>Hire Pack</th>
+            {compact ? null : <th>Hire Pack</th>}
           </tr>
         </thead>
         <tbody>
@@ -53,17 +66,23 @@ export function ClaimTable({ rows }: { rows: ClaimListRow[] }) {
                 {row.registration ? <div className="text-xs text-slate">{formatVehicleRegistration(row.registration)}</div> : null}
               </td>
               <td>{row.client_name || "Unknown"}</td>
-              <td>{row.insurer || "Unknown"}</td>
-              <td>{row.current_position}</td>
-              <td>{formatUkDateTime(row.last_correspondence_at)}</td>
+              {compact ? null : (
+                <>
+                  <td>{row.insurer || "Unknown"}</td>
+                  <td>{row.current_position}</td>
+                  <td>{formatUkDateTime(row.last_correspondence_at)}</td>
+                </>
+              )}
               <td>{row.next_action || "—"}</td>
-              <td>{formatUkDate(row.next_action_due)}</td>
+              <td>{compact ? <DueCell value={row.next_action_due} /> : formatUkDate(row.next_action_due)}</td>
               <td>{row.handler_name || "Unassigned"}</td>
-              <td>
-                <Link href={`/claims/${row.id}/hire-pack`} className="inline-block rounded-md bg-teal px-3 py-1.5 text-xs font-semibold text-white">
-                  Hire Pack
-                </Link>
-              </td>
+              {compact ? null : (
+                <td>
+                  <Link href={`/claims/${row.id}/hire-pack`} className="inline-block rounded-md bg-teal px-3 py-1.5 text-xs font-semibold text-white">
+                    Hire Pack
+                  </Link>
+                </td>
+              )}
             </tr>
           ))}
         </tbody>
@@ -71,6 +90,12 @@ export function ClaimTable({ rows }: { rows: ClaimListRow[] }) {
       </div>
     </>
   );
+}
+
+function DueCell({ value }: { value: string | null }) {
+  const when = dueWording(value);
+  if (when.tone === "unknown") return <span>—</span>;
+  return <span className={dueTextClass(when.tone)}>{when.text}</span>;
 }
 
 export function SearchForm({ defaultQuery, action = "/claims" }: { defaultQuery?: string; action?: string }) {

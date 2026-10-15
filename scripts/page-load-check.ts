@@ -19,6 +19,7 @@ const HEAD_SCREENS = ["recovery", "storage", "hire", "vehicle"] as const;
 
 const PAGES: Array<{ name: string; path: string }> = [
   { name: "Dashboard", path: "/" },
+  { name: "Gaps to explain before any dispute", path: "/gaps" },
   { name: "Claims list", path: "/claims" },
   { name: "Claim overview (TEST-0005)", path: `/claims/${CLAIM_ID}` },
   ...CLAIM_SCREENS.map((screen) => ({

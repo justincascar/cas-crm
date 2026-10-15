@@ -54,6 +54,15 @@ body {
   font-size: 0.9rem;
 }
 
+.ledger-fit {
+  table-layout: fixed;
+}
+
+.ledger-fit th,
+.ledger-fit td {
+  overflow-wrap: anywhere;
+}
+
 .ledger-table th {
   text-align: left;
   font-size: 0.72rem;

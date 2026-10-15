@@ -756,8 +756,33 @@ Tests: `tests/optimistic-concurrency.test.ts` and `tests/two-user-saves.test.ts`
 
 15 October 2026: The type check and the production build are clean. `npm run typecheck` checks the application, then checks the tests separately. `npm run check:pages` uses the production build, starts it on a free port, signs in as the Justin test user from `docs/AUTH-NOTES.md`, and opens every main page. It does not save a form and it does not send email.
 
+## Daily claims desk (15 October 2026)
+
+The dashboard is arranged as a working daily screen. Business rules and calculations are unchanged, apart from a new Outstanding column on the money table.
+
+Today’s work sits under the tiles. One row per claim, the most overdue item first, then due today, then anything later. “Overdue by [n] days” counts real days: the next day is 1. Due today says “Due today”. A future date is not called overdue. “+n more” opens that claim’s other items.
+
+Empty chase sections are not shown on their own. Their names are one line: “Nothing due: …”. The explanation under a heading stays word for word and opens from “?”.
+
+Outstanding is worked out on each claim: the agreed figure if there is one, otherwise the confirmed claimed figure, minus what has been received. Those amounts are then added up by head of loss. A provisional figure, a “Start date missing” figure, or no figure is not used as a confirmed claimed figure. Confirmed and provisional claimed totals are separate rows. Where money received is higher than the agreed figure, the row is labelled as an overpayment. On the current data that is TEST-0010 vehicle damage: £8,200.00 received, £6,700.00 agreed. The total-loss record has a PAV of £8,200.00 and salvage of £1,500.00. The figures were not changed.
+
+Active hire counts claims whose hire is active or approaching off-hire. On hire / courtesy counts fleet vehicles marked on hire. On 15 October 2026 those counts are 7 and 6. TEST-0010 is the extra claim: its hire is still active, and its fleet vehicle is in maintenance.
+
+My claims / All claims is at the top. Justin’s login opens on all claims. Every other handler opens on their own. The choice is kept for that person’s browser session, so the next person who signs in on this PC still gets their own default. The server applies it to the desk, including the tiles that count claims.
+
+Repair gaps on open claims stay on the dashboard. Open means the repaired vehicle has not been returned and the claim is not closed; a total loss stays open until the claim is closed. Gaps on finished claims are on “Gaps to explain before any dispute”, linked from the desk, and still show on the claim. The 7-real-day rule is unchanged.
+
+Every top tile opens its filtered list. Fleet available opens Hire / Fleet filtered to available vehicles.
+
+The database path stays in the footer for this stage.
+
+TEST-0005’s storage end is still unconfirmed. TEST-0009’s vehicle-damage offers were not changed. TEST-0006’s money was not changed. TEST-0007’s £800 was not written off. Hire agreement renewal alerts stay on day 70, day 80 and day 88. No live email was sent. `EMAIL_SEND_MODE` stays `simulate`.
+
+Tests: `tests/dashboard-desk.test.ts`. Full suite: 477 passing, 0 failing.
+
 ## Not yet claimed
 
+- Remove the database path from the dashboard footer before live use. It is there now so a handler on this PC can see where the file is kept. It should not be shown once the system is in live use.
 - Financial summary and the Assessed damage notes fields remain non-authoritative working notes, pending a later decision on whether to keep them.
 - Loss-of-use is earmarked for redesign into an automated chronology. Its current fields stay in place until that stage. They are typed notes on the hidden screen. The hire and repair chronology does not read them.
 - Stages 2–5 (finer permissions, live integrations, payment packs from CAS templates, litigation issue, backups/restore/deploy). Working dashboard is not production readiness.

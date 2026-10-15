@@ -6,11 +6,11 @@ import { listClaims, QUEUE_LABELS } from "@/lib/db/queries";
 export default async function ClaimsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; queue?: string }>;
+  searchParams: Promise<{ q?: string; queue?: string; handler?: string }>;
 }) {
   await requireStaff();
   const sp = await searchParams;
-  const rows = listClaims({ q: sp.q, queue: sp.queue });
+  const rows = listClaims({ q: sp.q, queue: sp.queue, handlerId: sp.handler || null });
   const queueLabel = sp.queue ? QUEUE_LABELS[sp.queue] : null;
 
   return (

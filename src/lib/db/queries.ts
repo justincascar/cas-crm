@@ -3,13 +3,16 @@ import { listDueChases, type ChaseView } from "./chase";
 import { listPaymentAttention } from "./payment-review";
 import { dueFollowUpChases } from "./follow-up-chases";
 import { accidentDateError, isBeforeLondonDay, isSameLondonDay, londonDateIso, londonTodayIso, nowUtcIso } from "../dates";
+import { dueWording } from "../domain/due-wording";
+import { claimedFigureIsConfirmed, summariseHeads } from "../domain/head-outstanding";
+import { todaysWorkRows, type DeskWorkItem, type TodaysWorkRow } from "../domain/todays-work";
 import { formatGbp, sumDistinctHeads } from "../money";
 import { all, dbPath, get, getDb, newId, resetSqlStatementCount, run, sqlStatementCount } from "./connection";
 import { touchFleetVersion } from "./fleet";
 import { withImmediateTransaction } from "./record-version";
 import { canReserveVehicle, chaseFileStateFromPosition, chaseStopReason, nextFileReference, parseFileReferenceNumber } from "../domain/rules";
 import { listClaimEvents, recordClaimEvent } from "./chronology";
-import { listRepairGapClaims } from "./repair-progress";
+import { listFinishedRepairGapClaims, listRepairGapClaims, type RepairGapClaimRow } from "./repair-progress";
 import { listKnownAgentsOn, listKnownInsurersOn } from "./insurers";
 import { KEY_DATE_TYPES, eventLabel, latestDates } from "../domain/events";
 import {
@@ -74,9 +77,13 @@ export const QUEUE_LABELS: Record<string, string> = {
   litigation: "Litigation deadlines",
 };
 
-export function listClaims(opts: { q?: string; queue?: string; dueChases?: ChaseView[] } = {}): ClaimListRow[] {
+export function listClaims(opts: { q?: string; queue?: string; dueChases?: ChaseView[]; handlerId?: string | null } = {}): ClaimListRow[] {
   const params: unknown[] = [];
   const where: string[] = [];
+  if (opts.handlerId) {
+    where.push("c.handler_id = ?");
+    params.push(opts.handlerId);
+  }
   if (opts.q) {
     const like = `%${opts.q.trim()}%`;
     where.push(`(
@@ -97,12 +104,22 @@ export function listClaims(opts: { q?: string; queue?: string; dueChases?: Chase
 }
 
 /** Card counts only — no chase overlay. Overlay is for next-action labels, not for how many files sit in a queue. */
-export function countClaims(queue?: string): number {
-  const extra = queue ? queueWhere(queue) : { sql: "", params: [] };
-  const sql = extra.sql
-    ? `SELECT COUNT(*) AS c FROM claims c WHERE ${extra.sql}`
+export function countClaims(queue?: string, handlerId?: string | null): number {
+  const extra = queue ? queueWhere(queue) : { sql: "", params: [] as unknown[] };
+  const parts: string[] = [];
+  const params: unknown[] = [];
+  if (extra.sql) {
+    parts.push(extra.sql);
+    params.push(...extra.params);
+  }
+  if (handlerId) {
+    parts.push("c.handler_id = ?");
+    params.push(handlerId);
+  }
+  const sql = parts.length
+    ? `SELECT COUNT(*) AS c FROM claims c WHERE ${parts.join(" AND ")}`
     : `SELECT COUNT(*) AS c FROM claims`;
-  const row = get<{ c: number }>(sql, extra.params);
+  const row = get<{ c: number }>(sql, params);
   return Number(row?.c || 0);
 }
 
@@ -205,11 +222,42 @@ function queueWhere(queue: string): { sql: string; params: unknown[] } {
   }
 }
 
-export function getDashboard() {
+export type DashboardCard = {
+  key: string;
+  label: string;
+  count: number;
+  tone: string;
+  href: string;
+  note: string | null;
+};
+
+function withHandlerQuery(href: string, handlerId: string | null): string {
+  if (!handlerId) return href;
+  const join = href.includes("?") ? "&" : "?";
+  return `${href}${join}handler=${encodeURIComponent(handlerId)}`;
+}
+
+function renewalDeskWording(row: ChaseView): { text: string; tone: DeskWorkItem["tone"]; sortDays: number } {
+  if (row.severity === "red_overdue") {
+    const timed = dueWording(row.dueAt);
+    if (timed.tone === "overdue") return timed;
+    return { text: "Overdue", tone: "overdue", sortDays: 0 };
+  }
+  if (row.severity === "amber") return { text: "Approaching", tone: "future", sortDays: -1 };
+  return { text: "Due", tone: "today", sortDays: 0 };
+}
+
+export function getDashboard(filter: { handlerId?: string | null } = {}) {
   resetSqlStatementCount();
   const started = Date.now();
-  const chasesDue = everyDueChase();
-  const claims = listClaims({ dueChases: chasesDue });
+  const handlerId = filter.handlerId || null;
+  const ownedIds = handlerId
+    ? new Set(all<{ id: string }>("SELECT id FROM claims WHERE handler_id = ?", [handlerId]).map((row) => String(row.id)))
+    : null;
+  const keepClaim = <T extends { claimId: string }>(rows: T[]) =>
+    ownedIds ? rows.filter((row) => ownedIds.has(row.claimId)) : rows;
+  const chasesDue = keepClaim(everyDueChase());
+  const claims = listClaims({ dueChases: chasesDue, handlerId });
   const tasks = all<{
     id: string;
     title: string;
@@ -218,14 +266,18 @@ export function getDashboard() {
     handler_name: string | null;
     file_reference: string | null;
     claim_id: string | null;
-  }>(`
-    SELECT t.id, t.title, t.due_at, t.status, s.name AS handler_name, c.file_reference, t.claim_id
-    FROM tasks t
-    LEFT JOIN staff s ON s.id = t.handler_id
-    LEFT JOIN claims c ON c.id = t.claim_id
-    WHERE t.status = 'open'
-    ORDER BY t.due_at ASC
-  `);
+    client_name: string | null;
+  }>(
+    `SELECT t.id, t.title, t.due_at, t.status, s.name AS handler_name, c.file_reference, t.claim_id,
+            p.full_name AS client_name
+     FROM tasks t
+     LEFT JOIN staff s ON s.id = t.handler_id
+     LEFT JOIN claims c ON c.id = t.claim_id
+     LEFT JOIN people p ON p.id = c.client_person_id
+     WHERE t.status = 'open'${handlerId ? " AND c.handler_id = ?" : ""}
+     ORDER BY t.due_at ASC`,
+    handlerId ? [handlerId] : [],
+  );
 
   const today = tasks.filter((t) => t.due_at && isSameLondonDay(t.due_at));
   const overdue = tasks.filter((t) => t.due_at && isBeforeLondonDay(t.due_at));
@@ -245,6 +297,7 @@ export function getDashboard() {
 
   const lines = all<{
     claim_id: string;
+    file_reference: string;
     head_of_loss: string;
     description: string | null;
     claimed_pence: number;
@@ -253,18 +306,24 @@ export function getDashboard() {
     received_pence: number;
     hire_unconfirmed: number;
     storage_unconfirmed: number;
+    storage_start_missing: number;
   }>(
-    `SELECT claim_id, head_of_loss, description, claimed_pence, offered_pence, agreed_pence, received_pence,
-            CASE WHEN head_of_loss IN ('hire', 'credit_hire') AND NOT EXISTS (
+    `SELECT fl.claim_id, c.file_reference, fl.head_of_loss, fl.description,
+            fl.claimed_pence, fl.offered_pence, fl.agreed_pence, fl.received_pence,
+            CASE WHEN fl.head_of_loss IN ('hire', 'credit_hire') AND NOT EXISTS (
               SELECT 1 FROM hire_episodes he
-              WHERE he.claim_id = financial_lines.claim_id AND he.billing_end_at IS NOT NULL AND trim(he.billing_end_at) != ''
+              WHERE he.claim_id = fl.claim_id AND he.billing_end_at IS NOT NULL AND trim(he.billing_end_at) != ''
             ) THEN 1 ELSE 0 END AS hire_unconfirmed,
-            CASE WHEN head_of_loss = 'storage' AND EXISTS (
-              SELECT 1 FROM claims c
-              WHERE c.id = financial_lines.claim_id
-                AND (c.storage_billing_end_on IS NULL OR trim(c.storage_billing_end_on) = '')
-            ) THEN 1 ELSE 0 END AS storage_unconfirmed
-     FROM financial_lines`,
+            CASE WHEN fl.head_of_loss = 'storage' AND (
+              c.storage_billing_end_on IS NULL OR trim(c.storage_billing_end_on) = ''
+            ) THEN 1 ELSE 0 END AS storage_unconfirmed,
+            CASE WHEN fl.head_of_loss = 'storage' AND (
+              c.storage_started_on IS NULL OR trim(c.storage_started_on) = ''
+            ) THEN 1 ELSE 0 END AS storage_start_missing
+     FROM financial_lines fl
+     JOIN claims c ON c.id = fl.claim_id
+     ${handlerId ? "WHERE c.handler_id = ?" : ""}`,
+    handlerId ? [handlerId] : [],
   );
 
   const byHead: Record<string, ReturnType<typeof sumDistinctHeads>> = {};
@@ -296,27 +355,106 @@ export function getDashboard() {
     hire_agreement_renewal: chasesDue.filter((row) => row.kind === "hire_agreement_renewal"),
   };
   const paymentAttention = listPaymentAttention();
+  const awaitingDecisions = keepClaim(paymentAttention.awaiting);
+  const paymentsAfterSettlement = keepClaim(paymentAttention.afterSettlement);
+  const repairProgressGaps = keepClaim(listRepairGapClaims());
+  const finishedRepairGaps = keepClaim(listFinishedRepairGapClaims());
+  const hireFleet = all<{
+    file_reference: string;
+    fleet_vehicle_id: string | null;
+    fleet_status: string | null;
+  }>(
+    `SELECT c.file_reference, he.fleet_vehicle_id, fv.status AS fleet_status
+     FROM claims c
+     LEFT JOIN hire_episodes he ON he.claim_id = c.id AND he.id = (
+       SELECT he2.id FROM hire_episodes he2 WHERE he2.claim_id = c.id ORDER BY he2.started_at DESC LIMIT 1
+     )
+     LEFT JOIN fleet_vehicles fv ON fv.id = he.fleet_vehicle_id AND fv.removed_at IS NULL
+     WHERE c.hire_status IN ('active', 'approaching_off_hire')
+     ${handlerId ? "AND c.handler_id = ?" : ""}
+     ORDER BY c.file_reference`,
+    handlerId ? [handlerId] : [],
+  );
+  const hireNotOnFleet = hireFleet.filter((row) => !row.fleet_vehicle_id || row.fleet_status !== "on_hire");
+  const activeHireNote = describeActiveHireGap(hireNotOnFleet, Boolean(handlerId));
+  const money = summariseHeads(
+    lines.map((line) => ({
+      claimId: String(line.claim_id),
+      fileReference: String(line.file_reference),
+      head: String(line.head_of_loss),
+      claimedPence: Number(line.claimed_pence) || 0,
+      offeredPence: Number(line.offered_pence) || 0,
+      agreedPence: Number(line.agreed_pence) || 0,
+      receivedPence: Number(line.received_pence) || 0,
+      claimedConfirmed: claimedFigureIsConfirmed({
+        head: String(line.head_of_loss),
+        claimedPence: Number(line.claimed_pence) || 0,
+        description: line.description,
+        hireUnconfirmed: Number(line.hire_unconfirmed) === 1,
+        storageUnconfirmed: Number(line.storage_unconfirmed) === 1,
+        storageStartMissing: Number(line.storage_start_missing) === 1,
+      }),
+    })),
+  );
+  const workItems: DeskWorkItem[] = [
+    ...chasesDue.map((row) => {
+      const when = row.kind === "hire_agreement_renewal" ? renewalDeskWording(row) : dueWording(row.dueAt);
+      return {
+        id: `chase-${row.kind}-${row.claimId}`,
+        claimId: row.claimId,
+        fileReference: row.fileReference || row.claimId,
+        clientName: row.clientName || "Unknown",
+        handlerName: row.handlerName || "Unassigned",
+        item: row.label || row.dueLabel,
+        wording: when.text,
+        tone: when.tone,
+        sortDays: when.sortDays,
+      };
+    }),
+    ...repairProgressGaps.map((row) => gapWorkItem(row)),
+    ...awaitingDecisions.map((row) => attentionWorkItem(row, "decision")),
+    ...paymentsAfterSettlement.map((row) => attentionWorkItem(row, "review")),
+    ...tasks.flatMap((task) => {
+      if (!task.claim_id || !task.due_at) return [];
+      const when = dueWording(String(task.due_at));
+      if (when.tone !== "overdue" && when.tone !== "today") return [];
+      return [
+        {
+          id: `task-${task.id}`,
+          claimId: String(task.claim_id),
+          fileReference: task.file_reference || String(task.claim_id),
+          clientName: task.client_name || "Unknown",
+          handlerName: task.handler_name || "Unassigned",
+          item: task.title,
+          wording: when.text,
+          tone: when.tone,
+          sortDays: when.sortDays,
+        },
+      ];
+    }),
+  ];
 
-  const cards = [
-    { key: "new_enquiries", label: "New enquiries / incomplete forms", count: countClaims("new_enquiries"), tone: "warn" },
-    { key: "tasks_today", label: "Tasks due today", count: today.length, tone: "info", href: "/tasks?when=today" },
-    { key: "tasks_overdue", label: "Overdue tasks", count: overdue.length, tone: "bad", href: "/tasks?when=overdue" },
-    { key: "active_hire", label: "Active hire", count: countClaims("active_hire"), tone: "info" },
-    { key: "storage", label: "Vehicles in storage", count: countClaims("storage"), tone: "info" },
-    { key: "storage_chargeable", label: "Chargeable storage", count: countClaims("storage_chargeable"), tone: "info" },
-    { key: "fleet_available", label: "Fleet available", count: Number(fleetMap.available || 0), tone: "ok", href: "/hire" },
-    { key: "liability", label: "Awaited liability responses", count: countClaims("liability"), tone: "warn" },
-    { key: "engineer", label: "Awaited engineer reports", count: countClaims("engineer"), tone: "warn" },
-    { key: "repair_auth", label: "Repair authorisations awaited", count: countClaims("repair_auth"), tone: "warn" },
-    { key: "repairs_progress", label: "Repairs in progress", count: countClaims("repairs_progress"), tone: "info" },
-    { key: "ready_return", label: "Ready for customer return", count: countClaims("ready_return"), tone: "ok" },
-    { key: "tl_payment", label: "Total-loss payments awaited", count: countClaims("tl_payment"), tone: "warn" },
-    { key: "off_hire", label: "Off-hire dates approaching", count: countClaims("off_hire"), tone: "warn" },
-    { key: "salvage", label: "Salvage awaiting collection", count: countClaims("salvage"), tone: "info" },
-    { key: "renewals", label: "Agreement renewals (day 80 / unsigned)", count: countClaims("renewals"), tone: "bad" },
-    { key: "unread", label: "Unread correspondence", count: countClaims("unread"), tone: "info" },
-    { key: "offers", label: "Offers awaiting review", count: countClaims("offers"), tone: "warn" },
-    { key: "litigation", label: "Litigation deadlines", count: countClaims("litigation"), tone: "bad" },
+  const claimHref = (key: string) => withHandlerQuery(`/claims?queue=${key}`, handlerId);
+  const cards: DashboardCard[] = [
+    { key: "new_enquiries", label: "New enquiries / incomplete forms", count: countClaims("new_enquiries", handlerId), tone: "warn", href: claimHref("new_enquiries"), note: null },
+    { key: "tasks_today", label: "Tasks due today", count: today.length, tone: "info", href: withHandlerQuery("/tasks?when=today", handlerId), note: null },
+    { key: "tasks_overdue", label: "Overdue tasks", count: overdue.length, tone: "bad", href: withHandlerQuery("/tasks?when=overdue", handlerId), note: null },
+    { key: "active_hire", label: "Active hire", count: countClaims("active_hire", handlerId), tone: "info", href: claimHref("active_hire"), note: activeHireNote },
+    { key: "storage", label: "Vehicles in storage", count: countClaims("storage", handlerId), tone: "info", href: claimHref("storage"), note: null },
+    { key: "storage_chargeable", label: "Chargeable storage", count: countClaims("storage_chargeable", handlerId), tone: "info", href: claimHref("storage_chargeable"), note: null },
+    { key: "fleet_available", label: "Fleet available", count: Number(fleetMap.available || 0), tone: "ok", href: "/hire?status=available", note: null },
+    { key: "liability", label: "Awaited liability responses", count: countClaims("liability", handlerId), tone: "warn", href: claimHref("liability"), note: null },
+    { key: "engineer", label: "Awaited engineer reports", count: countClaims("engineer", handlerId), tone: "warn", href: claimHref("engineer"), note: null },
+    { key: "repair_auth", label: "Repair authorisations awaited", count: countClaims("repair_auth", handlerId), tone: "warn", href: claimHref("repair_auth"), note: null },
+    { key: "repairs_progress", label: "Repairs in progress", count: countClaims("repairs_progress", handlerId), tone: "info", href: claimHref("repairs_progress"), note: null },
+    { key: "ready_return", label: "Ready for customer return", count: countClaims("ready_return", handlerId), tone: "ok", href: claimHref("ready_return"), note: null },
+    { key: "tl_payment", label: "Total-loss payments awaited", count: countClaims("tl_payment", handlerId), tone: "warn", href: claimHref("tl_payment"), note: null },
+    { key: "off_hire", label: "Off-hire dates approaching", count: countClaims("off_hire", handlerId), tone: "warn", href: claimHref("off_hire"), note: null },
+    { key: "salvage", label: "Salvage awaiting collection", count: countClaims("salvage", handlerId), tone: "info", href: claimHref("salvage"), note: null },
+    { key: "renewals", label: "Agreement renewals (day 80 / unsigned)", count: countClaims("renewals", handlerId), tone: "bad", href: claimHref("renewals"), note: null },
+    { key: "unread", label: "Unread correspondence", count: countClaims("unread", handlerId), tone: "info", href: claimHref("unread"), note: null },
+    { key: "offers", label: "Offers awaiting review", count: countClaims("offers", handlerId), tone: "warn", href: claimHref("offers"), note: null },
+    { key: "litigation", label: "Litigation deadlines", count: countClaims("litigation", handlerId), tone: "bad", href: claimHref("litigation"), note: null },
   ];
 
   const elapsedMs = Date.now() - started;
@@ -341,12 +479,78 @@ export function getDashboard() {
     } as Record<string, string>,
     chasesDue,
     chasesDueByKind,
-    awaitingDecisions: paymentAttention.awaiting,
-    paymentsAfterSettlement: paymentAttention.afterSettlement,
+    awaitingDecisions,
+    paymentsAfterSettlement,
     engineerChasesDue: chasesDueByKind.engineer_report,
     dashboardLoadMs: elapsedMs,
     dashboardSqlStatements: sqlStatements,
-    repairProgressGaps: listRepairGapClaims(),
+    repairProgressGaps,
+    finishedRepairGaps,
+    todaysWork: todaysWorkRows(workItems),
+    moneyHeads: money.heads,
+    moneyConfirmed: money.confirmed,
+    moneyProvisional: money.provisional,
+    moneyOverpayments: money.overpayments,
+    activeHireNote,
+    handlerId,
+  };
+}
+
+function describeActiveHireGap(
+  rows: Array<{ file_reference: string; fleet_vehicle_id: string | null; fleet_status: string | null }>,
+  handlerFiltered: boolean,
+): string | null {
+  const details = rows.map((row) => {
+    if (!row.fleet_vehicle_id) return `${row.file_reference} has no fleet vehicle assigned`;
+    const status = String(row.fleet_status || "not on hire").replaceAll("_", " ");
+    return `${row.file_reference}'s fleet vehicle is ${status}, not on hire`;
+  });
+  const scope = handlerFiltered
+    ? "This count is this handler's claims. On hire / courtesy counts every fleet vehicle."
+    : "";
+  if (details.length === 0) return scope || null;
+  if (!handlerFiltered && details.length === 1 && rows[0] && !rows[0].fleet_vehicle_id) {
+    return "Includes 1 hire with no fleet vehicle assigned";
+  }
+  const lead =
+    details.length === 1
+      ? `Includes 1 hire not in On hire / courtesy: ${details[0]}`
+      : `Includes ${details.length} hires not in On hire / courtesy: ${details.join("; ")}`;
+  return scope ? `${scope} ${lead}` : lead;
+}
+
+function gapWorkItem(row: RepairGapClaimRow): DeskWorkItem {
+  const days = row.days;
+  const overdue = days > 0;
+  return {
+    id: `gap-${row.claimId}-${row.wording}`,
+    claimId: row.claimId,
+    fileReference: row.fileReference,
+    clientName: row.clientName,
+    handlerName: row.handlerName,
+    item: row.wording,
+    wording: overdue ? (days === 1 ? "Overdue by 1 day" : `Overdue by ${days} days`) : "Due today",
+    tone: overdue ? "overdue" : "today",
+    sortDays: overdue ? days : 0,
+  };
+}
+
+function attentionWorkItem(
+  row: { id: string; claimId: string; fileReference: string; clientName: string; handlerName: string; label: string; occurredAt: string | null },
+  source: string,
+): DeskWorkItem {
+  const when = dueWording(row.occurredAt);
+  const openNow = when.tone === "unknown";
+  return {
+    id: `${source}-${row.id}`,
+    claimId: row.claimId,
+    fileReference: row.fileReference,
+    clientName: row.clientName,
+    handlerName: row.handlerName,
+    item: row.label,
+    wording: openNow ? "Due today" : when.text,
+    tone: openNow ? "today" : when.tone,
+    sortDays: openNow ? 0 : when.sortDays,
   };
 }
 
@@ -493,16 +697,17 @@ export function listStaff() {
   );
 }
 
-export function listTasks(when?: string) {
-  const rows = all<Record<string, string | number | null>>(`
-    SELECT t.*, s.name AS handler_name, c.file_reference, p.full_name AS client_name
-    FROM tasks t
-    LEFT JOIN staff s ON s.id = t.handler_id
-    LEFT JOIN claims c ON c.id = t.claim_id
-    LEFT JOIN people p ON p.id = c.client_person_id
-    WHERE t.status = 'open'
-    ORDER BY t.due_at ASC
-  `);
+export function listTasks(when?: string, handlerId?: string | null) {
+  const rows = all<Record<string, string | number | null>>(
+    `SELECT t.*, s.name AS handler_name, c.file_reference, p.full_name AS client_name
+     FROM tasks t
+     LEFT JOIN staff s ON s.id = t.handler_id
+     LEFT JOIN claims c ON c.id = t.claim_id
+     LEFT JOIN people p ON p.id = c.client_person_id
+     WHERE t.status = 'open'${handlerId ? " AND c.handler_id = ?" : ""}
+     ORDER BY t.due_at ASC`,
+    handlerId ? [handlerId] : [],
+  );
   if (when === "today") return rows.filter((t) => t.due_at && isSameLondonDay(String(t.due_at)));
   if (when === "overdue") return rows.filter((t) => t.due_at && isBeforeLondonDay(String(t.due_at)));
   return rows;

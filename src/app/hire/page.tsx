@@ -71,12 +71,15 @@ function FleetTable({
 export default async function HirePage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; error?: string; saved?: string; show?: string }>;
+  searchParams: Promise<{ q?: string; error?: string; saved?: string; show?: string; status?: string }>;
 }) {
   await requireStaff();
-  const { q, error, saved, show } = await searchParams;
+  const { q, error, saved, show, status } = await searchParams;
   const includeRemoved = show === "removed";
-  const fleet = listFleet({ includeRemoved }).filter((v) => fleetSearchMatches(v.registration ? String(v.registration) : "", q || ""));
+  const fleet = listFleet({ includeRemoved }).filter((v) => {
+    if (status && String(v.status) !== status) return false;
+    return fleetSearchMatches(v.registration ? String(v.registration) : "", q || "");
+  });
   const real = fleet.filter((v) => Number(v.is_real) === 1 && !v.removed_at);
   const test = fleet.filter((v) => Number(v.is_real) !== 1 && !v.removed_at);
   const removed = fleet.filter((v) => v.removed_at);
@@ -121,6 +124,15 @@ export default async function HirePage({
           </Link>
         ) : null}
       </form>
+
+      {status ? (
+        <p className="text-sm">
+          Filtered: {status.replaceAll("_", " ")}.{" "}
+          <Link href={q ? `/hire?q=${encodeURIComponent(q)}` : "/hire"} className="text-teal-dark underline">
+            Clear filter
+          </Link>
+        </p>
+      ) : null}
 
       <section className="rounded-xl border-2 border-teal bg-[#e8f4f2] p-5">
         <h2 className="font-serif text-xl text-navy-deep">Hire Packs</h2>

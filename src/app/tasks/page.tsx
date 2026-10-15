@@ -1,7 +1,7 @@
 import { actionCompleteTask } from "@/app/actions";
 import { asFormAction } from "@/lib/form-action";
 import { PageHeader } from "@/components/ClaimTable";
-import { formatUkDateTime } from "@/lib/dates";
+import { dueTextClass, dueWording } from "@/lib/domain/due-wording";
 import { requireStaff } from "@/lib/auth/session";
 import { listTasks } from "@/lib/db/queries";
 import Link from "next/link";
@@ -9,11 +9,18 @@ import Link from "next/link";
 export default async function TasksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ when?: string }>;
+  searchParams: Promise<{ when?: string; handler?: string }>;
 }) {
   await requireStaff();
-  const { when } = await searchParams;
-  const tasks = listTasks(when);
+  const { when, handler } = await searchParams;
+  const tasks = listTasks(when, handler || null);
+  const href = (nextWhen?: string) => {
+    const params = new URLSearchParams();
+    if (nextWhen) params.set("when", nextWhen);
+    if (handler) params.set("handler", handler);
+    const query = params.toString();
+    return query ? `/tasks?${query}` : "/tasks";
+  };
   return (
     <div>
       <PageHeader
@@ -21,13 +28,13 @@ export default async function TasksPage({
         subtitle="Open work grouped for the claims desk. Completing a task persists on this PC."
       />
       <div className="mb-4 flex gap-3 text-sm">
-        <Link href="/tasks" className={!when ? "font-semibold text-teal-dark" : "text-slate"}>
+        <Link href={href()} className={!when ? "font-semibold text-teal-dark" : "text-slate"}>
           All open
         </Link>
-        <Link href="/tasks?when=today" className={when === "today" ? "font-semibold text-teal-dark" : "text-slate"}>
+        <Link href={href("today")} className={when === "today" ? "font-semibold text-teal-dark" : "text-slate"}>
           Due today
         </Link>
-        <Link href="/tasks?when=overdue" className={when === "overdue" ? "font-semibold text-teal-dark" : "text-slate"}>
+        <Link href={href("overdue")} className={when === "overdue" ? "font-semibold text-teal-dark" : "text-slate"}>
           Overdue
         </Link>
       </div>
@@ -35,7 +42,7 @@ export default async function TasksPage({
         <table className="ledger-table">
           <thead>
             <tr>
-              <th>Due</th>
+              <th>When</th>
               <th>Task</th>
               <th>File</th>
               <th>Handler</th>
@@ -45,7 +52,9 @@ export default async function TasksPage({
           <tbody>
             {tasks.map((t) => (
               <tr key={String(t.id)}>
-                <td>{formatUkDateTime(t.due_at ? String(t.due_at) : null)}</td>
+                <td>
+                  <TaskWhen value={t.due_at ? String(t.due_at) : null} />
+                </td>
                 <td>
                   {String(t.title)}
                   <div className="text-xs text-slate">{String(t.details || "")}</div>
@@ -75,4 +84,10 @@ export default async function TasksPage({
       </div>
     </div>
   );
+}
+
+function TaskWhen({ value }: { value: string | null }) {
+  const when = dueWording(value);
+  if (when.tone === "unknown") return <span>—</span>;
+  return <span className={dueTextClass(when.tone)}>{when.text}</span>;
 }
