@@ -1,5 +1,9 @@
 import { SendPreparedEmailForm } from "@/components/claims/SendPreparedEmailForm";
 import { RecordVersionField } from "@/components/SaveClashNotice";
+import { SubmitKeyInput } from "@/components/SubmitKeyInput";
+import { SeparateRecordConfirm } from "@/components/SeparateRecordConfirm";
+import { sectionVersion } from "@/lib/db/record-version";
+import { SHARED_HIRE_END } from "@/lib/db/shared-fields";
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
 import { liveEmailSending } from "@/lib/email/send-mode";
 import { SIMULATED_EMAIL_BANNER } from "@/lib/email/send-mode-copy";
@@ -46,12 +50,16 @@ export function TotalLossPanel({
   returnTo,
   error,
   openMailId: _openMailId,
+  payWarn,
+  payAmount,
 }: {
   claimId: string;
   totalLoss: boolean;
   returnTo: string;
   error?: string;
   openMailId?: string;
+  payWarn?: string;
+  payAmount?: string;
 }) {
   if (!totalLoss) return null;
   const liveSending = liveEmailSending();
@@ -284,6 +292,15 @@ export function TotalLossPanel({
           <p className="mt-2 text-slate">{paymentChase.reason} Not due yet.</p>
         ) : null}
         {paymentChase?.outcomeOnFile ? <p className="mt-2">Payment is on file. The chase is cleared.</p> : null}
+        {payWarn ? (
+          <SeparateRecordConfirm
+            message={payWarn}
+            action={`/claims/${claimId}/total-loss`}
+            confirmField="confirmSeparate"
+            cancelHref={returnTo}
+            fields={{ intent: "record_payment", returnTo, received: payAmount || "" }}
+          />
+        ) : null}
         <div className="mt-3 flex flex-col gap-3">
           {!promisedAt && damage.receivedPence <= 0 ? (
             <form method="post" action={`/claims/${claimId}/total-loss`}>
@@ -295,6 +312,7 @@ export function TotalLossPanel({
             </form>
           ) : null}
           <form method="post" action={`/claims/${claimId}/total-loss`} className="flex flex-wrap items-end gap-3">
+              <SubmitKeyInput />
               <input type="hidden" name="intent" value="record_payment" />
               <input type="hidden" name="returnTo" value={returnTo} />
               <label>
@@ -361,9 +379,13 @@ export function TotalLossPanel({
                 rule. It is not applied until you confirm it. Storage is not changed.
               </p>
               <form method="post" action={`/claims/${claimId}/total-loss`} className="mt-3">
+                <SubmitKeyInput />
                 <input type="hidden" name="intent" value="confirm_off_hire" />
                 <input type="hidden" name="choice" value="suggested" />
                 <input type="hidden" name="returnTo" value={returnTo} />
+                {offHire.episodeId ? (
+                  <input type="hidden" name="hireEndVersion" value={sectionVersion(SHARED_HIRE_END, offHire.episodeId)} />
+                ) : null}
                 <button className="min-h-11 rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white" type="submit">
                   Use this as the hire end date
                 </button>
@@ -382,6 +404,9 @@ export function TotalLossPanel({
                   <input type="hidden" name="intent" value="confirm_off_hire" />
                   <input type="hidden" name="choice" value="suggested" />
                   <input type="hidden" name="returnTo" value={returnTo} />
+                  {offHire.episodeId ? (
+                    <input type="hidden" name="hireEndVersion" value={sectionVersion(SHARED_HIRE_END, offHire.episodeId)} />
+                  ) : null}
                   <button className="min-h-11 rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white" type="submit">
                     Use the suggested date
                   </button>
@@ -390,6 +415,9 @@ export function TotalLossPanel({
                   <input type="hidden" name="intent" value="confirm_off_hire" />
                   <input type="hidden" name="choice" value="keep" />
                   <input type="hidden" name="returnTo" value={returnTo} />
+                  {offHire.episodeId ? (
+                    <input type="hidden" name="hireEndVersion" value={sectionVersion(SHARED_HIRE_END, offHire.episodeId)} />
+                  ) : null}
                   <button className="min-h-11 rounded-md border border-line bg-white px-3 py-2 text-sm font-semibold" type="submit">
                     Keep the date already on the file
                   </button>

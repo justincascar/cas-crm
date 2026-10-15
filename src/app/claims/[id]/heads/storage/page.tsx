@@ -7,6 +7,7 @@ import { FigureResolution } from "@/components/claims/FigureResolution";
 import { HeadAgreedForm } from "@/components/claims/HeadAgreedForm";
 import { HeadOfLossScreen } from "@/components/claims/HeadOfLossScreen";
 import { PaymentReviewPanel } from "@/components/claims/PaymentReviewPanel";
+import { SeparateRecordConfirm } from "@/components/SeparateRecordConfirm";
 import { StorageDateReview } from "@/components/claims/StorageDateReview";
 import { StorageEndDateReview } from "@/components/claims/StorageEndDateReview";
 import { ChargeableStorageNote, StorageAuthorisationEndPanel } from "@/components/claims/StorageAuthorisationEnd";
@@ -27,6 +28,7 @@ import { accountCanAcceptPaymentSettlement, accountCanApproveSettlement } from "
 import { getClaim } from "@/lib/db/queries";
 import { getScreenData } from "@/lib/db/screens";
 import { loadClash, screenVersion, sectionVersion } from "@/lib/db/record-version";
+import { sharedVersionFields } from "@/lib/db/shared-fields";
 import { RecordVersionField, SaveClashNotice } from "@/components/SaveClashNotice";
 import { claimStorageChargeEnded, storageAuthorisationEndForClaim } from "@/lib/db/storage-authorisation-end";
 import {
@@ -56,7 +58,7 @@ export default async function StorageHeadPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; clash?: string; figureError?: string; offerError?: string; decisionError?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; clash?: string; figureError?: string; offerError?: string; offerWarn?: string; offerAmount?: string; offerOn?: string; offerNote?: string; offerHead?: string; offerDays?: string; offerRate?: string; decisionError?: string }>;
 }) {
   const staff = await requireStaff();
   const { id } = await params;
@@ -87,6 +89,7 @@ export default async function StorageHeadPage({
   const rateClash =
     screenClash && screenClash.scope === "storage-rate" && screenClash.recordKey === id ? screenClash : null;
   const storageVersion = detailsClash ? detailsClash.expectedVersion : screenVersion(id, "storage");
+  const sharedStorage = sharedVersionFields(id, "storage");
   const rateVersion = rateClash ? rateClash.expectedVersion : sectionVersion("storage-rate", id);
   const entered = (name: string, current: string) =>
     detailsClash && Object.prototype.hasOwnProperty.call(detailsClash.submitted, name) ? detailsClash.submitted[name] : current;
@@ -168,6 +171,8 @@ export default async function StorageHeadPage({
         </p>
         <form method="post" action={`/claims/${id}/storage-details`} className="grid gap-3 sm:grid-cols-2">
           <RecordVersionField version={storageVersion} />
+          <input type="hidden" name="storageStartVersion" value={sharedStorage.storageStartVersion || ""} />
+          <input type="hidden" name="storageEndVersion" value={sharedStorage.storageEndVersion || ""} />
           <input
             type="hidden"
             name="loadedJson"
@@ -242,6 +247,24 @@ export default async function StorageHeadPage({
         ) : null}
         {query.figureError ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.figureError}</p> : null}
         {query.offerError ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.offerError}</p> : null}
+        {query.offerWarn ? (
+          <SeparateRecordConfirm
+            message={query.offerWarn}
+            action={`/claims/${id}/vehicle-offers`}
+            confirmField="confirmDuplicate"
+            cancelHref={returnTo}
+            fields={{
+              intent: "record_offer",
+              returnTo,
+              amount: query.offerAmount || "",
+              offeredOn: query.offerOn || "",
+              note: query.offerNote || "",
+              head: query.offerHead || "storage",
+              offeredDays: query.offerDays || "",
+              offeredDailyRate: query.offerRate || "",
+            }}
+          />
+        ) : null}
         {query.decisionError ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.decisionError}</p> : null}
         {charge?.status === "calculated" ? (
           <dl className="grid gap-3 text-sm sm:grid-cols-2">

@@ -4,6 +4,7 @@ import { totalLossOffHireDecision, type TotalLossOffHireDecision } from "../doma
 import { TOTAL_LOSS_PAYMENT_RECEIVED_EVENT } from "../domain/follow-up-chases";
 import { recordClaimEvent } from "./chronology";
 import { get, run } from "./connection";
+import { SHARED_HIRE_END, guardSharedFields, hireEndAt } from "./shared-fields";
 import { calendarDay } from "./storage-recovery-date";
 import { getTotalLossReport, getVehicleDamageMoney } from "./total-loss";
 
@@ -61,7 +62,12 @@ export function totalLossOffHireForClaim(claimId: string): TotalLossOffHireView 
   return { ...decision, episodeId: episode?.id || null };
 }
 
-export function confirmTotalLossOffHire(input: { claimId: string; actorId: string; choice: "suggested" | "keep" }) {
+export function confirmTotalLossOffHire(input: {
+  claimId: string;
+  actorId: string;
+  choice: "suggested" | "keep";
+  hireEndVersion?: string;
+}) {
   const view = totalLossOffHireForClaim(input.claimId);
   if (!view || (view.kind !== "suggest" && view.kind !== "conflict")) {
     throw new Error("There is no hire-end suggestion to confirm.");
@@ -75,6 +81,19 @@ export function confirmTotalLossOffHire(input: { claimId: string; actorId: strin
   );
   if (input.choice === "keep") {
     if (view.kind !== "conflict") throw new Error("There is no existing hire end to keep.");
+    if (input.hireEndVersion !== undefined) {
+      const kept = { billing_end_at: hireEndAt(episode.id) };
+      guardSharedFields({
+        scope: SHARED_HIRE_END,
+        recordKey: episode.id,
+        expected: input.hireEndVersion,
+        actorId: input.actorId,
+        current: kept,
+        next: kept,
+        labels: { billing_end_at: "Hire end" },
+        submitted: kept,
+      });
+    }
     recordClaimEvent({
       claimId: input.claimId,
       eventType: "hire_end_date_confirmed",
@@ -86,6 +105,16 @@ export function confirmTotalLossOffHire(input: { claimId: string; actorId: strin
     return;
   }
   const date = view.kind === "suggest" ? view.date : view.suggestedDate;
+  guardSharedFields({
+    scope: SHARED_HIRE_END,
+    recordKey: episode.id,
+    expected: input.hireEndVersion,
+    actorId: input.actorId,
+    current: { billing_end_at: hireEndAt(episode.id) },
+    next: { billing_end_at: date },
+    labels: { billing_end_at: "Hire end" },
+    submitted: { billing_end_at: date },
+  });
   run(`UPDATE hire_episodes SET billing_end_at = ? WHERE id = ?`, [date, episode.id]);
   const storageAfter = get<{ storage_billing_end_on: string | null; storage_rate_pence: number | null }>(
     `SELECT storage_billing_end_on, storage_rate_pence FROM claims WHERE id = ?`,

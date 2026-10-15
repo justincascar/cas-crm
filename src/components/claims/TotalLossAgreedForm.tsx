@@ -1,4 +1,5 @@
 import { formatGbp } from "@/lib/money";
+import { SubmitKeyInput } from "@/components/SubmitKeyInput";
 import { getTotalLossReport } from "@/lib/db/total-loss";
 import { totalLossSuggestion } from "@/lib/domain/total-loss";
 
@@ -47,6 +48,7 @@ export function TotalLossAgreedForm({
       ) : null}
       {suggestionOnly ? null : (
       <form method="post" action={`/claims/${claimId}/total-loss`} className="rounded-md border border-line bg-white px-4 py-3 text-sm">
+        <SubmitKeyInput />
         <input type="hidden" name="returnTo" value={returnTo} />
         <input type="hidden" name="intent" value="confirm_agreed" />
         <label className="block">

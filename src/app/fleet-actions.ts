@@ -11,7 +11,7 @@ import {
   updateFleetVehicle,
 } from "@/lib/db/fleet";
 import { errorQuery } from "@/lib/form-validation";
-import { formVersion, withSectionSave } from "@/lib/db/record-version";
+import { formLoaded, formVersion, withSectionSave } from "@/lib/db/record-version";
 import { redirectClash } from "@/lib/http/version-clash";
 
 function bounce(path: string, error?: string) {
@@ -112,13 +112,20 @@ export async function actionUpdateFleetVehicle(formData: FormData) {
 }
 
 export async function actionRemoveFleetVehicle(formData: FormData) {
-  await requireStaff();
+  const staff = await requireStaff();
   const id = String(formData.get("fleetVehicleId") || "");
   const confirmDespiteReservations = String(formData.get("confirmDespiteReservations") || "") === "1";
   const reason = String(formData.get("removedReason") || "");
   try {
-    removeFleetVehicle(id, { confirmDespiteReservations, reason });
+    removeFleetVehicle(id, {
+      confirmDespiteReservations,
+      reason,
+      expectedVersion: formVersion(formData),
+      actorId: staff.id,
+      loaded: formLoaded(formData),
+    });
   } catch (error) {
+    redirectClash(`/hire/${id}`, error);
     bounce(`/hire/${id}`, error instanceof Error ? error.message : "Could not remove the vehicle.");
   }
   revalidatePath("/hire");

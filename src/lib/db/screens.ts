@@ -6,6 +6,30 @@ import { isMobileFieldName, mobileNumberError } from "../phone-number";
 import { formatTypedValue } from "../text";
 import { get, all, getDb, newId, run } from "./connection";
 import { withImmediateTransaction, writeScreenIfCurrent } from "./record-version";
+import {
+  ACCIDENT_FORM_NAMES,
+  CIRCUMSTANCE_FIELDS,
+  CLIENT_PERSON_FORM_NAMES,
+  INSURER_FORM_NAMES,
+  OWN_INSURER_FIELDS,
+  SHARED_CIRCUMSTANCES,
+  SHARED_CLIENT_GTA,
+  SHARED_CLIENT_PERSON,
+  SHARED_OWN_INSURER,
+  SHARED_RECOVERY_AT,
+  SHARED_STORAGE_END,
+  SHARED_STORAGE_START,
+  SHARED_TP_VEHICLE,
+  TP_FORM_NAMES,
+  VEHICLE_TP_FORM_NAMES,
+  claimColumns,
+  clientGtaGroup,
+  clientPersonColumns,
+  guardSharedFields,
+  ownInsurerLabels,
+  recoveryAt,
+  tpVehicleColumns,
+} from "./shared-fields";
 import { normaliseGtaGroup } from "../documents/gta";
 import { poundsToPence } from "./intake";
 import { INDICATIVE_DEFAULTS } from "../constants";
@@ -143,6 +167,175 @@ function screenLabels(screenKey: string): Record<string, string> {
  * Staff saves pass expectedVersion (the updated_at loaded with the page, or "" if the screen had not been saved).
  * A missing or different version does not overwrite. Callers that are not a staff form omit it.
  */
+function guardScreenOverlap(
+  claimId: string,
+  screenKey: string,
+  values: ScreenValues,
+  actorId: string,
+  shared: Record<string, string | undefined> | undefined,
+  loaded?: ScreenValues,
+) {
+  const token = (name: string) => (shared && Object.prototype.hasOwnProperty.call(shared, name) ? shared[name] : undefined);
+  if (screenKey === "accident") {
+    const current = claimColumns(claimId, CIRCUMSTANCE_FIELDS);
+    guardSharedFields({
+      scope: SHARED_CIRCUMSTANCES,
+      recordKey: claimId,
+      expected: token("circumstancesVersion"),
+      actorId,
+      current,
+      next: {
+        circumstances: values.details ? values.details : current.circumstances || "",
+        accident_location: values.location ? values.location : current.accident_location || "",
+      },
+      labels: { circumstances: "Circumstances", accident_location: "Location", details: "Details", location: "Location" },
+      formName: ACCIDENT_FORM_NAMES,
+      submitted: values,
+      loaded,
+    });
+  }
+  if (screenKey === "insurer") {
+    guardSharedFields({
+      scope: SHARED_OWN_INSURER,
+      recordKey: claimId,
+      expected: token("ownInsurerVersion"),
+      actorId,
+      current: claimColumns(claimId, OWN_INSURER_FIELDS),
+      next: {
+        own_insurer_name: values.companyName || "",
+        own_policy_ref: values.policyNumber || "",
+        own_claim_ref: values.claimReference || "",
+        own_insurer_address: values.address || "",
+        own_insurer_postcode: values.postcode || "",
+      },
+      labels: ownInsurerLabels(),
+      formName: INSURER_FORM_NAMES,
+      submitted: values,
+      loaded,
+    });
+  }
+  if (screenKey === "client") {
+    guardSharedFields({
+      scope: SHARED_CLIENT_PERSON,
+      recordKey: claimId,
+      expected: token("clientPersonVersion"),
+      actorId,
+      current: clientPersonColumns(claimId),
+      next: {
+        date_of_birth: values.dob || "",
+        licence_number: values.licenceNumber || "",
+        telephone: values.telMain || values.telMobile || "",
+      },
+      labels: { date_of_birth: "Date of birth", licence_number: "Licence number", telephone: "Telephone", dob: "Date of birth", licenceNumber: "Licence number", telMain: "Telephone" },
+      formName: CLIENT_PERSON_FORM_NAMES,
+      submitted: values,
+      loaded,
+    });
+  }
+  if (screenKey === "vehicle") {
+    guardSharedFields({
+      scope: SHARED_CLIENT_GTA,
+      recordKey: claimId,
+      expected: token("clientGtaVersion"),
+      actorId,
+      current: { gta_group: clientGtaGroup(claimId) },
+      next: { gta_group: values.clientGtaGroup ? normaliseGtaGroup(values.clientGtaGroup) || "" : "" },
+      labels: { gta_group: "GTA group", clientGtaGroup: "GTA group" },
+      formName: { gta_group: "clientGtaGroup" },
+      submitted: values,
+      loaded,
+    });
+    const tp = tpVehicleColumns(claimId);
+    if (tp) {
+      guardSharedFields({
+        scope: SHARED_TP_VEHICLE,
+        recordKey: claimId,
+        expected: token("tpVehicleVersion"),
+        actorId,
+        current: tp,
+        next: {
+          registration: values.tpReg ? values.tpReg : tp.registration || "",
+          make: values.tpMake ? values.tpMake : tp.make || "",
+          model: values.tpModel ? values.tpModel : tp.model || "",
+        },
+        labels: { registration: "Registration", make: "Make", model: "Model", tpReg: "Registration", tpMake: "Make", tpModel: "Model" },
+        formName: VEHICLE_TP_FORM_NAMES,
+        submitted: values,
+        loaded,
+      });
+    }
+  }
+  if (screenKey === "tp1") {
+    const tp = tpVehicleColumns(claimId);
+    if (tp) {
+      guardSharedFields({
+        scope: SHARED_TP_VEHICLE,
+        recordKey: claimId,
+        expected: token("tpVehicleVersion"),
+        actorId,
+        current: tp,
+        next: {
+          registration: values.registration ? values.registration : tp.registration || "",
+          make: values.make ? values.make : tp.make || "",
+          model: values.model ? values.model : tp.model || "",
+        },
+        labels: { registration: "Registration", make: "Make", model: "Model" },
+        formName: TP_FORM_NAMES,
+        submitted: values,
+        loaded,
+      });
+    }
+  }
+  if (screenKey === "storage") {
+    const current = claimColumns(claimId, ["storage_started_on", "storage_billing_end_on"]);
+    guardSharedFields({
+      scope: SHARED_STORAGE_START,
+      recordKey: claimId,
+      expected: token("storageStartVersion"),
+      actorId,
+      current: { storage_started_on: current.storage_started_on || "" },
+      next: { storage_started_on: values.startDate || "" },
+      labels: { storage_started_on: "Storage start", startDate: "Start date" },
+      formName: { storage_started_on: "startDate" },
+      submitted: values,
+      loaded,
+    });
+    if (Object.prototype.hasOwnProperty.call(values, "endDate")) {
+      guardSharedFields({
+        scope: SHARED_STORAGE_END,
+        recordKey: claimId,
+        expected: token("storageEndVersion"),
+        actorId,
+        current: { storage_billing_end_on: current.storage_billing_end_on || "" },
+        next: { storage_billing_end_on: values.endDate || "" },
+        labels: { storage_billing_end_on: "Storage end", endDate: "Chargeable end date" },
+        formName: { storage_billing_end_on: "endDate" },
+        submitted: values,
+        loaded,
+      });
+    }
+  }
+  if (screenKey === "recovery") {
+    const current = recoveryAt(claimId);
+    guardSharedFields({
+      scope: SHARED_RECOVERY_AT,
+      recordKey: claimId,
+      expected: token("recoveryAtVersion"),
+      actorId,
+      current: { recovered_at: current },
+      next: { recovered_at: values.recoveryDate ? values.recoveryDate : current },
+      labels: { recovered_at: "Recovered", recoveryDate: "Recovery date" },
+      formName: { recovered_at: "recoveryDate" },
+      submitted: values,
+      loaded,
+    });
+  }
+}
+
+/**
+ * Staff saves pass expectedVersion (the updated_at loaded with the page, or "" if the screen had not been saved).
+ * A missing or different version does not overwrite. Callers that are not a staff form omit it.
+ */
 export function saveScreenData(
   claimId: string,
   screenKey: string,
@@ -150,11 +343,14 @@ export function saveScreenData(
   actorId: string,
   expectedVersion?: string,
   loaded?: ScreenValues,
+  shared?: Record<string, string | undefined>,
 ) {
   const stored = screenKey === "recovery" ? normaliseRecoveryScreen(values) : values;
   const blocked = screenSaveFieldError(claimId, screenKey, stored);
   if (blocked) throw new FieldValidationError(blocked.field, blocked.message);
+  const guard = () => guardScreenOverlap(claimId, screenKey, stored, actorId, shared, loaded);
   if (expectedVersion === undefined) {
+    guard();
     const now = nowUtcIso();
     run(
       `INSERT INTO claim_screen_data(claim_id, screen_key, data_json, updated_at, updated_by)
@@ -167,6 +363,7 @@ export function saveScreenData(
     return;
   }
   withImmediateTransaction(() => {
+    guard();
     const written = writeScreenIfCurrent({
       claimId,
       screenKey,
@@ -533,6 +730,9 @@ export function seedScreenDefaults(claimId: string, screenKey: string): ScreenVa
     fill("licenceNumber", claim.licence_number);
     fill("licenceIssuedOn", claim.licence_issued_on);
     fill("licenceExpiry", claim.licence_expires_on);
+    defaults.dob = claim.date_of_birth == null ? "" : String(claim.date_of_birth);
+    defaults.licenceNumber = claim.licence_number == null ? "" : String(claim.licence_number);
+    defaults.telMain = claim.telephone == null ? "" : String(claim.telephone);
   }
   if (screenKey === "owner") {
     fill("companyName", claim.full_name);
@@ -558,7 +758,11 @@ export function seedScreenDefaults(claimId: string, screenKey: string): ScreenVa
       fill("tpMake", tp.make);
       fill("tpModel", tp.model);
       fill("tpColour", tp.colour);
+      defaults.tpReg = tp.registration == null ? "" : String(tp.registration);
+      defaults.tpMake = tp.make == null ? "" : String(tp.make);
+      defaults.tpModel = tp.model == null ? "" : String(tp.model);
     }
+    defaults.clientGtaGroup = claim.gta_group == null ? "" : String(claim.gta_group);
   }
   if (screenKey === "hire-mitigation") {
     fill("clientReg", claim.registration);
@@ -576,6 +780,8 @@ export function seedScreenDefaults(claimId: string, screenKey: string): ScreenVa
     fill("clientSpeed", claim.client_speed);
     fill("tpSpeed", claim.tp_speed);
     fill("photosAtScene", claim.photos_at_scene);
+    defaults.details = claim.circumstances == null ? "" : String(claim.circumstances);
+    defaults.location = claim.accident_location == null ? "" : String(claim.accident_location);
   }
   if (screenKey === "insurer") {
     fill("companyName", claim.own_insurer_name);
@@ -583,6 +789,11 @@ export function seedScreenDefaults(claimId: string, screenKey: string): ScreenVa
     fill("claimReference", claim.own_claim_ref);
     fill("address", claim.own_insurer_address);
     fill("postcode", claim.own_insurer_postcode);
+    defaults.companyName = claim.own_insurer_name == null ? "" : String(claim.own_insurer_name);
+    defaults.policyNumber = claim.own_policy_ref == null ? "" : String(claim.own_policy_ref);
+    defaults.claimReference = claim.own_claim_ref == null ? "" : String(claim.own_claim_ref);
+    defaults.address = claim.own_insurer_address == null ? "" : String(claim.own_insurer_address);
+    defaults.postcode = claim.own_insurer_postcode == null ? "" : String(claim.own_insurer_postcode);
     fill("audatexNetworkCode", claim.audatex_network_code);
     fill("audatexWorkProviderCode", claim.audatex_work_provider_code);
     const audatexSuggestion = suggestAudatexCodesForClaim(claimId);
@@ -604,6 +815,8 @@ export function seedScreenDefaults(claimId: string, screenKey: string): ScreenVa
   if (screenKey === "storage") {
     fill("startDate", claim.storage_started_on);
     fill("endDate", claim.storage_billing_end_on);
+    defaults.startDate = claim.storage_started_on == null ? "" : String(claim.storage_started_on);
+    defaults.endDate = claim.storage_billing_end_on == null ? "" : String(claim.storage_billing_end_on);
     if (claim.storage_rate_pence != null) fill("dailyRate", String(claim.storage_rate_pence));
   }
   if (screenKey === "recovery") {
@@ -613,7 +826,9 @@ export function seedScreenDefaults(claimId: string, screenKey: string): ScreenVa
     );
     if (job) {
       fill("location", job.location);
-      fill("recoveryDate", job.recovered_at ? String(job.recovered_at).slice(0, 10) : "");
+      const recovered = job.recovered_at ? String(job.recovered_at).slice(0, 10) : "";
+      fill("recoveryDate", recovered);
+      defaults.recoveryDate = recovered;
       if (!Object.prototype.hasOwnProperty.call(saved, "standardCharge") && Number(job.charge_pence) > 0) {
         defaults.standardCharge = String(job.charge_pence);
       }
@@ -653,6 +868,11 @@ export function seedScreenDefaults(claimId: string, screenKey: string): ScreenVa
       fill("registration", tp.registration);
       fill("make", tp.make);
       fill("model", tp.model);
+      if (sequence === 1) {
+        defaults.registration = tp.registration == null ? "" : String(tp.registration);
+        defaults.make = tp.make == null ? "" : String(tp.make);
+        defaults.model = tp.model == null ? "" : String(tp.model);
+      }
       fill("insurerName", tp.insurer_name);
       fill("insurerAddress", tp.insurer_address);
       fill("insurerPostcode", tp.insurer_postcode);

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { isOfficeRole } from "@/lib/auth/roles";
 import { getRequestStaff } from "@/lib/auth/session";
-import { formLoaded, formVersion, pathWithClash, VersionConflictError } from "@/lib/db/record-version";
+import { formLoaded, formVersion, pathWithClash, postedVersion, VersionConflictError } from "@/lib/db/record-version";
 import { saveScreenData } from "@/lib/db/screens";
 import { syncStorageClaimed } from "@/lib/db/storage-charge";
 import { browserOrigin } from "@/lib/http/browser-origin";
@@ -32,7 +32,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (form.has("endDate")) values.endDate = String(form.get("endDate") || "");
   if (form.has("endDateReason")) values.endDateReason = String(form.get("endDateReason") || "");
   try {
-    saveScreenData(id, "storage", values, staff.id, formVersion(form), formLoaded(form));
+    saveScreenData(id, "storage", values, staff.id, formVersion(form), formLoaded(form), {
+      storageStartVersion: postedVersion(form, "storageStartVersion"),
+      storageEndVersion: postedVersion(form, "storageEndVersion"),
+    });
     syncStorageClaimed(id);
   } catch (error) {
     if (error instanceof VersionConflictError) {

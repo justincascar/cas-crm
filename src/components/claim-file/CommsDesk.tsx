@@ -70,6 +70,7 @@ export function CommsDesk({
   repairVersion = "",
   overrideVersions = {},
   engineerVersion = "",
+  insurerPositionVersion,
 }: {
   claimId: string;
   handlerId: string;
@@ -104,6 +105,7 @@ export function CommsDesk({
   repairVersion?: string;
   overrideVersions?: Record<string, string>;
   engineerVersion?: string;
+  insurerPositionVersion?: string;
 }) {
   const router = useRouter();
   const defaultSubject = `Our ref: ${defaults.fileReference}  Your policy: ${defaults.policyRef || "…"}`;
@@ -204,6 +206,7 @@ export function CommsDesk({
           mailboxConnected={mailboxConnected}
           returnTo={`/claims/${claimId}/work/comms`}
           repairVersion={repairVersion}
+          insurerPositionVersion={insurerPositionVersion}
           overrideVersion={overrideVersions[chase.kind] || ""}
         />
       ))}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { formatUkDate } from "@/lib/dates";
+import { SubmitKeyInput } from "@/components/SubmitKeyInput";
 import { offerComparisonText } from "@/lib/domain/figure-resolution";
 import { formatGbp } from "@/lib/money";
 import type { VehicleOffer, VehicleOfferStatus } from "@/lib/db/vehicle-offers";
@@ -186,6 +186,7 @@ export function VehicleOffers({
           </ol>
         ) : null}
         <form method="post" action={action} className="mt-4 grid gap-3 sm:grid-cols-2" onSubmit={onRecordOffer}>
+          <SubmitKeyInput />
           <input type="hidden" name="returnTo" value={returnTo} />
           {offerHead ? <input type="hidden" name="head" value={offerHead} /> : null}
           <input type="hidden" name="intent" value="record_offer" />
@@ -230,6 +231,7 @@ export function VehicleOffers({
         action={action}
         className="scroll-mt-24 rounded-md border border-line bg-white p-3"
       >
+        <SubmitKeyInput />
         <input type="hidden" name="returnTo" value={returnTo} />
         {offerHead ? <input type="hidden" name="head" value={offerHead} /> : null}
         <input type="hidden" name="intent" value="record_agreed" />

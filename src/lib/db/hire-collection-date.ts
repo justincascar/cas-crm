@@ -1,6 +1,7 @@
 import { formatUkDate, nowUtcIso } from "../dates";
 import { recordClaimEvent } from "./chronology";
 import { all, get, run } from "./connection";
+import { SHARED_HIRE_END, guardSharedFields, hireEndAt } from "./shared-fields";
 import { calendarDay } from "./storage-recovery-date";
 
 export type HireEndDateReview = {
@@ -137,6 +138,7 @@ export function confirmHireEndDate(input: {
   episodeId: string;
   choice: "job" | "file";
   actorId: string;
+  hireEndVersion?: string;
 }) {
   const episode = readEpisode(input.episodeId);
   if (!episode || episode.claim_id !== input.claimId) return;
@@ -144,6 +146,16 @@ export function confirmHireEndDate(input: {
   if (!jobDate) return;
   const hireEndDay = calendarDay(episode.billing_end_at);
   if (input.choice === "job") {
+    guardSharedFields({
+      scope: SHARED_HIRE_END,
+      recordKey: episode.id,
+      expected: input.hireEndVersion,
+      actorId: input.actorId,
+      current: { billing_end_at: hireEndAt(episode.id) },
+      next: { billing_end_at: jobDate },
+      labels: { billing_end_at: "Hire end" },
+      submitted: { billing_end_at: jobDate },
+    });
     writeHireEnd(episode.id, jobDate);
     recordClaimEvent({
       claimId: input.claimId,
@@ -154,6 +166,19 @@ export function confirmHireEndDate(input: {
       source: "staff",
     });
     return;
+  }
+  if (input.hireEndVersion !== undefined) {
+    const keptHire = { billing_end_at: hireEndAt(episode.id) };
+    guardSharedFields({
+      scope: SHARED_HIRE_END,
+      recordKey: episode.id,
+      expected: input.hireEndVersion,
+      actorId: input.actorId,
+      current: keptHire,
+      next: keptHire,
+      labels: { billing_end_at: "Hire end" },
+      submitted: keptHire,
+    });
   }
   clearReview(episode.id);
   recordClaimEvent({

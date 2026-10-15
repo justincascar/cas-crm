@@ -12,6 +12,7 @@ import {
 } from "../domain/storage-authorisation-end";
 import { recordClaimEvent } from "./chronology";
 import { get, all, run } from "./connection";
+import { SHARED_STORAGE_END, claimColumns, guardSharedFields } from "./shared-fields";
 import { calendarDay } from "./storage-recovery-date";
 
 function ukDay(value: string): string {
@@ -98,6 +99,7 @@ export function confirmStorageAuthorisationEnd(input: {
   claimId: string;
   actorId: string;
   choice: "suggested" | "keep";
+  storageEndVersion?: string;
 }) {
   const started = get<{ storage_started_on: string | null }>(
     `SELECT storage_started_on FROM claims WHERE id = ?`,
@@ -118,6 +120,19 @@ export function confirmStorageAuthorisationEnd(input: {
   );
   if (input.choice === "keep") {
     if (view.kind !== "conflict") throw new Error("There is no storage end on the file to keep.");
+    const kept = claimColumns(input.claimId, ["storage_billing_end_on"]);
+    if (input.storageEndVersion !== undefined) {
+      guardSharedFields({
+        scope: SHARED_STORAGE_END,
+        recordKey: input.claimId,
+        expected: input.storageEndVersion,
+        actorId: input.actorId,
+        current: kept,
+        next: kept,
+        labels: { storage_billing_end_on: "Storage end" },
+        submitted: { storage_billing_end_on: kept.storage_billing_end_on || "" },
+      });
+    }
     recordClaimEvent({
       claimId: input.claimId,
       eventType: "storage_end_date_confirmed",
@@ -131,6 +146,16 @@ export function confirmStorageAuthorisationEnd(input: {
   const date = view.kind === "suggest" ? view.date : view.suggestedDate;
   const basis = view.kind === "suggest" || view.kind === "conflict" ? view.basis : "authorisation";
   const earlier = view.kind === "suggest" || view.kind === "conflict" ? view.earlierThanAuthorisation : false;
+  guardSharedFields({
+    scope: SHARED_STORAGE_END,
+    recordKey: input.claimId,
+    expected: input.storageEndVersion,
+    actorId: input.actorId,
+    current: claimColumns(input.claimId, ["storage_billing_end_on"]),
+    next: { storage_billing_end_on: date },
+    labels: { storage_billing_end_on: "Storage end" },
+    submitted: { storage_billing_end_on: date },
+  });
   run(`UPDATE claims SET storage_billing_end_on = ?, storage_authorisation_review = NULL WHERE id = ?`, [date, input.claimId]);
   const after = readClaim(input.claimId);
   const hireAfter = get<{ billing_end_at: string | null; rate_pence_per_day: number | null }>(

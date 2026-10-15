@@ -8,6 +8,7 @@ import { renameStoredFile, safeFilename, storedFileExists, storeFileCopy } from 
 import { normaliseGtaGroup } from "../documents/gta";
 import { formatVehicleRegistration } from "../text";
 import { get, getDb, newId, run } from "./connection";
+import { actorName, claimSectionForSave, conflictSentence, VersionConflictError, withImmediateTransaction } from "./record-version";
 import {
   DOCUMENT_TYPE_V5C,
   findFleetDocumentOn,
@@ -607,9 +608,59 @@ export function updateFleetVehicle(id: string, input: FleetVehicleInput) {
   ]);
 }
 
+export function touchFleetVersion(input: {
+  fleetVehicleId: string;
+  actorId: string;
+  expected?: string;
+  change: string;
+  loaded?: Record<string, string>;
+}) {
+  const row = get<{ updated_at: string; updated_by: string; fields_json: string }>(
+    `SELECT updated_at, updated_by, fields_json FROM record_versions WHERE scope = 'fleet' AND record_key = ?`,
+    [input.fleetVehicleId],
+  );
+  const actual = row?.updated_at || "";
+  let fields: Record<string, string> = {};
+  if (row?.fields_json) {
+    try {
+      const parsed = JSON.parse(row.fields_json) as Record<string, unknown>;
+      for (const [key, value] of Object.entries(parsed)) fields[key] = value == null ? "" : String(value);
+    } catch {
+      fields = {};
+    }
+  }
+  if (input.expected !== undefined && input.expected !== actual) {
+    const name = row ? actorName(row.updated_by) : "Someone";
+    const when = row?.updated_at || new Date().toISOString();
+    throw new VersionConflictError(
+      name,
+      when,
+      [{ name: "lastChange", label: "Fleet", saved: fields.lastChange || "" }],
+      { lastChange: input.change },
+      input.expected,
+      "fleet",
+      input.fleetVehicleId,
+      input.loaded
+        ? Object.entries(input.loaded).map(([key, value]) => ({ name: key, label: key, saved: "", yours: value }))
+        : [{ name: "lastChange", label: "Fleet", saved: "", yours: input.change }],
+      row ? conflictSentence(name, when) : "This save did not match the version on the file. Your changes have not been saved.",
+    );
+  }
+  claimSectionForSave({
+    scope: "fleet",
+    recordKey: input.fleetVehicleId,
+    expected: actual,
+    actorId: input.actorId,
+    submitted: { lastChange: input.change },
+    labels: { lastChange: "Fleet", registration: "Registration", make: "Make", model: "Model" },
+    fields: { ...fields, lastChange: input.change },
+    loaded: input.loaded,
+  });
+}
+
 export function removeFleetVehicle(
   id: string,
-  opts?: { confirmDespiteReservations?: boolean; reason?: string },
+  opts?: { confirmDespiteReservations?: boolean; reason?: string; expectedVersion?: string; actorId?: string; loaded?: Record<string, string> },
 ) {
   const existing = getFleetVehicle(id);
   if (!existing) throw new Error("Vehicle not found.");
@@ -618,11 +669,30 @@ export function removeFleetVehicle(
   if (blocking.length && !opts?.confirmDespiteReservations) {
     throw new FleetRemoveBlockedError(blocking);
   }
-  run(`UPDATE fleet_vehicles SET status = 'removed', removed_at = ?, removed_reason = ? WHERE id = ?`, [
-    nowUtcIso(),
-    blank(opts?.reason) || (blocking.length ? "Removed with active or future reservation confirmed." : null),
-    id,
-  ]);
+  const apply = () => {
+    const again = listBlockingReservations(id);
+    if (again.length && !opts?.confirmDespiteReservations) throw new FleetRemoveBlockedError(again);
+    const still = get<{ removed_at: string | null }>(`SELECT removed_at FROM fleet_vehicles WHERE id = ?`, [id]);
+    if (!still) throw new Error("Vehicle not found.");
+    if (still.removed_at) throw new Error("This vehicle is already removed from the fleet.");
+    touchFleetVersion({
+      fleetVehicleId: id,
+      actorId: opts?.actorId || "staff",
+      expected: opts?.expectedVersion,
+      change: "Removed from the fleet",
+      loaded: opts?.loaded,
+    });
+    run(`UPDATE fleet_vehicles SET status = 'removed', removed_at = ?, removed_reason = ? WHERE id = ?`, [
+      nowUtcIso(),
+      blank(opts?.reason) || (again.length ? "Removed with active or future reservation confirmed." : null),
+      id,
+    ]);
+  };
+  if (opts?.expectedVersion !== undefined) {
+    withImmediateTransaction(apply);
+    return;
+  }
+  apply();
 }
 
 export function getFleetVehicle(id: string) {

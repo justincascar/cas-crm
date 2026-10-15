@@ -16,6 +16,7 @@ import { listHireAgreements } from "@/lib/db/chronology";
 import { impecuniosityGate } from "@/lib/db/impecuniosity";
 import { getScreenData, seedScreenDefaults } from "@/lib/db/screens";
 import { loadClash, screenVersion, sectionVersion } from "@/lib/db/record-version";
+import { sharedVersionFields, SHARED_CIRCUMSTANCES, SHARED_CLIENT_GTA, SHARED_CLIENT_PERSON, SHARED_INSURER_POSITION, SHARED_OWN_INSURER, SHARED_TP_VEHICLE } from "@/lib/db/shared-fields";
 import { SaveClashNotice } from "@/components/SaveClashNotice";
 import { HireEndDateReview } from "@/components/claims/HireEndDateReview";
 import { TotalLossPanel } from "@/components/claims/TotalLossPanel";
@@ -48,12 +49,40 @@ export default async function ClaimWorkScreenPage({
   if (!data) notFound();
   const loadedValues = seedScreenDefaults(String(data.claim.id), screen);
   const screenClash = loadClash(clash);
+  const claimId = String(data.claim.id);
+  const sharedScopes =
+    screen === "accident"
+      ? [SHARED_CIRCUMSTANCES]
+      : screen === "insurer"
+        ? [SHARED_OWN_INSURER]
+        : screen === "client"
+          ? [SHARED_CLIENT_PERSON]
+          : screen === "vehicle"
+            ? [SHARED_CLIENT_GTA, SHARED_TP_VEHICLE]
+            : screen === "tp1"
+              ? [SHARED_TP_VEHICLE]
+              : [];
   const clashForScreen =
-    screenClash && screenClash.scope === "screen" && screenClash.recordKey === `${data.claim.id}:${screen}`
+    screenClash &&
+    ((screenClash.scope === "screen" && screenClash.recordKey === `${claimId}:${screen}`) ||
+      (sharedScopes.includes(screenClash.scope) && screenClash.recordKey === claimId))
       ? screenClash
       : null;
   const values = clashForScreen ? { ...loadedValues, ...clashForScreen.submitted } : loadedValues;
-  const recordVersion = clashForScreen ? clashForScreen.expectedVersion : screenVersion(String(data.claim.id), screen);
+  const recordVersion =
+    clashForScreen && clashForScreen.scope === "screen" ? clashForScreen.expectedVersion : screenVersion(claimId, screen);
+  const extraHidden = sharedVersionFields(claimId, screen);
+  if (clashForScreen && clashForScreen.scope !== "screen") {
+    const tokenName = Object.keys(extraHidden).find((name) => {
+      if (name === "circumstancesVersion") return clashForScreen.scope === SHARED_CIRCUMSTANCES;
+      if (name === "ownInsurerVersion") return clashForScreen.scope === SHARED_OWN_INSURER;
+      if (name === "clientPersonVersion") return clashForScreen.scope === SHARED_CLIENT_PERSON;
+      if (name === "clientGtaVersion") return clashForScreen.scope === SHARED_CLIENT_GTA;
+      if (name === "tpVehicleVersion") return clashForScreen.scope === SHARED_TP_VEHICLE;
+      return false;
+    });
+    if (tokenName) extraHidden[tokenName] = clashForScreen.expectedVersion;
+  }
   const actorId = String(data.claim.handler_id || "staff-sian");
   const justSaved = saved === "1";
   const preparedRow = findPreparedEngineerInstruction(String(data.claim.id));
@@ -195,6 +224,7 @@ export default async function ClaimWorkScreenPage({
           mailboxConnected={liveEmailSending()}
           impecuniosityBlockReason={impecuniosityGate(String(data.claim.id)).generationBlock}
           engineerVersion={sectionVersion("claim-engineer", String(data.claim.id))}
+          insurerPositionVersion={sectionVersion(SHARED_INSURER_POSITION, String(data.claim.id))}
           repairVersion={sectionVersion("money", `${data.claim.id}:repairs`)}
           overrideVersions={Object.fromEntries(
             chases.map((chase) => [chase.kind, sectionVersion("chase-override", `${data.claim.id}:${chase.kind}`)]),
@@ -254,6 +284,7 @@ export default async function ClaimWorkScreenPage({
           error={error}
           errorField={field}
           recordVersion={recordVersion}
+          extraHidden={extraHidden}
         />
       ) : null}
     </div>

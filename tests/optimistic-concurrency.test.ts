@@ -160,23 +160,49 @@ describe("optimistic concurrency", () => {
     db.close();
   });
 
-  it("records a double-clicked payment only once", () => {
+  it("records a double-clicked payment only once and keeps a second genuine payment", () => {
     const db = seeded();
     withDatabase(db, () => {
       db.prepare(`SELECT id FROM claims WHERE id = 'c3'`).get();
       const before = db.prepare(`SELECT received_pence FROM financial_lines WHERE claim_id = 'c3' AND head_of_loss = 'hire'`).get() as {
         received_pence: number;
       };
-      recordHeadPayment({ claimId: "c3", actorId: "staff-justin", head: "hire", amountPence: 1000, correction: false });
-      recordHeadPayment({ claimId: "c3", actorId: "staff-sian", head: "hire", amountPence: 1000, correction: false });
-      const after = db.prepare(`SELECT received_pence FROM financial_lines WHERE claim_id = 'c3' AND head_of_loss = 'hire'`).get() as {
+      const first = recordHeadPayment({
+        claimId: "c3",
+        actorId: "staff-justin",
+        head: "hire",
+        amountPence: 1000,
+        correction: false,
+        submitKey: "pay-once",
+      });
+      const replay = recordHeadPayment({
+        claimId: "c3",
+        actorId: "staff-sian",
+        head: "hire",
+        amountPence: 1000,
+        correction: false,
+        submitKey: "pay-once",
+      });
+      assert.equal(replay.replayed, true);
+      assert.equal(replay.receivedPence, first.receivedPence);
+      const afterOnce = db.prepare(`SELECT received_pence FROM financial_lines WHERE claim_id = 'c3' AND head_of_loss = 'hire'`).get() as {
         received_pence: number;
       };
-      assert.equal(Number(after.received_pence), Number(before.received_pence) + 1000);
-      const events = db
-        .prepare(`SELECT COUNT(*) AS n FROM claim_events WHERE claim_id = 'c3' AND event_type = 'head_payment_logged' AND details LIKE '%1000%'`)
-        .get() as { n: number };
-      assert.equal(Number(events.n) >= 1, true);
+      assert.equal(Number(afterOnce.received_pence), Number(before.received_pence) + 1000);
+      const second = recordHeadPayment({
+        claimId: "c3",
+        actorId: "staff-sian",
+        head: "hire",
+        amountPence: 1000,
+        correction: false,
+        submitKey: "pay-second",
+        confirmSeparate: true,
+      });
+      assert.equal(second.allocated, true);
+      const afterTwo = db.prepare(`SELECT received_pence FROM financial_lines WHERE claim_id = 'c3' AND head_of_loss = 'hire'`).get() as {
+        received_pence: number;
+      };
+      assert.equal(Number(afterTwo.received_pence), Number(before.received_pence) + 2000);
     });
     db.close();
   });
@@ -261,17 +287,43 @@ describe("optimistic concurrency", () => {
     db.close();
   });
 
-  it("does not record the same agreed figure twice inside a minute", () => {
+  it("records one agreed figure for a repeated key and another when the key is new", () => {
     const db = seeded();
     withDatabase(db, () => {
       db.prepare(`SELECT id FROM claims WHERE id = 'c3'`).get();
-      recordAgreedHeadFigure({ claimId: "c3", actorId: "staff-justin", head: "storage", agreedPence: 23400, expectedVersion: "" });
+      recordAgreedHeadFigure({
+        submitKey: "agreed-once",
+        claimId: "c3",
+        actorId: "staff-justin",
+        head: "storage",
+        agreedPence: 23400,
+        expectedVersion: "",
+      });
       const version = sectionVersion("money", "c3:storage");
-      recordAgreedHeadFigure({ claimId: "c3", actorId: "staff-sian", head: "storage", agreedPence: 23400, expectedVersion: version });
-      const events = db
+      recordAgreedHeadFigure({
+        submitKey: "agreed-once",
+        claimId: "c3",
+        actorId: "staff-sian",
+        head: "storage",
+        agreedPence: 23400,
+        expectedVersion: version,
+      });
+      const once = db
         .prepare(`SELECT COUNT(*) AS n FROM claim_events WHERE claim_id = 'c3' AND event_type = 'head_agreed_recorded' AND details LIKE '%head=storage%'`)
         .get() as { n: number };
-      assert.equal(Number(events.n), 1);
+      assert.equal(Number(once.n), 1);
+      recordAgreedHeadFigure({
+        submitKey: "agreed-again",
+        claimId: "c3",
+        actorId: "staff-sian",
+        head: "storage",
+        agreedPence: 23400,
+        expectedVersion: version,
+      });
+      const twice = db
+        .prepare(`SELECT COUNT(*) AS n FROM claim_events WHERE claim_id = 'c3' AND event_type = 'head_agreed_recorded' AND details LIKE '%head=storage%'`)
+        .get() as { n: number };
+      assert.equal(Number(twice.n), 2);
       const line = db.prepare(`SELECT agreed_pence FROM financial_lines WHERE claim_id = 'c3' AND head_of_loss = 'storage'`).get() as {
         agreed_pence: number;
       };

@@ -20,7 +20,8 @@ import {
 import { chaseDefinition, isChaseKind, type ChaseKind } from "@/lib/domain/chase";
 import { optionalPoundsToPence } from "@/lib/domain/total-loss";
 import { recordAgreedHeadFigure, recordAgreedRepairInvoice, recordHeadPayment, recordUnreferencedPayment } from "@/lib/db/payment-ledger";
-import { formVersion, VersionConflictError, withSectionSave } from "@/lib/db/record-version";
+import { formSubmitKey } from "@/lib/db/submit-key";
+import { formVersion, postedVersion, VersionConflictError, withSectionSave } from "@/lib/db/record-version";
 import { acceptPaymentAsFinal, disputePaymentSettlement } from "@/lib/db/payment-review";
 
 function refreshClaim(claimId: string) {
@@ -85,6 +86,7 @@ export async function actionLogChaseOutcome(formData: FormData) {
       occurredAt: String(formData.get("occurredAt") || "") || undefined,
       liabilityDecision: String(formData.get("liabilityDecision") || "") || undefined,
       repairOutcome: String(formData.get("repairOutcome") || "") || undefined,
+      insurerPositionVersion: postedVersion(formData, "insurerPositionVersion"),
     });
     refreshClaim(claimId);
     return { ok: true as const, error: undefined, ...result };
@@ -195,6 +197,7 @@ export async function actionRecordAgreedRepair(formData: FormData) {
       actorId: staff.id,
       agreedPence: poundsFrom(formData, "agreed"),
       expectedVersion: formVersion(formData),
+      submitKey: formSubmitKey(formData),
     });
     refreshClaim(claimId);
     return { ok: true as const };
@@ -213,6 +216,7 @@ export async function actionRecordAgreedHead(formData: FormData) {
       head: String(formData.get("head") || ""),
       agreedPence: poundsFrom(formData, "agreed"),
       expectedVersion: formVersion(formData),
+      submitKey: formSubmitKey(formData),
     });
     refreshClaim(claimId);
     return { ok: true as const };
@@ -232,7 +236,12 @@ export async function actionLogHeadPayment(formData: FormData) {
       amountPence: poundsFrom(formData, "amount"),
       correction: String(formData.get("correction") || "") === "yes",
       insurerReason: String(formData.get("insurerReason") || ""),
+      submitKey: formSubmitKey(formData),
+      confirmSeparate: String(formData.get("confirmSeparate") || "") === "yes",
     });
+    if ("needsConfirm" in result && result.needsConfirm) {
+      return { ok: false as const, needsConfirm: true as const, warning: String(result.warning || ""), error: undefined };
+    }
     refreshClaim(claimId);
     const message = result.reconciliation
       ? "No claim or invoice is recorded on that head. The payment was flagged for manual reconciliation and was not added to the financial record."

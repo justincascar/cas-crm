@@ -12,6 +12,7 @@ import {
   vehicleOfferHead,
   type VehicleOfferHead,
 } from "@/lib/db/vehicle-offers";
+import { formSubmitKey, SubmitNeedsConfirm } from "@/lib/db/submit-key";
 import { browserOrigin } from "@/lib/http/browser-origin";
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -49,6 +50,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         note: String(form.get("note") || ""),
         offeredDays,
         offeredDailyRatePence,
+        submitKey: formSubmitKey(form),
+        confirmDuplicate: String(form.get("confirmDuplicate") || "") === "yes",
       });
       return back();
     }
@@ -68,16 +71,47 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       if (agreed == null) throw new Error("Enter the agreed amount. It is not taken from an offer unless you choose to.");
       const agreedOn = requireCalendarDate(String(form.get("agreedOn") || ""), "the date agreement was reached");
       if (head === "hire" || head === "storage" || head === "recovery") {
-        acceptChargeFigure({ claimId: id, actorId: staff.id, role: staff.role, head, agreedPence: agreed });
+        acceptChargeFigure({
+          claimId: id,
+          actorId: staff.id,
+          role: staff.role,
+          head,
+          agreedPence: agreed,
+          submitKey: formSubmitKey(form),
+        });
       } else if (head === "repairs") {
-        recordAgreedRepairInvoice({ claimId: id, actorId: staff.id, agreedPence: agreed, agreedOn });
+        recordAgreedRepairInvoice({
+          claimId: id,
+          actorId: staff.id,
+          agreedPence: agreed,
+          agreedOn,
+          submitKey: formSubmitKey(form),
+        });
       } else {
-        confirmTypedVehicleDamageAgreed({ claimId: id, actorId: staff.id, agreedPence: agreed, agreedOn });
+        confirmTypedVehicleDamageAgreed({
+          claimId: id,
+          actorId: staff.id,
+          agreedPence: agreed,
+          agreedOn,
+          submitKey: formSubmitKey(form),
+        });
       }
       return back();
     }
     throw new Error("That action is not available on this screen.");
   } catch (error) {
+    if (error instanceof SubmitNeedsConfirm) {
+      const url = new URL(safeReturn, origin);
+      url.searchParams.set("offerWarn", error.message);
+      url.searchParams.set("offerAmount", String(form.get("amount") || ""));
+      url.searchParams.set("offerOn", String(form.get("offeredOn") || ""));
+      url.searchParams.set("offerNote", String(form.get("note") || ""));
+      url.searchParams.set("offerHead", String(form.get("head") || ""));
+      url.searchParams.set("offerDays", String(form.get("offeredDays") || ""));
+      url.searchParams.set("offerRate", String(form.get("offeredDailyRate") || ""));
+      url.searchParams.set("returnTo", safeReturn);
+      return NextResponse.redirect(url, 303);
+    }
     const message = error instanceof Error ? error.message : "The offer could not be saved.";
     return back(message);
   }

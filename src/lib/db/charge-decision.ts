@@ -5,6 +5,8 @@ import { nowUtcIso } from "../dates";
 import { recordClaimEvent } from "./chronology";
 import { get, newId, run } from "./connection";
 import { recordAgreedHeadFigure } from "./payment-ledger";
+import { replaySubmit, requireSubmitKey, storeSubmit } from "./submit-key";
+import { withImmediateTransaction } from "./record-version";
 
 export type ChargeHead = "hire" | "storage" | "recovery";
 
@@ -93,6 +95,7 @@ export function acceptChargeFigure(input: {
   head: ChargeHead;
   agreedPence: number;
   expectedVersion?: string;
+  submitKey: string;
 }) {
   assertOffice(input.role);
   const before = money(input.claimId, input.head);
@@ -105,28 +108,39 @@ export function acceptChargeFigure(input: {
       "Accepting a figure below the claimed figure needs the approveSettlement permission. The agreed figure was not saved.",
     );
   }
-  recordAgreedHeadFigure({
-    claimId: input.claimId,
-    actorId: input.actorId,
-    head: input.head,
-    agreedPence: input.agreedPence,
-    expectedVersion: input.expectedVersion,
+  const submitKey = requireSubmitKey(input.submitKey);
+  const replay = replaySubmit<{ agreedPence: number }>(submitKey);
+  if (replay) return replay;
+  withImmediateTransaction(() => {
+    const again = replaySubmit<{ agreedPence: number }>(submitKey);
+    if (again) return;
+    recordAgreedHeadFigure({
+      claimId: input.claimId,
+      actorId: input.actorId,
+      head: input.head,
+      agreedPence: input.agreedPence,
+      expectedVersion: input.expectedVersion,
+      submitKey,
+      holdKey: true,
+    });
+    insertDecision({
+      claimId: input.claimId,
+      head: input.head,
+      decision: "accepted",
+      agreedPence: input.agreedPence,
+      reason: "",
+      actorId: input.actorId,
+    });
+    const after = money(input.claimId, input.head);
+    if (Number(after?.claimed_pence) !== claimed || Number(after?.received_pence) !== received) {
+      throw new Error("Accepting this charge changed claimed or received. That must not happen.");
+    }
+    if (otherMoney(input.claimId, input.head) !== others || dates(input.claimId) !== open) {
+      throw new Error("Accepting this charge changed another charge, or closed hire or storage. That must not happen.");
+    }
+    storeSubmit(submitKey, { agreedPence: input.agreedPence });
   });
-  insertDecision({
-    claimId: input.claimId,
-    head: input.head,
-    decision: "accepted",
-    agreedPence: input.agreedPence,
-    reason: "",
-    actorId: input.actorId,
-  });
-  const after = money(input.claimId, input.head);
-  if (Number(after?.claimed_pence) !== claimed || Number(after?.received_pence) !== received) {
-    throw new Error("Accepting this charge changed claimed or received. That must not happen.");
-  }
-  if (otherMoney(input.claimId, input.head) !== others || dates(input.claimId) !== open) {
-    throw new Error("Accepting this charge changed another charge, or closed hire or storage. That must not happen.");
-  }
+  return replaySubmit<{ agreedPence: number }>(submitKey) || { agreedPence: input.agreedPence };
 }
 
 /** Waits for someone with approveSettlement. Does not write the agreed figure. */

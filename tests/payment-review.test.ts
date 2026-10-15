@@ -98,6 +98,7 @@ describe("payment review — nothing agreed, and total loss", () => {
       assert.equal(before.agreed_pence, 0);
       assert.equal(before.claimed_pence, 240_000);
       const logged = recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-1",
         claimId: "c6",
         actorId: "staff-justin",
         head: "repairs",
@@ -127,6 +128,7 @@ describe("payment review — nothing agreed, and total loss", () => {
     withDatabase(db, () => {
       const before = hireStorage(db, "c6");
       const logged = recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-2",
         claimId: "c6",
         actorId: "staff-justin",
         head: "repairs",
@@ -159,6 +161,7 @@ describe("payment review — nothing agreed, and total loss", () => {
       });
       const before = hireStorage(db, "c9");
       const short = recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-3",
         claimId: "c9",
         actorId: "staff-justin",
         head: "vehicle_damage",
@@ -186,6 +189,7 @@ describe("payment review — nothing agreed, and total loss", () => {
         `DELETE FROM claim_events WHERE claim_id = 'c9' AND event_type IN ('settlement_payment_logged', 'total_loss_payment_received', 'payment_chase_review_flagged')`,
       ).run();
       const full = recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-4",
         claimId: "c9",
         actorId: "staff-justin",
         head: "vehicle_damage",
@@ -212,6 +216,7 @@ describe("payment review — nothing agreed, and total loss", () => {
     withDatabase(db, () => {
       db.prepare(`UPDATE financial_lines SET agreed_pence = 1315000 WHERE id = 'f-c9-vd'`).run();
       recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-5",
         claimId: "c9",
         actorId: "staff-justin",
         head: "vehicle_damage",
@@ -253,6 +258,7 @@ describe("payment review — nothing agreed, and total loss", () => {
         saleProceedsPence: 10_000,
       });
       recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-6",
         claimId: "c9",
         actorId: "staff-justin",
         head: "vehicle_damage",
@@ -272,13 +278,16 @@ describe("payment review — one item, and a missing invoice", () => {
     const db = seeded();
     withDatabase(db, () => {
       db.prepare(`UPDATE financial_lines SET agreed_pence = 100000 WHERE id = 'f-c6-rep'`).run();
-      recordHeadPayment({ claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 10_000, correction: false });
-      recordHeadPayment({ claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 15_000, correction: false });
+      recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-7", claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 10_000, correction: false });
+      recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-8", claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 15_000, correction: false });
       const both = listOpenPaymentReviews("c6");
       assert.equal(both.length, 1);
       assert.equal(both[0].receivedPence, 25_000);
       assert.equal(both[0].outstandingPence, 75_000);
       const corrected = recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-9",
         claimId: "c6",
         actorId: "staff-justin",
         head: "repairs",
@@ -300,6 +309,7 @@ describe("payment review — one item, and a missing invoice", () => {
     withDatabase(db, () => {
       const before = db.prepare(`SELECT COUNT(*) AS n FROM financial_lines WHERE claim_id = 'c5'`).get() as { n: number };
       const result = recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-10",
         claimId: "c5",
         actorId: "staff-justin",
         head: "recovery",
@@ -329,6 +339,7 @@ describe("payment review — one item, and a missing invoice", () => {
           ('f-c7-vd', 'c7', 'vehicle_damage', 'PAV', 1, 'item', 0, 0, 0, 0, 50000, 0, 50000, 0)`,
       ).run();
       recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-11",
         claimId: "c7",
         actorId: "staff-justin",
         head: "hire",
@@ -361,7 +372,8 @@ describe("payment review — accept and dispute", () => {
       assert.equal(listStaffPermissions("staff-sian").includes(ACCEPT_PAYMENT_SETTLEMENT), false);
       assert.equal(listStaffPermissions("staff-justin").includes(ACCEPT_PAYMENT_SETTLEMENT), true);
       db.prepare(`UPDATE financial_lines SET agreed_pence = 100000 WHERE id = 'f-c6-rep'`).run();
-      recordHeadPayment({ claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 40_000, correction: false });
+      recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-12", claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 40_000, correction: false });
       const before = money(db, "f-c6-rep");
       assert.throws(() => acceptPaymentAsFinal({ claimId: "c6", actorId: "staff-sian", head: "repairs" }), /permission/);
       const created = createStaffAccount({
@@ -387,7 +399,8 @@ describe("payment review — accept and dispute", () => {
     const db = seeded();
     withDatabase(db, () => {
       db.prepare(`UPDATE financial_lines SET agreed_pence = 100000 WHERE id = 'f-c6-rep'`).run();
-      recordHeadPayment({ claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 40_000, correction: false });
+      recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-13", claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 40_000, correction: false });
       const before = money(db, "f-c6-rep");
       assert.throws(
         () => acceptPaymentAsFinal({ claimId: "c6", actorId: "staff-justin", head: "repairs" }),
@@ -415,6 +428,7 @@ describe("payment review — accept and dispute", () => {
       ).run();
       const positions = hireStorage(db, "c6");
       recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-14",
         claimId: "c6",
         actorId: "staff-justin",
         head: "repairs",
@@ -453,7 +467,8 @@ describe("payment review — accept and dispute", () => {
     withDatabase(db, () => {
       db.prepare(`UPDATE financial_lines SET agreed_pence = 100000 WHERE id = 'f-c6-rep'`).run();
       const positions = hireStorage(db, "c6");
-      recordHeadPayment({ claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 25_000, correction: false });
+      recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-15", claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 25_000, correction: false });
       assert.equal(listChasesForClaim("c6").find((row) => row.kind === "repair_payment")?.handlerState, "paused");
       const disputed = disputePaymentSettlement({
         claimId: "c6",
@@ -471,7 +486,8 @@ describe("payment review — accept and dispute", () => {
       assert.equal(resumed?.payment?.paidInFull, false);
       const grounds = listClaimEvents("c6").find((event) => event.event_type === "payment_settlement_disputed");
       assert.match(String(grounds?.details || ""), /items that were not on the estimate/);
-      const rest = recordHeadPayment({ claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 75_000, correction: false });
+      const rest = recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-16", claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 75_000, correction: false });
       assert.equal(rest.paidInFull, true);
       assert.equal(rest.outstandingPence, 0);
       const settled = chaseForClaim("repair_payment", "c6");
@@ -511,6 +527,7 @@ describe("payment review — log first, decide later", () => {
     withDatabase(db, () => {
       db.prepare(`UPDATE financial_lines SET agreed_pence = 100000 WHERE id = 'f-c6-rep'`).run();
       const logged = recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-17",
         claimId: "c6",
         actorId: "staff-justin",
         head: "repairs",
@@ -546,8 +563,10 @@ describe("payment review — log first, decide later", () => {
     const db = seeded();
     withDatabase(db, () => {
       db.prepare(`UPDATE financial_lines SET agreed_pence = 100000 WHERE id = 'f-c6-rep'`).run();
-      recordHeadPayment({ claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 10_000, correction: false });
-      recordHeadPayment({ claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 15_000, correction: false });
+      recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-18", claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 10_000, correction: false });
+      recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-19", claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 15_000, correction: false });
       const reviews = listOpenPaymentReviews("c6");
       assert.equal(reviews.length, 1);
       assert.equal(reviews[0].receivedPence, 25_000);
@@ -601,6 +620,7 @@ describe("payment review — log first, decide later", () => {
     withDatabase(db, () => {
       db.prepare(`UPDATE financial_lines SET agreed_pence = 100000 WHERE id = 'f-c6-rep'`).run();
       recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-20",
         claimId: "c6",
         actorId: "staff-justin",
         head: "repairs",
@@ -613,6 +633,7 @@ describe("payment review — log first, decide later", () => {
       assert.equal(settled.agreed_pence, 40_000);
       assert.equal(settled.received_pence, 40_000);
       const extra = recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-21",
         claimId: "c6",
         actorId: "staff-justin",
         head: "repairs",
@@ -632,6 +653,7 @@ describe("payment review — log first, decide later", () => {
       assert.equal(flags[0].amountPence, 10_000);
       assert.match(flags[0].label, /was not added/);
       recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-22",
         claimId: "c6",
         actorId: "staff-justin",
         head: "repairs",
@@ -654,7 +676,8 @@ describe("payment review — log first, decide later", () => {
     const db = seeded();
     withDatabase(db, () => {
       db.prepare(`UPDATE financial_lines SET agreed_pence = 100000 WHERE id = 'f-c6-rep'`).run();
-      recordHeadPayment({ claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 25_000, correction: false });
+      recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-23", claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 25_000, correction: false });
       disputePaymentSettlement({
         claimId: "c6",
         actorId: "staff-sian",
@@ -663,6 +686,7 @@ describe("payment review — log first, decide later", () => {
       });
       assert.equal(listOpenPaymentReviews("c6").length, 0);
       const further = recordHeadPayment({
+        submitKey: "payment-review-recordHeadPayment-24",
         claimId: "c6",
         actorId: "staff-justin",
         head: "repairs",

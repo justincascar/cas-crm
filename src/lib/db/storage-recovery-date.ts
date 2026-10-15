@@ -1,5 +1,6 @@
 import { formatUkDate, londonDateIso, nowUtcIso } from "../dates";
 import { get, newId, run } from "./connection";
+import { SHARED_RECOVERY_AT, SHARED_STORAGE_END, SHARED_STORAGE_START, claimColumns, guardSharedFields, recoveryAt } from "./shared-fields";
 import { recordClaimEvent } from "./chronology";
 
 export type StorageDateReview = {
@@ -144,7 +145,13 @@ export function getStorageDateReview(claimId: string): StorageDateReview | null 
   return { jobDate, storageDay, recoveryDay };
 }
 
-export function confirmStorageRecoveryDate(input: { claimId: string; choice: "job" | "file"; actorId: string }) {
+export function confirmStorageRecoveryDate(input: {
+  claimId: string;
+  choice: "job" | "file";
+  actorId: string;
+  storageStartVersion?: string;
+  recoveryAtVersion?: string;
+}) {
   const { claim, recovery } = readDates(input.claimId);
   if (!claim) throw new Error("File not found.");
   const jobDate = calendarDay(claim.storage_date_review_on);
@@ -152,6 +159,26 @@ export function confirmStorageRecoveryDate(input: { claimId: string; choice: "jo
   const storageDay = calendarDay(claim.storage_started_on);
   const recoveryDay = calendarDay(recovery?.recovered_at);
   if (input.choice === "job") {
+    guardSharedFields({
+      scope: SHARED_STORAGE_START,
+      recordKey: input.claimId,
+      expected: input.storageStartVersion,
+      actorId: input.actorId,
+      current: claimColumns(input.claimId, ["storage_started_on"]),
+      next: { storage_started_on: jobDate },
+      labels: { storage_started_on: "Storage start" },
+      submitted: { storage_started_on: jobDate },
+    });
+    guardSharedFields({
+      scope: SHARED_RECOVERY_AT,
+      recordKey: input.claimId,
+      expected: input.recoveryAtVersion,
+      actorId: input.actorId,
+      current: { recovered_at: recoveryAt(input.claimId) },
+      next: { recovered_at: jobDate },
+      labels: { recovered_at: "Recovered" },
+      submitted: { recovered_at: jobDate },
+    });
     writeStorageStart(input.claimId, jobDate, claim.storage_status);
     writeRecoveredAt(input.claimId, jobDate, recovery?.id || null, claim.recovery_status);
     run(`UPDATE claims SET storage_date_review_on = NULL WHERE id = ?`, [input.claimId]);
@@ -164,6 +191,20 @@ export function confirmStorageRecoveryDate(input: { claimId: string; choice: "jo
       source: "staff",
     });
     return;
+  }
+  const startNow = claimColumns(input.claimId, ["storage_started_on"]);
+  const nextStart = !storageDay && recoveryDay ? recoveryDay : startNow.storage_started_on || "";
+  if (input.storageStartVersion !== undefined || nextStart !== (startNow.storage_started_on || "")) {
+    guardSharedFields({
+      scope: SHARED_STORAGE_START,
+      recordKey: input.claimId,
+      expected: input.storageStartVersion,
+      actorId: input.actorId,
+      current: startNow,
+      next: { storage_started_on: nextStart },
+      labels: { storage_started_on: "Storage start" },
+      submitted: { storage_started_on: nextStart },
+    });
   }
   if (!storageDay && recoveryDay) writeStorageStart(input.claimId, recoveryDay, claim.storage_status);
   run(`UPDATE claims SET storage_date_review_on = NULL WHERE id = ?`, [input.claimId]);
@@ -249,7 +290,12 @@ export function getStorageEndDateReview(claimId: string): StorageEndDateReview |
   return { jobDate, storageEndDay };
 }
 
-export function confirmStorageEndDate(input: { claimId: string; choice: "job" | "file"; actorId: string }) {
+export function confirmStorageEndDate(input: {
+  claimId: string;
+  choice: "job" | "file";
+  actorId: string;
+  storageEndVersion?: string;
+}) {
   const started = get<{ storage_started_on: string | null }>(`SELECT storage_started_on FROM claims WHERE id = ?`, [input.claimId]);
   if (!calendarDay(started?.storage_started_on)) {
     throw new Error("Start date missing. A storage end cannot be proposed or confirmed.");
@@ -260,6 +306,16 @@ export function confirmStorageEndDate(input: { claimId: string; choice: "job" | 
   if (!jobDate) return;
   const storageEndDay = calendarDay(claim.storage_billing_end_on);
   if (input.choice === "job") {
+    guardSharedFields({
+      scope: SHARED_STORAGE_END,
+      recordKey: input.claimId,
+      expected: input.storageEndVersion,
+      actorId: input.actorId,
+      current: claimColumns(input.claimId, ["storage_billing_end_on"]),
+      next: { storage_billing_end_on: jobDate },
+      labels: { storage_billing_end_on: "Storage end" },
+      submitted: { storage_billing_end_on: jobDate },
+    });
     writeStorageEnd(input.claimId, jobDate);
     run(`UPDATE claims SET storage_end_review_on = NULL WHERE id = ?`, [input.claimId]);
     recordClaimEvent({
@@ -271,6 +327,19 @@ export function confirmStorageEndDate(input: { claimId: string; choice: "job" | 
       source: "staff",
     });
     return;
+  }
+  const keptEnd = claimColumns(input.claimId, ["storage_billing_end_on"]);
+  if (input.storageEndVersion !== undefined) {
+    guardSharedFields({
+      scope: SHARED_STORAGE_END,
+      recordKey: input.claimId,
+      expected: input.storageEndVersion,
+      actorId: input.actorId,
+      current: keptEnd,
+      next: keptEnd,
+      labels: { storage_billing_end_on: "Storage end" },
+      submitted: { storage_billing_end_on: keptEnd.storage_billing_end_on || "" },
+    });
   }
   run(`UPDATE claims SET storage_end_review_on = NULL WHERE id = ?`, [input.claimId]);
   recordClaimEvent({

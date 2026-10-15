@@ -18,6 +18,7 @@ import { accountCanAcceptPaymentSettlement, accountCanApproveSettlement } from "
 import { getClaim } from "@/lib/db/queries";
 import { loadClash, sectionVersion } from "@/lib/db/record-version";
 import { SaveClashNotice } from "@/components/SaveClashNotice";
+import { SeparateRecordConfirm } from "@/components/SeparateRecordConfirm";
 import { adoptHireClaimedIfNone, hireChargeForClaim } from "@/lib/db/hire-charge";
 import { loadHeadSection } from "@/lib/db/head-screen";
 import { agreedOnFor, listChargeOffers } from "@/lib/db/vehicle-offers";
@@ -33,7 +34,7 @@ export default async function HireHeadPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ figureError?: string; offerError?: string; decisionError?: string; clash?: string }>;
+  searchParams: Promise<{ figureError?: string; offerError?: string; offerWarn?: string; offerAmount?: string; offerOn?: string; offerNote?: string; offerHead?: string; offerDays?: string; offerRate?: string; decisionError?: string; clash?: string }>;
 }) {
   const staff = await requireStaff();
   const { id } = await params;
@@ -68,6 +69,24 @@ export default async function HireHeadPage({
       />
       {query.figureError ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.figureError}</p> : null}
       {query.offerError ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.offerError}</p> : null}
+      {query.offerWarn ? (
+        <SeparateRecordConfirm
+          message={query.offerWarn}
+          action={`/claims/${id}/vehicle-offers`}
+          confirmField="confirmDuplicate"
+          cancelHref={`/claims/${id}/heads/hire`}
+          fields={{
+            intent: "record_offer",
+            returnTo: `/claims/${id}/heads/hire`,
+            amount: query.offerAmount || "",
+            offeredOn: query.offerOn || "",
+            note: query.offerNote || "",
+            head: query.offerHead || "hire",
+            offeredDays: query.offerDays || "",
+            offeredDailyRate: query.offerRate || "",
+          }}
+        />
+      ) : null}
       {query.decisionError ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.decisionError}</p> : null}
 
       <section className="space-y-4 rounded-xl border border-line bg-card p-5" aria-label="Hire details">

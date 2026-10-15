@@ -489,6 +489,11 @@ export function migrate(db: DatabaseSync) {
       payload_json TEXT NOT NULL,
       created_at TEXT NOT NULL
     );
+    CREATE TABLE IF NOT EXISTS submit_keys (
+      submit_key TEXT PRIMARY KEY,
+      result_json TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
     CREATE INDEX IF NOT EXISTS idx_documents_claim ON documents(claim_id);
     CREATE INDEX IF NOT EXISTS idx_documents_fleet ON documents(fleet_vehicle_id);
     CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(document_type);

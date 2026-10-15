@@ -4,6 +4,7 @@ import { ReserveForm } from "@/components/ReserveForm";
 import { formatUkDateTime } from "@/lib/dates";
 import { requireStaff } from "@/lib/auth/session";
 import { listClaims, listFleet, listReservations } from "@/lib/db/queries";
+import { sectionVersion } from "@/lib/db/record-version";
 import { fleetSearchMatches } from "@/lib/db/fleet";
 import { vehicleClassLabel } from "@/lib/fleet/classes";
 import { formatVehicleRegistration } from "@/lib/text";
@@ -214,6 +215,7 @@ export default async function HirePage({
           label: `${v.registration || "No registration"} — ${v.make || ""} ${v.model || ""} (${v.status})`,
         }))}
         claims={claims.map((c) => ({ id: c.id, label: `${c.file_reference} ${c.client_name || ""}` }))}
+        versions={Object.fromEntries(bookable.map((v) => [String(v.id), sectionVersion("fleet", String(v.id))]))}
       />
     </div>
   );

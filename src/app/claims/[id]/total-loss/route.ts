@@ -14,7 +14,8 @@ import {
 } from "@/lib/db/total-loss";
 import { optionalPoundsToPence, type CasSalvageRequest, type InsurerSalvageInterest, type SalvageDisposal } from "@/lib/domain/total-loss";
 import { requireCalendarDate } from "@/lib/db/vehicle-offers";
-import { formVersion, withSectionSave } from "@/lib/db/record-version";
+import { formVersion, postedVersion, withSectionSave } from "@/lib/db/record-version";
+import { formSubmitKey, SubmitNeedsConfirm } from "@/lib/db/submit-key";
 import { browserOrigin } from "@/lib/http/browser-origin";
 import { clashRedirect } from "@/lib/http/version-clash";
 
@@ -77,6 +78,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         actorId: staff.id,
         agreedPence: agreedOnly,
         agreedOn: optionalAgreedOn(form),
+        submitKey: formSubmitKey(form),
       });
       return back();
     }
@@ -95,13 +97,24 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     if (intent === "confirm_off_hire") {
       const choice = String(form.get("choice") || "");
       if (choice !== "suggested" && choice !== "keep") throw new Error("Choose whether to use the suggested hire end or keep the date already on the file.");
-      confirmTotalLossOffHire({ claimId: id, actorId: staff.id, choice });
+      confirmTotalLossOffHire({
+        claimId: id,
+        actorId: staff.id,
+        choice,
+        hireEndVersion: postedVersion(form, "hireEndVersion"),
+      });
       return back();
     }
     if (intent === "record_payment") {
       const received = optionalPoundsToPence(String(form.get("received") || ""));
       if (received == null || received <= 0) throw new Error("Enter the amount that has arrived.");
-      recordTotalLossPaymentReceived({ claimId: id, actorId: staff.id, receivedPence: received });
+      recordTotalLossPaymentReceived({
+        claimId: id,
+        actorId: staff.id,
+        receivedPence: received,
+        submitKey: formSubmitKey(form),
+        confirmSeparate: String(form.get("confirmSeparate") || "") === "yes",
+      });
       return back();
     }
     if (intent === "prepare_payment_chase") {
@@ -165,10 +178,22 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     } else if (intent === "confirm_agreed") {
       const agreed = optionalPoundsToPence(String(form.get("agreed") || ""));
       if (agreed == null) throw new Error("Enter the agreed amount, or use the suggestion button.");
-      confirmTypedVehicleDamageAgreed({ claimId: id, actorId: staff.id, agreedPence: agreed, agreedOn: optionalAgreedOn(form) });
+      confirmTypedVehicleDamageAgreed({
+        claimId: id,
+        actorId: staff.id,
+        agreedPence: agreed,
+        agreedOn: optionalAgreedOn(form),
+        submitKey: formSubmitKey(form),
+      });
     }
     return back();
   } catch (error) {
+    if (error instanceof SubmitNeedsConfirm) {
+      const url = new URL(safeReturn, origin);
+      url.searchParams.set("payWarn", error.message);
+      url.searchParams.set("payAmount", String(form.get("received") || ""));
+      return NextResponse.redirect(url, 303);
+    }
     const refused = clashRedirect(origin, safeReturn, error);
     if (refused) return refused;
     const message = error instanceof Error ? error.message : "The total-loss figures could not be saved.";

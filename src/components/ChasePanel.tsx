@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -95,6 +95,7 @@ export function ChasePanel({
   bankDetailsMissing = false,
   repairVersion = "",
   overrideVersion = "",
+  insurerPositionVersion,
 }: {
   claimId: string;
   chase: ChaseView;
@@ -106,11 +107,18 @@ export function ChasePanel({
   bankDetailsMissing?: boolean;
   repairVersion?: string;
   overrideVersion?: string;
+  insurerPositionVersion?: string;
 }) {
   const router = useRouter();
   const sendBack = returnTo || `/claims/${claimId}`;
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [paymentWarning, setPaymentWarning] = useState<string | null>(null);
+  const paymentKey = useRef("");
+  const agreedKey = useRef("");
+  const pendingPayment = useRef<Record<string, string> | null>(null);
+  if (!paymentKey.current) paymentKey.current = crypto.randomUUID();
+  if (!agreedKey.current) agreedKey.current = crypto.randomUUID();
   const [mailto, setMailto] = useState<string | null>(() =>
     prepared?.to_address && prepared.body
       ? buildMailtoHref(prepared.to_address, prepared.subject || chase.title, prepared.body)
@@ -134,6 +142,9 @@ export function ChasePanel({
     }
     const result = await action(form);
     setBusy(false);
+    if ("needsConfirm" in result && result.needsConfirm) {
+      return result;
+    }
     if (result.error) {
       setMessage(result.error);
       return result;
@@ -451,6 +462,9 @@ export function ChasePanel({
                 void run(actionRecordAgreedRepair, {
                   agreed: String(form.get("agreed") || ""),
                   recordVersion: repairVersion,
+                  submitKey: agreedKey.current,
+                }).then(() => {
+                  agreedKey.current = crypto.randomUUID();
                 });
               }}
             >
@@ -468,12 +482,22 @@ export function ChasePanel({
             onSubmit={(event) => {
               event.preventDefault();
               const form = new FormData(event.currentTarget);
-              void run(actionLogHeadPayment, {
-                head: chase.payment?.head || "",
-                amount: String(form.get("amount") || ""),
-                correction: form.get("correction") ? "yes" : "",
-                insurerReason: String(form.get("insurerReason") || ""),
-              });
+              void (async () => {
+                const fields = {
+                  head: chase.payment?.head || "",
+                  amount: String(form.get("amount") || ""),
+                  correction: form.get("correction") ? "yes" : "",
+                  insurerReason: String(form.get("insurerReason") || ""),
+                  submitKey: paymentKey.current,
+                };
+                const result = await run(actionLogHeadPayment, fields);
+                if ("needsConfirm" in result && result.needsConfirm) {
+                  pendingPayment.current = fields;
+                  setPaymentWarning(String((result as { warning?: string }).warning || ""));
+                  return;
+                }
+                paymentKey.current = crypto.randomUUID();
+              })();
             }}
           >
             <label className="text-sm">
@@ -503,6 +527,39 @@ export function ChasePanel({
             <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white" disabled={busy}>
               Record payment received
             </button>
+            {paymentWarning ? (
+              <div className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm" role="alert">
+                <p>{paymentWarning}</p>
+                <div className="mt-3 flex gap-2">
+                  <button
+                    type="button"
+                    className="rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white"
+                    disabled={busy}
+                    onClick={() => {
+                      const fields = pendingPayment.current;
+                      if (!fields) return;
+                      void run(actionLogHeadPayment, {
+                        ...fields,
+                        submitKey: crypto.randomUUID(),
+                        confirmSeparate: "yes",
+                      }).then(() => {
+                        setPaymentWarning(null);
+                        paymentKey.current = crypto.randomUUID();
+                      });
+                    }}
+                  >
+                    Yes
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded-md border border-line bg-white px-3 py-2 text-sm font-semibold"
+                    onClick={() => setPaymentWarning(null)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : null}
           </form>
           <form
             className="grid gap-2 rounded-md border border-line bg-white p-3"
@@ -538,11 +595,13 @@ export function ChasePanel({
           onSubmit={(event) => {
             event.preventDefault();
             const form = new FormData(event.currentTarget);
-            void run(actionLogChaseOutcome, {
+            const extra: Record<string, string> = {
               occurredAt: String(form.get("occurredAt") || ""),
               liabilityDecision: String(form.get("liabilityDecision") || ""),
               repairOutcome: String(form.get("repairOutcome") || ""),
-            });
+            };
+            if (insurerPositionVersion !== undefined) extra.insurerPositionVersion = insurerPositionVersion;
+            void run(actionLogChaseOutcome, extra);
           }}
         >
           {chase.kind === "liability_response" ? (

@@ -11,6 +11,7 @@ import { ValidatedForm } from "@/components/ValidatedForm";
 import { requireStaff } from "@/lib/auth/session";
 import { getHirePack } from "@/lib/db/hire-pack";
 import { loadClash, sectionVersion } from "@/lib/db/record-version";
+import { SHARED_CLIENT_GTA, SHARED_CLIENT_PERSON } from "@/lib/db/shared-fields";
 import { hireAgreementPrehireBlock, listPrehireOverrides } from "@/lib/db/prehire-checks";
 import { formatUkDateTime } from "@/lib/dates";
 import { hireAgreementReadyLine, prehireCheckKindLabel } from "@/lib/domain/prehire-checks";
@@ -144,7 +145,16 @@ export default async function HirePackPage({
         <input type="hidden" name="claimId" value={id} />
         <input type="hidden" name="actorId" value={actorId} />
         <RecordVersionField version={packClash?.scope === "hire-pack" ? packClash.expectedVersion : sectionVersion("hire-pack", id)} />
-        <SaveClashNotice clash={packClash?.scope === "hire-pack" ? packClash : null} reloadHref={`/claims/${id}/hire-pack`} />
+        <input type="hidden" name="clientPersonVersion" value={packClash?.scope === SHARED_CLIENT_PERSON ? packClash.expectedVersion : sectionVersion(SHARED_CLIENT_PERSON, id)} />
+        <input type="hidden" name="clientGtaVersion" value={packClash?.scope === SHARED_CLIENT_GTA ? packClash.expectedVersion : sectionVersion(SHARED_CLIENT_GTA, id)} />
+        <SaveClashNotice
+          clash={
+            packClash && (packClash.scope === "hire-pack" || packClash.scope === SHARED_CLIENT_PERSON || packClash.scope === SHARED_CLIENT_GTA)
+              ? packClash
+              : null
+          }
+          reloadHref={`/claims/${id}/hire-pack`}
+        />
 
         <fieldset className="space-y-3 rounded-xl border border-line bg-card p-5">
           <legend className="font-serif text-xl text-navy-deep">Hirer</legend>

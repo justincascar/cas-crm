@@ -17,7 +17,10 @@ import { TOTAL_LOSS_NOTICE_SENT_EVENT, TOTAL_LOSS_PAYMENT_PROMISED_EVENT, TOTAL_
 import { paymentDetailsLetterLine, type InsurerPaymentDetails } from "../domain/payment-details";
 import { correspondenceCanBeMarkedSent, ENGINEER_INSTRUCTION_MARKED_SENT, ENGINEER_INSTRUCTION_PREPARED } from "./engineers";
 import { recordClaimEvent } from "./chronology";
-import { get, newId, run } from "./connection";
+import { get, newId, run, all } from "./connection";
+import { actorName, withImmediateTransaction } from "./record-version";
+import { replaySubmit, requireSubmitKey, storeSubmit, SubmitNeedsConfirm } from "./submit-key";
+import { SAME_AMOUNT_WARN_MS, secondPaymentWarning } from "./payment-warning";
 import { getInsurerPaymentDetails } from "./payment-details";
 
 export type { TotalLossFigures };
@@ -284,21 +287,37 @@ export function confirmTypedVehicleDamageAgreed(input: {
   actorId: string;
   agreedPence: number;
   agreedOn?: string;
+  submitKey?: string;
 }) {
   assertTotalLoss(input.claimId);
   if (!Number.isInteger(input.agreedPence) || input.agreedPence < 0) throw new Error("Enter the agreed amount in pounds.");
-  const before = getVehicleDamageMoney(input.claimId);
-  writeAgreed(input.claimId, input.agreedPence, input.agreedOn);
-  const after = getVehicleDamageMoney(input.claimId);
-  if (after.receivedPence !== before.receivedPence) throw new Error("The amount paid was not changed.");
-  const dated = input.agreedOn ? ` Agreement was reached on ${input.agreedOn.split("-").reverse().join("/")}.` : "";
-  recordClaimEvent({
-    claimId: input.claimId,
-    eventType: "total_loss_agreed_confirmed",
-    occurredAt: nowUtcIso(),
-    actorId: input.actorId,
-    details: `Staff recorded ${(input.agreedPence / 100).toFixed(2)} pounds as the agreed vehicle-damage amount. This is separate from the engineer's figures. The amount paid was not changed.${dated}`,
-    source: "staff",
+  const write = () => {
+    const before = getVehicleDamageMoney(input.claimId);
+    writeAgreed(input.claimId, input.agreedPence, input.agreedOn);
+    const after = getVehicleDamageMoney(input.claimId);
+    if (after.receivedPence !== before.receivedPence) throw new Error("The amount paid was not changed.");
+    const dated = input.agreedOn ? ` Agreement was reached on ${input.agreedOn.split("-").reverse().join("/")}.` : "";
+    recordClaimEvent({
+      claimId: input.claimId,
+      eventType: "total_loss_agreed_confirmed",
+      occurredAt: nowUtcIso(),
+      actorId: input.actorId,
+      details: `Staff recorded ${(input.agreedPence / 100).toFixed(2)} pounds as the agreed vehicle-damage amount. This is separate from the engineer's figures. The amount paid was not changed.${dated}`,
+      source: "staff",
+    });
+  };
+  if (input.submitKey === undefined) {
+    write();
+    return { agreedPence: input.agreedPence };
+  }
+  const submitKey = requireSubmitKey(input.submitKey);
+  return withImmediateTransaction(() => {
+    const replay = replaySubmit<{ agreedPence: number }>(submitKey);
+    if (replay) return replay;
+    write();
+    const result = { agreedPence: input.agreedPence };
+    storeSubmit(submitKey, result);
+    return result;
   });
 }
 
@@ -556,22 +575,47 @@ export function confirmInsurerSendingPayment(input: { claimId: string; actorId: 
   });
 }
 
-export function recordTotalLossPaymentReceived(input: { claimId: string; actorId: string; receivedPence: number }) {
+export function recordTotalLossPaymentReceived(input: {
+  claimId: string;
+  actorId: string;
+  receivedPence: number;
+  /** Omitted when the payment ledger already claimed the one-time key. A staff form must send one. */
+  submitKey?: string;
+  confirmSeparate?: boolean;
+}) {
   assertTotalLoss(input.claimId);
   if (!Number.isInteger(input.receivedPence) || input.receivedPence <= 0) {
     throw new Error("Enter the amount that has arrived. It is not marked received until you do.");
   }
-  const recent = get<{ occurred_at: string; details: string | null }>(
-    `SELECT occurred_at, details FROM claim_events
-     WHERE claim_id = ? AND event_type = ?
-     ORDER BY occurred_at DESC, recorded_at DESC LIMIT 1`,
-    [input.claimId, TOTAL_LOSS_PAYMENT_RECEIVED_EVENT],
-  );
-  if (recent?.occurred_at) {
-    const age = Date.now() - Date.parse(recent.occurred_at);
-    const sameAmount = String(recent.details || "").includes((input.receivedPence / 100).toFixed(2));
-    if (sameAmount && age >= 0 && age < 60_000) return;
+  if (input.submitKey === undefined) {
+    writeTotalLossReceived(input);
+    return { receivedPence: input.receivedPence };
   }
+  const submitKey = requireSubmitKey(input.submitKey);
+  return withImmediateTransaction(() => {
+    const replay = replaySubmit<{ receivedPence: number }>(submitKey);
+    if (replay) return replay;
+    if (!input.confirmSeparate) {
+      const recent = recentVehicleDamageAmount(input.claimId, input.receivedPence);
+      if (recent) {
+        throw new SubmitNeedsConfirm(
+          secondPaymentWarning({
+            amountPence: input.receivedPence,
+            headLabel: "Vehicle damage",
+            at: recent.at,
+            by: recent.by,
+          }),
+        );
+      }
+    }
+    writeTotalLossReceived(input);
+    const result = { receivedPence: input.receivedPence };
+    storeSubmit(submitKey, result);
+    return result;
+  });
+}
+
+function writeTotalLossReceived(input: { claimId: string; actorId: string; receivedPence: number }) {
   const existing = getVehicleDamageMoney(input.claimId);
   const totalReceived = (existing.receivedPence || 0) + input.receivedPence;
   if (existing.id) {
@@ -585,13 +629,33 @@ export function recordTotalLossPaymentReceived(input: { claimId: string; actorId
       [`vd-${input.claimId}`, input.claimId, input.receivedPence],
     );
   }
-  const when = nowUtcIso();
   recordClaimEvent({
     claimId: input.claimId,
     eventType: TOTAL_LOSS_PAYMENT_RECEIVED_EVENT,
-    occurredAt: when,
+    occurredAt: nowUtcIso(),
     actorId: input.actorId,
     details: `Staff added ${(input.receivedPence / 100).toFixed(2)} pounds to the vehicle-damage amount received. The hire end date was not changed.`,
     source: "staff",
   });
+}
+
+function recentVehicleDamageAmount(claimId: string, amountPence: number): { at: string; by: string } | null {
+  const rows = all<{ occurred_at: string; details: string | null; actor_id: string | null }>(
+    `SELECT occurred_at, details, actor_id FROM claim_events
+     WHERE claim_id = ? AND event_type IN ('settlement_payment_logged', ?)
+     ORDER BY occurred_at DESC, recorded_at DESC`,
+    [claimId, TOTAL_LOSS_PAYMENT_RECEIVED_EVENT],
+  );
+  const pounds = (amountPence / 100).toFixed(2);
+  for (const row of rows) {
+    const recorded = Date.parse(String(row.occurred_at));
+    if (Number.isNaN(recorded)) continue;
+    const age = Date.now() - recorded;
+    if (age < 0) continue;
+    if (age >= SAME_AMOUNT_WARN_MS) break;
+    const details = String(row.details || "");
+    if (!details.includes(`amount_pence=${amountPence}`) && !details.includes(pounds)) continue;
+    return { at: String(row.occurred_at), by: actorName(row.actor_id) };
+  }
+  return null;
 }

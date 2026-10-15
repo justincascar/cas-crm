@@ -1,6 +1,7 @@
 import { RecordVersionField } from "@/components/SaveClashNotice";
 import { formatUkDate } from "@/lib/dates";
 import { sectionVersion } from "@/lib/db/record-version";
+import { SHARED_HIRE_END } from "@/lib/db/shared-fields";
 import type { HireEndDateReview as Review } from "@/lib/db/hire-collection-date";
 
 function shown(value: string | null) {
@@ -38,6 +39,7 @@ export function HireEndDateReview({
             <div className="mt-3 flex flex-col gap-2 sm:flex-row">
               <form method="post" action={`/claims/${claimId}/hire-end-date`}>
                 <RecordVersionField version={sectionVersion("hire-end", review.episodeId)} />
+                <input type="hidden" name="hireEndVersion" value={sectionVersion(SHARED_HIRE_END, review.episodeId)} />
                 <input type="hidden" name="choice" value="job" />
                 <input type="hidden" name="episodeId" value={review.episodeId} />
                 <input type="hidden" name="returnTo" value={returnTo} />
@@ -47,6 +49,7 @@ export function HireEndDateReview({
               </form>
               <form method="post" action={`/claims/${claimId}/hire-end-date`}>
                 <RecordVersionField version={sectionVersion("hire-end", review.episodeId)} />
+                <input type="hidden" name="hireEndVersion" value={sectionVersion(SHARED_HIRE_END, review.episodeId)} />
                 <input type="hidden" name="choice" value="file" />
                 <input type="hidden" name="episodeId" value={review.episodeId} />
                 <input type="hidden" name="returnTo" value={returnTo} />

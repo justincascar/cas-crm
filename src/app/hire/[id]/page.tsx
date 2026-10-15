@@ -110,6 +110,7 @@ export default async function FleetVehiclePage({
           ) : null}
           <ValidatedForm action={actionRemoveFleetVehicle} className="mt-4 space-y-3">
             <input type="hidden" name="fleetVehicleId" value={id} />
+            <RecordVersionField version={sectionVersion("fleet", id)} />
             <label className="block text-sm">
               Reason (optional)
               <input name="removedReason" className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" />

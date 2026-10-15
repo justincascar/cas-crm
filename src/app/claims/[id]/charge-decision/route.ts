@@ -3,6 +3,7 @@ import { isOfficeRole } from "@/lib/auth/roles";
 import { getRequestStaff } from "@/lib/auth/session";
 import { acceptChargeFigure, disputeCharge, proposeChargeAcceptance, type ChargeHead } from "@/lib/db/charge-decision";
 import { formVersion } from "@/lib/db/record-version";
+import { formSubmitKey } from "@/lib/db/submit-key";
 import { optionalPoundsToPence } from "@/lib/domain/total-loss";
 import { browserOrigin } from "@/lib/http/browser-origin";
 import { clashRedirect } from "@/lib/http/version-clash";
@@ -35,6 +36,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
           head,
           agreedPence: agreed,
           expectedVersion: formVersion(form),
+          submitKey: formSubmitKey(form),
         });
       }
     } else if (intent === "dispute") {

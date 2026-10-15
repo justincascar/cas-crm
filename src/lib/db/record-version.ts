@@ -75,6 +75,13 @@ export function formVersion(form: FormData): string {
   return raw == null ? "" : String(raw);
 }
 
+/** A shared-field token. Omitted when the form did not send one, so internal callers are not refused. */
+export function postedVersion(form: FormData, name: string): string | undefined {
+  if (!form.has(name)) return undefined;
+  const raw = form.get(name);
+  return raw == null ? "" : String(raw);
+}
+
 export function formLoaded(form: FormData): Record<string, string> | undefined {
   const raw = String(form.get(LOADED_JSON) || "").trim();
   if (!raw) return undefined;

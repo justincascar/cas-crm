@@ -107,6 +107,7 @@ describe("calculated hire, storage and recovery figures", () => {
       for (const head of ["hire", "storage", "recovery"] as const) {
         const before = money(db, "c3", head)!;
         recordVehicleOffer({
+        submitKey: `charge-figures-offer-${head}`,
           claimId: "c3",
           actorId: "staff-megan",
           head,
@@ -125,6 +126,7 @@ describe("calculated hire, storage and recovery figures", () => {
         if (head !== "recovery") assert.equal(offer.rateMismatch, true);
       }
       const again = recordVehicleOffer({
+        submitKey: "charge-figures-offer-hire",
         claimId: "c3",
         actorId: "staff-megan",
         head: "hire",
@@ -151,11 +153,13 @@ describe("calculated hire, storage and recovery figures", () => {
       const claimed = money(db, "c3", "recovery")!.claimed_pence;
       assert.ok(claimed > 100);
       assert.throws(
-        () => acceptChargeFigure({ claimId: "c3", actorId: "staff-sian", role: "staff", head: "recovery", agreedPence: claimed - 100 }),
+        () => acceptChargeFigure({
+        submitKey: "charge-figures-acceptChargeFigure-3", claimId: "c3", actorId: "staff-sian", role: "staff", head: "recovery", agreedPence: claimed - 100 }),
         /approveSettlement/,
       );
       assert.throws(
-        () => recordAgreedHeadFigure({ claimId: "c3", actorId: "staff-sian", head: "recovery", agreedPence: claimed - 100 }),
+        () => recordAgreedHeadFigure({
+        submitKey: "charge-figures-recordAgreedHeadFigure-4", claimId: "c3", actorId: "staff-sian", head: "recovery", agreedPence: claimed - 100 }),
         /approveSettlement/,
       );
       assert.equal(money(db, "c3", "recovery")!.agreed_pence, 0);
@@ -163,7 +167,8 @@ describe("calculated hire, storage and recovery figures", () => {
       assert.equal(latestChargeDecision("c3", "recovery").decision, "proposed");
       assert.equal(money(db, "c3", "recovery")!.agreed_pence, 0);
       assert.equal(latestChargeDecision("c3", "hire").decision, "disputed");
-      acceptChargeFigure({ claimId: "c3", actorId: "staff-justin", role: "staff", head: "storage", agreedPence: storageBefore.claimed_pence });
+      acceptChargeFigure({
+        submitKey: "charge-figures-acceptChargeFigure-5", claimId: "c3", actorId: "staff-justin", role: "staff", head: "storage", agreedPence: storageBefore.claimed_pence });
       assert.equal(money(db, "c3", "storage")!.agreed_pence, storageBefore.claimed_pence);
       assert.equal(money(db, "c3", "hire")!.agreed_pence, hireBefore.agreed_pence);
       assert.equal(money(db, "c3", "recovery")!.agreed_pence, 0);
@@ -225,13 +230,15 @@ describe("calculated hire, storage and recovery figures", () => {
         assert.ok(chaseForClaim("storage_payment", "c4"));
         assert.equal(chaseForClaim("storage_payment", "c4")?.handlerState, "tracking");
 
-        const part = recordHeadPayment({ claimId: "c4", actorId: "staff-justin", head: "storage", amountPence: 3000, correction: false });
+        const part = recordHeadPayment({
+        submitKey: "charge-figures-recordHeadPayment-6", claimId: "c4", actorId: "staff-justin", head: "storage", amountPence: 3000, correction: false });
         assert.equal(part.paused, true);
         assert.equal(chaseRow("c4", "storage_payment")?.paused, 1);
         assert.equal(money(db, "c4", "hire")!.claimed_pence, hireBefore.claimed_pence);
         assert.equal(money(db, "c4", "hire")!.agreed_pence, hireBefore.agreed_pence);
 
-        const full = recordHeadPayment({ claimId: "c4", actorId: "staff-justin", head: "storage", amountPence: 5000, correction: false });
+        const full = recordHeadPayment({
+        submitKey: "charge-figures-recordHeadPayment-7", claimId: "c4", actorId: "staff-justin", head: "storage", amountPence: 5000, correction: false });
         assert.equal(full.paidInFull, true);
         const stopped = chaseForClaim("storage_payment", "c4");
         assert.equal(stopped?.due, false);

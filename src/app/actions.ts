@@ -32,14 +32,23 @@ import { generateHirePackDocument, generateStorageRecoveryDocument, getHirePack,
 import { generateHireAgreementDocument, getGtaMarkupPercent, prepareHireRating } from "@/lib/db/hire-agreement";
 import { hireAgreementPrehireBlock } from "@/lib/db/prehire-checks";
 import { normaliseGtaGroup, standardDailyRatePence } from "@/lib/documents/gta";
-import { formLoaded, formVersion, pathWithClash, VersionConflictError, withImmediateTransaction, withSectionSave, writeScreenIfCurrent } from "@/lib/db/record-version";
+import { formLoaded, formVersion, pathWithClash, postedVersion, VersionConflictError, claimSectionForSave, withImmediateTransaction, withSectionSave, writeScreenIfCurrent } from "@/lib/db/record-version";
 import { saveScreenData, valuesFromForm } from "@/lib/db/screens";
+import { saveClaimOverview } from "@/lib/db/claim-facts";
+import {
+  SHARED_CLIENT_GTA,
+  SHARED_CLIENT_PERSON,
+  clientGtaGroup,
+  clientPersonColumns,
+  guardSharedFields,
+} from "@/lib/db/shared-fields";
 import { syncRecoveryClaimed, syncStorageClaimed } from "@/lib/db/storage-charge";
 import { isoDaysFromNow } from "@/lib/dates";
 import { postcodeLookup } from "@/lib/lookups/postcode";
 import { VEHICLE_MANUAL_HINT, vehicleLookup } from "@/lib/lookups/vehicle";
 import { isDocumentTemplateKey } from "@/lib/documents/catalog";
 import { errorQuery, FieldValidationError } from "@/lib/form-validation";
+import { redirectClash } from "@/lib/http/version-clash";
 import { setClaimEngineer } from "@/lib/db/engineers";
 
 export async function actionCreateClaim(formData: FormData) {
@@ -121,14 +130,14 @@ export async function actionUpdateClaim(formData: FormData) {
   const submitted: Record<string, string> = {};
   for (const name of CLAIM_FACT_FIELDS) submitted[name] = String(formData.get(name) || "");
   try {
-    withSectionSave({
-      scope: "claim-overview",
-      recordKey: id,
-      expected: formVersion(formData),
+    saveClaimOverview({
+      claimId: id,
       actorId: staff.id,
       submitted,
-      fields: submitted,
-      write: () => updateClaimPosition(id, submitted, staff.id),
+      overviewVersion: formVersion(formData),
+      circumstancesVersion: postedVersion(formData, "circumstancesVersion"),
+      ownInsurerVersion: postedVersion(formData, "ownInsurerVersion"),
+      insurerPositionVersion: postedVersion(formData, "insurerPositionVersion"),
     });
   } catch (error) {
     if (error instanceof VersionConflictError) redirect(pathWithClash(`/claims/${id}`, error));
@@ -226,28 +235,32 @@ export async function actionReserveVehicle(formData: FormData) {
   const staff = await requireStaff();
   const claimId = String(formData.get("claimId") || "");
   const returnTo = String(formData.get("returnTo") || "");
+  const fleetVehicleId = String(formData.get("fleetVehicleId") || "");
+  const versionName = `fleetVersion_${fleetVehicleId}`;
   try {
     createReservation({
-      fleetVehicleId: String(formData.get("fleetVehicleId")),
+      fleetVehicleId,
       claimId: claimId || undefined,
       startAt: new Date(String(formData.get("startAt"))).toISOString(),
       endAt: new Date(String(formData.get("endAt"))).toISOString(),
       kind: String(formData.get("kind") || "hire"),
       createdBy: staff.id,
+      expectedVersion: formData.has(versionName) ? String(formData.get(versionName) ?? "") : undefined,
     });
-    revalidatePath("/hire");
-    if (claimId) {
-      revalidatePath(`/claims/${claimId}`);
-      revalidatePath(`/claims/${claimId}/work/hire-vehicle`);
-      revalidatePath(`/claims/${claimId}/work/reserve`);
-    }
-    if (returnTo) redirect(`${returnTo}?saved=1`);
-    return { ok: true };
   } catch (error) {
+    redirectClash(returnTo || "/hire", error);
     const message = error instanceof Error ? error.message : "Reservation failed.";
     if (returnTo) redirect(`${returnTo}${errorQuery(message)}`);
     return { error: message };
   }
+  revalidatePath("/hire");
+  if (claimId) {
+    revalidatePath(`/claims/${claimId}`);
+    revalidatePath(`/claims/${claimId}/work/hire-vehicle`);
+    revalidatePath(`/claims/${claimId}/work/reserve`);
+  }
+  if (returnTo) redirect(`${returnTo}?saved=1`);
+  return { ok: true };
 }
 
 export async function actionSaveClaimScreen(formData: FormData) {
@@ -263,6 +276,16 @@ export async function actionSaveClaimScreen(formData: FormData) {
       staff.id,
       formVersion(formData),
       formLoaded(formData),
+      {
+        circumstancesVersion: postedVersion(formData, "circumstancesVersion"),
+        ownInsurerVersion: postedVersion(formData, "ownInsurerVersion"),
+        clientPersonVersion: postedVersion(formData, "clientPersonVersion"),
+        clientGtaVersion: postedVersion(formData, "clientGtaVersion"),
+        tpVehicleVersion: postedVersion(formData, "tpVehicleVersion"),
+        storageStartVersion: postedVersion(formData, "storageStartVersion"),
+        storageEndVersion: postedVersion(formData, "storageEndVersion"),
+        recoveryAtVersion: postedVersion(formData, "recoveryAtVersion"),
+      },
     );
     if (screenKey === "recovery") syncRecoveryClaimed(claimId);
     if (screenKey === "storage") syncStorageClaimed(claimId);
@@ -621,7 +644,44 @@ export async function actionSaveHirePack(formData: FormData) {
         group_charged: String(formData.get("group_charged") || ""),
       },
       write: () => {
-    const rating = prepareHireRating({
+        const person = clientPersonColumns(claimId);
+        const telephone = String(formData.get("mobile_tel") || formData.get("home_tel") || "");
+        guardSharedFields({
+          scope: SHARED_CLIENT_PERSON,
+          recordKey: claimId,
+          expected: postedVersion(formData, "clientPersonVersion"),
+          actorId: staff.id,
+          current: person,
+          next: {
+            date_of_birth: String(formData.get("date_of_birth") || "") || person.date_of_birth || "",
+            licence_number: String(formData.get("licence_number") || "") || person.licence_number || "",
+            telephone: telephone || person.telephone || "",
+          },
+          labels: {
+            date_of_birth: "Date of birth",
+            licence_number: "Licence number",
+            telephone: "Telephone",
+            mobile_tel: "Mobile",
+          },
+          formName: { date_of_birth: "date_of_birth", licence_number: "licence_number", telephone: "mobile_tel" },
+          submitted: {
+            date_of_birth: String(formData.get("date_of_birth") || ""),
+            licence_number: String(formData.get("licence_number") || ""),
+            mobile_tel: telephone,
+          },
+        });
+        guardSharedFields({
+          scope: SHARED_CLIENT_GTA,
+          recordKey: claimId,
+          expected: postedVersion(formData, "clientGtaVersion"),
+          actorId: staff.id,
+          current: { gta_group: clientGtaGroup(claimId) },
+          next: { gta_group: normaliseGtaGroup(String(formData.get("client_gta_group") || "")) || "" },
+          labels: { gta_group: "GTA group", client_gta_group: "GTA group" },
+          formName: { gta_group: "client_gta_group" },
+          submitted: { client_gta_group: String(formData.get("client_gta_group") || "") },
+        });
+        const rating = prepareHireRating({
       claimId,
       clientGroupRaw: String(formData.get("client_gta_group") || ""),
       groupChargedRaw: String(formData.get("group_charged") || ""),

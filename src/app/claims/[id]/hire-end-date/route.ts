@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { isOfficeRole } from "@/lib/auth/roles";
 import { getRequestStaff } from "@/lib/auth/session";
 import { confirmHireEndDate } from "@/lib/db/hire-collection-date";
-import { formVersion, withSectionSave } from "@/lib/db/record-version";
+import { formVersion, postedVersion, withSectionSave } from "@/lib/db/record-version";
 import { browserOrigin } from "@/lib/http/browser-origin";
 import { clashRedirect } from "@/lib/http/version-clash";
 
@@ -28,7 +28,14 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         submitted: { choice },
         labels: { choice: "Hire end" },
         fields: { choice },
-        write: () => confirmHireEndDate({ claimId: id, episodeId, choice, actorId: staff.id }),
+        write: () =>
+          confirmHireEndDate({
+            claimId: id,
+            episodeId,
+            choice,
+            actorId: staff.id,
+            hireEndVersion: postedVersion(form, "hireEndVersion"),
+          }),
       });
     } catch (error) {
       const refused = clashRedirect(origin, safeReturn, error);

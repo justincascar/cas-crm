@@ -531,6 +531,12 @@ CREATE TABLE IF NOT EXISTS save_clashes (
   created_at TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS submit_keys (
+  submit_key TEXT PRIMARY KEY,
+  result_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS known_insurers (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,

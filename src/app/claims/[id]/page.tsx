@@ -8,12 +8,13 @@ import { JustificationChronology } from "@/components/claims/JustificationChrono
 import { ClaimWorkflowStatus } from "@/components/ClaimWorkflowStatus";
 import { ChasePanel } from "@/components/ChasePanel";
 import { PageHeader } from "@/components/ClaimTable";
-import { RecordVersionField, SaveClashNotice } from "@/components/SaveClashNotice";
+import { SubmitKeyInput } from "@/components/SubmitKeyInput";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import { requireStaff } from "@/lib/auth/session";
 import { getClaim, listStaff } from "@/lib/db/queries";
 import { loadClash, screenVersion, sectionVersion } from "@/lib/db/record-version";
+import { SHARED_CIRCUMSTANCES, SHARED_INSURER_POSITION, SHARED_OWN_INSURER } from "@/lib/db/shared-fields";
 import { gapsForClaim } from "@/lib/db/repair-progress";
 import { THIRD_PARTY_VEHICLE_EMPTY, vehicleIsRecorded, vehicleSummary } from "@/lib/domain/vehicle-display";
 import { findPreparedChase, listChasesForClaim } from "@/lib/db/chase";
@@ -75,10 +76,12 @@ export default async function ClaimDetailPage({
     stepError?: string;
     stepSaved?: string;
     clash?: string;
+    payWarn?: string;
+    payAmount?: string;
   }>;
 }) {
   const { id } = await params;
-  const { error, tlError, tlMail, mailboxError, mailboxSent, mailboxSimulated, mailboxReport, paymentDecision, stepError, stepSaved, clash } = await searchParams;
+  const { error, tlError, tlMail, mailboxError, mailboxSent, mailboxSimulated, mailboxReport, paymentDecision, stepError, stepSaved, clash, payWarn, payAmount } = await searchParams;
   const claimClash = loadClash(clash);
   await requireStaff();
   const data = getClaim(id);
@@ -188,6 +191,7 @@ export default async function ClaimDetailPage({
           bankDetailsMissing={bankDetailsMissing}
           repairVersion={sectionVersion("money", `${id}:repairs`)}
           overrideVersion={sectionVersion("chase-override", `${id}:${chase.kind}`)}
+          insurerPositionVersion={sectionVersion(SHARED_INSURER_POSITION, id)}
           returnTo={`/claims/${claim.id}`}
           awaitingDecisionHref={
             chase.payment && reviews.some((item) => item.head === chase.payment?.head)
@@ -300,6 +304,9 @@ export default async function ClaimDetailPage({
                 : sectionVersion("claim-overview", id)
             }
           />
+          <input type="hidden" name="circumstancesVersion" value={claimClash?.scope === SHARED_CIRCUMSTANCES && claimClash.recordKey === id ? claimClash.expectedVersion : sectionVersion(SHARED_CIRCUMSTANCES, id)} />
+          <input type="hidden" name="ownInsurerVersion" value={claimClash?.scope === SHARED_OWN_INSURER && claimClash.recordKey === id ? claimClash.expectedVersion : sectionVersion(SHARED_OWN_INSURER, id)} />
+          <input type="hidden" name="insurerPositionVersion" value={claimClash?.scope === SHARED_INSURER_POSITION && claimClash.recordKey === id ? claimClash.expectedVersion : sectionVersion(SHARED_INSURER_POSITION, id)} />
           <h2 className="font-serif text-xl text-navy-deep">Claim facts</h2>
           <p className="text-xs text-slate">Staff-reviewed fields. Client-entered material stays in notes and the form status until reviewed.</p>
           <label className="block text-sm">
@@ -637,6 +644,7 @@ export default async function ClaimDetailPage({
                 </span>
               </label>
               <input type="hidden" name="claimId" value={String(claim.id)} />
+              <SubmitKeyInput />
               <RecordVersionField
                 version={
                   claimClash?.scope === "money" && claimClash.recordKey === `${id}:repairs`
@@ -658,6 +666,8 @@ export default async function ClaimDetailPage({
         returnTo={`/claims/${claim.id}`}
         error={tlError}
         openMailId={tlMail}
+        payWarn={payWarn}
+        payAmount={payAmount}
       />
 
       <section className="grid gap-6 lg:grid-cols-2">

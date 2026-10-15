@@ -1,6 +1,7 @@
 import { RecordVersionField } from "@/components/SaveClashNotice";
 import { formatUkDate } from "@/lib/dates";
 import { sectionVersion } from "@/lib/db/record-version";
+import { SHARED_RECOVERY_AT, SHARED_STORAGE_START } from "@/lib/db/shared-fields";
 import type { StorageDateReview as Review } from "@/lib/db/storage-recovery-date";
 
 function shown(value: string | null) {
@@ -29,6 +30,8 @@ export function StorageDateReview({ claimId, review, returnTo }: { claimId: stri
       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
         <form method="post" action={`/claims/${claimId}/storage-date`}>
           <RecordVersionField version={version} />
+          <input type="hidden" name="storageStartVersion" value={sectionVersion(SHARED_STORAGE_START, claimId)} />
+          <input type="hidden" name="recoveryAtVersion" value={sectionVersion(SHARED_RECOVERY_AT, claimId)} />
           <input type="hidden" name="choice" value="job" />
           <input type="hidden" name="returnTo" value={returnTo} />
           <button className="min-h-11 w-full rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white" type="submit">
@@ -37,6 +40,8 @@ export function StorageDateReview({ claimId, review, returnTo }: { claimId: stri
         </form>
         <form method="post" action={`/claims/${claimId}/storage-date`}>
           <RecordVersionField version={version} />
+          <input type="hidden" name="storageStartVersion" value={sectionVersion(SHARED_STORAGE_START, claimId)} />
+          <input type="hidden" name="recoveryAtVersion" value={sectionVersion(SHARED_RECOVERY_AT, claimId)} />
           <input type="hidden" name="choice" value="file" />
           <input type="hidden" name="returnTo" value={returnTo} />
           <button className="min-h-11 w-full rounded-md border border-line bg-white px-3 py-2 text-sm font-semibold" type="submit">

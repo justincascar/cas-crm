@@ -53,6 +53,7 @@ describe("vehicle damage offers", () => {
       assert.equal(listVehicleOffers("c6", "repairs").length, 0);
 
       recordVehicleOffer({
+        submitKey: "vehicle-offers-recordVehicleOffer-1",
         claimId: "c6",
         actorId: "staff-justin",
         head: "repairs",
@@ -72,6 +73,7 @@ describe("vehicle damage offers", () => {
       assert.equal(money(db, "c6", "repairs").offered_pence, 800000);
 
       recordVehicleOffer({
+        submitKey: "vehicle-offers-recordVehicleOffer-2",
         claimId: "c6",
         actorId: "staff-justin",
         head: "repairs",
@@ -98,6 +100,7 @@ describe("vehicle damage offers", () => {
     const db = seeded();
     withDatabase(db, () => {
       recordVehicleOffer({
+        submitKey: "vehicle-offers-recordVehicleOffer-3",
         claimId: "c6",
         actorId: "staff-justin",
         head: "repairs",
@@ -106,6 +109,7 @@ describe("vehicle damage offers", () => {
         note: "",
       });
       recordAgreedRepairInvoice({
+        submitKey: "vehicle-offers-recordAgreedRepairInvoice-4",
         claimId: "c6",
         actorId: "staff-justin",
         agreedPence: 800000,
@@ -119,6 +123,7 @@ describe("vehicle damage offers", () => {
       assert.equal(listVehicleOffers("c6", "repairs").length, 1);
 
       recordAgreedRepairInvoice({
+        submitKey: "vehicle-offers-recordAgreedRepairInvoice-5",
         claimId: "c6",
         actorId: "staff-justin",
         agreedPence: 920000,
@@ -138,6 +143,7 @@ describe("vehicle damage offers", () => {
     withDatabase(db, () => {
       assert.equal(listVehicleOffers("c6", "repairs").length, 0);
       recordAgreedRepairInvoice({
+        submitKey: "vehicle-offers-recordAgreedRepairInvoice-6",
         claimId: "c6",
         actorId: "staff-justin",
         agreedPence: 700000,
@@ -157,6 +163,7 @@ describe("vehicle damage offers", () => {
     const db = seeded();
     withDatabase(db, () => {
       recordVehicleOffer({
+        submitKey: "vehicle-offers-recordVehicleOffer-7",
         claimId: "c6",
         actorId: "staff-justin",
         head: "repairs",
@@ -165,6 +172,7 @@ describe("vehicle damage offers", () => {
         note: "",
       });
       recordVehicleOffer({
+        submitKey: "vehicle-offers-recordVehicleOffer-8",
         claimId: "c6",
         actorId: "staff-justin",
         head: "repairs",
@@ -244,7 +252,7 @@ describe("vehicle damage offers", () => {
     db.close();
   });
 
-  it("records one row when the same offer is submitted twice in a row", () => {
+  it("records one row when the same offer key is submitted twice, and keeps a confirmed second offer", () => {
     const db = seeded();
     withDatabase(db, () => {
       const first = recordVehicleOffer({
@@ -254,6 +262,7 @@ describe("vehicle damage offers", () => {
         amountPence: 1300000,
         offeredOn: "2026-10-12",
         note: "",
+        submitKey: "offer-once",
       });
       const second = recordVehicleOffer({
         claimId: "c6",
@@ -262,11 +271,28 @@ describe("vehicle damage offers", () => {
         amountPence: 1300000,
         offeredOn: "2026-10-12",
         note: "",
+        submitKey: "offer-once",
       });
       assert.equal(second, first);
       assert.equal(listVehicleOffers("c6", "repairs").length, 1);
-      assert.equal(money(db, "c6", "repairs").offered_pence, 1300000);
-      db.prepare(`UPDATE insurer_offers SET recorded_at = ? WHERE id = ?`).run("2026-10-12T17:00:00.000Z", first);
+      assert.throws(
+        () =>
+          recordVehicleOffer({
+            claimId: "c6",
+            actorId: "staff-justin",
+            head: "repairs",
+            amountPence: 1300000,
+            offeredOn: "2026-10-12",
+            note: "",
+            submitKey: "offer-warn",
+          }),
+        (error: unknown) => {
+          assert.equal(error instanceof Error ? error.name : "", "SubmitNeedsConfirm");
+          assert.match(error instanceof Error ? error.message : "", /Is this a second, separate offer/);
+          return true;
+        },
+      );
+      assert.equal(listVehicleOffers("c6", "repairs").length, 1);
       const later = recordVehicleOffer({
         claimId: "c6",
         actorId: "staff-justin",
@@ -274,9 +300,12 @@ describe("vehicle damage offers", () => {
         amountPence: 1300000,
         offeredOn: "2026-10-12",
         note: "",
+        submitKey: "offer-confirmed",
+        confirmDuplicate: true,
       });
       assert.notEqual(later, first);
       assert.equal(listVehicleOffers("c6", "repairs").length, 2);
+      assert.equal(money(db, "c6", "repairs").offered_pence, 1300000);
     });
     db.close();
   });
@@ -285,6 +314,7 @@ describe("vehicle damage offers", () => {
     const db = seeded();
     withDatabase(db, () => {
       recordVehicleOffer({
+        submitKey: "vehicle-offers-recordVehicleOffer-12",
         claimId: "c6",
         actorId: "staff-justin",
         head: "repairs",
@@ -293,6 +323,7 @@ describe("vehicle damage offers", () => {
         note: "First offer",
       });
       const later = recordVehicleOffer({
+        submitKey: "vehicle-offers-recordVehicleOffer-13",
         claimId: "c6",
         actorId: "staff-justin",
         head: "repairs",
@@ -328,6 +359,7 @@ describe("vehicle damage offers", () => {
     withDatabase(db, () => {
       listVehicleOffers("c6", "repairs");
       recordVehicleOffer({
+        submitKey: "vehicle-offers-recordVehicleOffer-14",
         claimId: "c6",
         actorId: "staff-justin",
         head: "repairs",
@@ -336,6 +368,7 @@ describe("vehicle damage offers", () => {
         note: "",
       });
       const later = recordVehicleOffer({
+        submitKey: "vehicle-offers-recordVehicleOffer-15",
         claimId: "c6",
         actorId: "staff-justin",
         head: "repairs",

@@ -1,4 +1,5 @@
 import type { ChargeDecision } from "@/lib/db/charge-decision";
+import { SubmitKeyInput } from "@/components/SubmitKeyInput";
 import { formatGbp } from "@/lib/money";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
@@ -41,6 +42,7 @@ export function ChargeDecisionPanel({
         </p>
       )}
       <form method="post" action={action} className="grid gap-3 sm:grid-cols-2">
+        <SubmitKeyInput />
         <input type="hidden" name="head" value={head} />
         <input type="hidden" name="recordVersion" value={recordVersion} />
         <input type="hidden" name="intent" value={canApproveSettlement ? "accept" : "propose"} />

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { isOfficeRole } from "@/lib/auth/roles";
 import { getRequestStaff } from "@/lib/auth/session";
 import { confirmStorageRecoveryDate } from "@/lib/db/storage-recovery-date";
-import { formVersion, withSectionSave } from "@/lib/db/record-version";
+import { formVersion, postedVersion, withSectionSave } from "@/lib/db/record-version";
 import { browserOrigin } from "@/lib/http/browser-origin";
 import { clashRedirect } from "@/lib/http/version-clash";
 
@@ -27,7 +27,14 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         submitted: { choice },
         labels: { choice: "Storage start" },
         fields: { choice },
-        write: () => confirmStorageRecoveryDate({ claimId: id, choice, actorId: staff.id }),
+        write: () =>
+          confirmStorageRecoveryDate({
+            claimId: id,
+            choice,
+            actorId: staff.id,
+            storageStartVersion: postedVersion(form, "storageStartVersion"),
+            recoveryAtVersion: postedVersion(form, "recoveryAtVersion"),
+          }),
       });
     } catch (error) {
       const refused = clashRedirect(origin, safeReturn, error);

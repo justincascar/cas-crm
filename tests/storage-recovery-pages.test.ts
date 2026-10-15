@@ -173,7 +173,8 @@ describe("storage and recovery pages", () => {
         `UPDATE claims SET storage_started_on = '2026-09-01', storage_billing_end_on = '2026-09-03', storage_rate_pence = 3900 WHERE id = 'c4'`,
       );
       syncStorageClaimed("c4", "2026-10-14");
-      recordHeadPayment({ claimId: "c4", actorId: "staff-justin", head: "storage", amountPence: 1000, correction: false });
+      recordHeadPayment({
+        submitKey: "storage-recovery-pages-recordHeadPayment-1", claimId: "c4", actorId: "staff-justin", head: "storage", amountPence: 1000, correction: false });
       assert.throws(() => setClaimStorageRate({ claimId: "c4", actorId: "staff-justin", ratePence: 4500, reason: "  " }), /reason/);
       const before = get<{ storage_started_on: string; storage_billing_end_on: string; received_pence: number }>(
         `SELECT c.storage_started_on, c.storage_billing_end_on, f.received_pence
@@ -285,8 +286,10 @@ describe("storage and recovery pages", () => {
     withDatabase(db, () => {
       run(`UPDATE claims SET storage_started_on = '2026-09-22', storage_billing_end_on = '2026-10-01' WHERE id = 'c4'`);
       syncStorageClaimed("c4", "2026-10-14");
-      recordAgreedHeadFigure({ claimId: "c4", actorId: "staff-justin", head: "storage", agreedPence: 5000 });
-      recordHeadPayment({ claimId: "c4", actorId: "staff-justin", head: "storage", amountPence: 2000, correction: false });
+      recordAgreedHeadFigure({
+        submitKey: "storage-recovery-pages-recordAgreedHeadFigure-2", claimId: "c4", actorId: "staff-justin", head: "storage", agreedPence: 5000 });
+      recordHeadPayment({
+        submitKey: "storage-recovery-pages-recordHeadPayment-3", claimId: "c4", actorId: "staff-justin", head: "storage", amountPence: 2000, correction: false });
       const after = get<{ storage_started_on: string; storage_billing_end_on: string; received_pence: number; agreed_pence: number }>(
         `SELECT c.storage_started_on, c.storage_billing_end_on, f.received_pence, f.agreed_pence
          FROM claims c JOIN financial_lines f ON f.claim_id = c.id AND f.head_of_loss = 'storage'

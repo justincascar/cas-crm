@@ -728,11 +728,19 @@ Tests: `tests/repair-progress.test.ts` and `tests/hire-storage-end.test.ts`. Ful
 
 ## One save must not silently overwrite another (15 October 2026)
 
-Each screen a person edits has its own version, loaded with the page and sent back with the save. If someone else saved that same screen after it was opened, the later save is refused. The message is “[Name] changed this on [dd/MM/yyyy HH:mm] after you opened it. Your changes have not been saved.” It lists the fields the other person changed and the entries that were not saved, and it offers “Reload the latest version”. The first person’s change stays. Saving a different screen on the same file is not a clash. Client details and Storage are separate.
+Each screen a person edits has its own version, loaded with the page and sent back with the save. If someone else saved that same screen after it was opened, the later save is refused. The message is “[Name] changed this on [dd/MM/yyyy HH:mm] after you opened it. Your changes have not been saved.” It lists the fields the other person changed and the entries that were not saved, and it offers “Reload the latest version”. The first person’s change stays. Saving different information on the same file is not a clash. Client details and Storage are separate.
 
 Notes, file history, chronology events, new offers, corrections, gap explanations and financial circumstances are new entries. Two people can add them at the same time. They are not version-checked.
 
-A payment, or an agreed figure, that is the same amount again within one minute is recorded once. A chase writes its own reminder fields and re-reads the file first. It does not write hire, storage or client details. If it does change a field on a screen someone has open, the refusal names the job, for example “Payment chase”. A storage-end proposal still does not confirm the end.
+Where two screens write the same stored fields, they share one version. A save from either is refused if the other changed those fields after the page was opened. Nothing is merged and nothing is overwritten. The shared pairs are: Claim facts and Accident (circumstances and location); Claim facts and the insurer screen (own insurer); Claim facts and a liability chase (insurer position); Client details and the hire pack (date of birth, licence number, telephone); the vehicle screen and the hire pack (GTA group); the vehicle screen and third party 1 (registration, make, model); Storage details and the recovery-date job (storage start); Storage details and the storage-end confirmations (chargeable end); the recovery screen and the recovery-date job (recovered date); hire-end confirmation and the total-loss off-hire date (hire billing end). The General screen and the file status form already share the general screen version. Audatex on the insurer screen and on Vehicles already share the insurer screen version. Storage rate is only written from the storage rate form. Fleet vehicles are not the client’s vehicle.
+
+A payment, an agreed figure and an offer each carry a one-time key. The server records a key only after the row is saved. A double-click, a resubmit or a retry of that same key shows the original result and does not write a second row. A missing key is refused and nothing is recorded. A new key is always recorded, even when the amount is the same. This replaces the one-minute silent drop.
+
+If the same amount was recorded on the same charge within the last 10 minutes, the screen asks “£[amount] was recorded on [charge] at [dd/MM/yyyy HH:mm] by [name]. Is this a second, separate payment?” Yes records it. Cancel leaves the file unchanged. An identical open offer asks the same kind of question and is kept when the person confirms it. It is not dropped.
+
+Removing a fleet vehicle, editing one, and creating or changing a booking are version-checked. A stale version does not delete or overwrite. A vehicle that already has an active or future booking is not removed unless the person confirms that removal. A booking opened before the vehicle was removed, or before it was edited, is refused. The booking does not point at a removed vehicle.
+
+A chase writes its own reminder fields and re-reads the file first. It does not write hire, storage or client details. If it does change a field on a screen someone has open, the refusal names the job, for example “Payment chase”. A storage-end proposal still does not confirm the end.
 
 Bank details use the same version check. Only Justin’s staff login (`manageBankDetails`) can change them, and the existing audit remains (who, when, old and new masked except the last 4 digits). Sort code stays 6 digits and account number 8 digits. Incoming email, attachments, client submissions and imports still cannot change them.
 
@@ -742,7 +750,7 @@ The old “later save is kept” warning has been removed from Storage and from 
 
 TEST-0005’s proposed storage end is still unconfirmed. TEST-0009’s vehicle-damage offers were not changed. TEST-0006’s money was not changed. TEST-0007’s £800 was not written off. Hire agreement renewal alerts stay on day 70, day 80 and day 88. No live email was sent. `EMAIL_SEND_MODE` stays `simulate`.
 
-Tests: `tests/optimistic-concurrency.test.ts`. Full suite: 429 passing, 0 failing.
+Tests: `tests/optimistic-concurrency.test.ts` and `tests/two-user-saves.test.ts`. Full suite: 467 passing, 0 failing.
 
 ## Not yet claimed
 

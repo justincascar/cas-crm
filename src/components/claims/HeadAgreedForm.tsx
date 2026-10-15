@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { actionRecordAgreedHead, actionRecordAgreedRepair } from "@/app/chase-actions";
 
@@ -38,6 +38,8 @@ export function HeadAgreedForm({
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const submitKey = useRef("");
+  if (!submitKey.current) submitKey.current = crypto.randomUUID();
   const text = copy[head];
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -48,6 +50,7 @@ export function HeadAgreedForm({
     form.set("claimId", claimId);
     form.set("recordVersion", recordVersion);
     form.set("agreed", amount);
+    form.set("submitKey", submitKey.current);
     if (head !== "repairs") form.set("head", head);
     const result = head === "repairs" ? await actionRecordAgreedRepair(form) : await actionRecordAgreedHead(form);
     setBusy(false);
@@ -56,6 +59,7 @@ export function HeadAgreedForm({
       return;
     }
     setAmount("");
+    submitKey.current = crypto.randomUUID();
     router.refresh();
   }
 

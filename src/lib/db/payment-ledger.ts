@@ -1,4 +1,5 @@
 import { nowUtcIso } from "../dates";
+import { HEAD_LABELS, type HeadOfLoss } from "../constants";
 import { type ChaseKind } from "../domain/chase";
 import { TOTAL_LOSS_PAYMENT_RECEIVED_EVENT } from "../domain/follow-up-chases";
 import {
@@ -18,8 +19,11 @@ import { chaseRow, pauseChase, syncOutstandingPaymentChases } from "./chase";
 import { accountCanApproveSettlement } from "./permissions";
 import { recordClaimEvent } from "./chronology";
 import { all, get, run } from "./connection";
-import { claimSectionForSave, withImmediateTransaction } from "./record-version";
-import { SAME_OFFER_WINDOW_MS } from "./vehicle-offers";
+import { actorName, claimSectionForSave, withImmediateTransaction } from "./record-version";
+import { replaySubmit, requireSubmitKey, storeSubmit } from "./submit-key";
+import { SAME_AMOUNT_WARN_MS, secondPaymentWarning } from "./payment-warning";
+
+export { SAME_AMOUNT_WARN_MS, secondPaymentWarning };
 import { comparisonForHead, headDisputeStands } from "./payment-review";
 import { recordTotalLossPaymentReceived } from "./total-loss";
 
@@ -129,7 +133,9 @@ export function recordAgreedRepairInvoice(input: {
   /** Calendar day yyyy-mm-dd. Omitted leaves any date already stored as it is. */
   agreedOn?: string;
   expectedVersion?: string;
+  submitKey: string;
 }) {
+  const submitKey = requireSubmitKey(input.submitKey);
   if (!claimRow(input.claimId)) throw new Error("File not found.");
   if (!Number.isInteger(input.agreedPence) || input.agreedPence <= 0) {
     throw new Error("Enter the agreed repair invoice amount. It is not taken from the claimed figure.");
@@ -138,7 +144,6 @@ export function recordAgreedRepairInvoice(input: {
   const receivedBefore = existing?.received_pence || 0;
   const claimedBefore = existing?.claimed_pence || 0;
   const writeRepair = () => {
-    if (sameAgreedWithinMinute(input.claimId, "repairs", input.agreedPence)) return false;
     if (existing) {
       run(`UPDATE financial_lines SET agreed_pence = ? WHERE id = ?`, [input.agreedPence, existing.id]);
     } else {
@@ -170,19 +175,25 @@ export function recordAgreedRepairInvoice(input: {
     syncOutstandingPaymentChases([input.claimId]);
     return true;
   };
+  const result = { agreedPence: input.agreedPence, head: "repairs" };
   withImmediateTransaction(() => {
+    const replay = replaySubmit<typeof result>(submitKey);
+    if (replay) return;
     const wrote = writeRepair();
-    if (!wrote || input.expectedVersion === undefined) return;
-    claimSectionForSave({
-      scope: "money",
-      recordKey: `${input.claimId}:repairs`,
-      expected: input.expectedVersion,
-      actorId: input.actorId,
-      submitted: { agreedPence: String(input.agreedPence) },
-      labels: { agreedPence: "Agreed repair invoice" },
-      fields: { agreedPence: String(input.agreedPence) },
-    });
+    if (wrote && input.expectedVersion !== undefined) {
+      claimSectionForSave({
+        scope: "money",
+        recordKey: `${input.claimId}:repairs`,
+        expected: input.expectedVersion,
+        actorId: input.actorId,
+        submitted: { agreedPence: String(input.agreedPence) },
+        labels: { agreedPence: "Agreed repair invoice" },
+        fields: { agreedPence: String(input.agreedPence) },
+      });
+    }
+    storeSubmit(submitKey, result);
   });
+  return replaySubmit<typeof result>(submitKey) || result;
 }
 
 const AGREED_HEAD_FIGURES = ["hire", "recovery", "storage"] as const;
@@ -199,7 +210,11 @@ export function recordAgreedHeadFigure(input: {
   head: string;
   agreedPence: number;
   expectedVersion?: string;
+  submitKey: string;
+  /** The caller already holds the transaction and will store the one-time key after its own writes. */
+  holdKey?: boolean;
 }) {
+  const submitKey = requireSubmitKey(input.submitKey);
   if (!claimRow(input.claimId)) throw new Error("File not found.");
   if (!isAgreedHeadFigure(input.head)) {
     throw new Error("An agreed figure of this kind is recorded on hire, recovery, or storage.");
@@ -217,7 +232,6 @@ export function recordAgreedHeadFigure(input: {
   }
   const label = input.head === "hire" ? "hire" : input.head === "recovery" ? "recovery" : "storage";
   const writeAgreed = () => {
-  if (sameAgreedWithinMinute(input.claimId, input.head, input.agreedPence)) return false;
   if (existing) {
     run(`UPDATE financial_lines SET agreed_pence = ? WHERE id = ?`, [input.agreedPence, existing.id]);
   } else {
@@ -244,20 +258,33 @@ export function recordAgreedHeadFigure(input: {
   });
   return true;
   };
+  const result = { agreedPence: input.agreedPence, head: input.head };
   const stamp = input.expectedVersion !== undefined;
-  withImmediateTransaction(() => {
+  const write = () => {
     const wrote = writeAgreed();
-    if (!wrote || !stamp) return;
-    claimSectionForSave({
-      scope: "money",
-      recordKey: `${input.claimId}:${input.head}`,
-      expected: input.expectedVersion || "",
-      actorId: input.actorId,
-      submitted: { agreedPence: String(input.agreedPence) },
-      labels: { agreedPence: `Agreed ${label} figure` },
-      fields: { agreedPence: String(input.agreedPence) },
-    });
+    if (wrote && stamp) {
+      claimSectionForSave({
+        scope: "money",
+        recordKey: `${input.claimId}:${input.head}`,
+        expected: input.expectedVersion || "",
+        actorId: input.actorId,
+        submitted: { agreedPence: String(input.agreedPence) },
+        labels: { agreedPence: `Agreed ${label} figure` },
+        fields: { agreedPence: String(input.agreedPence) },
+      });
+    }
+  };
+  if (input.holdKey) {
+    write();
+    return result;
+  }
+  withImmediateTransaction(() => {
+    const replay = replaySubmit<typeof result>(submitKey);
+    if (replay) return;
+    write();
+    storeSubmit(submitKey, result);
   });
+  return replaySubmit<typeof result>(submitKey) || result;
 }
 
 export function recordUnreferencedPayment(input: { claimId: string; actorId: string; amountPence: number | null; note?: string }) {
@@ -289,7 +316,12 @@ export function recordHeadPayment(input: {
   amountPence: number;
   correction: boolean;
   insurerReason?: string;
+  submitKey: string;
+  confirmSeparate?: boolean;
 }) {
+  const submitKey = requireSubmitKey(input.submitKey);
+  const already = replaySubmit<Record<string, unknown>>(submitKey);
+  if (already) return { ...already, replayed: true as const };
   if (!isPaymentReviewHead(input.head)) {
     recordUnreferencedPayment({
       claimId: input.claimId,
@@ -378,29 +410,29 @@ export function recordHeadPayment(input: {
     throw new Error("That amount is higher than the outstanding balance on this head. It was not recorded.");
   }
   return withImmediateTransaction(() => {
-  const lockedPrevious = lastLogged(input.claimId, input.head);
-  if (
-    !input.correction &&
-    received >= (lockedPrevious?.amountPence || 0) &&
-    sameEntryWithinMinute(lockedPrevious?.at, lockedPrevious?.amountPence, input.amountPence)
-  ) {
-    const freshNow = comparisonForHead(input.claimId, input.head, {
-      agreedPence: agreed,
-      claimedPence: claimed,
-      receivedPence: received,
-    });
+  const replay = replaySubmit<Record<string, unknown>>(submitKey);
+  if (replay) return { ...replay, replayed: true as const };
+  const recent = !input.correction && !input.confirmSeparate ? recentSameAmount(input.claimId, input.head, input.amountPence) : null;
+  if (recent) {
     return {
-      allocated: true as const,
+      allocated: false as const,
       reconciliation: false as const,
       settledReview: false as const,
+      needsConfirm: true as const,
+      warning: secondPaymentWarning({
+        amountPence: input.amountPence,
+        headLabel: headLabel(input.head),
+        at: recent.at,
+        by: recent.by,
+      }),
       receivedPence: received,
-      outstandingPence: freshNow.targetPence == null ? 0 : Math.max(0, freshNow.targetPence - received),
+      outstandingPence: outstanding,
       paused: false,
-      paidInFull: paymentCoversTarget(freshNow.targetPence, received),
+      paidInFull: false,
       replacedPrevious: false,
     };
   }
-  const previous = lockedPrevious;
+  const previous = lastLogged(input.claimId, input.head);
   const applied = applyLoggedPayment({
     receivedPence: received,
     amountPence: input.amountPence,
@@ -507,7 +539,7 @@ export function recordHeadPayment(input: {
       flagHireStorage(input.claimId, input.actorId, input.head, totalLoss);
     }
   }
-  return {
+  const saved = {
     allocated: true as const,
     reconciliation: false as const,
     settledReview: false as const,
@@ -516,31 +548,46 @@ export function recordHeadPayment(input: {
     paused: partial && !keepChasing && Boolean(kind && chaseRow(input.claimId, kind)),
     paidInFull: paid,
     replacedPrevious: applied.replacedPrevious,
+    replayed: false as const,
   };
+  storeSubmit(submitKey, saved);
+  return saved;
   });
 }
 
-function sameAgreedWithinMinute(claimId: string, head: string, amountPence: number): boolean {
-  const eventType = head === "repairs" ? "repair_invoice_agreed_recorded" : "head_agreed_recorded";
-  const row = get<{ occurred_at: string; details: string | null }>(
-    `SELECT occurred_at, details FROM claim_events
-     WHERE claim_id = ? AND event_type = ?
-     ORDER BY occurred_at DESC, recorded_at DESC LIMIT 1`,
-    [claimId, eventType],
-  );
-  if (!row) return false;
-  if (head !== "repairs" && !String(row.details || "").includes(`head=${head}`)) return false;
-  const line = moneyLine(claimId, head);
-  if (Number(line?.agreed_pence) !== amountPence) return false;
-  return sameEntryWithinMinute(row.occurred_at, amountPence, amountPence);
+function headLabel(head: string): string {
+  if (head in HEAD_LABELS) return HEAD_LABELS[head as HeadOfLoss];
+  return head;
 }
 
-function sameEntryWithinMinute(at: string | undefined, existingPence: number | undefined, amountPence: number): boolean {
-  if (!at || existingPence !== amountPence) return false;
-  const recorded = Date.parse(at);
-  if (Number.isNaN(recorded)) return false;
-  const age = Date.now() - recorded;
-  return age >= 0 && age < SAME_OFFER_WINDOW_MS;
+function recentSameAmount(claimId: string, head: string, amountPence: number): { at: string; by: string } | null {
+  const types =
+    head === "repairs"
+      ? ["repair_invoice_payment_logged"]
+      : head === "vehicle_damage"
+        ? ["settlement_payment_logged", TOTAL_LOSS_PAYMENT_RECEIVED_EVENT]
+        : ["head_payment_logged"];
+  const rows = all<{ details: string | null; occurred_at: string; event_type: string; actor_id: string | null }>(
+    `SELECT details, occurred_at, event_type, actor_id FROM claim_events
+     WHERE claim_id = ? AND event_type IN (${types.map(() => "?").join(", ")})
+     ORDER BY occurred_at DESC, recorded_at DESC`,
+    [claimId, ...types],
+  );
+  for (const row of rows) {
+    const recorded = Date.parse(String(row.occurred_at));
+    if (Number.isNaN(recorded)) continue;
+    const age = Date.now() - recorded;
+    if (age < 0) continue;
+    if (age >= SAME_AMOUNT_WARN_MS) break;
+    if (head !== "repairs" && head !== "vehicle_damage" && !String(row.details || "").includes(`head=${head}`)) continue;
+    if (head === "repairs" && !String(row.details || "").includes("head=repairs") && row.event_type !== "repair_invoice_payment_logged") {
+      continue;
+    }
+    const amount = parseAmount(row.details);
+    if (amount !== amountPence) continue;
+    return { at: String(row.occurred_at), by: actorName(row.actor_id) };
+  }
+  return null;
 }
 
 export { PAYMENT_CORRECTION_WINDOW_MS };

@@ -1,5 +1,6 @@
 import { actionReserveVehicle, actionSaveClaimScreen } from "@/app/actions";
 import { ValidatedForm } from "@/components/ValidatedForm";
+import { sectionVersion } from "@/lib/db/record-version";
 import type { ScreenValues } from "@/lib/db/screens";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
@@ -66,6 +67,9 @@ export function HireVehiclePanel({
         <input type="hidden" name="claimId" value={claimId} />
         <input type="hidden" name="createdBy" value={actorId} />
         <input type="hidden" name="returnTo" value={`/claims/${claimId}/work/hire-vehicle`} />
+        {fleet.map((v) => (
+          <input key={String(v.id)} type="hidden" name={`fleetVersion_${v.id}`} value={sectionVersion("fleet", String(v.id))} />
+        ))}
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm">
             Fleet vehicle
@@ -154,6 +158,9 @@ export function ReserveHirePanel({
         <input type="hidden" name="createdBy" value={actorId} />
         <input type="hidden" name="kind" value="hire" />
         <input type="hidden" name="returnTo" value={`/claims/${claimId}/work/reserve`} />
+        {fleet.map((v) => (
+          <input key={`reserve-${v.id}`} type="hidden" name={`fleetVersion_${v.id}`} value={sectionVersion("fleet", String(v.id))} />
+        ))}
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm sm:col-span-2">
             Vehicle currently in use

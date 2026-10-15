@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { actionLogHeadPayment } from "@/app/chase-actions";
 import type { PayableHead } from "@/lib/db/payment-review";
@@ -20,6 +20,10 @@ export function PaymentReviewPanel({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [warning, setWarning] = useState<string | null>(null);
+  const paymentKey = useRef("");
+  if (!paymentKey.current) paymentKey.current = crypto.randomUUID();
+  const pending = useRef<FormData | null>(null);
   const [selectedHead, setSelectedHead] = useState(payableHeads[0]?.head || "");
   const selected = payableHeads.find((head) => head.head === selectedHead) || payableHeads[0];
   const comparison = lockedHead
@@ -34,16 +38,25 @@ export function PaymentReviewPanel({
 
   if (!lockedHead && payableHeads.length === 0) return null;
 
-  async function submit(form: FormData) {
+  async function submit(form: FormData, confirm = false) {
     setBusy(true);
     setMessage(null);
     form.set("claimId", claimId);
+    form.set("submitKey", confirm ? crypto.randomUUID() : paymentKey.current);
+    if (confirm) form.set("confirmSeparate", "yes");
     const result = await actionLogHeadPayment(form);
     setBusy(false);
+    if ("needsConfirm" in result && result.needsConfirm) {
+      setWarning(String(result.warning || ""));
+      pending.current = form;
+      return;
+    }
     if (result.error) {
       setMessage(result.error);
       return;
     }
+    setWarning(null);
+    paymentKey.current = crypto.randomUUID();
     if (result.message) setMessage(result.message);
     router.refresh();
   }
@@ -59,6 +72,33 @@ export function PaymentReviewPanel({
       </div>
 
       {message ? <p className="rounded-md border border-line bg-white px-3 py-2 text-sm">{message}</p> : null}
+      {warning ? (
+        <div className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm" role="alert">
+          <p>{warning}</p>
+          <div className="mt-3 flex gap-2">
+            <button
+              type="button"
+              className="rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white"
+              disabled={busy}
+              onClick={() => {
+                if (pending.current) void submit(pending.current, true);
+              }}
+            >
+              Yes
+            </button>
+            <button
+              type="button"
+              className="rounded-md border border-line bg-white px-3 py-2 text-sm font-semibold"
+              onClick={() => {
+                setWarning(null);
+                pending.current = null;
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <form
         className="grid gap-2 rounded-md border border-line bg-white p-3"

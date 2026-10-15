@@ -54,7 +54,8 @@ describe("payment chase — partial, full, reminder and backlog", () => {
     const db = seeded();
     withDatabase(db, () => {
       const claimedBefore = repairs(db).claimed_pence;
-      recordAgreedRepairInvoice({ claimId: "c6", actorId: "staff-justin", agreedPence: 100_000 });
+      recordAgreedRepairInvoice({
+        submitKey: "payment-chase-recordAgreedRepairInvoice-1", claimId: "c6", actorId: "staff-justin", agreedPence: 100_000 });
       db.prepare(
         `INSERT INTO financial_lines(
           id, claim_id, head_of_loss, description, quantity, unit, rate_pence, net_pence, vat_pence, gross_pence,
@@ -68,6 +69,7 @@ describe("payment chase — partial, full, reminder and backlog", () => {
         storage_billing_end_on: string | null;
       };
       const logged = recordHeadPayment({
+        submitKey: "payment-chase-recordHeadPayment-2",
         claimId: "c6",
         actorId: "staff-justin",
         head: "repairs",
@@ -128,10 +130,12 @@ describe("payment chase — partial, full, reminder and backlog", () => {
   it("stops the chase when the balance is paid and flags hire and storage without closing them", () => {
     const db = seeded();
     withDatabase(db, () => {
-      recordAgreedRepairInvoice({ claimId: "c6", actorId: "staff-justin", agreedPence: 80_000 });
+      recordAgreedRepairInvoice({
+        submitKey: "payment-chase-recordAgreedRepairInvoice-3", claimId: "c6", actorId: "staff-justin", agreedPence: 80_000 });
       const hireBefore = db.prepare(`SELECT billing_end_at FROM hire_episodes WHERE claim_id = 'c6'`).all();
       const storageBefore = db.prepare(`SELECT storage_billing_end_on, storage_started_on FROM claims WHERE id = 'c6'`).get();
       const logged = recordHeadPayment({
+        submitKey: "payment-chase-recordHeadPayment-4",
         claimId: "c6",
         actorId: "staff-justin",
         head: "repairs",
@@ -160,7 +164,8 @@ describe("payment chase — partial, full, reminder and backlog", () => {
   it("prepares one reminder after the interval, and only one catch-up after an outage", () => {
     const db = seeded();
     withDatabase(db, () => {
-      recordAgreedRepairInvoice({ claimId: "c6", actorId: "staff-justin", agreedPence: 100_000 });
+      recordAgreedRepairInvoice({
+        submitKey: "payment-chase-recordAgreedRepairInvoice-5", claimId: "c6", actorId: "staff-justin", agreedPence: 100_000 });
       db.prepare(
         `INSERT INTO claim_third_parties(id, claim_id, person_id, insurer_name, insurer_email, insurer_ref) VALUES ('tp-c6','c6','p-tp2','Ageas','claims@ageas.example.test','AG-1')`,
       ).run();
@@ -198,7 +203,8 @@ describe("payment chase — partial, full, reminder and backlog", () => {
   it("leaves at most one catch-up reminder due after an outage", () => {
     const db = seeded();
     withDatabase(db, () => {
-      recordAgreedRepairInvoice({ claimId: "c6", actorId: "staff-justin", agreedPence: 100_000 });
+      recordAgreedRepairInvoice({
+        submitKey: "payment-chase-recordAgreedRepairInvoice-6", claimId: "c6", actorId: "staff-justin", agreedPence: 100_000 });
       db.prepare(
         `INSERT INTO claim_third_parties(id, claim_id, person_id, insurer_name, insurer_email, insurer_ref) VALUES ('tp-c6b','c6','p-tp2','Ageas','claims@ageas.example.test','AG-1')`,
       ).run();
@@ -231,9 +237,12 @@ describe("payment chase — partial, full, reminder and backlog", () => {
   it("replaces a correction logged straight after the first figure", () => {
     const db = seeded();
     withDatabase(db, () => {
-      recordAgreedRepairInvoice({ claimId: "c6", actorId: "staff-justin", agreedPence: 100_000 });
-      recordHeadPayment({ claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 50_000, correction: false });
+      recordAgreedRepairInvoice({
+        submitKey: "payment-chase-recordAgreedRepairInvoice-7", claimId: "c6", actorId: "staff-justin", agreedPence: 100_000 });
+      recordHeadPayment({
+        submitKey: "payment-chase-recordHeadPayment-8", claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 50_000, correction: false });
       const corrected = recordHeadPayment({
+        submitKey: "payment-chase-recordHeadPayment-9",
         claimId: "c6",
         actorId: "staff-justin",
         head: "repairs",
@@ -251,7 +260,8 @@ describe("payment chase — partial, full, reminder and backlog", () => {
   it("does not allocate a payment that has no head of loss", () => {
     const db = seeded();
     withDatabase(db, () => {
-      recordAgreedRepairInvoice({ claimId: "c6", actorId: "staff-justin", agreedPence: 100_000 });
+      recordAgreedRepairInvoice({
+        submitKey: "payment-chase-recordAgreedRepairInvoice-10", claimId: "c6", actorId: "staff-justin", agreedPence: 100_000 });
       const before = repairs(db).received_pence;
       const result = recordUnreferencedPayment({ claimId: "c6", actorId: "staff-justin", amountPence: 10_000, note: "No reference on the advice." });
       void result;
@@ -269,7 +279,8 @@ describe("payment chase — partial, full, reminder and backlog", () => {
       assert.equal(classifyPaymentReply("Thank you for your email. We acknowledge receipt."), "acknowledgement");
       assert.equal(classifyPaymentReply("We dispute the repair invoice."), "substantive");
       assert.equal(classifyPaymentReply("Please see attached."), "uncertain");
-      recordAgreedRepairInvoice({ claimId: "c6", actorId: "staff-justin", agreedPence: 100_000 });
+      recordAgreedRepairInvoice({
+        submitKey: "payment-chase-recordAgreedRepairInvoice-11", claimId: "c6", actorId: "staff-justin", agreedPence: 100_000 });
       logIncomingEmail({
         claimId: "c6",
         actorId: "staff-justin",

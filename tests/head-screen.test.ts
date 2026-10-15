@@ -53,7 +53,8 @@ describe("head of loss screens", () => {
       assert.equal(hire.review, null);
 
       db.prepare(`UPDATE financial_lines SET agreed_pence = 100000 WHERE id = 'f-c6-rep'`).run();
-      recordHeadPayment({ claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 40_000, correction: false });
+      recordHeadPayment({
+        submitKey: "head-screen-recordHeadPayment-1", claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 40_000, correction: false });
       const waiting = loadHeadSection("c6", "repairs");
       assert.equal(waiting.statusLabel, "Awaiting decision");
       assert.equal(waiting.receivedPence, 40_000);
@@ -82,7 +83,8 @@ describe("head of loss screens", () => {
 
       db.prepare(`UPDATE financial_lines SET agreed_pence = 100000, received_pence = 0 WHERE id = 'f-c6-rep'`).run();
       db.prepare(`DELETE FROM payment_settlement_decisions WHERE claim_id = 'c6'`).run();
-      recordHeadPayment({ claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 40_000, correction: false });
+      recordHeadPayment({
+        submitKey: "head-screen-recordHeadPayment-2", claimId: "c6", actorId: "staff-justin", head: "repairs", amountPence: 40_000, correction: false, confirmSeparate: true });
       acceptPaymentAsFinal({ claimId: "c6", actorId: "staff-justin", head: "repairs", confirmed: true });
       const settled = loadHeadSection("c6", "repairs");
       assert.equal(settled.statusLabel, "Settled");

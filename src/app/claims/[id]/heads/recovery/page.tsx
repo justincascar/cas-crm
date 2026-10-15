@@ -8,6 +8,7 @@ import { FigureResolution } from "@/components/claims/FigureResolution";
 import { HeadAgreedForm } from "@/components/claims/HeadAgreedForm";
 import { HeadOfLossScreen } from "@/components/claims/HeadOfLossScreen";
 import { PaymentReviewPanel } from "@/components/claims/PaymentReviewPanel";
+import { SeparateRecordConfirm } from "@/components/SeparateRecordConfirm";
 import { requireStaff } from "@/lib/auth/session";
 import { getClaimScreen } from "@/lib/claim-screens";
 import { formatUkDate } from "@/lib/dates";
@@ -23,6 +24,7 @@ import { recoveryCarrierName, recoveryClaimForClaim, recoveryJobForClaim, syncRe
 import { getDefaultVehicleLocation } from "@/lib/db/vehicle-location";
 import { getScreenData } from "@/lib/db/screens";
 import { loadClash, screenVersion, sectionVersion } from "@/lib/db/record-version";
+import { SHARED_RECOVERY_AT, sharedVersionFields } from "@/lib/db/shared-fields";
 import { SaveClashNotice } from "@/components/SaveClashNotice";
 import { agreedOnFor, listChargeOffers } from "@/lib/db/vehicle-offers";
 
@@ -41,7 +43,7 @@ export default async function RecoveryHeadPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; field?: string; clash?: string; figureError?: string; offerError?: string; decisionError?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; field?: string; clash?: string; figureError?: string; offerError?: string; offerWarn?: string; offerAmount?: string; offerOn?: string; offerNote?: string; offerHead?: string; offerDays?: string; offerRate?: string; decisionError?: string }>;
 }) {
   const staff = await requireStaff();
   const { id } = await params;
@@ -65,9 +67,15 @@ export default async function RecoveryHeadPage({
   const loadedValues = seedScreenDefaults(id, "recovery");
   const screenClash = loadClash(query.clash);
   const clashForScreen =
-    screenClash && screenClash.scope === "screen" && screenClash.recordKey === `${id}:recovery` ? screenClash : null;
+    screenClash &&
+    ((screenClash.scope === "screen" && screenClash.recordKey === `${id}:recovery`) ||
+      (screenClash.scope === SHARED_RECOVERY_AT && screenClash.recordKey === id))
+      ? screenClash
+      : null;
   const values = clashForScreen ? { ...loadedValues, ...clashForScreen.submitted } : loadedValues;
-  const recordVersion = clashForScreen ? clashForScreen.expectedVersion : screenVersion(id, "recovery");
+  const recordVersion = clashForScreen && clashForScreen.scope === "screen" ? clashForScreen.expectedVersion : screenVersion(id, "recovery");
+  const extraHidden = sharedVersionFields(id, "recovery");
+  if (clashForScreen?.scope === SHARED_RECOVERY_AT) extraHidden.recoveryAtVersion = clashForScreen.expectedVersion;
   const chargeNote =
     decision.source === "screen"
       ? "This claimed figure is the total already calculated on the recovery screen: the standard charge, any extras and the card fee, plus VAT. It is not a second £395 on top."
@@ -127,6 +135,24 @@ export default async function RecoveryHeadPage({
         </p>
         {query.figureError ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.figureError}</p> : null}
         {query.offerError ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.offerError}</p> : null}
+        {query.offerWarn ? (
+          <SeparateRecordConfirm
+            message={query.offerWarn}
+            action={`/claims/${id}/vehicle-offers`}
+            confirmField="confirmDuplicate"
+            cancelHref={`/claims/${id}/heads/recovery`}
+            fields={{
+              intent: "record_offer",
+              returnTo: `/claims/${id}/heads/recovery`,
+              amount: query.offerAmount || "",
+              offeredOn: query.offerOn || "",
+              note: query.offerNote || "",
+              head: query.offerHead || "recovery",
+              offeredDays: query.offerDays || "",
+              offeredDailyRate: query.offerRate || "",
+            }}
+          />
+        ) : null}
         {query.decisionError ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.decisionError}</p> : null}
         <FigureResolution
           claimId={id}
@@ -157,6 +183,7 @@ export default async function RecoveryHeadPage({
           error={query.error}
           errorField={query.field}
           recordVersion={recordVersion}
+          extraHidden={extraHidden}
         />
       </section>
 

@@ -39,9 +39,12 @@ describe("agreed figures on hire, recovery and storage", () => {
   it("records an agreed hire, recovery and storage figure without touching claimed or received", () => {
     const db = seeded();
     withDatabase(db, () => {
-      recordAgreedHeadFigure({ claimId: "c3", actorId: "staff-justin", head: "recovery", agreedPence: 25000 });
-      recordAgreedHeadFigure({ claimId: "c3", actorId: "staff-justin", head: "storage", agreedPence: 18000 });
-      recordAgreedHeadFigure({ claimId: "c4", actorId: "staff-justin", head: "hire", agreedPence: 5000 });
+      recordAgreedHeadFigure({
+        submitKey: "agreed-head-recordAgreedHeadFigure-1", claimId: "c3", actorId: "staff-justin", head: "recovery", agreedPence: 25000 });
+      recordAgreedHeadFigure({
+        submitKey: "agreed-head-recordAgreedHeadFigure-2", claimId: "c3", actorId: "staff-justin", head: "storage", agreedPence: 18000 });
+      recordAgreedHeadFigure({
+        submitKey: "agreed-head-recordAgreedHeadFigure-3", claimId: "c4", actorId: "staff-justin", head: "hire", agreedPence: 5000 });
     });
     const recovery = line(db, "f-c3-rec");
     assert.equal(recovery.claimed_pence, 39500);
@@ -60,7 +63,8 @@ describe("agreed figures on hire, recovery and storage", () => {
     assert.equal(hire.agreed_pence, 5000);
     assert.equal(hire.received_pence, 0);
     assert.throws(
-      () => withDatabase(db, () => recordAgreedHeadFigure({ claimId: "c3", actorId: "staff-justin", head: "hire", agreedPence: 0 })),
+      () => withDatabase(db, () => recordAgreedHeadFigure({
+        submitKey: "agreed-head-recordAgreedHeadFigure-4", claimId: "c3", actorId: "staff-justin", head: "hire", agreedPence: 0 })),
       /not taken from the claimed figure/,
     );
     db.close();
@@ -69,12 +73,14 @@ describe("agreed figures on hire, recovery and storage", () => {
   it("switches an open comparison from claimed to the new agreed figure and leaves a running chase alone", () => {
     const db = seeded();
     withDatabase(db, () => {
-      recordHeadPayment({ claimId: "c3", actorId: "staff-justin", head: "hire", amountPence: 10000, correction: false });
+      recordHeadPayment({
+        submitKey: "agreed-head-recordHeadPayment-5", claimId: "c3", actorId: "staff-justin", head: "hire", amountPence: 10000, correction: false });
       const before = listOpenPaymentReviews("c3").find((item) => item.head === "hire");
       assert.equal(before?.targetPence, 53400);
       assert.equal(before?.outstandingPence, 43400);
       const running = chases(db, "c3");
-      recordAgreedHeadFigure({ claimId: "c3", actorId: "staff-justin", head: "hire", agreedPence: 40000 });
+      recordAgreedHeadFigure({
+        submitKey: "agreed-head-recordAgreedHeadFigure-6", claimId: "c3", actorId: "staff-justin", head: "hire", agreedPence: 40000 });
       const after = listOpenPaymentReviews("c3").find((item) => item.head === "hire");
       assert.equal(after?.targetPence, 40000);
       assert.equal(after?.outstandingPence, 30000);
@@ -91,13 +97,16 @@ describe("agreed figures on hire, recovery and storage", () => {
   it("keeps a paused repair payment chase paused when the agreed repair figure changes, and measures it against the new figure", () => {
     const db = seeded();
     withDatabase(db, () => {
-      recordAgreedRepairInvoice({ claimId: "c6", actorId: "staff-justin", agreedPence: 100000 });
+      recordAgreedRepairInvoice({
+        submitKey: "agreed-head-recordAgreedRepairInvoice-7", claimId: "c6", actorId: "staff-justin", agreedPence: 100000 });
       pauseChase("repair_payment", "c6", "Paused while the figure is checked.");
       const paused = chaseRow("c6", "repair_payment");
       assert.equal(paused?.status, "paused");
-      recordAgreedHeadFigure({ claimId: "c6", actorId: "staff-justin", head: "hire", agreedPence: 20000 });
+      recordAgreedHeadFigure({
+        submitKey: "agreed-head-recordAgreedHeadFigure-8", claimId: "c6", actorId: "staff-justin", head: "hire", agreedPence: 20000 });
       assert.equal(chaseRow("c6", "repair_payment")?.status, "paused");
-      recordAgreedRepairInvoice({ claimId: "c6", actorId: "staff-justin", agreedPence: 80000 });
+      recordAgreedRepairInvoice({
+        submitKey: "agreed-head-recordAgreedRepairInvoice-9", claimId: "c6", actorId: "staff-justin", agreedPence: 80000 });
       const still = chaseRow("c6", "repair_payment");
       assert.equal(still?.status, "paused");
       assert.equal(Number(still?.paused), 1);
@@ -117,8 +126,10 @@ describe("agreed figures on hire, recovery and storage", () => {
   it("records a payment against the agreed figure through the same action the head screen uses", () => {
     const db = seeded();
     withDatabase(db, () => {
-      recordAgreedHeadFigure({ claimId: "c4", actorId: "staff-justin", head: "hire", agreedPence: 5000 });
+      recordAgreedHeadFigure({
+        submitKey: "agreed-head-recordAgreedHeadFigure-10", claimId: "c4", actorId: "staff-justin", head: "hire", agreedPence: 5000 });
       const fromHeadScreen = recordHeadPayment({
+        submitKey: "agreed-head-recordHeadPayment-11",
         claimId: "c4",
         actorId: "staff-justin",
         head: "hire",
@@ -129,6 +140,7 @@ describe("agreed figures on hire, recovery and storage", () => {
       assert.equal(fromHeadScreen.receivedPence, 1000);
       assert.equal(fromHeadScreen.outstandingPence, 4000);
       const again = recordHeadPayment({
+        submitKey: "agreed-head-recordHeadPayment-12",
         claimId: "c4",
         actorId: "staff-justin",
         head: "hire",

@@ -30,6 +30,8 @@ import { addCalendarDaysIso, formatUkDate, londonDateIso, londonTodayIso, nowUtc
 import { blankInsurerField } from "../insurers";
 import { textAssertsImpecuniosity, templateReliesOnImpecuniosity } from "../domain/impecuniosity";
 import { all, get, getDb, newId, run } from "./connection";
+import { withImmediateTransaction } from "./record-version";
+import { SHARED_INSURER_POSITION, claimColumns, guardSharedFields } from "./shared-fields";
 import { impecuniosityGate } from "./impecuniosity";
 import {
   correspondenceCanBeMarkedSent,
@@ -1513,6 +1515,7 @@ export function logChaseOutcome(input: {
   occurredAt?: string;
   liabilityDecision?: string;
   repairOutcome?: string;
+  insurerPositionVersion?: string;
 }) {
   const def = chaseDefinition(input.kind);
   const when = occurredFromForm(input.occurredAt);
@@ -1530,16 +1533,29 @@ export function logChaseOutcome(input: {
       throw new Error("Choose the insurer's decision: accepted, rejected, or partial. Not yet decided does not clear this chase.");
     }
     const label = LIABILITY_DECISIONS.find((item) => item.value === decision)?.label || decision;
-    recordClaimEvent({
-      claimId: input.claimId,
-      eventType: "liability_response_received",
-      occurredAt: when,
-      details: `Liability decision logged as ${label} by ${handlerName}. Chase reminder cleared. CAS liability status was not changed.`,
-      actorId: input.actorId,
-      channel: "file",
-      source: "staff",
+    withImmediateTransaction(() => {
+      const current = claimColumns(input.claimId, ["insurer_liability_position"]);
+      guardSharedFields({
+        scope: SHARED_INSURER_POSITION,
+        recordKey: input.claimId,
+        expected: input.insurerPositionVersion,
+        actorId: input.actorId,
+        current,
+        next: { insurer_liability_position: decision },
+        labels: { insurer_liability_position: "Insurer position" },
+        submitted: { insurer_liability_position: decision },
+      });
+      recordClaimEvent({
+        claimId: input.claimId,
+        eventType: "liability_response_received",
+        occurredAt: when,
+        details: `Liability decision logged as ${label} by ${handlerName}. Chase reminder cleared. CAS liability status was not changed.`,
+        actorId: input.actorId,
+        channel: "file",
+        source: "staff",
+      });
+      run(`UPDATE claims SET insurer_liability_position = ? WHERE id = ?`, [decision, input.claimId]);
     });
-    run(`UPDATE claims SET insurer_liability_position = ? WHERE id = ?`, [decision, input.claimId]);
     return { handlerName, occurredAt: when };
   }
   const outcome = String(input.repairOutcome || "");

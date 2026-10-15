@@ -5,6 +5,8 @@ import { dueFollowUpChases } from "./follow-up-chases";
 import { accidentDateError, isBeforeLondonDay, isSameLondonDay, londonDateIso, londonTodayIso, nowUtcIso } from "../dates";
 import { formatGbp, sumDistinctHeads } from "../money";
 import { all, dbPath, get, getDb, newId, resetSqlStatementCount, run, sqlStatementCount } from "./connection";
+import { touchFleetVersion } from "./fleet";
+import { withImmediateTransaction } from "./record-version";
 import { canReserveVehicle, chaseFileStateFromPosition, chaseStopReason, nextFileReference, parseFileReferenceNumber } from "../domain/rules";
 import { listClaimEvents, recordClaimEvent } from "./chronology";
 import { listRepairGapClaims } from "./repair-progress";
@@ -922,31 +924,45 @@ export function createReservation(input: {
   endAt: string;
   kind: string;
   createdBy: string;
+  expectedVersion?: string;
 }) {
-  const existing = listReservations().map((r) => ({
-    vehicleId: String(r.fleet_vehicle_id),
-    startAt: String(r.start_at),
-    endAt: String(r.end_at),
-    status: String(r.status),
-  }));
-  const decision = canReserveVehicle({
-    vehicleId: input.fleetVehicleId,
-    startAt: input.startAt,
-    endAt: input.endAt,
-    existing,
-  });
-  if (!decision.ok) throw new Error(decision.reason);
-  const fleetRow = get<{ removed_at: string | null }>(`SELECT removed_at FROM fleet_vehicles WHERE id = ?`, [
-    input.fleetVehicleId,
-  ]);
-  if (!fleetRow) throw new Error("Vehicle not found.");
-  if (fleetRow.removed_at) throw new Error("That vehicle has been removed from the fleet and cannot be reserved.");
-  run(
-    `INSERT INTO reservations(id, fleet_vehicle_id, claim_id, start_at, end_at, kind, status, charges_started, created_by, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, 'reserved', 0, ?, ?)`,
-    [newId("res"), input.fleetVehicleId, input.claimId || null, input.startAt, input.endAt, input.kind, input.createdBy, nowUtcIso()],
-  );
-  run(`UPDATE fleet_vehicles SET status = 'reserved' WHERE id = ? AND status = 'available'`, [input.fleetVehicleId]);
+  const book = () => {
+    const existing = listReservations().map((r) => ({
+      vehicleId: String(r.fleet_vehicle_id),
+      startAt: String(r.start_at),
+      endAt: String(r.end_at),
+      status: String(r.status),
+    }));
+    const decision = canReserveVehicle({
+      vehicleId: input.fleetVehicleId,
+      startAt: input.startAt,
+      endAt: input.endAt,
+      existing,
+    });
+    if (!decision.ok) throw new Error(decision.reason);
+    const fleetRow = get<{ removed_at: string | null }>(`SELECT removed_at FROM fleet_vehicles WHERE id = ?`, [
+      input.fleetVehicleId,
+    ]);
+    if (!fleetRow) throw new Error("Vehicle not found.");
+    if (fleetRow.removed_at) throw new Error("That vehicle has been removed from the fleet and cannot be reserved.");
+    touchFleetVersion({
+      fleetVehicleId: input.fleetVehicleId,
+      actorId: input.createdBy,
+      expected: input.expectedVersion,
+      change: "Booking recorded",
+    });
+    run(
+      `INSERT INTO reservations(id, fleet_vehicle_id, claim_id, start_at, end_at, kind, status, charges_started, created_by, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, 'reserved', 0, ?, ?)`,
+      [newId("res"), input.fleetVehicleId, input.claimId || null, input.startAt, input.endAt, input.kind, input.createdBy, nowUtcIso()],
+    );
+    run(`UPDATE fleet_vehicles SET status = 'reserved' WHERE id = ? AND status = 'available'`, [input.fleetVehicleId]);
+  };
+  if (input.expectedVersion !== undefined) {
+    withImmediateTransaction(book);
+    return;
+  }
+  book();
 }
 
 export function dbLocation() {

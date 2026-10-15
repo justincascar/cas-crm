@@ -2,8 +2,11 @@ import { applicableVehicleHead } from "../domain/head-screen";
 import { dayRateMismatchesOffer } from "../domain/figure-resolution";
 import { formatGbp } from "../money";
 import { nowUtcIso } from "../dates";
+import { HEAD_LABELS } from "../constants";
 import { get, all, newId, run } from "./connection";
 import { recordClaimEvent } from "./chronology";
+import { withImmediateTransaction } from "./record-version";
+import { replaySubmit, requireSubmitKey, storeSubmit, SubmitNeedsConfirm } from "./submit-key";
 
 export type VehicleOfferHead = "repairs" | "vehicle_damage" | "hire" | "storage" | "recovery";
 export type VehicleOfferStatus = "open" | "withdrawn" | "lapsed" | "rejected";
@@ -21,9 +24,6 @@ export type VehicleOffer = {
   offeredDailyRatePence: number | null;
   rateMismatch: boolean;
 };
-
-/** A second save of the same open offer inside this window is the same press, not a new offer. */
-export const SAME_OFFER_WINDOW_MS = 60_000;
 
 const NOTE_LIMIT = 500;
 
@@ -119,7 +119,10 @@ export function recordVehicleOffer(input: {
   note: string;
   offeredDays?: number | null;
   offeredDailyRatePence?: number | null;
+  submitKey: string;
+  confirmDuplicate?: boolean;
 }) {
+  const submitKey = requireSubmitKey(input.submitKey);
   if (!Number.isInteger(input.amountPence) || input.amountPence <= 0) {
     throw new Error("Enter the amount the insurer offered. It is not taken from the claimed or agreed figure.");
   }
@@ -128,35 +131,46 @@ export function recordVehicleOffer(input: {
   if (note.length > NOTE_LIMIT) throw new Error("The note is too long.");
   const offeredDays = optionalPositiveInt(input.offeredDays, "offered days");
   const offeredDailyRatePence = optionalPositiveInt(input.offeredDailyRatePence, "offered daily rate");
-  const existing = get<{ id: string; recorded_at: string }>(
-    `SELECT id, recorded_at FROM insurer_offers
-     WHERE claim_id = ? AND head_of_loss = ? AND amount_pence = ? AND offered_on = ? AND note = ? AND status = 'open'
-       AND offered_days IS ? AND offered_daily_rate_pence IS ?
-     ORDER BY recorded_at DESC LIMIT 1`,
-    [input.claimId, input.head, input.amountPence, offeredOn, note, offeredDays, offeredDailyRatePence],
-  );
-  if (existing && sameOfferStillOpen(existing.recorded_at)) return existing.id;
-  const before = moneySnapshot(input.claimId, input.head);
-  const id = newId("offer");
-  const at = nowUtcIso();
-  run(
-    `INSERT INTO insurer_offers(
-      id, claim_id, head_of_loss, amount_pence, offered_on, note, status, recorded_at, recorded_by, offered_days, offered_daily_rate_pence
-    ) VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`,
-    [id, input.claimId, input.head, input.amountPence, offeredOn, note, at, input.actorId, offeredDays, offeredDailyRatePence],
-  );
-  syncCurrentOffer(input.claimId, input.head, before);
-  const noted = note ? ` Note: ${note}` : "";
-  recordClaimEvent({
-    claimId: input.claimId,
-    eventType: "insurer_offer_recorded",
-    occurredAt: at,
-    actorId: input.actorId,
-    details: `head=${input.head} Insurer offer of ${formatGbp(input.amountPence)} dated ${offeredOn.split("-").reverse().join("/")}. It was not saved as the agreed figure.${noted}`,
-    source: "staff",
-    channel: "file",
+  return withImmediateTransaction(() => {
+    const replay = replaySubmit<{ id: string }>(submitKey);
+    if (replay?.id) return replay.id;
+    const existing = get<{ id: string }>(
+      `SELECT id FROM insurer_offers
+       WHERE claim_id = ? AND head_of_loss = ? AND amount_pence = ? AND offered_on = ? AND note = ? AND status = 'open'
+         AND offered_days IS ? AND offered_daily_rate_pence IS ?
+       ORDER BY recorded_at DESC LIMIT 1`,
+      [input.claimId, input.head, input.amountPence, offeredOn, note, offeredDays, offeredDailyRatePence],
+    );
+    if (existing && !input.confirmDuplicate) {
+      const dated = offeredOn.split("-").reverse().join("/");
+      const headLabel = HEAD_LABELS[input.head] || input.head;
+      throw new SubmitNeedsConfirm(
+        `An offer of ${formatGbp(input.amountPence)} dated ${dated} is already open on ${headLabel}. Is this a second, separate offer?`,
+      );
+    }
+    const before = moneySnapshot(input.claimId, input.head);
+    const id = newId("offer");
+    const at = nowUtcIso();
+    run(
+      `INSERT INTO insurer_offers(
+        id, claim_id, head_of_loss, amount_pence, offered_on, note, status, recorded_at, recorded_by, offered_days, offered_daily_rate_pence
+      ) VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?, ?, ?)`,
+      [id, input.claimId, input.head, input.amountPence, offeredOn, note, at, input.actorId, offeredDays, offeredDailyRatePence],
+    );
+    syncCurrentOffer(input.claimId, input.head, before);
+    const noted = note ? ` Note: ${note}` : "";
+    recordClaimEvent({
+      claimId: input.claimId,
+      eventType: "insurer_offer_recorded",
+      occurredAt: at,
+      actorId: input.actorId,
+      details: `head=${input.head} Insurer offer of ${formatGbp(input.amountPence)} dated ${offeredOn.split("-").reverse().join("/")}. It was not saved as the agreed figure.${noted}`,
+      source: "staff",
+      channel: "file",
+    });
+    storeSubmit(submitKey, { id });
+    return id;
   });
-  return id;
 }
 
 export function markVehicleOffer(input: {
@@ -211,13 +225,6 @@ function optionalPositiveInt(value: number | null | undefined, label: string): n
 function offerStatus(status: string): VehicleOfferStatus {
   if (status === "withdrawn" || status === "lapsed" || status === "rejected") return status;
   return "open";
-}
-
-function sameOfferStillOpen(recordedAt: string): boolean {
-  const recorded = Date.parse(recordedAt);
-  if (Number.isNaN(recorded)) return false;
-  const age = Date.now() - recorded;
-  return age >= 0 && age < SAME_OFFER_WINDOW_MS;
 }
 
 type MoneySnapshot = { id: string | null; claimed: number; agreed: number; received: number };

@@ -7,9 +7,11 @@ import { ValidatedForm } from "@/components/ValidatedForm";
 export function ReserveForm({
   vehicles,
   claims,
+  versions = {},
 }: {
   vehicles: Array<{ id: string; label: string }>;
   claims: Array<{ id: string; label: string }>;
+  versions?: Record<string, string>;
 }) {
   const [message, setMessage] = useState<string | null>(null);
   return (
@@ -21,6 +23,9 @@ export function ReserveForm({
       }}
     >
       <h2 className="font-serif text-xl text-navy-deep md:col-span-2">New reservation</h2>
+      {Object.entries(versions).map(([id, version]) => (
+        <input key={id} type="hidden" name={`fleetVersion_${id}`} value={version} />
+      ))}
       <label className="text-sm">
         Vehicle
         <select name="fleetVehicleId" className="mt-1 w-full rounded-md border border-line px-3 py-2">
