@@ -5,6 +5,7 @@ import { dobConfirmName, dobKindForField, dobSaveError, isDobFieldName } from ".
 import { isMobileFieldName, mobileNumberError } from "../phone-number";
 import { formatTypedValue } from "../text";
 import { get, all, getDb, newId, run } from "./connection";
+import { withImmediateTransaction, writeScreenIfCurrent } from "./record-version";
 import { normaliseGtaGroup } from "../documents/gta";
 import { poundsToPence } from "./intake";
 import { INDICATIVE_DEFAULTS } from "../constants";
@@ -128,19 +129,56 @@ export function screenSaveError(claimId: string, screenKey: string, values: Scre
   return screenSaveFieldError(claimId, screenKey, values)?.message ?? null;
 }
 
-export function saveScreenData(claimId: string, screenKey: string, values: ScreenValues, actorId: string) {
+function screenLabels(screenKey: string): Record<string, string> {
+  const def = getClaimScreen(screenKey);
+  const labels: Record<string, string> = {};
+  if (!def) return labels;
+  for (const section of def.sections) {
+    for (const field of section.fields) labels[field.name] = field.label;
+  }
+  return labels;
+}
+
+/**
+ * Staff saves pass expectedVersion (the updated_at loaded with the page, or "" if the screen had not been saved).
+ * A missing or different version does not overwrite. Callers that are not a staff form omit it.
+ */
+export function saveScreenData(
+  claimId: string,
+  screenKey: string,
+  values: ScreenValues,
+  actorId: string,
+  expectedVersion?: string,
+  loaded?: ScreenValues,
+) {
   const stored = screenKey === "recovery" ? normaliseRecoveryScreen(values) : values;
   const blocked = screenSaveFieldError(claimId, screenKey, stored);
   if (blocked) throw new FieldValidationError(blocked.field, blocked.message);
-  const now = nowUtcIso();
-  run(
-    `INSERT INTO claim_screen_data(claim_id, screen_key, data_json, updated_at)
-     VALUES (?, ?, ?, ?)
-     ON CONFLICT(claim_id, screen_key) DO UPDATE SET data_json = excluded.data_json, updated_at = excluded.updated_at`,
-    [claimId, screenKey, JSON.stringify(stored), now],
-  );
-  applySideEffects(claimId, screenKey, stored, actorId);
-  run(`UPDATE claims SET updated_at = ? WHERE id = ?`, [now, claimId]);
+  if (expectedVersion === undefined) {
+    const now = nowUtcIso();
+    run(
+      `INSERT INTO claim_screen_data(claim_id, screen_key, data_json, updated_at, updated_by)
+       VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT(claim_id, screen_key) DO UPDATE SET data_json = excluded.data_json, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+      [claimId, screenKey, JSON.stringify(stored), now, actorId],
+    );
+    applySideEffects(claimId, screenKey, stored, actorId);
+    run(`UPDATE claims SET updated_at = ? WHERE id = ?`, [now, claimId]);
+    return;
+  }
+  withImmediateTransaction(() => {
+    const written = writeScreenIfCurrent({
+      claimId,
+      screenKey,
+      expected: expectedVersion,
+      actorId,
+      stored,
+      loaded,
+      labels: screenLabels(screenKey),
+    });
+    applySideEffects(claimId, screenKey, stored, actorId);
+    run(`UPDATE claims SET updated_at = ? WHERE id = ?`, [written.now, claimId]);
+  });
 }
 
 function applySideEffects(claimId: string, screenKey: string, values: ScreenValues, actorId: string) {

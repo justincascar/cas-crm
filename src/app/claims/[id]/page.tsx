@@ -8,10 +8,12 @@ import { JustificationChronology } from "@/components/claims/JustificationChrono
 import { ClaimWorkflowStatus } from "@/components/ClaimWorkflowStatus";
 import { ChasePanel } from "@/components/ChasePanel";
 import { PageHeader } from "@/components/ClaimTable";
+import { RecordVersionField, SaveClashNotice } from "@/components/SaveClashNotice";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import { requireStaff } from "@/lib/auth/session";
 import { getClaim, listStaff } from "@/lib/db/queries";
+import { loadClash, screenVersion, sectionVersion } from "@/lib/db/record-version";
 import { gapsForClaim } from "@/lib/db/repair-progress";
 import { THIRD_PARTY_VEHICLE_EMPTY, vehicleIsRecorded, vehicleSummary } from "@/lib/domain/vehicle-display";
 import { findPreparedChase, listChasesForClaim } from "@/lib/db/chase";
@@ -72,10 +74,12 @@ export default async function ClaimDetailPage({
     paymentDecision?: string;
     stepError?: string;
     stepSaved?: string;
+    clash?: string;
   }>;
 }) {
   const { id } = await params;
-  const { error, tlError, tlMail, mailboxError, mailboxSent, mailboxSimulated, mailboxReport, paymentDecision, stepError, stepSaved } = await searchParams;
+  const { error, tlError, tlMail, mailboxError, mailboxSent, mailboxSimulated, mailboxReport, paymentDecision, stepError, stepSaved, clash } = await searchParams;
+  const claimClash = loadClash(clash);
   await requireStaff();
   const data = getClaim(id);
   if (!data) notFound();
@@ -108,6 +112,10 @@ export default async function ClaimDetailPage({
 
   return (
     <div className="space-y-6">
+      <SaveClashNotice
+        clash={claimClash && (claimClash.recordKey === id || claimClash.recordKey.startsWith(`${id}:`)) ? claimClash : null}
+        reloadHref={`/claims/${id}`}
+      />
       <PageHeader
         title={`${claim.file_reference}`}
         subtitle={`${claim.client_name || "Unknown client"} · ${liabilityStatusLabel(String(claim.claim_type))} · ${roadworthinessLabel(String(claim.roadworthiness))} · ${claim.handler_name || "Unassigned"}`}
@@ -154,6 +162,11 @@ export default async function ClaimDetailPage({
         claimId={String(claim.id)}
         liabilityStatus={String(claim.claim_type || "")}
         roadworthiness={String(claim.roadworthiness || "")}
+        recordVersion={
+          claimClash?.scope === "screen" && claimClash.recordKey === `${id}:general`
+            ? claimClash.expectedVersion
+            : screenVersion(id, "general")
+        }
       />
 
       {bankDetailsMissing ? (
@@ -173,6 +186,8 @@ export default async function ClaimDetailPage({
           agreements={chase.kind === "hire_agreement_renewal" ? hireAgreements : undefined}
           mailboxConnected={liveEmailSending()}
           bankDetailsMissing={bankDetailsMissing}
+          repairVersion={sectionVersion("money", `${id}:repairs`)}
+          overrideVersion={sectionVersion("chase-override", `${id}:${chase.kind}`)}
           returnTo={`/claims/${claim.id}`}
           awaitingDecisionHref={
             chase.payment && reviews.some((item) => item.head === chase.payment?.head)
@@ -278,6 +293,13 @@ export default async function ClaimDetailPage({
       <section className="grid gap-6 xl:grid-cols-3">
         <form action={actionUpdateClaim} className="space-y-3 rounded-xl border border-line bg-card p-5 xl:col-span-2">
           <input type="hidden" name="claimId" value={String(claim.id)} />
+          <RecordVersionField
+            version={
+              claimClash?.scope === "claim-overview" && claimClash.recordKey === id
+                ? claimClash.expectedVersion
+                : sectionVersion("claim-overview", id)
+            }
+          />
           <h2 className="font-serif text-xl text-navy-deep">Claim facts</h2>
           <p className="text-xs text-slate">Staff-reviewed fields. Client-entered material stays in notes and the form status until reviewed.</p>
           <label className="block text-sm">
@@ -615,6 +637,13 @@ export default async function ClaimDetailPage({
                 </span>
               </label>
               <input type="hidden" name="claimId" value={String(claim.id)} />
+              <RecordVersionField
+                version={
+                  claimClash?.scope === "money" && claimClash.recordKey === `${id}:repairs`
+                    ? claimClash.expectedVersion
+                    : sectionVersion("money", `${id}:repairs`)
+                }
+              />
               <button className="rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white" type="submit">
                 Record agreed figure
               </button>

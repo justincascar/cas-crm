@@ -173,6 +173,7 @@ export function ScreenForm({
   agents = [],
   error,
   errorField,
+  recordVersion = "",
 }: {
   claimId: string;
   actorId: string;
@@ -184,6 +185,7 @@ export function ScreenForm({
   agents?: KnownInsurer[];
   error?: string;
   errorField?: string;
+  recordVersion?: string;
 }) {
   return (
     <ValidatedForm
@@ -195,6 +197,8 @@ export function ScreenForm({
       <input type="hidden" name="claimId" value={claimId} />
       <input type="hidden" name="screenKey" value={def.key} />
       <input type="hidden" name="actorId" value={actorId} />
+      <input type="hidden" name="recordVersion" value={recordVersion} />
+      <input type="hidden" name="loadedJson" value={JSON.stringify(values)} />
 
       {def.key === "damage" ? (
         <div className="rounded-xl border border-teal/40 bg-[#e8f4f2] px-4 py-3 text-sm">

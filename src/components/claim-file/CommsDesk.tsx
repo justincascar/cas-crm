@@ -67,6 +67,9 @@ export function CommsDesk({
   preparedByKind,
   mailboxConnected = false,
   impecuniosityBlockReason = null,
+  repairVersion = "",
+  overrideVersions = {},
+  engineerVersion = "",
 }: {
   claimId: string;
   handlerId: string;
@@ -98,6 +101,9 @@ export function CommsDesk({
   >;
   mailboxConnected?: boolean;
   impecuniosityBlockReason?: string | null;
+  repairVersion?: string;
+  overrideVersions?: Record<string, string>;
+  engineerVersion?: string;
 }) {
   const router = useRouter();
   const defaultSubject = `Our ref: ${defaults.fileReference}  Your policy: ${defaults.policyRef || "…"}`;
@@ -185,6 +191,7 @@ export function CommsDesk({
         prepared={preparedEngineerInstruction}
         mailboxConnected={mailboxConnected}
         returnTo={`/claims/${claimId}/work/comms`}
+        engineerVersion={engineerVersion}
       />
 
       {chases.map((chase) => (
@@ -196,6 +203,8 @@ export function CommsDesk({
           agreements={chase.kind === "hire_agreement_renewal" ? hireAgreements : undefined}
           mailboxConnected={mailboxConnected}
           returnTo={`/claims/${claimId}/work/comms`}
+          repairVersion={repairVersion}
+          overrideVersion={overrideVersions[chase.kind] || ""}
         />
       ))}
 

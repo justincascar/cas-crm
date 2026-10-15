@@ -6,9 +6,11 @@ import { GTA_GROUPS, GTA_NOT_CLASSIFIED, GTA_RATE_PERIOD_LABEL, gtaGroupLabel, g
 import { AgeField } from "@/components/AgeField";
 import { MobileField } from "@/components/MobileField";
 import { PageHeader } from "@/components/ClaimTable";
+import { RecordVersionField, SaveClashNotice } from "@/components/SaveClashNotice";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { requireStaff } from "@/lib/auth/session";
 import { getHirePack } from "@/lib/db/hire-pack";
+import { loadClash, sectionVersion } from "@/lib/db/record-version";
 import { hireAgreementPrehireBlock, listPrehireOverrides } from "@/lib/db/prehire-checks";
 import { formatUkDateTime } from "@/lib/dates";
 import { hireAgreementReadyLine, prehireCheckKindLabel } from "@/lib/domain/prehire-checks";
@@ -26,11 +28,12 @@ export default async function HirePackPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; field?: string }>;
+  searchParams: Promise<{ error?: string; field?: string; clash?: string }>;
 }) {
   const { id } = await params;
   const staffUser = await requireStaff();
-  const { error, field } = await searchParams;
+  const { error, field, clash } = await searchParams;
+  const packClash = loadClash(clash);
   const pack = getHirePack(id);
   if (!pack) notFound();
   const s = pack.stored;
@@ -140,6 +143,8 @@ export default async function HirePackPage({
       >
         <input type="hidden" name="claimId" value={id} />
         <input type="hidden" name="actorId" value={actorId} />
+        <RecordVersionField version={packClash?.scope === "hire-pack" ? packClash.expectedVersion : sectionVersion("hire-pack", id)} />
+        <SaveClashNotice clash={packClash?.scope === "hire-pack" ? packClash : null} reloadHref={`/claims/${id}/hire-pack`} />
 
         <fieldset className="space-y-3 rounded-xl border border-line bg-card p-5">
           <legend className="font-serif text-xl text-navy-deep">Hirer</legend>

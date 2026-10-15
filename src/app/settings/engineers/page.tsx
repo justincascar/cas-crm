@@ -5,19 +5,22 @@ import {
   actionUpdateEngineer,
 } from "@/app/engineer-actions";
 import { PageHeader } from "@/components/ClaimTable";
+import { RecordVersionField, SaveClashNotice } from "@/components/SaveClashNotice";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { requireStaff } from "@/lib/auth/session";
 import { listAllEngineers } from "@/lib/db/engineers";
+import { loadClash, sectionVersion } from "@/lib/db/record-version";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
 export default async function EngineersAdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; clash?: string }>;
 }) {
   await requireStaff();
-  const { error, saved } = await searchParams;
+  const { error, saved, clash } = await searchParams;
+  const engineerClash = loadClash(clash);
   const engineers = listAllEngineers();
 
   return (
@@ -65,8 +68,19 @@ export default async function EngineersAdminPage({
       <section className="space-y-3">
         {engineers.map((engineer) => (
           <article key={engineer.id} className="rounded-xl border border-line bg-card p-5">
+            <SaveClashNotice
+              clash={engineerClash?.scope === "engineer" && engineerClash.recordKey === engineer.id ? engineerClash : null}
+              reloadHref="/settings/engineers"
+            />
             <ValidatedForm action={actionUpdateEngineer} className="grid gap-3">
               <input type="hidden" name="engineerId" value={engineer.id} />
+              <RecordVersionField
+                version={
+                  engineerClash?.scope === "engineer" && engineerClash.recordKey === engineer.id
+                    ? engineerClash.expectedVersion
+                    : sectionVersion("engineer", engineer.id)
+                }
+              />
               <label className="text-sm">
                 Name
                 <input name="name" required className={field} defaultValue={engineer.name} />
@@ -87,6 +101,7 @@ export default async function EngineersAdminPage({
             </ValidatedForm>
             <ValidatedForm action={actionSetEngineerActive} className="mt-3">
               <input type="hidden" name="engineerId" value={engineer.id} />
+              <RecordVersionField version={sectionVersion("engineer", engineer.id)} />
               <input type="hidden" name="active" value={engineer.active ? "0" : "1"} />
               <button type="submit" className="text-sm text-teal-dark underline">
                 {engineer.active ? "Remove from the dropdown" : "Show in the dropdown again"}

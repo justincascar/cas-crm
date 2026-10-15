@@ -93,6 +93,8 @@ export function ChasePanel({
   returnTo,
   awaitingDecisionHref = null,
   bankDetailsMissing = false,
+  repairVersion = "",
+  overrideVersion = "",
 }: {
   claimId: string;
   chase: ChaseView;
@@ -102,6 +104,8 @@ export function ChasePanel({
   returnTo?: string;
   awaitingDecisionHref?: string | null;
   bankDetailsMissing?: boolean;
+  repairVersion?: string;
+  overrideVersion?: string;
 }) {
   const router = useRouter();
   const sendBack = returnTo || `/claims/${claimId}`;
@@ -444,7 +448,10 @@ export function ChasePanel({
               onSubmit={(event) => {
                 event.preventDefault();
                 const form = new FormData(event.currentTarget);
-                void run(actionRecordAgreedRepair, { agreed: String(form.get("agreed") || "") });
+                void run(actionRecordAgreedRepair, {
+                  agreed: String(form.get("agreed") || ""),
+                  recordVersion: repairVersion,
+                });
               }}
             >
               <label className="text-sm">
@@ -623,6 +630,7 @@ export function ChasePanel({
             void run(actionSaveChaseOverride, {
               overrideDays: String(form.get("overrideDays") || ""),
               overrideReason: String(form.get("overrideReason") || ""),
+              recordVersion: overrideVersion,
             });
           }}
         >
@@ -658,7 +666,7 @@ export function ChasePanel({
                 type="button"
                 className="rounded-md border border-line bg-white px-4 py-2 text-sm"
                 disabled={busy}
-                onClick={() => void run(actionClearChaseOverride)}
+                onClick={() => void run(actionClearChaseOverride, { recordVersion: overrideVersion })}
               >
                 Use global default
               </button>

@@ -963,8 +963,14 @@ function chargeBalanceOutstanding(money: { agreed: number; claimed: number; rece
   return target > 0 && money.received < target;
 }
 
+/** Re-read the file immediately before a chase writes its own automation row. */
+function rereadClaimBeforeChase(claimId: string) {
+  get(`SELECT id, updated_at FROM claims WHERE id = ?`, [claimId]);
+}
+
 /** One row per outstanding head. An existing pause or cancellation is left as it is. */
 export function syncOutstandingPaymentChases(claimIds?: string[]) {
+  for (const claimId of claimIds || []) rereadClaimBeforeChase(claimId);
   const limited = Boolean(claimIds && claimIds.length);
   const filter = limited ? ` AND fl.claim_id IN (${placeholders(claimIds!.length)})` : "";
   const lines = all<{
@@ -1210,6 +1216,7 @@ function effectiveDaysForWrite(kind: ChaseKind, existing: ChaseRow | undefined):
 }
 
 export function startChase(kind: ChaseKind, claimId: string, clockAt: string) {
+  rereadClaimBeforeChase(claimId);
   const def = chaseDefinition(kind);
   const existing = chaseRow(claimId, kind);
   const interval = effectiveDaysForWrite(kind, existing);
@@ -1232,6 +1239,7 @@ export function startChase(kind: ChaseKind, claimId: string, clockAt: string) {
 }
 
 export function restartChaseClock(kind: ChaseKind, claimId: string, clockAt: string) {
+  rereadClaimBeforeChase(claimId);
   const existing = chaseRow(claimId, kind);
   if (!existing) {
     startChase(kind, claimId, clockAt);

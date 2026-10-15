@@ -1,4 +1,6 @@
+import { RecordVersionField } from "@/components/SaveClashNotice";
 import { formatUkDate } from "@/lib/dates";
+import { sectionVersion } from "@/lib/db/record-version";
 import type { HireGapView } from "@/lib/db/storage-authorisation-end";
 import {
   proposedStorageEndSentence,
@@ -24,6 +26,7 @@ export function StorageAuthorisationEndPanel({
   returnTo: string;
 }) {
   if (decision.kind === "open") return null;
+  const version = sectionVersion("storage-auth-end", claimId);
   if (decision.kind === "suggest") {
     const day = shown(decision.date);
     return (
@@ -31,6 +34,7 @@ export function StorageAuthorisationEndPanel({
         <p className="font-semibold">Proposed storage end: {day}</p>
         <p className="mt-1">{proposedStorageEndSentence(decision.basis, decision.earlierThanAuthorisation)}</p>
         <form method="post" action={`/claims/${claimId}/storage-authorisation-end`} className="mt-3">
+          <RecordVersionField version={version} />
           <input type="hidden" name="choice" value="suggested" />
           <input type="hidden" name="returnTo" value={returnTo} />
           <button className="min-h-11 rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white" type="submit">
@@ -52,6 +56,7 @@ export function StorageAuthorisationEndPanel({
         </p>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <form method="post" action={`/claims/${claimId}/storage-authorisation-end`}>
+            <RecordVersionField version={version} />
             <input type="hidden" name="choice" value="suggested" />
             <input type="hidden" name="returnTo" value={returnTo} />
             <button className="min-h-11 w-full rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white" type="submit">
@@ -59,6 +64,7 @@ export function StorageAuthorisationEndPanel({
             </button>
           </form>
           <form method="post" action={`/claims/${claimId}/storage-authorisation-end`}>
+            <RecordVersionField version={version} />
             <input type="hidden" name="choice" value="keep" />
             <input type="hidden" name="returnTo" value={returnTo} />
             <button className="min-h-11 w-full rounded-md border border-line bg-white px-3 py-2 text-sm font-semibold" type="submit">

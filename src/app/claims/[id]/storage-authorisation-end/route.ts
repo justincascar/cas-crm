@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { isOfficeRole } from "@/lib/auth/roles";
 import { getRequestStaff } from "@/lib/auth/session";
 import { confirmStorageAuthorisationEnd } from "@/lib/db/storage-authorisation-end";
+import { formVersion, withSectionSave } from "@/lib/db/record-version";
 import { browserOrigin } from "@/lib/http/browser-origin";
+import { clashRedirect } from "@/lib/http/version-clash";
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
@@ -22,8 +24,19 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   };
   if (choice !== "suggested" && choice !== "keep") return back("Choose whether to use the authorisation date or keep the date already on the file.");
   try {
-    confirmStorageAuthorisationEnd({ claimId: id, actorId: staff.id, choice });
+    withSectionSave({
+      scope: "storage-auth-end",
+      recordKey: id,
+      expected: formVersion(form),
+      actorId: staff.id,
+      submitted: { choice },
+      labels: { choice: "Storage authorisation end" },
+      fields: { choice },
+      write: () => confirmStorageAuthorisationEnd({ claimId: id, actorId: staff.id, choice }),
+    });
   } catch (error) {
+    const refused = clashRedirect(origin, safeReturn, error);
+    if (refused) return refused;
     const message = error instanceof Error ? error.message : "Could not confirm the storage end.";
     return back(message);
   }

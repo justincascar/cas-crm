@@ -9,6 +9,8 @@ import {
   setStaffActive,
   setStaffRole,
 } from "@/lib/db/staff-admin";
+import { formVersion, withSectionSave } from "@/lib/db/record-version";
+import { redirectClash } from "@/lib/http/version-clash";
 
 function bounce(error?: string) {
   redirect(error ? `/settings/staff?error=${encodeURIComponent(error)}` : "/settings/staff?saved=1");
@@ -29,38 +31,50 @@ export async function actionCreateStaff(formData: FormData) {
   bounce();
 }
 
+function saveStaffRow(formData: FormData, adminId: string, submitted: Record<string, string>, write: () => { ok: true } | { ok: false; error: string }) {
+  const staffId = String(formData.get("staffId") || "");
+  try {
+    withSectionSave({
+      scope: "staff",
+      recordKey: staffId,
+      expected: formVersion(formData),
+      actorId: adminId,
+      submitted,
+      fields: submitted,
+      write: () => {
+        const result = write();
+        if (!result.ok) throw new Error(result.error);
+      },
+    });
+  } catch (error) {
+    redirectClash("/settings/staff", error);
+    bounce(error instanceof Error ? error.message : "Could not save.");
+  }
+}
+
 export async function actionSetStaffActive(formData: FormData) {
   const admin = await requireAdministrator();
-  const result = setStaffActive(
-    String(formData.get("staffId") || ""),
-    String(formData.get("active") || "") === "1",
-    admin.id,
+  const active = String(formData.get("active") || "") === "1";
+  saveStaffRow(formData, admin.id, { active: active ? "1" : "0" }, () =>
+    setStaffActive(String(formData.get("staffId") || ""), active, admin.id),
   );
   revalidatePath("/settings/staff");
-  if (!result.ok) bounce(result.error);
   bounce();
 }
 
 export async function actionResetStaffPassword(formData: FormData) {
   const admin = await requireAdministrator();
-  const result = resetStaffPassword(
-    String(formData.get("staffId") || ""),
-    String(formData.get("password") || ""),
-    admin.id,
+  saveStaffRow(formData, admin.id, { password: "entered" }, () =>
+    resetStaffPassword(String(formData.get("staffId") || ""), String(formData.get("password") || ""), admin.id),
   );
   revalidatePath("/settings/staff");
-  if (!result.ok) bounce(result.error);
   bounce();
 }
 
 export async function actionSetStaffRole(formData: FormData) {
   const admin = await requireAdministrator();
-  const result = setStaffRole(
-    String(formData.get("staffId") || ""),
-    String(formData.get("role") || "staff"),
-    admin.id,
-  );
+  const role = String(formData.get("role") || "staff");
+  saveStaffRow(formData, admin.id, { role }, () => setStaffRole(String(formData.get("staffId") || ""), role, admin.id));
   revalidatePath("/settings/staff");
-  if (!result.ok) bounce(result.error);
   bounce();
 }

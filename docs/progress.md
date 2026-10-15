@@ -413,7 +413,7 @@ Blocked: per-file permissions, shared hosting, live DVLA. Incoming mail is not b
 - A later change of circumstances, or a correction of the mitigation statement, is a new dated entry. The earlier entry stays.
 - The mitigation statement uses the Hire Pack questionnaire already in the CRM (offer of a replacement or not, personal liability, why a vehicle is needed, own vehicle unusable, no other suitable vehicle, statement of truth). There is no separate "how long" question on that page. Duration is recorded in the client's answer to why they need a vehicle. A signature is not added.
 - An administrator can approve relying on impecuniosity. That flag is separate from the checklist. The impecuniosity disclosure letter, and an email that uses the assertion wording, is refused until the checklist is Complete and that approval is set. The screen states the reason. A generated hire pack leaves that assertion out until both are in place. A complete checklist does not mean the charges can be recovered.
-- There is no client form for this. Staff enter it. Two people saving at once: the later save is kept. The CRM does not yet warn of a clash. Earlier dated entries stay.
+- There is no client form for this. Staff enter it. Circumstances, the checklist, mitigation and concerns are new dated entries, so two people can add them at the same time and both are kept. Earlier dated entries stay. From 15 October 2026 a save that edits one screen no longer silently overwrites another person's save of that same screen.
 - The research note was not in the project on 6 October. Justin supplied it on 7 October. It is stored at `docs/impecuniosity-legal-research.md`. Letters were not rewritten from it.
 - Tests: `tests/impecuniosity.test.ts` (five cases: dated circumstances, checklist not promoted by files, approval gate on the letter and an asserting email, mitigation versions, hire pack withholding the assertion). Full suite before this stage: 254 passing, 0 failing. After: 259 passing, 0 failing.
 
@@ -636,7 +636,7 @@ A blank storage location is filled from the CAS premises default (Complete Accid
 
 Hire was inspected and not changed. Hire dates sit on the delivery and collection screen and on the hire booking. Hire money sits on the hire head screen. That claimed figure is the amount stored on the hire line. It is not calculated from the days and the daily rate.
 
-If two people save Storage at the same time, the later save is kept. The CRM does not warn that someone else changed it. There is no new lock.
+Saving Storage and saving another screen on the same file do not block each other. From 15 October 2026 a second save of Storage itself is refused if someone else saved Storage after the page was opened. The first person's details stay.
 
 ## Hire charge (14 October 2026)
 
@@ -725,6 +725,24 @@ TEST-0008 still has repairs started on 01/09/2026 before repair authorisation on
 TEST-0005’s proposed storage end of 01/10/2026 is still unconfirmed. TEST-0003’s storage end of 14/09/2026 is unchanged. TEST-0009’s vehicle-damage offers were not changed. TEST-0006’s money was not changed. Hire agreement renewal alerts stay on day 70, day 80 and day 88. No live email was sent.
 
 Tests: `tests/repair-progress.test.ts` and `tests/hire-storage-end.test.ts`. Full suite: 421 passing, 0 failing.
+
+## One save must not silently overwrite another (15 October 2026)
+
+Each screen a person edits has its own version, loaded with the page and sent back with the save. If someone else saved that same screen after it was opened, the later save is refused. The message is “[Name] changed this on [dd/MM/yyyy HH:mm] after you opened it. Your changes have not been saved.” It lists the fields the other person changed and the entries that were not saved, and it offers “Reload the latest version”. The first person’s change stays. Saving a different screen on the same file is not a clash. Client details and Storage are separate.
+
+Notes, file history, chronology events, new offers, corrections, gap explanations and financial circumstances are new entries. Two people can add them at the same time. They are not version-checked.
+
+A payment, or an agreed figure, that is the same amount again within one minute is recorded once. A chase writes its own reminder fields and re-reads the file first. It does not write hire, storage or client details. If it does change a field on a screen someone has open, the refusal names the job, for example “Payment chase”. A storage-end proposal still does not confirm the end.
+
+Bank details use the same version check. Only Justin’s staff login (`manageBankDetails`) can change them, and the existing audit remains (who, when, old and new masked except the last 4 digits). Sort code stays 6 digits and account number 8 digits. Incoming email, attachments, client submissions and imports still cannot change them.
+
+If the session has expired, the person is sent to sign in. The form is not kept across that redirect. A version clash does keep the unsaved entries on screen.
+
+The old “later save is kept” warning has been removed from Storage and from Financial circumstances.
+
+TEST-0005’s proposed storage end is still unconfirmed. TEST-0009’s vehicle-damage offers were not changed. TEST-0006’s money was not changed. TEST-0007’s £800 was not written off. Hire agreement renewal alerts stay on day 70, day 80 and day 88. No live email was sent. `EMAIL_SEND_MODE` stays `simulate`.
+
+Tests: `tests/optimistic-concurrency.test.ts`. Full suite: 429 passing, 0 failing.
 
 ## Not yet claimed
 

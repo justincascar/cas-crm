@@ -1,4 +1,5 @@
 import { PageHeader } from "@/components/ClaimTable";
+import { RecordVersionField, SaveClashNotice } from "@/components/SaveClashNotice";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import Link from "next/link";
 import { actionSaveAgreementLimits, actionSaveChaseIntervals, actionSaveDefaultVehicleLocation, actionSaveGtaMarkup, actionSaveStorageDailyRate, actionTestMailboxConnection } from "@/app/settings-actions";
@@ -14,6 +15,7 @@ import { accountCanManageBankDetails } from "@/lib/db/permissions";
 import { PAYMENT_DUE_ON_RECEIPT, PAYMENT_DUE_ON_RECEIPT_SENTENCE } from "@/lib/constants";
 import { getGtaMarkupPercent } from "@/lib/db/hire-agreement";
 import { getInsurerPaymentDetails } from "@/lib/db/payment-details";
+import { loadClash, sectionVersion } from "@/lib/db/record-version";
 import { GTA_RATE_PERIOD_LABEL } from "@/lib/documents/gta";
 import { EmailSendModeBanner } from "@/components/EmailSendModeBanner";
 import { CAS_CLAIMS_MAILBOX, INDICATIVE_DEFAULTS } from "@/lib/constants";
@@ -27,10 +29,12 @@ import { PAYMENT_REQUEST_PACK_MISSING } from "@/lib/email/payment-request-pack";
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string; mailboxCheck?: string; mailboxCheckError?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; mailboxCheck?: string; mailboxCheckError?: string; clash?: string }>;
 }) {
   const staffUser = await requireStaff();
-  const { error, saved, mailboxCheck, mailboxCheckError } = await searchParams;
+  const { error, saved, mailboxCheck, mailboxCheckError, clash: clashId } = await searchParams;
+  const clash = loadClash(clashId);
+  const versionFor = (scope: string) => (clash?.scope === scope ? clash.expectedVersion : sectionVersion(scope, "office"));
   const settings = getSettings();
   const staff = listStaff();
   const admin = isAdministrator(staffUser.role);
@@ -56,6 +60,7 @@ export default async function SettingsPage({
         subtitle="Prototype configuration. Administrator and staff can open every file. Driver and bodyshop / mechanic can open only the jobs assigned to them today."
       />
       <EmailSendModeBanner />
+      <SaveClashNotice clash={clash} reloadHref="/settings" />
       {error ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
       ) : null}
@@ -82,6 +87,7 @@ export default async function SettingsPage({
           silently aligned. Confirm with the solicitor which figure is correct before live enforcement.
         </p>
         <ValidatedForm action={actionSaveAgreementLimits} className="mt-4 grid gap-3 sm:grid-cols-3 sm:items-end">
+          <RecordVersionField version={versionFor("settings-agreement")} />
           <label className="text-sm">
             Approaching (amber) day
             <input
@@ -132,6 +138,7 @@ export default async function SettingsPage({
           It is not a legal limit, and it does not change hire agreement renewal days.
         </p>
         <form method="post" action="/settings/repair-gap" className="mt-4 flex flex-wrap items-end gap-3">
+          <RecordVersionField version={versionFor("settings-repair-gap")} />
           <label className="text-sm">
             Days
             <input
@@ -156,6 +163,7 @@ export default async function SettingsPage({
           total-loss notification says they are not yet on file until all three are saved. Nothing is sent automatically.
         </p>
         <form method="post" action="/settings/payment-details" className="mt-4 grid gap-3 sm:grid-cols-3 sm:items-end">
+          <RecordVersionField version={versionFor("bank-details")} />
           <label className="text-sm">
             Account name
             <input
@@ -199,6 +207,7 @@ export default async function SettingsPage({
           saved for one insurer. It is not shown as a number of days, and it is not the chase reminder interval.
         </p>
         <form method="post" action="/settings/insurer-payment-term" className="mt-3 grid gap-3 sm:grid-cols-3 sm:items-end">
+          <RecordVersionField version={versionFor("settings-insurer-term")} />
           <label className="text-sm sm:col-span-1">
             Insurer
             <select name="insurerName" className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" defaultValue="">
@@ -238,6 +247,7 @@ export default async function SettingsPage({
           <p className="mt-3 rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2 text-sm">{PAYMENT_REQUEST_PACK_MISSING.casInsurance}</p>
         )}
         <form method="post" action="/settings/cas-insurance" encType="multipart/form-data" className="mt-4 space-y-3">
+          <RecordVersionField version={versionFor("settings-insurance")} />
           <label className="block text-sm">
             {casInsurance ? "Store a newer copy" : "Certificate file"}
             <input
@@ -295,6 +305,7 @@ export default async function SettingsPage({
           vehicle CAS supplies is recorded separately and is not used for the rate.
         </p>
         <ValidatedForm action={actionSaveGtaMarkup} className="mt-4 flex flex-wrap items-end gap-3">
+          <RecordVersionField version={versionFor("settings-gta")} />
           <label className="text-sm">
             CAS markup (%)
             <input
@@ -346,6 +357,7 @@ export default async function SettingsPage({
           or cleared by a logged outcome, and does not overwrite a per-file override.
         </p>
         <ValidatedForm action={actionSaveChaseIntervals} className="mt-4 grid gap-3 sm:grid-cols-3 sm:items-end">
+          <RecordVersionField version={versionFor("settings-chase-intervals")} />
           <label className="text-sm">
             Engineer report (days)
             <input
@@ -405,6 +417,7 @@ export default async function SettingsPage({
           Used when a file has no rate of its own. The standard is £39 a day. Changing this does not change a rate already stored on a file.
         </p>
         <ValidatedForm action={actionSaveStorageDailyRate} className="mt-4 flex flex-wrap items-end gap-3">
+          <RecordVersionField version={versionFor("settings-storage-rate")} />
           <label className="text-sm">
             Daily rate (£)
             <input
@@ -427,6 +440,7 @@ export default async function SettingsPage({
           vehicles normally sit at CAS premises. A location saved on a file is never overwritten by this default.
         </p>
         <ValidatedForm action={actionSaveDefaultVehicleLocation} className="mt-4 space-y-3">
+          <RecordVersionField version={versionFor("settings-vehicle-location")} />
           <label className="block text-sm">
             Address
             <textarea

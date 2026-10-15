@@ -561,6 +561,17 @@ export function recordTotalLossPaymentReceived(input: { claimId: string; actorId
   if (!Number.isInteger(input.receivedPence) || input.receivedPence <= 0) {
     throw new Error("Enter the amount that has arrived. It is not marked received until you do.");
   }
+  const recent = get<{ occurred_at: string; details: string | null }>(
+    `SELECT occurred_at, details FROM claim_events
+     WHERE claim_id = ? AND event_type = ?
+     ORDER BY occurred_at DESC, recorded_at DESC LIMIT 1`,
+    [input.claimId, TOTAL_LOSS_PAYMENT_RECEIVED_EVENT],
+  );
+  if (recent?.occurred_at) {
+    const age = Date.now() - Date.parse(recent.occurred_at);
+    const sameAmount = String(recent.details || "").includes((input.receivedPence / 100).toFixed(2));
+    if (sameAmount && age >= 0 && age < 60_000) return;
+  }
   const existing = getVehicleDamageMoney(input.claimId);
   const totalReceived = (existing.receivedPence || 0) + input.receivedPence;
   if (existing.id) {

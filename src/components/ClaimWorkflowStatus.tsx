@@ -14,10 +14,12 @@ export function ClaimWorkflowStatus({
   claimId,
   liabilityStatus,
   roadworthiness,
+  recordVersion = "",
 }: {
   claimId: string;
   liabilityStatus: string | null | undefined;
   roadworthiness: string | null | undefined;
+  recordVersion?: string;
 }) {
   const liability = normalizeLiabilityStatus(liabilityStatus);
   const vehicle = normalizeRoadworthiness(roadworthiness);
@@ -33,6 +35,7 @@ export function ClaimWorkflowStatus({
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <form action={actionUpdateClaimStatus} className="space-y-2 rounded-lg border border-line bg-white p-4">
           <input type="hidden" name="claimId" value={claimId} />
+          <input type="hidden" name="recordVersion" value={recordVersion} />
           <input type="hidden" name="field" value="liability" />
           <label className="block text-sm font-medium">
             Liability status
@@ -51,6 +54,7 @@ export function ClaimWorkflowStatus({
         </form>
         <form action={actionUpdateClaimStatus} className="space-y-2 rounded-lg border border-line bg-white p-4">
           <input type="hidden" name="claimId" value={claimId} />
+          <input type="hidden" name="recordVersion" value={recordVersion} />
           <input type="hidden" name="field" value="roadworthiness" />
           <label className="block text-sm font-medium">
             Roadworthiness

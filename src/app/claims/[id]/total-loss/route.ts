@@ -14,7 +14,9 @@ import {
 } from "@/lib/db/total-loss";
 import { optionalPoundsToPence, type CasSalvageRequest, type InsurerSalvageInterest, type SalvageDisposal } from "@/lib/domain/total-loss";
 import { requireCalendarDate } from "@/lib/db/vehicle-offers";
+import { formVersion, withSectionSave } from "@/lib/db/record-version";
 import { browserOrigin } from "@/lib/http/browser-origin";
+import { clashRedirect } from "@/lib/http/version-clash";
 
 function interestOf(raw: string): InsurerSalvageInterest | null {
   if (raw === "no_interest" || raw === "takes_interest") return raw;
@@ -118,20 +120,41 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const disposal = disposalOf(String(form.get("disposal") || ""));
     const offerRaw = String(form.get("insurerOffer") || "");
     const applyDisposal = interest === "no_interest";
-    saveTotalLossReport({
-      claimId: id,
+    const submitted = {
+      pav: String(form.get("pav") || ""),
+      salvage: String(form.get("salvage") || ""),
+      interest: String(form.get("interest") || ""),
+      insurerOffer: offerRaw,
+    };
+    withSectionSave({
+      scope: "total-loss",
+      recordKey: id,
+      expected: formVersion(form),
       actorId: staff.id,
-      pavPence: optionalPoundsToPence(String(form.get("pav") || "")),
-      salvagePence: optionalPoundsToPence(String(form.get("salvage") || "")),
-      interest,
-      insurerOfferedPence: offerRaw.trim() ? optionalPoundsToPence(offerRaw) : undefined,
-      disposal: applyDisposal ? disposal : null,
-      saleProceedsPence: applyDisposal && disposal === "sold" ? optionalPoundsToPence(String(form.get("saleProceeds") || "")) : undefined,
-      returnedOn: applyDisposal && disposal === "returned" ? dateOrNull(String(form.get("returnedOn") || "")) : undefined,
-      customerChargePence:
-        applyDisposal && disposal === "returned" ? optionalPoundsToPence(String(form.get("customerCharge") || "")) : undefined,
-      casPurchasePence: applyDisposal && disposal === "bought_by_cas" ? optionalPoundsToPence(String(form.get("casPurchase") || "")) : undefined,
-      casRequest: requestOf(String(form.get("casRequest") || "")),
+      submitted,
+      labels: {
+        pav: "Pre-accident value",
+        salvage: "Salvage",
+        interest: "Insurer interest in salvage",
+        insurerOffer: "Insurer offer",
+      },
+      fields: submitted,
+      write: () =>
+        saveTotalLossReport({
+          claimId: id,
+          actorId: staff.id,
+          pavPence: optionalPoundsToPence(submitted.pav),
+          salvagePence: optionalPoundsToPence(submitted.salvage),
+          interest,
+          insurerOfferedPence: offerRaw.trim() ? optionalPoundsToPence(offerRaw) : undefined,
+          disposal: applyDisposal ? disposal : null,
+          saleProceedsPence: applyDisposal && disposal === "sold" ? optionalPoundsToPence(String(form.get("saleProceeds") || "")) : undefined,
+          returnedOn: applyDisposal && disposal === "returned" ? dateOrNull(String(form.get("returnedOn") || "")) : undefined,
+          customerChargePence:
+            applyDisposal && disposal === "returned" ? optionalPoundsToPence(String(form.get("customerCharge") || "")) : undefined,
+          casPurchasePence: applyDisposal && disposal === "bought_by_cas" ? optionalPoundsToPence(String(form.get("casPurchase") || "")) : undefined,
+          casRequest: requestOf(String(form.get("casRequest") || "")),
+        }),
     });
     if (intent === "prepare_email") {
       const prepared = prepareTotalLossInsurerEmail({ claimId: id, actorId: staff.id });
@@ -146,6 +169,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
     return back();
   } catch (error) {
+    const refused = clashRedirect(origin, safeReturn, error);
+    if (refused) return refused;
     const message = error instanceof Error ? error.message : "The total-loss figures could not be saved.";
     return back(message);
   }

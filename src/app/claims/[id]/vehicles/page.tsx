@@ -4,6 +4,7 @@ import { ClaimAudatexFields } from "@/components/ClaimAudatexFields";
 import { PageHeader } from "@/components/ClaimTable";
 import { requireStaff } from "@/lib/auth/session";
 import { getClaim, suggestAudatexCodesForClaim } from "@/lib/db/queries";
+import { screenVersion } from "@/lib/db/record-version";
 import {
   CLIENT_VEHICLE_EMPTY,
   THIRD_PARTY_VEHICLE_EMPTY,
@@ -93,6 +94,7 @@ export default async function ClaimVehiclesPage({ params }: { params: Promise<{ 
             workProviderCode={String(claim.audatex_work_provider_code || "")}
             suggestedNetwork={audatexSuggestion.network}
             suggestedWorkProvider={audatexSuggestion.workProvider}
+            recordVersion={screenVersion(String(claim.id), "insurer")}
           />
         </section>
         <section className="space-y-4">

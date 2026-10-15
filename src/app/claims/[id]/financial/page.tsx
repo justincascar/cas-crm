@@ -19,7 +19,6 @@ import {
   ABILITY_ANSWERS,
   ABILITY_TO_PAY_QUESTION,
   ABILITY_TO_PAY_REVIEW,
-  CONCURRENT_EDIT_NOTICE,
   EMPLOYMENT_STATUSES,
   EVIDENCE_KINDS,
   MITIGATION_QUESTIONNAIRE,
@@ -66,7 +65,6 @@ export default async function FinancialCircumstancesPage({
       />
       <p className="rounded-md border border-line bg-card px-4 py-3 text-sm">{OPERATIONAL_RECORD_NOTICE}</p>
       <p className="text-sm text-slate">{NO_CLIENT_PORTAL_NOTICE}</p>
-      <p className="text-sm text-slate">{CONCURRENT_EDIT_NOTICE}</p>
       {query.error ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{query.error}</p>
       ) : null}

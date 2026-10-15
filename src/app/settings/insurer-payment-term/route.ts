@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { isOfficeRole } from "@/lib/auth/roles";
 import { getRequestStaff } from "@/lib/auth/session";
 import { setInsurerPaymentTerm } from "@/lib/db/insurers";
+import { formVersion, withSectionSave } from "@/lib/db/record-version";
 import { browserOrigin } from "@/lib/http/browser-origin";
+import { clashRedirect } from "@/lib/http/version-clash";
 
 export async function POST(request: Request) {
   const origin = browserOrigin(request);
@@ -12,9 +14,24 @@ export async function POST(request: Request) {
     return NextResponse.redirect(new URL("/settings?error=You%20cannot%20change%20payment%20terms.", origin), 303);
   }
   const form = await request.formData();
+  const submitted = {
+    insurerName: String(form.get("insurerName") || ""),
+    paymentTerm: String(form.get("paymentTerm") || ""),
+  };
   try {
-    setInsurerPaymentTerm(String(form.get("insurerName") || ""), String(form.get("paymentTerm") || ""));
+    withSectionSave({
+      scope: "settings-insurer-term",
+      recordKey: "office",
+      expected: formVersion(form),
+      actorId: staff.id,
+      submitted,
+      labels: { insurerName: "Insurer", paymentTerm: "Payment term" },
+      fields: submitted,
+      write: () => setInsurerPaymentTerm(submitted.insurerName, submitted.paymentTerm),
+    });
   } catch (error) {
+    const refused = clashRedirect(origin, "/settings", error);
+    if (refused) return refused;
     const message = error instanceof Error ? error.message : "The payment term could not be saved.";
     return NextResponse.redirect(new URL(`/settings?error=${encodeURIComponent(message)}`, origin), 303);
   }

@@ -32,6 +32,7 @@ import { generateHirePackDocument, generateStorageRecoveryDocument, getHirePack,
 import { generateHireAgreementDocument, getGtaMarkupPercent, prepareHireRating } from "@/lib/db/hire-agreement";
 import { hireAgreementPrehireBlock } from "@/lib/db/prehire-checks";
 import { normaliseGtaGroup, standardDailyRatePence } from "@/lib/documents/gta";
+import { formLoaded, formVersion, pathWithClash, VersionConflictError, withImmediateTransaction, withSectionSave, writeScreenIfCurrent } from "@/lib/db/record-version";
 import { saveScreenData, valuesFromForm } from "@/lib/db/screens";
 import { syncRecoveryClaimed, syncStorageClaimed } from "@/lib/db/storage-charge";
 import { isoDaysFromNow } from "@/lib/dates";
@@ -97,25 +98,42 @@ export async function actionCompleteTask(formData: FormData) {
   return { ok: true };
 }
 
+const CLAIM_FACT_FIELDS = [
+  "current_position",
+  "circumstances",
+  "accident_location",
+  "cas_liability_assessment",
+  "insurer_liability_position",
+  "roadworthiness_reasons",
+  "next_action",
+  "next_action_due",
+  "handler_id",
+  "own_insurer_name",
+  "own_policy_ref",
+  "own_claim_ref",
+  "own_insurer_address",
+  "own_insurer_postcode",
+] as const;
+
 export async function actionUpdateClaim(formData: FormData) {
   const staff = await requireStaff();
   const id = String(formData.get("claimId"));
-  updateClaimPosition(id, {
-    current_position: String(formData.get("current_position") || ""),
-    circumstances: String(formData.get("circumstances") || ""),
-    accident_location: String(formData.get("accident_location") || ""),
-    cas_liability_assessment: String(formData.get("cas_liability_assessment") || ""),
-    insurer_liability_position: String(formData.get("insurer_liability_position") || ""),
-    roadworthiness_reasons: String(formData.get("roadworthiness_reasons") || ""),
-    next_action: String(formData.get("next_action") || ""),
-    next_action_due: String(formData.get("next_action_due") || ""),
-    handler_id: String(formData.get("handler_id") || ""),
-    own_insurer_name: String(formData.get("own_insurer_name") || ""),
-    own_policy_ref: String(formData.get("own_policy_ref") || ""),
-    own_claim_ref: String(formData.get("own_claim_ref") || ""),
-    own_insurer_address: String(formData.get("own_insurer_address") || ""),
-    own_insurer_postcode: String(formData.get("own_insurer_postcode") || ""),
-  }, staff.id);
+  const submitted: Record<string, string> = {};
+  for (const name of CLAIM_FACT_FIELDS) submitted[name] = String(formData.get(name) || "");
+  try {
+    withSectionSave({
+      scope: "claim-overview",
+      recordKey: id,
+      expected: formVersion(formData),
+      actorId: staff.id,
+      submitted,
+      fields: submitted,
+      write: () => updateClaimPosition(id, submitted, staff.id),
+    });
+  } catch (error) {
+    if (error instanceof VersionConflictError) redirect(pathWithClash(`/claims/${id}`, error));
+    throw error;
+  }
   revalidatePath(`/claims/${id}`);
   revalidatePath("/");
   return { ok: true };
@@ -125,10 +143,35 @@ export async function actionUpdateClaimStatus(formData: FormData) {
   const staff = await requireStaff();
   const id = String(formData.get("claimId"));
   const field = String(formData.get("field") || "");
-  if (field === "liability") {
-    updateClaimWorkflowStatus(id, { liabilityStatus: String(formData.get("liabilityStatus") || "") }, staff.id);
-  } else if (field === "roadworthiness") {
-    updateClaimWorkflowStatus(id, { roadworthiness: String(formData.get("roadworthiness") || "") }, staff.id);
+  const liabilityStatus = String(formData.get("liabilityStatus") || "");
+  const roadworthiness = String(formData.get("roadworthiness") || "");
+  try {
+    withImmediateTransaction(() => {
+      if (field === "liability") {
+        writeScreenIfCurrent({
+          claimId: id,
+          screenKey: "general",
+          expected: formVersion(formData),
+          actorId: staff.id,
+          stored: { typeOfClaim: liabilityStatus },
+          labels: { typeOfClaim: "Liability status" },
+        });
+        updateClaimWorkflowStatus(id, { liabilityStatus }, staff.id);
+      } else if (field === "roadworthiness") {
+        writeScreenIfCurrent({
+          claimId: id,
+          screenKey: "general",
+          expected: formVersion(formData),
+          actorId: staff.id,
+          stored: { roadworthiness },
+          labels: { roadworthiness: "Roadworthiness" },
+        });
+        updateClaimWorkflowStatus(id, { roadworthiness }, staff.id);
+      }
+    });
+  } catch (error) {
+    if (error instanceof VersionConflictError) redirect(pathWithClash(`/claims/${id}`, error));
+    throw error;
   }
   revalidatePath(`/claims/${id}`);
   revalidatePath(`/claims/${id}/work/general`);
@@ -141,10 +184,35 @@ export async function actionUpdateAudatexCodes(formData: FormData) {
   const staff = await requireStaff();
   const id = String(formData.get("claimId"));
   const field = String(formData.get("field") || "");
-  if (field === "network") {
-    updateClaimAudatexCodes(id, { audatexNetworkCode: String(formData.get("audatexNetworkCode") || "") }, staff.id);
-  } else if (field === "provider") {
-    updateClaimAudatexCodes(id, { audatexWorkProviderCode: String(formData.get("audatexWorkProviderCode") || "") }, staff.id);
+  const audatexNetworkCode = String(formData.get("audatexNetworkCode") || "");
+  const audatexWorkProviderCode = String(formData.get("audatexWorkProviderCode") || "");
+  try {
+    withImmediateTransaction(() => {
+      if (field === "network") {
+        writeScreenIfCurrent({
+          claimId: id,
+          screenKey: "insurer",
+          expected: formVersion(formData),
+          actorId: staff.id,
+          stored: { audatexNetworkCode },
+          labels: { audatexNetworkCode: "Audatex network code" },
+        });
+        updateClaimAudatexCodes(id, { audatexNetworkCode }, staff.id);
+      } else if (field === "provider") {
+        writeScreenIfCurrent({
+          claimId: id,
+          screenKey: "insurer",
+          expected: formVersion(formData),
+          actorId: staff.id,
+          stored: { audatexWorkProviderCode },
+          labels: { audatexWorkProviderCode: "Audatex work provider code" },
+        });
+        updateClaimAudatexCodes(id, { audatexWorkProviderCode }, staff.id);
+      }
+    });
+  } catch (error) {
+    if (error instanceof VersionConflictError) redirect(pathWithClash(`/claims/${id}/vehicles`, error));
+    throw error;
   }
   revalidatePath(`/claims/${id}`);
   revalidatePath(`/claims/${id}/vehicles`);
@@ -183,17 +251,26 @@ export async function actionReserveVehicle(formData: FormData) {
 }
 
 export async function actionSaveClaimScreen(formData: FormData) {
-  await requireStaff();
+  const staff = await requireStaff();
   const claimId = String(formData.get("claimId"));
   const screenKey = String(formData.get("screenKey"));
+  const back = screenReturnPath(claimId, screenKey);
   try {
-    saveScreenData(claimId, screenKey, valuesFromForm(formData, screenKey), String(formData.get("actorId") || "staff-sian"));
+    saveScreenData(
+      claimId,
+      screenKey,
+      valuesFromForm(formData, screenKey),
+      staff.id,
+      formVersion(formData),
+      formLoaded(formData),
+    );
     if (screenKey === "recovery") syncRecoveryClaimed(claimId);
     if (screenKey === "storage") syncStorageClaimed(claimId);
   } catch (error) {
+    if (error instanceof VersionConflictError) redirect(pathWithClash(back, error));
     const message = error instanceof Error ? error.message : "Could not save this screen.";
     const field = error instanceof FieldValidationError ? error.field : undefined;
-    redirect(`${screenReturnPath(claimId, screenKey)}${errorQuery(message, field)}`);
+    redirect(`${back}${errorQuery(message, field)}`);
   }
   revalidatePath(`/claims/${claimId}`);
   revalidatePath(`/claims/${claimId}/work/${screenKey}`);
@@ -207,18 +284,20 @@ function screenReturnPath(claimId: string, screenKey: string) {
 }
 
 export async function actionRequestScenePhotosWhatsApp(formData: FormData) {
-  await requireStaff();
+  const staff = await requireStaff();
   const claimId = String(formData.get("claimId"));
   const screenKey = String(formData.get("screenKey") || "accident");
-  const actorId = String(formData.get("actorId") || "staff-sian");
   const values = valuesFromForm(formData, screenKey);
   try {
-    saveScreenData(claimId, screenKey, values, actorId);
+    saveScreenData(claimId, screenKey, values, staff.id, formVersion(formData), formLoaded(formData));
     if (values.photosAtScene !== "yes") {
       throw new Error("Record that photographs were taken at the scene before asking for them by WhatsApp.");
     }
-    await requestScenePhotosWhatsApp(claimId, actorId);
+    await requestScenePhotosWhatsApp(claimId, staff.id);
   } catch (error) {
+    if (error instanceof VersionConflictError) {
+      redirect(pathWithClash(`/claims/${claimId}/work/${screenKey}`, error));
+    }
     const message = error instanceof Error ? error.message : "Could not request the scene photographs.";
     redirect(`/claims/${claimId}/work/${screenKey}${errorQuery(message)}`);
   }
@@ -349,11 +428,20 @@ export async function actionPreviewCorrespondence(formData: FormData) {
 }
 
 export async function actionSetClaimEngineer(formData: FormData) {
-  await requireStaff();
+  const staff = await requireStaff();
   const claimId = String(formData.get("claimId"));
   const engineerId = String(formData.get("engineerId") || "").trim();
   try {
-    setClaimEngineer(claimId, engineerId || null);
+    withSectionSave({
+      scope: "claim-engineer",
+      recordKey: claimId,
+      expected: formVersion(formData),
+      actorId: staff.id,
+      submitted: { engineerId },
+      labels: { engineerId: "Engineer" },
+      fields: { engineerId },
+      write: () => setClaimEngineer(claimId, engineerId || null),
+    });
   } catch (error) {
     return { error: error instanceof Error ? error.message : "Could not save the engineer." };
   }
@@ -511,11 +599,28 @@ function poundsToPence(formData: FormData, name: string) {
 }
 
 export async function actionSaveHirePack(formData: FormData) {
-  await requireStaff();
+  const staff = await requireStaff();
   const claimId = String(formData.get("claimId"));
   const prior = getHirePack(claimId);
   if (!prior) throw new Error("File not found.");
   try {
+    withSectionSave({
+      scope: "hire-pack",
+      recordKey: claimId,
+      expected: formVersion(formData),
+      actorId: staff.id,
+      submitted: {
+        title: String(formData.get("title") || ""),
+        daily_rate: String(formData.get("daily_rate") || ""),
+        group_charged: String(formData.get("group_charged") || ""),
+      },
+      labels: { title: "Title", daily_rate: "Daily rate", group_charged: "Group charged" },
+      fields: {
+        title: String(formData.get("title") || ""),
+        daily_rate: String(formData.get("daily_rate") || ""),
+        group_charged: String(formData.get("group_charged") || ""),
+      },
+      write: () => {
     const rating = prepareHireRating({
       claimId,
       clientGroupRaw: String(formData.get("client_gta_group") || ""),
@@ -592,7 +697,10 @@ export async function actionSaveHirePack(formData: FormData) {
     date_of_birth_confirmed: formData.get("date_of_birth_confirmed") ? "yes" : "",
     additional_dob_confirmed: formData.get("additional_dob_confirmed") ? "yes" : "",
   });
+      },
+    });
   } catch (error) {
+    if (error instanceof VersionConflictError) redirect(pathWithClash(`/claims/${claimId}/hire-pack`, error));
     const message = error instanceof Error ? error.message : "Could not save the hire pack.";
     const field = error instanceof FieldValidationError ? error.field : undefined;
     redirect(`/claims/${claimId}/hire-pack${errorQuery(message, field)}`);

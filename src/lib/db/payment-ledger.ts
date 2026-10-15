@@ -18,6 +18,8 @@ import { chaseRow, pauseChase, syncOutstandingPaymentChases } from "./chase";
 import { accountCanApproveSettlement } from "./permissions";
 import { recordClaimEvent } from "./chronology";
 import { all, get, run } from "./connection";
+import { claimSectionForSave, withImmediateTransaction } from "./record-version";
+import { SAME_OFFER_WINDOW_MS } from "./vehicle-offers";
 import { comparisonForHead, headDisputeStands } from "./payment-review";
 import { recordTotalLossPaymentReceived } from "./total-loss";
 
@@ -126,6 +128,7 @@ export function recordAgreedRepairInvoice(input: {
   agreedPence: number;
   /** Calendar day yyyy-mm-dd. Omitted leaves any date already stored as it is. */
   agreedOn?: string;
+  expectedVersion?: string;
 }) {
   if (!claimRow(input.claimId)) throw new Error("File not found.");
   if (!Number.isInteger(input.agreedPence) || input.agreedPence <= 0) {
@@ -134,35 +137,52 @@ export function recordAgreedRepairInvoice(input: {
   const existing = moneyLine(input.claimId, "repairs");
   const receivedBefore = existing?.received_pence || 0;
   const claimedBefore = existing?.claimed_pence || 0;
-  if (existing) {
-    run(`UPDATE financial_lines SET agreed_pence = ? WHERE id = ?`, [input.agreedPence, existing.id]);
-  } else {
-    run(
-      `INSERT INTO financial_lines(
-        id, claim_id, head_of_loss, description, quantity, unit, rate_pence, net_pence, vat_pence, gross_pence,
-        claimed_pence, offered_pence, agreed_pence, received_pence, offer_status
-      ) VALUES (?, ?, 'repairs', 'Agreed repair invoice', 1, 'job', 0, 0, 0, 0, 0, 0, ?, 0, NULL)`,
-      [`rep-${input.claimId}`, input.claimId, input.agreedPence],
-    );
-  }
-  const after = moneyLine(input.claimId, "repairs");
-  if (!after || Number(after.received_pence) !== receivedBefore || (existing && Number(after.claimed_pence) !== claimedBefore)) {
-    throw new Error("The agreed repair invoice could not be saved without changing claimed or received.");
-  }
-  if (input.agreedOn) {
-    run(`UPDATE financial_lines SET agreed_on = ? WHERE id = ?`, [input.agreedOn, after.id]);
-  }
-  const dated = input.agreedOn ? ` Agreement was reached on ${input.agreedOn.split("-").reverse().join("/")}.` : "";
-  recordClaimEvent({
-    claimId: input.claimId,
-    eventType: "repair_invoice_agreed_recorded",
-    occurredAt: nowUtcIso(),
-    actorId: input.actorId,
-    details: `Staff recorded ${formatGbp(input.agreedPence)} as the agreed repair invoice. Claimed and received were not changed. Storage was not included.${dated}`,
-    source: "staff",
-    channel: "file",
+  const writeRepair = () => {
+    if (sameAgreedWithinMinute(input.claimId, "repairs", input.agreedPence)) return false;
+    if (existing) {
+      run(`UPDATE financial_lines SET agreed_pence = ? WHERE id = ?`, [input.agreedPence, existing.id]);
+    } else {
+      run(
+        `INSERT INTO financial_lines(
+          id, claim_id, head_of_loss, description, quantity, unit, rate_pence, net_pence, vat_pence, gross_pence,
+          claimed_pence, offered_pence, agreed_pence, received_pence, offer_status
+        ) VALUES (?, ?, 'repairs', 'Agreed repair invoice', 1, 'job', 0, 0, 0, 0, 0, 0, ?, 0, NULL)`,
+        [`rep-${input.claimId}`, input.claimId, input.agreedPence],
+      );
+    }
+    const after = moneyLine(input.claimId, "repairs");
+    if (!after || Number(after.received_pence) !== receivedBefore || (existing && Number(after.claimed_pence) !== claimedBefore)) {
+      throw new Error("The agreed repair invoice could not be saved without changing claimed or received.");
+    }
+    if (input.agreedOn) {
+      run(`UPDATE financial_lines SET agreed_on = ? WHERE id = ?`, [input.agreedOn, after.id]);
+    }
+    const dated = input.agreedOn ? ` Agreement was reached on ${input.agreedOn.split("-").reverse().join("/")}.` : "";
+    recordClaimEvent({
+      claimId: input.claimId,
+      eventType: "repair_invoice_agreed_recorded",
+      occurredAt: nowUtcIso(),
+      actorId: input.actorId,
+      details: `Staff recorded ${formatGbp(input.agreedPence)} as the agreed repair invoice. Claimed and received were not changed. Storage was not included.${dated}`,
+      source: "staff",
+      channel: "file",
+    });
+    syncOutstandingPaymentChases([input.claimId]);
+    return true;
+  };
+  withImmediateTransaction(() => {
+    const wrote = writeRepair();
+    if (!wrote || input.expectedVersion === undefined) return;
+    claimSectionForSave({
+      scope: "money",
+      recordKey: `${input.claimId}:repairs`,
+      expected: input.expectedVersion,
+      actorId: input.actorId,
+      submitted: { agreedPence: String(input.agreedPence) },
+      labels: { agreedPence: "Agreed repair invoice" },
+      fields: { agreedPence: String(input.agreedPence) },
+    });
   });
-  syncOutstandingPaymentChases([input.claimId]);
 }
 
 const AGREED_HEAD_FIGURES = ["hire", "recovery", "storage"] as const;
@@ -173,7 +193,13 @@ function isAgreedHeadFigure(head: string): head is AgreedHeadFigure {
 }
 
 /** Staff-entered agreed figure for hire, recovery or storage. Claimed, received and any running chase are left as they are. */
-export function recordAgreedHeadFigure(input: { claimId: string; actorId: string; head: string; agreedPence: number }) {
+export function recordAgreedHeadFigure(input: {
+  claimId: string;
+  actorId: string;
+  head: string;
+  agreedPence: number;
+  expectedVersion?: string;
+}) {
   if (!claimRow(input.claimId)) throw new Error("File not found.");
   if (!isAgreedHeadFigure(input.head)) {
     throw new Error("An agreed figure of this kind is recorded on hire, recovery, or storage.");
@@ -190,6 +216,8 @@ export function recordAgreedHeadFigure(input: { claimId: string; actorId: string
     );
   }
   const label = input.head === "hire" ? "hire" : input.head === "recovery" ? "recovery" : "storage";
+  const writeAgreed = () => {
+  if (sameAgreedWithinMinute(input.claimId, input.head, input.agreedPence)) return false;
   if (existing) {
     run(`UPDATE financial_lines SET agreed_pence = ? WHERE id = ?`, [input.agreedPence, existing.id]);
   } else {
@@ -213,6 +241,22 @@ export function recordAgreedHeadFigure(input: { claimId: string; actorId: string
     details: `head=${input.head} Staff recorded ${formatGbp(input.agreedPence)} as the agreed ${label} figure. Claimed and received were not changed. A chase already running was not paused, resumed, or cancelled.`,
     source: "staff",
     channel: "file",
+  });
+  return true;
+  };
+  const stamp = input.expectedVersion !== undefined;
+  withImmediateTransaction(() => {
+    const wrote = writeAgreed();
+    if (!wrote || !stamp) return;
+    claimSectionForSave({
+      scope: "money",
+      recordKey: `${input.claimId}:${input.head}`,
+      expected: input.expectedVersion || "",
+      actorId: input.actorId,
+      submitted: { agreedPence: String(input.agreedPence) },
+      labels: { agreedPence: `Agreed ${label} figure` },
+      fields: { agreedPence: String(input.agreedPence) },
+    });
   });
 }
 
@@ -333,7 +377,30 @@ export function recordHeadPayment(input: {
     );
     throw new Error("That amount is higher than the outstanding balance on this head. It was not recorded.");
   }
-  const previous = lastLogged(input.claimId, input.head);
+  return withImmediateTransaction(() => {
+  const lockedPrevious = lastLogged(input.claimId, input.head);
+  if (
+    !input.correction &&
+    received >= (lockedPrevious?.amountPence || 0) &&
+    sameEntryWithinMinute(lockedPrevious?.at, lockedPrevious?.amountPence, input.amountPence)
+  ) {
+    const freshNow = comparisonForHead(input.claimId, input.head, {
+      agreedPence: agreed,
+      claimedPence: claimed,
+      receivedPence: received,
+    });
+    return {
+      allocated: true as const,
+      reconciliation: false as const,
+      settledReview: false as const,
+      receivedPence: received,
+      outstandingPence: freshNow.targetPence == null ? 0 : Math.max(0, freshNow.targetPence - received),
+      paused: false,
+      paidInFull: paymentCoversTarget(freshNow.targetPence, received),
+      replacedPrevious: false,
+    };
+  }
+  const previous = lockedPrevious;
   const applied = applyLoggedPayment({
     receivedPence: received,
     amountPence: input.amountPence,
@@ -450,6 +517,30 @@ export function recordHeadPayment(input: {
     paidInFull: paid,
     replacedPrevious: applied.replacedPrevious,
   };
+  });
+}
+
+function sameAgreedWithinMinute(claimId: string, head: string, amountPence: number): boolean {
+  const eventType = head === "repairs" ? "repair_invoice_agreed_recorded" : "head_agreed_recorded";
+  const row = get<{ occurred_at: string; details: string | null }>(
+    `SELECT occurred_at, details FROM claim_events
+     WHERE claim_id = ? AND event_type = ?
+     ORDER BY occurred_at DESC, recorded_at DESC LIMIT 1`,
+    [claimId, eventType],
+  );
+  if (!row) return false;
+  if (head !== "repairs" && !String(row.details || "").includes(`head=${head}`)) return false;
+  const line = moneyLine(claimId, head);
+  if (Number(line?.agreed_pence) !== amountPence) return false;
+  return sameEntryWithinMinute(row.occurred_at, amountPence, amountPence);
+}
+
+function sameEntryWithinMinute(at: string | undefined, existingPence: number | undefined, amountPence: number): boolean {
+  if (!at || existingPence !== amountPence) return false;
+  const recorded = Date.parse(at);
+  if (Number.isNaN(recorded)) return false;
+  const age = Date.now() - recorded;
+  return age >= 0 && age < SAME_OFFER_WINDOW_MS;
 }
 
 export { PAYMENT_CORRECTION_WINDOW_MS };

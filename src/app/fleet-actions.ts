@@ -11,6 +11,8 @@ import {
   updateFleetVehicle,
 } from "@/lib/db/fleet";
 import { errorQuery } from "@/lib/form-validation";
+import { formVersion, withSectionSave } from "@/lib/db/record-version";
+import { redirectClash } from "@/lib/http/version-clash";
 
 function bounce(path: string, error?: string) {
   redirect(error ? `${path}${errorQuery(error)}` : `${path}?saved=1`);
@@ -71,7 +73,24 @@ export async function actionUpdateFleetVehicle(formData: FormData) {
   const staff = await requireStaff();
   const id = String(formData.get("fleetVehicleId") || "");
   try {
-    updateFleetVehicle(id, fieldsFromForm(formData));
+    withSectionSave({
+      scope: "fleet",
+      recordKey: id,
+      expected: formVersion(formData),
+      actorId: staff.id,
+      submitted: {
+        registration: String(formData.get("registration") || ""),
+        make: String(formData.get("make") || ""),
+        model: String(formData.get("model") || ""),
+      },
+      labels: { registration: "Registration", make: "Make", model: "Model" },
+      fields: {
+        registration: String(formData.get("registration") || ""),
+        make: String(formData.get("make") || ""),
+        model: String(formData.get("model") || ""),
+      },
+      write: () => updateFleetVehicle(id, fieldsFromForm(formData)),
+    });
     const vehicle = getFleetVehicle(id);
     const v5c = await v5cFromForm(formData);
     if (vehicle && v5c) {
@@ -84,6 +103,7 @@ export async function actionUpdateFleetVehicle(formData: FormData) {
       });
     }
   } catch (error) {
+    redirectClash(`/hire/${id}`, error);
     bounce(`/hire/${id}`, error instanceof Error ? error.message : "Could not save the vehicle.");
   }
   revalidatePath("/hire");

@@ -6,20 +6,23 @@ import {
   actionSetStaffRole,
 } from "@/app/staff-actions";
 import { PageHeader } from "@/components/ClaimTable";
+import { RecordVersionField, SaveClashNotice } from "@/components/SaveClashNotice";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { requireAdministrator } from "@/lib/auth/session";
 import { ADMINISTRATOR_ROLE, DRIVER_ROLE, MECHANIC_ROLE, STAFF_ROLE, roleLabel } from "@/lib/auth/roles";
 import { listAllStaff } from "@/lib/db/staff-admin";
+import { loadClash, sectionVersion } from "@/lib/db/record-version";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
 export default async function StaffAdminPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; clash?: string }>;
 }) {
   await requireAdministrator();
-  const { error, saved } = await searchParams;
+  const { error, saved, clash } = await searchParams;
+  const staffClash = loadClash(clash);
   const staff = listAllStaff();
 
   return (
@@ -34,6 +37,7 @@ export default async function StaffAdminPage({
         }
       />
 
+      <SaveClashNotice clash={staffClash?.scope === "staff" ? staffClash : null} reloadHref="/settings/staff" />
       {error ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
       ) : null}
@@ -90,6 +94,9 @@ export default async function StaffAdminPage({
             <div className="mt-4 grid gap-4 lg:grid-cols-3">
               <form action={actionSetStaffRole} className="space-y-2">
                 <input type="hidden" name="staffId" value={person.id} />
+                <RecordVersionField
+                  version={staffClash?.recordKey === person.id ? staffClash.expectedVersion : sectionVersion("staff", person.id)}
+                />
                 <label className="block text-sm">
                   Role
                   <select name="role" className={field} defaultValue={person.role}>
@@ -105,6 +112,7 @@ export default async function StaffAdminPage({
               </form>
               <ValidatedForm action={actionResetStaffPassword} className="space-y-2">
                 <input type="hidden" name="staffId" value={person.id} />
+                <RecordVersionField version={sectionVersion("staff", person.id)} />
                 <label className="block text-sm">
                   Reset password
                   <input name="password" type="password" required minLength={8} className={field} autoComplete="new-password" />
@@ -115,6 +123,7 @@ export default async function StaffAdminPage({
               </ValidatedForm>
               <form action={actionSetStaffActive} className="space-y-2">
                 <input type="hidden" name="staffId" value={person.id} />
+                <RecordVersionField version={sectionVersion("staff", person.id)} />
                 <input type="hidden" name="active" value={person.active ? "0" : "1"} />
                 <p className="text-sm text-slate">
                   {person.active

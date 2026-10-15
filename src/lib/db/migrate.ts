@@ -90,6 +90,7 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["engineer_id", "TEXT"],
     ["hire_agreement_number", "TEXT"],
   ],
+  claim_screen_data: [["updated_by", "TEXT"]],
   claim_third_parties: [
     ["sequence", "INTEGER NOT NULL DEFAULT 1"],
     ["insurer_address", "TEXT"],
@@ -475,6 +476,19 @@ export function migrate(db: DatabaseSync) {
     db.exec(`ALTER TABLE documents ADD COLUMN replaces_document_id TEXT`);
   }
   db.exec(`
+    CREATE TABLE IF NOT EXISTS record_versions (
+      scope TEXT NOT NULL,
+      record_key TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      updated_by TEXT NOT NULL,
+      fields_json TEXT NOT NULL DEFAULT '{}',
+      PRIMARY KEY (scope, record_key)
+    );
+    CREATE TABLE IF NOT EXISTS save_clashes (
+      id TEXT PRIMARY KEY,
+      payload_json TEXT NOT NULL,
+      created_at TEXT NOT NULL
+    );
     CREATE INDEX IF NOT EXISTS idx_documents_claim ON documents(claim_id);
     CREATE INDEX IF NOT EXISTS idx_documents_fleet ON documents(fleet_vehicle_id);
     CREATE INDEX IF NOT EXISTS idx_documents_type ON documents(document_type);

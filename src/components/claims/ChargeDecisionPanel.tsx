@@ -15,11 +15,13 @@ export function ChargeDecisionPanel({
   head,
   decision,
   canApproveSettlement,
+  recordVersion = "",
 }: {
   claimId: string;
   head: "hire" | "storage" | "recovery";
   decision: ChargeDecision;
   canApproveSettlement: boolean;
+  recordVersion?: string;
 }) {
   const action = `/claims/${claimId}/charge-decision`;
   return (
@@ -40,6 +42,7 @@ export function ChargeDecisionPanel({
       )}
       <form method="post" action={action} className="grid gap-3 sm:grid-cols-2">
         <input type="hidden" name="head" value={head} />
+        <input type="hidden" name="recordVersion" value={recordVersion} />
         <input type="hidden" name="intent" value={canApproveSettlement ? "accept" : "propose"} />
         <label className="block text-sm">
           Agreed figure (£)
@@ -58,6 +61,7 @@ export function ChargeDecisionPanel({
       </form>
       <form method="post" action={action} className="grid gap-3 sm:grid-cols-2">
         <input type="hidden" name="head" value={head} />
+        <input type="hidden" name="recordVersion" value={recordVersion} />
         <input type="hidden" name="intent" value="dispute" />
         <label className="block text-sm">
           Dispute reason

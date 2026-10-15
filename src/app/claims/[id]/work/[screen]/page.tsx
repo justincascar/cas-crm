@@ -15,6 +15,8 @@ import { findPreparedChase, listChasesForClaim } from "@/lib/db/chase";
 import { listHireAgreements } from "@/lib/db/chronology";
 import { impecuniosityGate } from "@/lib/db/impecuniosity";
 import { getScreenData, seedScreenDefaults } from "@/lib/db/screens";
+import { loadClash, screenVersion, sectionVersion } from "@/lib/db/record-version";
+import { SaveClashNotice } from "@/components/SaveClashNotice";
 import { HireEndDateReview } from "@/components/claims/HireEndDateReview";
 import { TotalLossPanel } from "@/components/claims/TotalLossPanel";
 import { StorageDateReview } from "@/components/claims/StorageDateReview";
@@ -34,17 +36,24 @@ export default async function ClaimWorkScreenPage({
   searchParams,
 }: {
   params: Promise<{ id: string; screen: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; field?: string; whatsapp?: string; tlError?: string; tlMail?: string; mailboxError?: string; mailboxSent?: string; mailboxSimulated?: string; mailboxReport?: string; stepError?: string; stepSaved?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; field?: string; whatsapp?: string; clash?: string; tlError?: string; tlMail?: string; mailboxError?: string; mailboxSent?: string; mailboxSimulated?: string; mailboxReport?: string; stepError?: string; stepSaved?: string }>;
 }) {
   const { id, screen } = await params;
   if (screen === "storage" || screen === "recovery") redirect(headScreenPath(id, screen));
   await requireStaff();
-  const { saved, error, field, whatsapp, tlError, tlMail, mailboxError, mailboxSent, mailboxSimulated, mailboxReport, stepError, stepSaved } = await searchParams;
+  const { saved, error, field, whatsapp, clash, tlError, tlMail, mailboxError, mailboxSent, mailboxSimulated, mailboxReport, stepError, stepSaved } = await searchParams;
   const def = getClaimScreen(screen);
   if (!def) notFound();
   const data = getClaim(id);
   if (!data) notFound();
-  const values = seedScreenDefaults(String(data.claim.id), screen);
+  const loadedValues = seedScreenDefaults(String(data.claim.id), screen);
+  const screenClash = loadClash(clash);
+  const clashForScreen =
+    screenClash && screenClash.scope === "screen" && screenClash.recordKey === `${data.claim.id}:${screen}`
+      ? screenClash
+      : null;
+  const values = clashForScreen ? { ...loadedValues, ...clashForScreen.submitted } : loadedValues;
+  const recordVersion = clashForScreen ? clashForScreen.expectedVersion : screenVersion(String(data.claim.id), screen);
   const actorId = String(data.claim.handler_id || "staff-sian");
   const justSaved = saved === "1";
   const preparedRow = findPreparedEngineerInstruction(String(data.claim.id));
@@ -83,6 +92,7 @@ export default async function ClaimWorkScreenPage({
       {error ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
       ) : null}
+      <SaveClashNotice clash={clashForScreen} reloadHref={`/claims/${data.claim.id}/work/${screen}`} />
       <EmailSendModeBanner />
       <MailboxSendNotice sent={mailboxSent} simulated={mailboxSimulated} error={mailboxError} reportNotice={mailboxReport} />
       {screen === "storage" || screen === "recovery" ? (
@@ -184,6 +194,11 @@ export default async function ClaimWorkScreenPage({
           preparedByKind={preparedByKind}
           mailboxConnected={liveEmailSending()}
           impecuniosityBlockReason={impecuniosityGate(String(data.claim.id)).generationBlock}
+          engineerVersion={sectionVersion("claim-engineer", String(data.claim.id))}
+          repairVersion={sectionVersion("money", `${data.claim.id}:repairs`)}
+          overrideVersions={Object.fromEntries(
+            chases.map((chase) => [chase.kind, sectionVersion("chase-override", `${data.claim.id}:${chase.kind}`)]),
+          )}
         />
       ) : null}
 
@@ -238,6 +253,7 @@ export default async function ClaimWorkScreenPage({
           agents={listKnownAgents()}
           error={error}
           errorField={field}
+          recordVersion={recordVersion}
         />
       ) : null}
     </div>

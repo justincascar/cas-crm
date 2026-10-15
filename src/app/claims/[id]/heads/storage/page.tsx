@@ -26,6 +26,8 @@ import { figureFlag, refreshFollowedFigure } from "@/lib/db/figure-resolution";
 import { accountCanAcceptPaymentSettlement, accountCanApproveSettlement } from "@/lib/db/permissions";
 import { getClaim } from "@/lib/db/queries";
 import { getScreenData } from "@/lib/db/screens";
+import { loadClash, screenVersion, sectionVersion } from "@/lib/db/record-version";
+import { RecordVersionField, SaveClashNotice } from "@/components/SaveClashNotice";
 import { claimStorageChargeEnded, storageAuthorisationEndForClaim } from "@/lib/db/storage-authorisation-end";
 import {
   effectiveStorageRatePence,
@@ -54,7 +56,7 @@ export default async function StorageHeadPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; figureError?: string; offerError?: string; decisionError?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; clash?: string; figureError?: string; offerError?: string; decisionError?: string }>;
 }) {
   const staff = await requireStaff();
   const { id } = await params;
@@ -79,6 +81,15 @@ export default async function StorageHeadPage({
   const flag = figureFlag(id, "storage", section.claimedPence, calculated);
   const provisional = !endDay && section.claimedPence > 0;
   const returnTo = headScreenPath(id, "storage");
+  const screenClash = loadClash(query.clash);
+  const detailsClash =
+    screenClash && screenClash.scope === "screen" && screenClash.recordKey === `${id}:storage` ? screenClash : null;
+  const rateClash =
+    screenClash && screenClash.scope === "storage-rate" && screenClash.recordKey === id ? screenClash : null;
+  const storageVersion = detailsClash ? detailsClash.expectedVersion : screenVersion(id, "storage");
+  const rateVersion = rateClash ? rateClash.expectedVersion : sectionVersion("storage-rate", id);
+  const entered = (name: string, current: string) =>
+    detailsClash && Object.prototype.hasOwnProperty.call(detailsClash.submitted, name) ? detailsClash.submitted[name] : current;
 
   return (
     <div className="space-y-6">
@@ -105,9 +116,16 @@ export default async function StorageHeadPage({
       <section className="space-y-4 rounded-xl border border-line bg-card p-5" aria-label="Storage details">
         <h2 className="font-serif text-xl text-navy-deep">Storage details</h2>
         <p className="text-sm text-slate">
-          This is where the vehicle is, and the dates storage is charged. Saving these boxes does not change a payment. Two people saving at
-          the same time: the later save is kept.
+          This is where the vehicle is, and the dates storage is charged. Saving these boxes does not change a payment.
         </p>
+        <SaveClashNotice
+          clash={
+            screenClash && (screenClash.recordKey === id || screenClash.recordKey.startsWith(`${id}:`))
+              ? screenClash
+              : null
+          }
+          reloadHref={returnTo}
+        />
         <StorageDateReview claimId={id} review={getStorageDateReview(id)} returnTo={returnTo} />
         {startDay ? (
           <StorageEndDateReview claimId={id} review={getStorageEndDateReview(id)} returnTo={returnTo} />
@@ -149,43 +167,59 @@ export default async function StorageHeadPage({
           the confirmed end has passed.
         </p>
         <form method="post" action={`/claims/${id}/storage-details`} className="grid gap-3 sm:grid-cols-2">
+          <RecordVersionField version={storageVersion} />
+          <input
+            type="hidden"
+            name="loadedJson"
+            value={JSON.stringify({
+              name: location.name,
+              address: location.address,
+              postcode: location.postcode,
+              telMain: location.telMain,
+              email: location.email,
+              ref: saved.ref || "",
+              invoiceNo: saved.invoiceNo || "",
+              startDate: startDay,
+              endDate: endDay,
+            })}
+          />
           <label className="text-sm">
             Name
-            <input name="name" defaultValue={location.name} className={field} />
+            <input name="name" defaultValue={entered("name", location.name)} className={field} />
           </label>
           <label className="text-sm sm:col-span-2">
             Address
-            <textarea name="address" defaultValue={location.address} rows={2} className={field} />
+            <textarea name="address" defaultValue={entered("address", location.address)} rows={2} className={field} />
           </label>
           <label className="text-sm">
             Postcode
-            <input name="postcode" defaultValue={location.postcode} className={field} />
+            <input name="postcode" defaultValue={entered("postcode", location.postcode)} className={field} />
           </label>
           <label className="text-sm">
             Tel
-            <input name="telMain" defaultValue={location.telMain} className={field} />
+            <input name="telMain" defaultValue={entered("telMain", location.telMain)} className={field} />
           </label>
           <label className="text-sm">
             Email
-            <input name="email" defaultValue={location.email} className={field} />
+            <input name="email" defaultValue={entered("email", location.email)} className={field} />
           </label>
           <label className="text-sm">
             Ref
-            <input name="ref" defaultValue={saved.ref || ""} className={field} />
+            <input name="ref" defaultValue={entered("ref", saved.ref || "")} className={field} />
           </label>
           <label className="text-sm">
             Invoice no.
-            <input name="invoiceNo" defaultValue={saved.invoiceNo || ""} className={field} />
+            <input name="invoiceNo" defaultValue={entered("invoiceNo", saved.invoiceNo || "")} className={field} />
           </label>
           <label className="text-sm">
             Start date
-            <input name="startDate" type="date" defaultValue={startDay} className={field} />
+            <input name="startDate" type="date" defaultValue={entered("startDate", startDay)} className={field} />
           </label>
           {startDay ? (
             <>
               <label className="text-sm">
                 Chargeable end date
-                <input name="endDate" type="date" defaultValue={endDay} className={field} />
+                <input name="endDate" type="date" defaultValue={entered("endDate", endDay)} className={field} />
               </label>
               <label className="text-sm sm:col-span-2">
                 Reason, if this end date is not the proposed storage end
@@ -246,11 +280,13 @@ export default async function StorageHeadPage({
           keptLabel={flag.mode === "kept" ? flag.label : null}
           storedPence={section.claimedPence}
           calculatedPence={calculated}
+          recordVersion={sectionVersion("figure", `${id}:storage`)}
         />
         <form method="post" action={`/claims/${id}/storage-rate`} className="grid gap-3 sm:grid-cols-2">
+          <RecordVersionField version={rateVersion} />
           <label className="text-sm">
             Daily rate on this file (£)
-            <input name="dailyRate" inputMode="decimal" required defaultValue={(rate.pence / 100).toFixed(2)} className={field} />
+            <input name="dailyRate" inputMode="decimal" required defaultValue={rateClash ? rateClash.submitted.dailyRate || "" : (rate.pence / 100).toFixed(2)} className={field} />
           </label>
           <label className="text-sm sm:col-span-2">
             Reason for changing the rate on this file
@@ -270,7 +306,7 @@ export default async function StorageHeadPage({
         canAccept={accountCanAcceptPaymentSettlement(staff.id, staff.role)}
         actions={
           <>
-            <HeadAgreedForm claimId={id} head="storage" />
+            <HeadAgreedForm claimId={id} head="storage" recordVersion={sectionVersion("money", `${id}:storage`)} />
             <div className="mt-4">
               <PaymentReviewPanel
                 claimId={id}
@@ -291,6 +327,7 @@ export default async function StorageHeadPage({
         head="storage"
         decision={latestChargeDecision(id, "storage")}
         canApproveSettlement={accountCanApproveSettlement(staff.id, staff.role)}
+        recordVersion={sectionVersion("money", `${id}:storage`)}
       />
       <ChargeOffers
         claimId={id}

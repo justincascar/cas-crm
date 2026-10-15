@@ -512,7 +512,23 @@ CREATE TABLE IF NOT EXISTS claim_screen_data (
   screen_key TEXT NOT NULL,
   data_json TEXT NOT NULL,
   updated_at TEXT NOT NULL,
+  updated_by TEXT,
   PRIMARY KEY (claim_id, screen_key)
+);
+
+CREATE TABLE IF NOT EXISTS record_versions (
+  scope TEXT NOT NULL,
+  record_key TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  updated_by TEXT NOT NULL,
+  fields_json TEXT NOT NULL DEFAULT '{}',
+  PRIMARY KEY (scope, record_key)
+);
+
+CREATE TABLE IF NOT EXISTS save_clashes (
+  id TEXT PRIMARY KEY,
+  payload_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS known_insurers (

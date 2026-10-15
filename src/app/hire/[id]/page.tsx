@@ -3,10 +3,12 @@ import { notFound } from "next/navigation";
 import { actionRemoveFleetVehicle, actionUpdateFleetVehicle } from "@/app/fleet-actions";
 import { PageHeader } from "@/components/ClaimTable";
 import { FleetVehicleFields } from "@/components/FleetVehicleFields";
+import { RecordVersionField, SaveClashNotice } from "@/components/SaveClashNotice";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { requireStaff } from "@/lib/auth/session";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import { getFleetVehicle, listBlockingReservations, listFleetVehicleDocuments } from "@/lib/db/fleet";
+import { loadClash, sectionVersion } from "@/lib/db/record-version";
 import { vehicleClassLabel } from "@/lib/fleet/classes";
 import { formatVehicleRegistration } from "@/lib/text";
 
@@ -15,9 +17,10 @@ export default async function FleetVehiclePage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; clash?: string }>;
 }) {
   await requireStaff();
+  const fleetClash = loadClash((await searchParams).clash);
   const { id } = await params;
   const { error, saved } = await searchParams;
   const vehicle = getFleetVehicle(id);
@@ -80,8 +83,10 @@ export default async function FleetVehiclePage({
           First registered {vehicle.first_registered_on ? formatUkDate(String(vehicle.first_registered_on)) : "not on file"}.
           Gearbox and seating are staff-editable and were not taken from the V5C.
         </p>
+        <SaveClashNotice clash={fleetClash?.scope === "fleet" ? fleetClash : null} reloadHref={`/hire/${id}`} />
         <ValidatedForm action={actionUpdateFleetVehicle} encType="multipart/form-data" className="mt-4 space-y-4">
           <input type="hidden" name="fleetVehicleId" value={id} />
+          <RecordVersionField version={fleetClash?.scope === "fleet" ? fleetClash.expectedVersion : sectionVersion("fleet", id)} />
           <FleetVehicleFields values={vehicle} />
           <button type="submit" className="rounded-md bg-teal px-4 py-2 text-sm font-semibold text-white">
             Save details

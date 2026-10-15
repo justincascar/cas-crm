@@ -20,6 +20,7 @@ import {
 import { chaseDefinition, isChaseKind, type ChaseKind } from "@/lib/domain/chase";
 import { optionalPoundsToPence } from "@/lib/domain/total-loss";
 import { recordAgreedHeadFigure, recordAgreedRepairInvoice, recordHeadPayment, recordUnreferencedPayment } from "@/lib/db/payment-ledger";
+import { formVersion, VersionConflictError, withSectionSave } from "@/lib/db/record-version";
 import { acceptPaymentAsFinal, disputePaymentSettlement } from "@/lib/db/payment-review";
 
 function refreshClaim(claimId: string) {
@@ -189,7 +190,12 @@ export async function actionRecordAgreedRepair(formData: FormData) {
   const staff = await requireStaff();
   const claimId = String(formData.get("claimId"));
   try {
-    recordAgreedRepairInvoice({ claimId, actorId: staff.id, agreedPence: poundsFrom(formData, "agreed") });
+    recordAgreedRepairInvoice({
+      claimId,
+      actorId: staff.id,
+      agreedPence: poundsFrom(formData, "agreed"),
+      expectedVersion: formVersion(formData),
+    });
     refreshClaim(claimId);
     return { ok: true as const };
   } catch (error) {
@@ -206,6 +212,7 @@ export async function actionRecordAgreedHead(formData: FormData) {
       actorId: staff.id,
       head: String(formData.get("head") || ""),
       agreedPence: poundsFrom(formData, "agreed"),
+      expectedVersion: formVersion(formData),
     });
     refreshClaim(claimId);
     return { ok: true as const };
@@ -296,7 +303,18 @@ export async function actionSaveChaseOverride(formData: FormData) {
   try {
     const kind = kindFromForm(formData);
     const def = chaseDefinition(kind);
-    setChaseIntervalOverride(kind, claimId, String(formData.get("overrideDays") || ""), String(formData.get("overrideReason") || ""));
+    const days = String(formData.get("overrideDays") || "");
+    const reason = String(formData.get("overrideReason") || "");
+    withSectionSave({
+      scope: "chase-override",
+      recordKey: `${claimId}:${kind}`,
+      expected: formVersion(formData),
+      actorId: staff.id,
+      submitted: { overrideDays: days, overrideReason: reason },
+      labels: { overrideDays: "Chase interval on this file", overrideReason: "Reason" },
+      fields: { overrideDays: days, overrideReason: reason },
+      write: () => setChaseIntervalOverride(kind, claimId, days, reason),
+    });
     recordClaimEvent({
       claimId,
       eventType: "other",
@@ -319,7 +337,16 @@ export async function actionClearChaseOverride(formData: FormData) {
   try {
     const kind = kindFromForm(formData);
     const def = chaseDefinition(kind);
-    clearChaseIntervalOverride(kind, claimId);
+    withSectionSave({
+      scope: "chase-override",
+      recordKey: `${claimId}:${kind}`,
+      expected: formVersion(formData),
+      actorId: staff.id,
+      submitted: { overrideDays: "" },
+      labels: { overrideDays: "Chase interval on this file" },
+      fields: { overrideDays: "" },
+      write: () => clearChaseIntervalOverride(kind, claimId),
+    });
     recordClaimEvent({
       claimId,
       eventType: "other",

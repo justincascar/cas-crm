@@ -92,6 +92,7 @@ export function acceptChargeFigure(input: {
   role: string | null | undefined;
   head: ChargeHead;
   agreedPence: number;
+  expectedVersion?: string;
 }) {
   assertOffice(input.role);
   const before = money(input.claimId, input.head);
@@ -109,6 +110,7 @@ export function acceptChargeFigure(input: {
     actorId: input.actorId,
     head: input.head,
     agreedPence: input.agreedPence,
+    expectedVersion: input.expectedVersion,
   });
   insertDecision({
     claimId: input.claimId,

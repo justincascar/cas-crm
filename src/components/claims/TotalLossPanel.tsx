@@ -1,8 +1,10 @@
 import { SendPreparedEmailForm } from "@/components/claims/SendPreparedEmailForm";
+import { RecordVersionField } from "@/components/SaveClashNotice";
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
 import { liveEmailSending } from "@/lib/email/send-mode";
 import { SIMULATED_EMAIL_BANNER } from "@/lib/email/send-mode-copy";
 import { formatUkDate, formatUkDateTime, nowUtcIso } from "@/lib/dates";
+import { sectionVersion } from "@/lib/db/record-version";
 import { buildMailtoHref } from "@/lib/email/mailto";
 import { getPreparedFollowUpEmail, listFollowUpChases, totalLossPaymentChaseTemplateKey } from "@/lib/db/follow-up-chases";
 import { TOTAL_LOSS_PAYMENT_CHASE_KIND } from "@/lib/domain/follow-up-chases";
@@ -86,6 +88,7 @@ export function TotalLossPanel({
 
       <form method="post" action={`/claims/${claimId}/total-loss`} className="mt-4 space-y-4">
         <input type="hidden" name="returnTo" value={returnTo} />
+        <RecordVersionField version={sectionVersion("total-loss", claimId)} />
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm">
             Pre-accident value (£)

@@ -2,7 +2,9 @@ import { NextResponse } from "next/server";
 import { isOfficeRole } from "@/lib/auth/roles";
 import { getRequestStaff } from "@/lib/auth/session";
 import { keepStoredFigure, useCalculatedFigure, type FigureHead } from "@/lib/db/figure-resolution";
+import { formVersion, withSectionSave } from "@/lib/db/record-version";
 import { browserOrigin } from "@/lib/http/browser-origin";
+import { clashRedirect } from "@/lib/http/version-clash";
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
@@ -19,15 +21,29 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   }
   try {
     const intent = String(form.get("intent") || "");
-    if (intent === "use_calculated") {
-      useCalculatedFigure({ claimId: id, actorId: staff.id, role: staff.role, head });
-    } else if (intent === "keep_stored") {
-      keepStoredFigure({ claimId: id, actorId: staff.id, role: staff.role, head, reason: String(form.get("reason") || "") });
-    } else {
-      throw new Error("That action is not available on this screen.");
-    }
+    const submitted = { intent, reason: String(form.get("reason") || "") };
+    withSectionSave({
+      scope: "figure",
+      recordKey: `${id}:${head}`,
+      expected: formVersion(form),
+      actorId: staff.id,
+      submitted,
+      labels: { reason: "Reason for keeping the stored figure", intent: "Figure choice" },
+      fields: submitted,
+      write: () => {
+        if (intent === "use_calculated") {
+          useCalculatedFigure({ claimId: id, actorId: staff.id, role: staff.role, head });
+        } else if (intent === "keep_stored") {
+          keepStoredFigure({ claimId: id, actorId: staff.id, role: staff.role, head, reason: submitted.reason });
+        } else {
+          throw new Error("That action is not available on this screen.");
+        }
+      },
+    });
     return NextResponse.redirect(backTo, 303);
   } catch (error) {
+    const refused = clashRedirect(origin, `/claims/${id}/heads/${head}`, error);
+    if (refused) return refused;
     backTo.searchParams.set("figureError", error instanceof Error ? error.message : "The figure could not be saved.");
     return NextResponse.redirect(backTo, 303);
   }

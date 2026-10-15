@@ -22,6 +22,8 @@ import { seedScreenDefaults } from "@/lib/db/screens";
 import { recoveryCarrierName, recoveryClaimForClaim, recoveryJobForClaim, syncRecoveryClaimed } from "@/lib/db/storage-charge";
 import { getDefaultVehicleLocation } from "@/lib/db/vehicle-location";
 import { getScreenData } from "@/lib/db/screens";
+import { loadClash, screenVersion, sectionVersion } from "@/lib/db/record-version";
+import { SaveClashNotice } from "@/components/SaveClashNotice";
 import { agreedOnFor, listChargeOffers } from "@/lib/db/vehicle-offers";
 
 function shownDay(value: string | null | undefined) {
@@ -39,7 +41,7 @@ export default async function RecoveryHeadPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; field?: string; figureError?: string; offerError?: string; decisionError?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; field?: string; clash?: string; figureError?: string; offerError?: string; decisionError?: string }>;
 }) {
   const staff = await requireStaff();
   const { id } = await params;
@@ -60,7 +62,12 @@ export default async function RecoveryHeadPage({
   const section = loadHeadSection(id, "recovery");
   const calculated = decision.totalPence > 0 ? decision.totalPence : null;
   const flag = figureFlag(id, "recovery", section.claimedPence, calculated);
-  const values = seedScreenDefaults(id, "recovery");
+  const loadedValues = seedScreenDefaults(id, "recovery");
+  const screenClash = loadClash(query.clash);
+  const clashForScreen =
+    screenClash && screenClash.scope === "screen" && screenClash.recordKey === `${id}:recovery` ? screenClash : null;
+  const values = clashForScreen ? { ...loadedValues, ...clashForScreen.submitted } : loadedValues;
+  const recordVersion = clashForScreen ? clashForScreen.expectedVersion : screenVersion(id, "recovery");
   const chargeNote =
     decision.source === "screen"
       ? "This claimed figure is the total already calculated on the recovery screen: the standard charge, any extras and the card fee, plus VAT. It is not a second £395 on top."
@@ -128,6 +135,15 @@ export default async function RecoveryHeadPage({
           keptLabel={flag.mode === "kept" ? flag.label : null}
           storedPence={section.claimedPence}
           calculatedPence={calculated}
+          recordVersion={sectionVersion("figure", `${id}:recovery`)}
+        />
+        <SaveClashNotice
+          clash={
+            screenClash && (screenClash.recordKey === id || screenClash.recordKey.startsWith(`${id}:`))
+              ? screenClash
+              : null
+          }
+          reloadHref={`/claims/${id}/heads/recovery`}
         />
         <ScreenForm
           claimId={id}
@@ -140,6 +156,7 @@ export default async function RecoveryHeadPage({
           agents={listKnownAgents()}
           error={query.error}
           errorField={query.field}
+          recordVersion={recordVersion}
         />
       </section>
 
@@ -149,7 +166,7 @@ export default async function RecoveryHeadPage({
         canAccept={accountCanAcceptPaymentSettlement(staff.id, staff.role)}
         actions={
           <>
-            <HeadAgreedForm claimId={id} head="recovery" />
+            <HeadAgreedForm claimId={id} head="recovery" recordVersion={sectionVersion("money", `${id}:recovery`)} />
             <div className="mt-4">
               <PaymentReviewPanel
                 claimId={id}
@@ -170,6 +187,7 @@ export default async function RecoveryHeadPage({
         head="recovery"
         decision={latestChargeDecision(id, "recovery")}
         canApproveSettlement={accountCanApproveSettlement(staff.id, staff.role)}
+        recordVersion={sectionVersion("money", `${id}:recovery`)}
       />
       <ChargeOffers
         claimId={id}

@@ -1,4 +1,6 @@
+import { RecordVersionField } from "@/components/SaveClashNotice";
 import { formatUkDate } from "@/lib/dates";
+import { sectionVersion } from "@/lib/db/record-version";
 import type { StorageEndDateReview as Review } from "@/lib/db/storage-recovery-date";
 
 function shown(value: string | null) {
@@ -13,6 +15,7 @@ function shown(value: string | null) {
 export function StorageEndDateReview({ claimId, review, returnTo }: { claimId: string; review: Review | null; returnTo: string }) {
   if (!review) return null;
   const job = shown(review.jobDate);
+  const version = sectionVersion("storage-end-date", claimId);
   const kept = shown(review.storageEndDay);
   return (
     <div className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm">
@@ -24,6 +27,7 @@ export function StorageEndDateReview({ claimId, review, returnTo }: { claimId: s
       </p>
       <div className="mt-3 flex flex-col gap-2 sm:flex-row">
         <form method="post" action={`/claims/${claimId}/storage-end-date`}>
+          <RecordVersionField version={version} />
           <input type="hidden" name="choice" value="job" />
           <input type="hidden" name="returnTo" value={returnTo} />
           <button className="min-h-11 w-full rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white" type="submit">
@@ -31,6 +35,7 @@ export function StorageEndDateReview({ claimId, review, returnTo }: { claimId: s
           </button>
         </form>
         <form method="post" action={`/claims/${claimId}/storage-end-date`}>
+          <RecordVersionField version={version} />
           <input type="hidden" name="choice" value="file" />
           <input type="hidden" name="returnTo" value={returnTo} />
           <button className="min-h-11 w-full rounded-md border border-line bg-white px-3 py-2 text-sm font-semibold" type="submit">

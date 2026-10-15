@@ -76,8 +76,6 @@ export type OfferPosition = (typeof OFFER_POSITIONS)[number];
 export const OPERATIONAL_RECORD_NOTICE =
   "This records what the client or a handler has provided. It is not legal advice. A complete checklist does not mean the hire charges will be recovered.";
 
-export const CONCURRENT_EDIT_NOTICE =
-  "If two people save this section at the same time, the later save is kept. The CRM does not yet warn that someone else changed it. Earlier dated entries stay.";
 
 export const NO_CLIENT_PORTAL_NOTICE =
   "There is no client form for this yet. Staff enter what the client tells them. A client sending this in themselves is a later stage.";

@@ -33,6 +33,7 @@ export function InstructEngineerPanel({
   prepared,
   mailboxConnected = false,
   returnTo,
+  engineerVersion = "",
 }: {
   claimId: string;
   engineers: Engineer[];
@@ -40,6 +41,7 @@ export function InstructEngineerPanel({
   prepared: PreparedInstruction | null;
   mailboxConnected?: boolean;
   returnTo?: string;
+  engineerVersion?: string;
 }) {
   const router = useRouter();
   const sendBack = returnTo || `/claims/${claimId}/work/comms`;
@@ -61,6 +63,7 @@ export function InstructEngineerPanel({
     const form = new FormData();
     form.set("claimId", claimId);
     form.set("engineerId", id);
+    form.set("recordVersion", engineerVersion);
     const result = await actionSetClaimEngineer(form);
     if (result.error) setMessage(result.error);
   }

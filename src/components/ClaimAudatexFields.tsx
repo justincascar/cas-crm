@@ -25,6 +25,7 @@ export function ClaimAudatexFields({
   workProviderCode,
   suggestedNetwork,
   suggestedWorkProvider,
+  recordVersion = "",
 }: {
   claimId: string;
   insurerName: string;
@@ -32,6 +33,7 @@ export function ClaimAudatexFields({
   workProviderCode: string | null | undefined;
   suggestedNetwork: AudatexCodeSuggestion | null;
   suggestedWorkProvider: AudatexCodeSuggestion | null;
+  recordVersion?: string;
 }) {
   const network = displayAudatexCode(networkCode, suggestedNetwork);
   const provider = displayAudatexCode(workProviderCode, suggestedWorkProvider);
@@ -58,6 +60,7 @@ export function ClaimAudatexFields({
       <div className="mt-4 grid gap-4 md:grid-cols-2">
         <form action={actionUpdateAudatexCodes} className="space-y-2 rounded-lg border border-line bg-white p-4">
           <input type="hidden" name="claimId" value={claimId} />
+          <input type="hidden" name="recordVersion" value={recordVersion} />
           <input type="hidden" name="field" value="network" />
           <label className="block text-sm font-medium">
             Audatex network code
@@ -79,6 +82,7 @@ export function ClaimAudatexFields({
         </form>
         <form action={actionUpdateAudatexCodes} className="space-y-2 rounded-lg border border-line bg-white p-4">
           <input type="hidden" name="claimId" value={claimId} />
+          <input type="hidden" name="recordVersion" value={recordVersion} />
           <input type="hidden" name="field" value="provider" />
           <label className="block text-sm font-medium">
             Audatex work provider code

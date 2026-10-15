@@ -28,9 +28,11 @@ const copy = {
 export function HeadAgreedForm({
   claimId,
   head,
+  recordVersion = "",
 }: {
   claimId: string;
   head: keyof typeof copy;
+  recordVersion?: string;
 }) {
   const router = useRouter();
   const [amount, setAmount] = useState("");
@@ -44,6 +46,7 @@ export function HeadAgreedForm({
     setMessage(null);
     const form = new FormData();
     form.set("claimId", claimId);
+    form.set("recordVersion", recordVersion);
     form.set("agreed", amount);
     if (head !== "repairs") form.set("head", head);
     const result = head === "repairs" ? await actionRecordAgreedRepair(form) : await actionRecordAgreedHead(form);

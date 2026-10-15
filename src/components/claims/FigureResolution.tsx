@@ -10,6 +10,7 @@ export function FigureResolution({
   keptLabel,
   storedPence,
   calculatedPence,
+  recordVersion = "",
 }: {
   claimId: string;
   head: "hire" | "storage" | "recovery";
@@ -17,6 +18,7 @@ export function FigureResolution({
   keptLabel: string | null;
   storedPence: number;
   calculatedPence: number | null;
+  recordVersion?: string;
 }) {
   if (keptLabel) {
     return <p className="rounded-md border border-line bg-white px-4 py-3 text-sm">{keptLabel}</p>;
@@ -31,6 +33,7 @@ export function FigureResolution({
       </p>
       <form method="post" action={action}>
         <input type="hidden" name="head" value={head} />
+        <input type="hidden" name="recordVersion" value={recordVersion} />
         <input type="hidden" name="intent" value="use_calculated" />
         <button className="rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white" type="submit">
           Use calculated figure
@@ -38,6 +41,7 @@ export function FigureResolution({
       </form>
       <form method="post" action={action} className="grid gap-2">
         <input type="hidden" name="head" value={head} />
+        <input type="hidden" name="recordVersion" value={recordVersion} />
         <input type="hidden" name="intent" value="keep_stored" />
         <label className="block text-sm">
           Reason for keeping the stored figure
