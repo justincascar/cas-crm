@@ -90,6 +90,7 @@ describe("storage and hire with no start date", () => {
       assert.equal(c11.storage_billing_end_on, c11Before?.storage_billing_end_on);
       assert.ok(String(c11.storage_billing_end_on || ""));
       const charge = storageChargeForClaim("c11");
+      assert.ok(charge);
       assert.equal(charge.status, "missing_start");
       const line = db.prepare(`SELECT claimed_pence, agreed_pence, received_pence FROM financial_lines WHERE claim_id = 'c11' AND head_of_loss = 'storage'`).get() as
         | { claimed_pence: number; agreed_pence: number; received_pence: number }

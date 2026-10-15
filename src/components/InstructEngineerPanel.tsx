@@ -119,8 +119,8 @@ export function InstructEngineerPanel({
     form.set("correspondenceId", preparedId);
     const result = await actionMarkEngineerInstructionSent(form);
     setBusy(false);
-    if (result.error) {
-      setMessage(result.error);
+    if (result.error || !("handlerName" in result)) {
+      setMessage(result.error || "Could not mark the instruction as sent.");
       return;
     }
     setMessage(`Marked as sent by ${result.handlerName}. It is now on the file history. Not auto-sent from ${CAS_CLAIMS_MAILBOX}.`);

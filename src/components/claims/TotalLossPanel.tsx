@@ -8,7 +8,6 @@ import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
 import { liveEmailSending } from "@/lib/email/send-mode";
 import { SIMULATED_EMAIL_BANNER } from "@/lib/email/send-mode-copy";
 import { formatUkDate, formatUkDateTime, nowUtcIso } from "@/lib/dates";
-import { sectionVersion } from "@/lib/db/record-version";
 import { buildMailtoHref } from "@/lib/email/mailto";
 import { getPreparedFollowUpEmail, listFollowUpChases, totalLossPaymentChaseTemplateKey } from "@/lib/db/follow-up-chases";
 import { TOTAL_LOSS_PAYMENT_CHASE_KIND } from "@/lib/domain/follow-up-chases";

@@ -24,7 +24,7 @@ export function PaymentReviewPanel({
   const paymentKey = useRef("");
   if (!paymentKey.current) paymentKey.current = crypto.randomUUID();
   const pending = useRef<FormData | null>(null);
-  const [selectedHead, setSelectedHead] = useState(payableHeads[0]?.head || "");
+  const [selectedHead, setSelectedHead] = useState<string>(payableHeads[0]?.head || "");
   const selected = payableHeads.find((head) => head.head === selectedHead) || payableHeads[0];
   const comparison = lockedHead
     ? paymentComparisonLabel(lockedHead)
@@ -57,7 +57,7 @@ export function PaymentReviewPanel({
     }
     setWarning(null);
     paymentKey.current = crypto.randomUUID();
-    if (result.message) setMessage(result.message);
+    if ("message" in result && result.message) setMessage(result.message);
     router.refresh();
   }
 

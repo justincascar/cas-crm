@@ -235,7 +235,8 @@ describe("EMAIL_SEND_MODE", () => {
         assert.equal(row.sent_status, "failed");
         assert.notEqual(row.sent_status, "simulated_sent");
         assert.notEqual(row.sent_status, "sent");
-        const events = listClaimEvents("c3").filter((item) => item.correspondence_id === result.correspondenceId);
+        const correspondenceId = "correspondenceId" in result ? result.correspondenceId : undefined;
+        const events = listClaimEvents("c3").filter((item) => item.correspondence_id === correspondenceId);
         assert.equal(events.some((item) => item.event_type === "outgoing_email"), false);
         assert.equal(events.some((item) => item.event_type === "email_send_failed"), true);
         assert.equal(calls.some((call) => call.includes("/sendMail")), false);

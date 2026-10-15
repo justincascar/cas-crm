@@ -9,6 +9,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "tsx --test tests/*.test.ts",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.tests.json",
+    "check:pages": "tsx scripts/page-load-check.ts",
     "seed": "tsx scripts/seed.ts"
   },
   "dependencies": {

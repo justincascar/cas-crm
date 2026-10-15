@@ -1,6 +1,7 @@
 "use client";
 
 import { actionUpdateAudatexCodes } from "@/app/actions";
+import { asFormAction } from "@/lib/form-action";
 import type { AudatexCodeSuggestion } from "@/lib/domain/audatex";
 import { displayAudatexCode } from "@/lib/domain/audatex";
 
@@ -58,7 +59,7 @@ export function ClaimAudatexFields({
         <p className="mt-3 text-xs text-slate">Looking up previous codes for {insurerName}.</p>
       )}
       <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <form action={actionUpdateAudatexCodes} className="space-y-2 rounded-lg border border-line bg-white p-4">
+        <form action={asFormAction(actionUpdateAudatexCodes)} className="space-y-2 rounded-lg border border-line bg-white p-4">
           <input type="hidden" name="claimId" value={claimId} />
           <input type="hidden" name="recordVersion" value={recordVersion} />
           <input type="hidden" name="field" value="network" />
@@ -80,7 +81,7 @@ export function ClaimAudatexFields({
             Save network code
           </button>
         </form>
-        <form action={actionUpdateAudatexCodes} className="space-y-2 rounded-lg border border-line bg-white p-4">
+        <form action={asFormAction(actionUpdateAudatexCodes)} className="space-y-2 rounded-lg border border-line bg-white p-4">
           <input type="hidden" name="claimId" value={claimId} />
           <input type="hidden" name="recordVersion" value={recordVersion} />
           <input type="hidden" name="field" value="provider" />

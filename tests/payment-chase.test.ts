@@ -249,7 +249,7 @@ describe("payment chase — partial, full, reminder and backlog", () => {
         amountPence: 20_000,
         correction: true,
       });
-      assert.equal(corrected.replacedPrevious, true);
+      assert.equal("replacedPrevious" in corrected && corrected.replacedPrevious, true);
       assert.equal(corrected.receivedPence, 20_000);
       assert.equal(repairs(db).received_pence, 20_000);
       assert.equal(partPaymentCountsAsPaid(100_000, 20_000), false);
@@ -345,7 +345,7 @@ describe("payment chase — term and templates", () => {
     assert.doesNotMatch(copy.body, /\b28\b/);
     assert.equal(formatGbp(100_000), "£1,000.00");
     const titles = emailTemplatesForRole("third_party").map((template) => template.key);
-    assert.equal(titles.includes("payment_chase_1"), false);
-    assert.equal(titles.includes("payment_chase_2"), false);
+    assert.equal((titles as readonly string[]).includes("payment_chase_1"), false);
+    assert.equal((titles as readonly string[]).includes("payment_chase_2"), false);
   });
 });

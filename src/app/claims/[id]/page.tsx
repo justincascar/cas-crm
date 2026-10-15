@@ -8,6 +8,7 @@ import { JustificationChronology } from "@/components/claims/JustificationChrono
 import { ClaimWorkflowStatus } from "@/components/ClaimWorkflowStatus";
 import { ChasePanel } from "@/components/ChasePanel";
 import { PageHeader } from "@/components/ClaimTable";
+import { RecordVersionField, SaveClashNotice } from "@/components/SaveClashNotice";
 import { SubmitKeyInput } from "@/components/SubmitKeyInput";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
@@ -18,7 +19,9 @@ import { SHARED_CIRCUMSTANCES, SHARED_INSURER_POSITION, SHARED_OWN_INSURER } fro
 import { gapsForClaim } from "@/lib/db/repair-progress";
 import { THIRD_PARTY_VEHICLE_EMPTY, vehicleIsRecorded, vehicleSummary } from "@/lib/domain/vehicle-display";
 import { findPreparedChase, listChasesForClaim } from "@/lib/db/chase";
+import { isChaseKind } from "@/lib/domain/chase";
 import { listHireAgreements } from "@/lib/db/chronology";
+import { asFormAction } from "@/lib/form-action";
 import { formatGbp } from "@/lib/money";
 import { HEAD_LABELS, type HeadOfLoss } from "@/lib/constants";
 import { formatVehicleRegistration } from "@/lib/text";
@@ -97,7 +100,7 @@ export default async function ClaimDetailPage({
   const settledPayments = listPaymentsAfterSettlement(claimId);
   const preparedByKind = Object.fromEntries(
     chases.map((chase) => {
-      const row = findPreparedChase(chase.kind, String(claim.id));
+      const row = isChaseKind(chase.kind) ? findPreparedChase(chase.kind, String(claim.id)) : null;
       return [
         chase.kind,
         row
@@ -295,7 +298,7 @@ export default async function ClaimDetailPage({
       />
 
       <section className="grid gap-6 xl:grid-cols-3">
-        <form action={actionUpdateClaim} className="space-y-3 rounded-xl border border-line bg-card p-5 xl:col-span-2">
+        <form action={asFormAction(actionUpdateClaim)} className="space-y-3 rounded-xl border border-line bg-card p-5 xl:col-span-2">
           <input type="hidden" name="claimId" value={String(claim.id)} />
           <RecordVersionField
             version={
@@ -635,7 +638,7 @@ export default async function ClaimDetailPage({
             </tbody>
           </table>
           {Number(claim.total_loss) === 1 ? null : (
-            <form action={actionRecordAgreedRepair} className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
+            <form action={asFormAction(actionRecordAgreedRepair)} className="mt-4 grid gap-2 sm:grid-cols-[1fr_auto] sm:items-end">
               <label className="text-sm">
                 Agreed repair invoice (£)
                 <input name="agreed" inputMode="decimal" required className={field} />
@@ -722,7 +725,7 @@ export default async function ClaimDetailPage({
                   </div>
                 </div>
                 {t.status === "open" ? (
-                  <form action={actionCompleteTask}>
+                  <form action={asFormAction(actionCompleteTask)}>
                     <input type="hidden" name="taskId" value={String(t.id)} />
                     <button className="text-xs text-teal-dark underline" type="submit">
                       Done

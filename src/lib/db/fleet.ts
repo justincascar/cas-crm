@@ -635,7 +635,7 @@ export function touchFleetVersion(input: {
     throw new VersionConflictError(
       name,
       when,
-      [{ name: "lastChange", label: "Fleet", saved: fields.lastChange || "" }],
+      [{ name: "lastChange", label: "Fleet", saved: fields.lastChange || "", yours: input.change }],
       { lastChange: input.change },
       input.expected,
       "fleet",

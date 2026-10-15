@@ -12,6 +12,7 @@ import { getClaim, listFleet, listKnownAgents, listKnownInsurers, listReservatio
 import { findPreparedEngineerInstruction, getEngineer, listActiveEngineers } from "@/lib/db/engineers";
 import { representativeIsRecorded, savedText } from "@/lib/email/send-to";
 import { findPreparedChase, listChasesForClaim } from "@/lib/db/chase";
+import { isChaseKind } from "@/lib/domain/chase";
 import { listHireAgreements } from "@/lib/db/chronology";
 import { impecuniosityGate } from "@/lib/db/impecuniosity";
 import { getScreenData, seedScreenDefaults } from "@/lib/db/screens";
@@ -99,7 +100,7 @@ export default async function ClaimWorkScreenPage({
   const hireAgreements = listHireAgreements(String(data.claim.id));
   const preparedByKind = Object.fromEntries(
     chases.map((chase) => {
-      const preparedChaseRow = findPreparedChase(chase.kind, String(data.claim.id));
+      const preparedChaseRow = isChaseKind(chase.kind) ? findPreparedChase(chase.kind, String(data.claim.id)) : null;
       return [
         chase.kind,
         preparedChaseRow

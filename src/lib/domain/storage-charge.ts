@@ -190,7 +190,7 @@ export function recoveryJobNetPence(job: {
   forklift_pence?: number | null;
   mileage_pence?: number | null;
   manual_pence?: number | null;
-} | null): number {
+} | null | undefined): number {
   if (!job) return 0;
   return (
     (Number(job.charge_pence) || 0) +

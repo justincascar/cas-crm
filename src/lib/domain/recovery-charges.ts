@@ -152,7 +152,7 @@ function penceField(raw: string | undefined, fallback: number): number {
  * Something else is added only when both the description and a positive amount are present.
  */
 export function normaliseRecoveryScreen<T extends ChargeValues>(values: T): T {
-  const next = { ...values };
+  const next: ChargeValues = { ...values };
   const standard = penceField(next.standardCharge, INDICATIVE_DEFAULTS.recovery_net_pence);
   next.standardCharge = String(standard);
   let net = standard;
@@ -183,7 +183,7 @@ export function normaliseRecoveryScreen<T extends ChargeValues>(values: T): T {
   const priced = recoveryVatAndTotal(net);
   next.vat = String(priced.vat);
   next.total = String(priced.gross);
-  return next;
+  return next as T;
 }
 
 function somethingElseChargePence(values: ChargeValues): number {

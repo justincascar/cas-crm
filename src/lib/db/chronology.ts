@@ -479,7 +479,7 @@ export async function sendClaimEmail(input: {
   to: string;
   subject: string;
   body: string;
-  templateKey?: DocumentTemplateKey;
+  templateKey?: string;
   occurredAt?: string;
   attachmentIds?: string[];
 }) {
@@ -505,7 +505,7 @@ async function deliverClaimEmail(input: {
   to: string;
   subject: string;
   body: string;
-  templateKey?: DocumentTemplateKey;
+  templateKey?: string;
   occurredAt?: string;
   attachmentIds?: string[];
 }) {

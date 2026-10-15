@@ -1,4 +1,4 @@
-import { DatabaseSync } from "node:sqlite";
+import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import fs from "node:fs";
 import path from "node:path";
 import { ensureStaffAuth } from "../auth/ensure";
@@ -131,17 +131,21 @@ export function sqlStatementCount(): number {
   return sqlCount;
 }
 
+function sqlArgs(params: readonly unknown[]): SQLInputValue[] {
+  return params as SQLInputValue[];
+}
+
 export function all<T extends SqlRow>(sql: string, params: unknown[] = []): T[] {
   sqlCount += 1;
-  return getDb().prepare(sql).all(...params) as T[];
+  return getDb().prepare(sql).all(...sqlArgs(params)) as T[];
 }
 
 export function get<T extends SqlRow>(sql: string, params: unknown[] = []): T | undefined {
   sqlCount += 1;
-  return getDb().prepare(sql).get(...params) as T | undefined;
+  return getDb().prepare(sql).get(...sqlArgs(params)) as T | undefined;
 }
 
 export function run(sql: string, params: unknown[] = []): void {
   sqlCount += 1;
-  getDb().prepare(sql).run(...params);
+  getDb().prepare(sql).run(...sqlArgs(params));
 }

@@ -307,7 +307,7 @@ describe("two-user saves", () => {
         correction: false,
         submitKey: "pence-4321",
       });
-      assert.equal(replay.replayed, true);
+      assert.equal("replayed" in replay && replay.replayed, true);
       assert.equal(replay.receivedPence, first.receivedPence);
       assert.equal(Number(column(db, `SELECT received_pence FROM financial_lines WHERE claim_id = 'c3' AND head_of_loss = 'hire'`).received_pence), before + 4321);
       const warned = recordHeadPayment({
@@ -318,16 +318,17 @@ describe("two-user saves", () => {
         correction: false,
         submitKey: "pence-4321-b",
       });
-      assert.equal(warned.needsConfirm, true);
-      assert.match(String(warned.warning), /Is this a second, separate payment\?/);
-      assert.match(String(warned.warning), new RegExp(formatGbp(4321).replace("£", "£")));
+      assert.equal("needsConfirm" in warned && warned.needsConfirm, true);
+      const warning = "warning" in warned ? String(warned.warning) : "";
+      assert.match(warning, /Is this a second, separate payment\?/);
+      assert.match(warning, new RegExp(formatGbp(4321).replace("£", "£")));
       assert.equal(Number(column(db, `SELECT received_pence FROM financial_lines WHERE claim_id = 'c3' AND head_of_loss = 'hire'`).received_pence), before + 4321);
       const event = column(
         db,
         `SELECT occurred_at, actor_id FROM claim_events WHERE claim_id = 'c3' AND event_type = 'head_payment_logged' ORDER BY occurred_at DESC LIMIT 1`,
       );
       assert.equal(
-        warned.warning,
+        warning,
         secondPaymentWarning({ amountPence: 4321, headLabel: "Hire", at: String(event.occurred_at), by: "Justin Roberts" }),
       );
       const yes = recordHeadPayment({

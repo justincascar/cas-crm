@@ -33,7 +33,7 @@ function handover(actorId: string, claimId = "c3") {
     fuelLevel: "half",
     conditionNote: "",
     actorId,
-    photos: [] as Array<{ buffer: Buffer; filename: string; mimeType: string }>,
+    photos: [] as Array<{ buffer: Buffer; filename: string; mimeType: string; slot: string }>,
   };
 }
 

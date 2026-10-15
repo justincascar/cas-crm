@@ -54,11 +54,12 @@ async function openPdf(data: Uint8Array): Promise<OpenedPdf> {
   if (owned.byteLength < 5 || Buffer.from(owned.subarray(0, 5)).toString("latin1") !== "%PDF-") {
     throw new PdfPreviewError("This stored file is not a PDF that can be drawn on screen.");
   }
+  const openParams = { data: owned, disableWorker: true, isEvalSupported: false, verbosity: 0 };
   const pdf = (await withTimeout(
-    getPdfJsDocument({ data: owned, disableWorker: true, isEvalSupported: false, verbosity: 0 }).promise as Promise<OpenedPdf>,
+    getPdfJsDocument(openParams).promise,
     OPEN_TIMEOUT_MS,
     "Timed out reading this PDF.",
-  )) as OpenedPdf;
+  )) as unknown as OpenedPdf;
   return pdf;
 }
 

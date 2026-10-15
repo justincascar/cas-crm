@@ -339,6 +339,7 @@ export function recordHeadPayment(input: {
       paidInFull: false,
     };
   }
+  const paymentHead = input.head;
   const claim = claimRow(input.claimId);
   if (!claim) throw new Error("File not found.");
   const totalLoss = Number(claim.total_loss) === 1 || Number(claim.later_declared_total_loss) === 1;
@@ -511,7 +512,7 @@ export function recordHeadPayment(input: {
   const paid = paymentCoversTarget(fresh.targetPence, receivedNow);
   const partial = paymentNeedsReview(fresh.targetPence, receivedNow);
   syncOutstandingPaymentChases([input.claimId]);
-  const kind = reviewKind(input.head);
+  const kind = reviewKind(paymentHead);
   const keepChasing = partial && headDisputeStands(input.claimId, input.head);
   if (partial && !keepChasing) {
     if (kind && chaseRow(input.claimId, kind)) {

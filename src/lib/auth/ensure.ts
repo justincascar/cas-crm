@@ -1,4 +1,4 @@
-import type { DatabaseSync } from "node:sqlite";
+import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { ADMINISTRATOR_ROLE, STAFF_ROLE } from "./roles";
 import { DEMO_STAFF, demoPasswordFor } from "./demo-staff";
 import { hashPasswordSync } from "./passwords";
@@ -8,12 +8,16 @@ function columnNames(db: DatabaseSync, table: string): Set<string> {
   return new Set(rows.map((row) => row.name));
 }
 
+function sqlArgs(params: readonly unknown[]): SQLInputValue[] {
+  return params as SQLInputValue[];
+}
+
 function run(db: DatabaseSync, sql: string, params: unknown[] = []) {
-  db.prepare(sql).run(...params);
+  db.prepare(sql).run(...sqlArgs(params));
 }
 
 function get<T>(db: DatabaseSync, sql: string, params: unknown[] = []): T | undefined {
-  return db.prepare(sql).get(...params) as T | undefined;
+  return db.prepare(sql).get(...sqlArgs(params)) as T | undefined;
 }
 
 export function ensureStaffAuth(db: DatabaseSync) {

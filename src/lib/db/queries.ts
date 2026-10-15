@@ -338,7 +338,7 @@ export function getDashboard() {
       ...(HEAD_LABELS as Record<string, string>),
       ...(provisionalStorageClaimed > 0 ? { storage: "Storage (includes provisional, not a final charge)" } : {}),
       ...(provisionalHireClaimed > 0 ? { hire: "Hire (includes provisional, not a final charge)" } : {}),
-    },
+    } as Record<string, string>,
     chasesDue,
     chasesDueByKind,
     awaitingDecisions: paymentAttention.awaiting,

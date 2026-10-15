@@ -22,15 +22,15 @@ export const ATTACHMENT_TOO_LARGE_MESSAGE = `These documents are too large for t
 export const NO_STORED_DOCUMENTS_MESSAGE = "No documents stored on this claim yet.";
 
 export type AttachmentSource = {
-  id?: string | null;
-  title?: string | null;
-  document_type?: string | null;
+  id?: string | number | null;
+  title?: string | number | null;
+  document_type?: string | number | null;
   kind?: string | null;
-  template_key?: string | null;
+  template_key?: string | number | null;
   version?: string | number | null;
-  created_at?: string | null;
-  stored_relpath?: string | null;
-  body_html?: string | null;
+  created_at?: string | number | null;
+  stored_relpath?: string | number | null;
+  body_html?: string | number | null;
   byte_size?: string | number | null;
 };
 

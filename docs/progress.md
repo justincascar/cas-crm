@@ -752,6 +752,10 @@ TEST-0005’s proposed storage end is still unconfirmed. TEST-0009’s vehicle-d
 
 Tests: `tests/optimistic-concurrency.test.ts` and `tests/two-user-saves.test.ts`. Full suite: 467 passing, 0 failing.
 
+15 October 2026: `TotalLossPanel` imported `sectionVersion` twice. The second import is removed. The same save had also dropped `SaveClashNotice`, `RecordVersionField`, `VehicleOffers` and `formatUkDate`; those imports are restored. No other duplicate declaration was found.
+
+15 October 2026: The type check and the production build are clean. `npm run typecheck` checks the application, then checks the tests separately. `npm run check:pages` uses the production build, starts it on a free port, signs in as the Justin test user from `docs/AUTH-NOTES.md`, and opens every main page. It does not save a form and it does not send email.
+
 ## Not yet claimed
 
 - Financial summary and the Assessed damage notes fields remain non-authoritative working notes, pending a later decision on whether to keep them.

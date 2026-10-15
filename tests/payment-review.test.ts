@@ -294,7 +294,7 @@ describe("payment review — one item, and a missing invoice", () => {
         amountPence: 20_000,
         correction: true,
       });
-      assert.equal(corrected.replacedPrevious, true);
+      assert.equal("replacedPrevious" in corrected && corrected.replacedPrevious, true);
       assert.equal(corrected.receivedPence, 30_000);
       const reviews = listOpenPaymentReviews("c6");
       assert.equal(reviews.length, 1);

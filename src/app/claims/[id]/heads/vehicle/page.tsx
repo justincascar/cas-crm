@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/ClaimTable";
 import { HeadOfLossScreen } from "@/components/claims/HeadOfLossScreen";
 import { PaymentReviewPanel } from "@/components/claims/PaymentReviewPanel";
 import { TotalLossAgreedForm } from "@/components/claims/TotalLossAgreedForm";
+import { VehicleOffers } from "@/components/claims/VehicleOffers";
 import { SeparateRecordConfirm } from "@/components/SeparateRecordConfirm";
 import { applicableVehicleHead } from "@/lib/domain/head-screen";
 import { requireStaff } from "@/lib/auth/session";
@@ -87,7 +88,13 @@ export default async function VehicleDamagePage({
             <div className="mt-4">
               <PaymentReviewPanel
                 claimId={id}
-                lockedHead={{ head, label: totalLoss ? "Vehicle damage" : "Repairs" }}
+                lockedHead={{
+                  head,
+                  label: totalLoss ? "Vehicle damage" : "Repairs",
+                  receivedPence: section.receivedPence,
+                  agreedPence: section.agreedPence ?? 0,
+                  claimedPence: section.claimedPence,
+                }}
               />
             </div>
           </>

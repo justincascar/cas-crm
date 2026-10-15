@@ -145,7 +145,7 @@ export function relatedControl(el: FormControl, form: HTMLFormElement): FormCont
   if (!el.name.endsWith("_confirmed")) return el;
   const dobName = el.name.slice(0, -"_confirmed".length);
   const dob = form.elements.namedItem(dobName);
-  return isFormControl(dob) ? dob : el;
+  return dob instanceof EventTarget && isFormControl(dob) ? dob : el;
 }
 
 function radioGroupInvalid(form: HTMLFormElement, name: string): FormControl | null {
@@ -256,7 +256,7 @@ export function scrollAndFocusFirstInvalid(control: HTMLElement) {
 
 export function namedControl(form: HTMLFormElement, name: string): FormControl | null {
   const el = form.elements.namedItem(name);
-  return isFormControl(el) ? el : null;
+  return el instanceof EventTarget && isFormControl(el) ? el : null;
 }
 
 export function applyServerFieldError(form: HTMLFormElement, field: string, message: string) {

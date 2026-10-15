@@ -112,12 +112,12 @@ function ensureCalculatedLine(db: DatabaseSync, head: "storage" | "recovery") {
     .get(head) as { id: string; agreed_pence: number; received_pence: number } | undefined;
   const priced = head === "storage" ? storageFigure(db) : recoveryFigure(db);
   if (existing) {
-    if (head !== "storage" || !priced) return;
+    if (head !== "storage" || !priced || !("description" in priced)) return;
     db.prepare(
       `UPDATE financial_lines
        SET description = ?, quantity = ?, unit = ?, rate_pence = ?, net_pence = ?, vat_pence = ?, gross_pence = ?, claimed_pence = ?
        WHERE id = ?`,
-    ).run(priced.description, priced.quantity, priced.unit, priced.rate, priced.net, priced.vat, priced.gross, priced.gross, existing.id);
+    ).run(String(priced.description), priced.quantity, priced.unit, priced.rate, priced.net, priced.vat, priced.gross, priced.gross, existing.id);
     const after = db
       .prepare(`SELECT agreed_pence, received_pence FROM financial_lines WHERE id = ?`)
       .get(existing.id) as { agreed_pence: number; received_pence: number };
@@ -135,7 +135,7 @@ function ensureCalculatedLine(db: DatabaseSync, head: "storage" | "recovery") {
   ).run(
     `${head}-c5`,
     head,
-    head === "storage" ? priced.description : "Recovery",
+    head === "storage" && "description" in priced ? String(priced.description) : "Recovery",
     priced.quantity,
     priced.unit,
     priced.rate,

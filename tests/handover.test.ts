@@ -408,7 +408,7 @@ describe("vehicle handover records", () => {
     assert.equal(finishedSeven.outstanding.length, 0);
     const withDamage = requiredShotProgress([...order.slice(0, 3), "damage", "damage"], "seven");
     assert.equal(withDamage.label, "3 of 7 done");
-    assert.equal(withDamage.outstanding.some((shot) => shot.slot === "damage"), false);
+    assert.equal(withDamage.outstanding.some((shot) => (shot.slot as string) === "damage"), false);
   });
 
   it("leaves an already-completed five-shot handover complete, without asking for Dash or Chassis number", () => {
@@ -576,7 +576,8 @@ describe("vehicle handover records", () => {
         assert.equal(row?.photos.length, 0);
         assert.equal(row?.incomplete, true);
         const post = row?.scans.find((scan) => scan.slot === "post");
-        const postStored = db.prepare(`SELECT stored_relpath, mime_type FROM documents WHERE id = ?`).get(post?.documentId) as {
+        assert.ok(post?.documentId);
+        const postStored = db.prepare(`SELECT stored_relpath, mime_type FROM documents WHERE id = ?`).get(post.documentId) as {
           stored_relpath: string;
           mime_type: string;
         };

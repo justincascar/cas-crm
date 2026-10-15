@@ -10,7 +10,6 @@ export const CAS_LETTER_SPECS: CorrespondenceSpec[] = [
     audience: "insurer",
     eventType: "initial_letter_tp_insurer",
     legalCitations: false,
-    required: ["client_name", "accident_date", "tp_insurer_name", "vehicle_reg"],
     // Structure follows the supplied Initial Letter ERS.doc. File-specific facts from that example are not copied.
     required: ["client_name", "accident_date", "tp_insurer_name", "vehicle_reg"],
     subject: "Uninsured losses — {{claim_ref}}",

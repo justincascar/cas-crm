@@ -242,8 +242,8 @@ describe("CAS email templates", () => {
     ]) {
       assert.ok(keys.includes(key as never), `missing ${key}`);
     }
-    assert.equal(keys.includes("payment_chase_1"), false);
-    assert.equal(keys.includes("payment_chase_2"), false);
+    assert.equal((keys as readonly string[]).includes("payment_chase_1"), false);
+    assert.equal((keys as readonly string[]).includes("payment_chase_2"), false);
     const wording = CAS_EMAIL_SPECS.map((item) => item.key);
     assert.ok(wording.includes("payment_chase_1"));
     assert.ok(wording.includes("payment_chase_2"));

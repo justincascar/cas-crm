@@ -243,7 +243,7 @@ describe("payment request pack ticks", () => {
     ]);
     assert.equal(licenceOnly.missing.some((line) => /engineer/i.test(line)), false);
     assert.equal(licenceOnly.missing.includes(PAYMENT_REQUEST_PACK_MISSING.drivingLicence), false);
-    assert.equal(licenceOnly.missing.includes(PAYMENT_REQUEST_PACK_MISSING.casInsurance), false);
+    assert.equal((licenceOnly.missing as readonly string[]).includes(PAYMENT_REQUEST_PACK_MISSING.casInsurance), false);
     assert.equal(licenceOnly.missing.includes(PAYMENT_REQUEST_PACK_MISSING.clientInsurance), true);
   });
 

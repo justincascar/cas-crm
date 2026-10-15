@@ -1,4 +1,5 @@
 import { actionCompleteTask } from "@/app/actions";
+import { asFormAction } from "@/lib/form-action";
 import { PageHeader } from "@/components/ClaimTable";
 import { formatUkDateTime } from "@/lib/dates";
 import { requireStaff } from "@/lib/auth/session";
@@ -60,7 +61,7 @@ export default async function TasksPage({
                 </td>
                 <td>{String(t.handler_name || "Unassigned")}</td>
                 <td>
-                  <form action={actionCompleteTask}>
+                  <form action={asFormAction(actionCompleteTask)}>
                     <input type="hidden" name="taskId" value={String(t.id)} />
                     <button className="text-sm text-teal-dark underline" type="submit">
                       Done

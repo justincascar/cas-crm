@@ -1,4 +1,5 @@
 import { actionUpdateClaimStatus } from "@/app/actions";
+import { asFormAction } from "@/lib/form-action";
 import {
   LIABILITY_STATUS_OPTIONS,
   ROADWORTHINESS_OPTIONS,
@@ -33,7 +34,7 @@ export function ClaimWorkflowStatus({
         file is open.
       </p>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
-        <form action={actionUpdateClaimStatus} className="space-y-2 rounded-lg border border-line bg-white p-4">
+        <form action={asFormAction(actionUpdateClaimStatus)} className="space-y-2 rounded-lg border border-line bg-white p-4">
           <input type="hidden" name="claimId" value={claimId} />
           <input type="hidden" name="recordVersion" value={recordVersion} />
           <input type="hidden" name="field" value="liability" />
@@ -52,7 +53,7 @@ export function ClaimWorkflowStatus({
             Save liability status
           </button>
         </form>
-        <form action={actionUpdateClaimStatus} className="space-y-2 rounded-lg border border-line bg-white p-4">
+        <form action={asFormAction(actionUpdateClaimStatus)} className="space-y-2 rounded-lg border border-line bg-white p-4">
           <input type="hidden" name="claimId" value={claimId} />
           <input type="hidden" name="recordVersion" value={recordVersion} />
           <input type="hidden" name="field" value="roadworthiness" />

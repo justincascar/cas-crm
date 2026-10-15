@@ -13,10 +13,16 @@ import {
   scrollAndFocusFirstInvalid,
 } from "@/lib/form-validation";
 
-type ValidatedFormProps = FormHTMLAttributes<HTMLFormElement> & {
+type ServerFormAction = (formData: FormData) => void | Promise<unknown>;
+
+type ValidatedFormProps = Omit<FormHTMLAttributes<HTMLFormElement>, "action"> & {
   initialError?: string;
   initialErrorField?: string;
+  action?: string | ServerFormAction;
 };
+
+type NativeSubmit = NonNullable<FormHTMLAttributes<HTMLFormElement>["onSubmit"]>;
+type NativeSubmitEvent = NativeSubmit extends (event: infer Event) => unknown ? Event : never;
 
 export function ValidatedForm({
   children,
@@ -55,7 +61,7 @@ export function ValidatedForm({
     }
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  function handleSubmit(event: NativeSubmitEvent) {
     const invalid = collectInvalidControls(event.currentTarget);
     if (invalid.length) {
       event.preventDefault();
@@ -68,10 +74,11 @@ export function ValidatedForm({
 
   // A server action is a function. React then sets method and encoding itself, and warns if we set them too.
   const functionAction = typeof action === "function";
+  const formAction = functionAction ? (action as (formData: FormData) => void | Promise<void>) : action;
   return (
     <form
       {...rest}
-      action={action}
+      action={formAction}
       {...(functionAction ? {} : { method, encType })}
       ref={(node) => {
         formRef.current = node;

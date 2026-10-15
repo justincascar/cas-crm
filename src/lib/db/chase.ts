@@ -775,8 +775,16 @@ function evaluateChase(kind: ChaseKind, claimId: string, row: ChaseRow, facts: C
         : recoveryFigureFinal(claimId, headMoney?.claimed || 0) && requestMarkedSent(claimId, "recovery");
   const decision = def.paymentHead && !chargeReady
     ? {
+        active: false,
         due: false,
+        outcomeOnFile: false,
+        handlerState,
+        daysOutstanding: null,
+        clockAt: null,
+        dueAt: null,
         reason: "The chase has not started. The figure is not final, or the payment request has not been recorded as sent.",
+        label: null,
+        severity: null as ChaseSeverity | null,
         nextDueAt: null,
         intervalDays: effective.days,
         daysOverdue: 0,
@@ -1188,7 +1196,8 @@ export function listDueChases(asAt: string = nowUtcIso()): ChaseView[] {
     });
   }
   due.sort((a, b) => {
-    const kindOrder = CHASE_KIND_ORDER.indexOf(a.kind) - CHASE_KIND_ORDER.indexOf(b.kind);
+    const kindRank = (kind: string) => (CHASE_KIND_ORDER as readonly string[]).indexOf(kind);
+    const kindOrder = kindRank(a.kind) - kindRank(b.kind);
     if (kindOrder !== 0) return kindOrder;
     const severityRank = (value: ChaseSeverity | null) =>
       value === "red_overdue" ? 0 : value === "red" ? 1 : value === "amber" ? 2 : 3;

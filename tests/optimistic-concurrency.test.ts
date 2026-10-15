@@ -183,7 +183,7 @@ describe("optimistic concurrency", () => {
         correction: false,
         submitKey: "pay-once",
       });
-      assert.equal(replay.replayed, true);
+      assert.equal("replayed" in replay && replay.replayed, true);
       assert.equal(replay.receivedPence, first.receivedPence);
       const afterOnce = db.prepare(`SELECT received_pence FROM financial_lines WHERE claim_id = 'c3' AND head_of_loss = 'hire'`).get() as {
         received_pence: number;
