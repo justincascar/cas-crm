@@ -4,7 +4,7 @@ import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, it } from "node:test";
 import { CAS_CLAIMS_MAILBOX } from "../src/lib/constants.ts";
-import { formatUkDate } from "../src/lib/dates.ts";
+import { formatUkDate, londonTodayIso, utcFromLondonDateTime } from "../src/lib/dates.ts";
 import { withDatabase, withDatabaseAsync } from "../src/lib/db/connection.ts";
 import { listClaimEvents, sendClaimEmail } from "../src/lib/db/chronology.ts";
 import { seed } from "../src/lib/db/seed.ts";
@@ -18,12 +18,17 @@ import {
 import { storageAuthorisationEndForClaim } from "../src/lib/db/storage-authorisation-end.ts";
 import { justificationChronology, justificationRepairGaps } from "../src/lib/domain/justification-chronology.ts";
 import {
+  SINCE_LAST_STEP,
   SIMULATED_REPORT_NOT_RECORDED,
   explainedGapWording,
+  gapFlagWording,
   gapIsFlagged,
   inclusiveLondonDays,
+  noProgressWording,
+  realLondonDays,
   repairProgressGaps,
-  unexplainedGapWording,
+  stillNoProgressWording,
+  type RepairProgressEvent,
 } from "../src/lib/domain/repair-progress.ts";
 import {
   M365_CLIENT_ID_ENV,
@@ -68,6 +73,20 @@ function requestUrl(input: RequestInfo | URL): string {
   return input.url;
 }
 
+function shiftDay(isoDay: string, days: number): string {
+  const [year, month, day] = isoDay.split("-").map(Number);
+  const next = new Date(Date.UTC(year, month - 1, day + days));
+  return next.toISOString().slice(0, 10);
+}
+
+function atNine(day: string): string {
+  return utcFromLondonDateTime(`${day}T09:00`);
+}
+
+function step(id: string, eventType: string, title: string, day: string): RepairProgressEvent {
+  return { id, event_type: eventType, title, details: null, occurred_at: atNine(day) };
+}
+
 function money(db: DatabaseSync, id: string) {
   return db.prepare(
     `SELECT claimed_pence, offered_pence, agreed_pence, received_pence FROM financial_lines WHERE id = ?`,
@@ -75,11 +94,14 @@ function money(db: DatabaseSync, id: string) {
 }
 
 describe("repair progress", () => {
-  it("counts both the first and last day and flags an inclusive gap of 15, not 14", () => {
+  it("counts the next day as 1 and flags a gap of 7, not 6", () => {
+    assert.equal(realLondonDays("2026-09-01", "2026-09-02"), 1);
+    assert.equal(realLondonDays("2026-09-01T09:00:00.000Z", "2026-09-08T09:00:00.000Z"), 7);
+    assert.equal(realLondonDays("2026-09-01", "2026-09-07"), 6);
+    assert.equal(realLondonDays("2026-09-01", "2026-09-08"), 7);
+    assert.equal(gapIsFlagged(6), false);
+    assert.equal(gapIsFlagged(7), true);
     assert.equal(inclusiveLondonDays("2026-09-22T09:00:00.000Z", "2026-10-01T09:00:00.000Z"), 10);
-    assert.equal(gapIsFlagged(14), false);
-    assert.equal(gapIsFlagged(15), true);
-    assert.equal(gapIsFlagged(16), true);
   });
 
   it("records each new step on the chronology, blocks a duplicate, and keeps a correction as a new entry", () => {
@@ -253,45 +275,43 @@ describe("repair progress", () => {
     }
   });
 
-  it("flags an inclusive gap of 15 days, clears it when explained, and flags a later gap again", () => {
+  it("flags a gap of 7 real days, clears it when explained, and flags a later gap again", () => {
     const db = seeded();
     try {
       withDatabase(db, () => {
-        listClaimEvents("c3");
+        listClaimEvents("c1");
+        const today = londonTodayIso();
+        const booked = shiftDay(today, -20);
+        const attended = shiftDay(booked, 7);
         recordRepairProgressStep({
-          claimId: "c3",
+          claimId: "c1",
           actorId: "staff-tom",
           role: "staff",
           step: "engineer_inspection_booked",
-          occurredOn: "2026-09-01",
+          occurredOn: booked,
           note: "Booked.",
         });
         recordRepairProgressStep({
-          claimId: "c3",
+          claimId: "c1",
           actorId: "staff-tom",
           role: "staff",
           step: "engineer_inspection_attended",
-          occurredOn: "2026-09-15",
+          occurredOn: attended,
           note: "Attended.",
         });
-        const flagged = gapsForClaim("c3", false).filter((gap) => !gap.explained);
+        const flagged = gapsForClaim("c1", false).filter((gap) => gap.kind === "between" && !gap.explained);
         assert.equal(flagged.length, 1);
-        assert.equal(flagged[0]?.inclusiveDays, 15);
+        assert.equal(flagged[0]?.days, 7);
         assert.equal(
-          unexplainedGapWording(flagged[0]!),
-          "Unexplained gap of 15 days between Engineer inspection booked and Engineer inspection attended",
+          gapFlagWording(flagged[0]!),
+          "Unexplained gap of 7 days between Engineer inspection booked and Engineer inspection attended",
         );
-        const quiet = repairProgressGaps(listClaimEvents("c3"), {
-          thresholdDays: 15,
-          explanations: [],
-        }).filter((gap) => gap.inclusiveDays === 14);
-        assert.equal(quiet.length, 0);
         recordRepairProgressStep({
           claimId: "c4",
           actorId: "staff-sian",
           role: "staff",
           step: "engineer_inspection_booked",
-          occurredOn: "2026-09-01",
+          occurredOn: booked,
           note: "Booked.",
         });
         recordRepairProgressStep({
@@ -299,33 +319,36 @@ describe("repair progress", () => {
           actorId: "staff-sian",
           role: "staff",
           step: "engineer_inspection_attended",
-          occurredOn: "2026-09-14",
+          occurredOn: shiftDay(booked, 6),
           note: "Attended.",
         });
-        assert.equal(gapsForClaim("c4", false).length, 0);
+        assert.equal(
+          gapsForClaim("c4", false).filter((gap) => gap.kind === "between" && !gap.historical).length,
+          0,
+        );
         explainRepairProgressGap({
-          claimId: "c3",
+          claimId: "c1",
           actorId: "staff-tom",
           role: "staff",
           fromEventId: flagged[0]!.fromEventId,
           toEventId: flagged[0]!.toEventId,
           note: "awaiting the engineer",
         });
-        const cleared = gapsForClaim("c3", false);
+        const cleared = gapsForClaim("c1", false).filter((gap) => gap.kind === "between" && !gap.historical);
         assert.equal(cleared.filter((gap) => !gap.explained).length, 0);
         assert.match(explainedGapWording(cleared[0]!), /awaiting the engineer/);
         recordRepairProgressStep({
-          claimId: "c3",
+          claimId: "c1",
           actorId: "staff-tom",
           role: "staff",
           step: "engineer_report_sent_to_insurer",
-          occurredOn: "2026-10-06",
+          occurredOn: shiftDay(attended, 8),
           note: "Posted on.",
           recipient: "Admiral",
         });
-        const again = gapsForClaim("c3", false).filter((gap) => !gap.explained);
+        const again = gapsForClaim("c1", false).filter((gap) => gap.kind === "between" && !gap.explained && !gap.historical);
         assert.equal(again.length, 1);
-        assert.ok(again[0]!.inclusiveDays > 15);
+        assert.equal(again[0]!.days, 8);
         assert.notEqual(again[0]!.fromEventId, flagged[0]!.fromEventId);
       });
     } finally {
@@ -352,7 +375,11 @@ describe("repair progress", () => {
         const after = justificationChronology(listClaimEvents("c9"), { totalLoss: true });
         assert.equal(after.some((line) => line.eventType === "vehicle_received_for_repair"), true);
         assert.deepEqual(justificationRepairGaps(listClaimEvents("c9"), { totalLoss: true }), []);
-        assert.equal(repairProgressGaps(listClaimEvents("c9"), { totalLoss: true }).length, 0);
+        const lossGaps = repairProgressGaps(listClaimEvents("c9"), { totalLoss: true, today: londonTodayIso() });
+        assert.equal(
+          lossGaps.some((gap) => gap.fromLabel.includes("Vehicle received") || gap.toLabel.includes("Vehicle received")),
+          false,
+        );
       });
     } finally {
       db.close();
@@ -383,8 +410,18 @@ describe("repair progress", () => {
           storage_billing_end_on: string | null;
         };
         assert.equal(String(c5.storage_billing_end_on || ""), "");
+        const endBefore = db.prepare(`SELECT storage_billing_end_on FROM claims WHERE id = 'c8'`).get() as {
+          storage_billing_end_on: string | null;
+        };
         const storage = storageAuthorisationEndForClaim("c8");
-        assert.equal(storage.kind, "matches");
+        assert.equal(storage.kind, "review");
+        if (storage.kind === "review") {
+          assert.equal(storage.reasons.includes("Storage end is after repairs started, review"), true);
+        }
+        const endAfter = db.prepare(`SELECT storage_billing_end_on FROM claims WHERE id = 'c8'`).get() as {
+          storage_billing_end_on: string | null;
+        };
+        assert.equal(endAfter.storage_billing_end_on, endBefore.storage_billing_end_on);
         const c8Lines = justificationChronology(listClaimEvents("c8"));
         for (const step of [
           "engineer_inspection_booked",
@@ -401,17 +438,181 @@ describe("repair progress", () => {
           assert.equal(c8Lines.some((line) => line.eventType === step), true, step);
         }
         assert.deepEqual(justificationRepairGaps(listClaimEvents("c8")), []);
-        const explained = gapsForClaim("c8", false);
-        assert.equal(explained.length, 1);
-        assert.equal(explained[0]?.explained, true);
-        assert.match(String(explained[0]?.note), /awaiting parts/);
+        const c8Gaps = gapsForClaim("c8", false);
+        const historical = c8Gaps.filter((gap) => gap.historical);
+        assert.equal(historical.length, 1);
+        assert.match(String(historical[0]?.note), /awaiting parts/);
+        assert.match(String(historical[0]?.note), /splits this wait/);
+        assert.match(explainedGapWording(historical[0]!), /awaiting parts/);
+        const c8Open = c8Gaps.filter((gap) => !gap.explained && !gap.historical);
+        assert.equal(c8Open.some((gap) => gap.kind === "between"), true);
+        const c7Events = listClaimEvents("c7");
+        const c7Report = c7Events.find((event) => event.event_type === "engineer_report_received");
+        const c7Attend = c7Events.find((event) => event.event_type === "engineer_inspection_attended");
+        const c7Started = c7Events.find((event) => event.event_type === "repairs_started");
+        assert.ok(c7Report && c7Attend && c7Started);
+        assert.ok(String(c7Attend.occurred_at) <= String(c7Report.occurred_at));
+        assert.ok(String(c7Started.occurred_at) >= String(c7Report.occurred_at));
+        const c7Since = gapsForClaim("c7", false).filter((gap) => gap.kind === "since" && !gap.explained);
+        assert.equal(c7Since.length, 1);
+        assert.ok(c7Since[0]!.days >= 7);
+        assert.equal(c7Since[0]!.fromEventId, c7Started.id);
         const dashboard = listRepairGapClaims();
-        assert.equal(dashboard.some((row) => row.fileReference === "TEST-0008"), false);
+        assert.equal(dashboard.some((row) => row.fileReference === "TEST-0008" && row.wording.includes("Unexplained gap")), true);
+        assert.equal(
+          dashboard.some((row) => row.fileReference === "TEST-0008" && row.wording.includes("awaiting parts")),
+          false,
+        );
         const shown = dashboard.filter((row) => row.fileReference === "TEST-0007");
         assert.equal(shown.length, 1);
-        assert.match(shown[0]!.wording, /Unexplained gap of 15 days between Engineer inspection booked and Engineer inspection attended/);
+        assert.match(shown[0]!.wording, /^No progress recorded for \d+ days since Repairs started on /);
         const sent = c8Lines.find((line) => line.eventType === "engineer_report_sent_to_insurer");
         assert.match(String(sent?.details), /Sent to AXA/);
+      });
+    } finally {
+      db.close();
+    }
+  });
+
+  it("flags no progress on an open claim, stops when the vehicle is returned, and ignores a chaser", () => {
+    const today = "2026-10-15";
+    const open = repairProgressGaps(
+      [step("a", "engineer_instructed", "Engineer instructed", "2026-10-01")],
+      { today, thresholdDays: 7 },
+    );
+    assert.equal(open.length, 1);
+    assert.equal(open[0]?.kind, "since");
+    assert.equal(open[0]?.days, 14);
+    assert.equal(noProgressWording(open[0]!), "No progress recorded for 14 days since Engineer instructed on 01/10/2026");
+    const returned = repairProgressGaps(
+      [
+        step("a", "engineer_instructed", "Engineer instructed", "2026-10-01"),
+        step("back", "vehicle_returned", "Repaired vehicle returned to customer", "2026-10-14"),
+      ],
+      { today, thresholdDays: 7 },
+    );
+    assert.equal(returned.some((gap) => gap.kind === "since"), false);
+    const chased = repairProgressGaps(
+      [
+        step("a", "repairs_started", "Repairs started", "2026-09-01"),
+        step("chase", "repair_authorisation_requested", "Repair authorisation requested", "2026-09-04"),
+        step("b", "repairs_authorised", "Repair authorisation received", "2026-09-08"),
+      ],
+      { today, thresholdDays: 7 },
+    );
+    const between = chased.filter((gap) => gap.kind === "between");
+    assert.equal(between.length, 1);
+    assert.equal(between[0]?.days, 7);
+    assert.equal(between[0]?.fromLabel, "Repairs started");
+    assert.equal(between[0]?.toLabel, "Repair authorisation received");
+    assert.equal(chased.some((gap) => gap.fromLabel.includes("requested") || gap.toLabel.includes("requested")), false);
+  });
+
+  it("brings the since-last-step flag back seven days after the explanation", () => {
+    const events = [step("a", "repairs_started", "Repairs started", "2026-09-01")];
+    const today = "2026-09-20";
+    const open = repairProgressGaps(events, { today, thresholdDays: 7 });
+    assert.equal(gapFlagWording(open[0]!), "No progress recorded for 19 days since Repairs started on 01/09/2026");
+    const silenced = repairProgressGaps(events, {
+      today,
+      thresholdDays: 7,
+      explanations: [
+        {
+          id: "gap-1",
+          fromEventId: "a",
+          toEventId: SINCE_LAST_STEP,
+          days: 19,
+          note: "waiting on the insurer",
+          recordedAt: atNine("2026-09-15"),
+        },
+      ],
+    });
+    assert.equal(silenced.filter((gap) => !gap.explained).length, 0);
+    const back = repairProgressGaps(events, {
+      today: "2026-09-22",
+      thresholdDays: 7,
+      explanations: [
+        {
+          id: "gap-1",
+          fromEventId: "a",
+          toEventId: SINCE_LAST_STEP,
+          days: 19,
+          note: "waiting on the insurer",
+          recordedAt: atNine("2026-09-15"),
+        },
+      ],
+    });
+    assert.equal(back[0]?.still, true);
+    assert.equal(
+      stillNoProgressWording(back[0]!),
+      "Still no progress recorded for 21 days since Repairs started, last explained 15/09/2026",
+    );
+    assert.equal(gapFlagWording(back[0]!), stillNoProgressWording(back[0]!));
+    const quiet = repairProgressGaps(events, {
+      today: "2026-09-21",
+      thresholdDays: 7,
+      explanations: [
+        {
+          id: "gap-1",
+          fromEventId: "a",
+          toEventId: SINCE_LAST_STEP,
+          days: 19,
+          note: "waiting on the insurer",
+          recordedAt: atNine("2026-09-15"),
+        },
+      ],
+    });
+    assert.equal(quiet.filter((gap) => !gap.explained).length, 0);
+  });
+
+  it("stops expecting workshop steps on a total loss and still flags the relevant gap", () => {
+    const events = [
+      step("eng", "engineer_instructed", "Engineer instructed", "2026-09-01"),
+      step("recv", "vehicle_received_for_repair", "Vehicle received for repair", "2026-09-02"),
+      step("start", "repairs_started", "Repairs started", "2026-09-03"),
+      step("sent", "engineer_report_sent_to_insurer", "Engineer's report sent to insurer", "2026-09-10"),
+    ];
+    const gaps = repairProgressGaps(events, { totalLoss: true, today: "2026-10-15", thresholdDays: 7 });
+    assert.equal(gaps.some((gap) => gap.fromLabel.includes("Vehicle received") || gap.toLabel.includes("Vehicle received")), false);
+    assert.equal(gaps.some((gap) => gap.fromLabel === "Repairs started" || gap.toLabel === "Repairs started"), false);
+    const between = gaps.filter((gap) => gap.kind === "between");
+    assert.equal(between.length, 1);
+    assert.equal(between[0]?.fromLabel, "Engineer instructed");
+    assert.equal(between[0]?.toLabel, "Engineer's report sent to insurer");
+    assert.equal(between[0]?.days, 9);
+    const since = gaps.find((gap) => gap.kind === "since");
+    assert.equal(since?.fromLabel, "Engineer's report sent to insurer");
+    assert.equal(since?.days, 35);
+  });
+
+  it("lists an open gap on the dashboard and drops it once the vehicle is returned", () => {
+    const db = seeded();
+    try {
+      withDatabase(db, () => {
+        listClaimEvents("c1");
+        const today = londonTodayIso();
+        recordRepairProgressStep({
+          claimId: "c1",
+          actorId: "staff-sian",
+          role: "staff",
+          step: "engineer_inspection_booked",
+          occurredOn: shiftDay(today, -7),
+          note: "Booked.",
+        });
+        const shown = listRepairGapClaims().filter((row) => row.fileReference === "TEST-0001");
+        assert.equal(shown.length, 1);
+        assert.match(shown[0]!.wording, /^No progress recorded for 7 days since Engineer inspection booked on /);
+        const quiet = listRepairGapClaims().filter(
+          (row) => row.fileReference === "TEST-0004" && row.wording.includes("Unexplained gap of 6"),
+        );
+        assert.equal(quiet.length, 0);
+        db.prepare(
+          `INSERT INTO claim_events(id, claim_id, event_type, title, details, occurred_at, recorded_at, actor_id, source)
+           VALUES ('ret-c1', 'c1', 'vehicle_returned', 'Repaired vehicle returned to customer', 'Returned.', ?, ?, 'staff-sian', 'staff')`,
+        ).run(atNine(today), atNine(today));
+        db.prepare(`UPDATE claims SET repaired_vehicle_returned = 1 WHERE id = 'c1'`).run();
+        const after = listRepairGapClaims().filter((row) => row.fileReference === "TEST-0001");
+        assert.equal(after.some((row) => row.wording.startsWith("No progress")), false);
       });
     } finally {
       db.close();

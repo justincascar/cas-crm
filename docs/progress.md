@@ -621,7 +621,7 @@ TEST-0003 had a hire collection date of 03/10/2026 on the booking with no hire e
 ## Decisions confirmed on 14 October 2026
 
 - Repairable hire ends on hire car collection.
-- Repairable storage ends on repair authorisation, confirmed by a handler.
+- Repairable storage ends on the earlier of repairs started and repair authorisation, confirmed by a handler. Updated by Justin on 15/10/2026. The 13 October note that it ended on authorisation alone is replaced by that rule.
 - Storage and hire are both charged for the start day and the end day. Confirmed 14/10/2026. Storage from 22/09/2026 to 01/10/2026 is 10 days, and hire uses the same count.
 - Hire agreement renewal alerts stay on day 70, day 80 and day 88. Day 1 of that count is the agreement start day.
 - CAS’s default insurer payment term is Due on receipt. Invoices and payment requests say “Payment is due immediately upon receipt of this invoice.” It is never shown as 0 days. Confirmed by Justin on 14 October 2026. A different term can be stored for one insurer and is shown as that insurer’s own words. If none is stored, the default applies.
@@ -694,17 +694,37 @@ Tests: `tests/start-date-bank-terms.test.ts`, with the existing charge, payment-
 
 The hire and repair chronology can now show the inspection booking, the inspection attendance, the engineer’s report sent to the insurer, the vehicle received for repair, and parts ordered. Parts delayed can be recorded more than once. Each is a dated `claim_events` row: the date it happened, who recorded it, and a note. Once saved, the row is not edited. A correction is a new entry, “Correction of a repair step”, and the original stays.
 
-Staff record them with Record step on Engineering (inspection booked, inspection attended, report sent to the insurer) and on Repair evidence (vehicle received, parts ordered, parts delayed, repairs started, repairs complete). A bodyshop / mechanic login can record the workshop steps and is refused the inspection and insurer steps. That split is proposed and is waiting for Justin’s confirmation. It is checked on the server.
+Staff record them with Record step on Engineering (inspection booked, inspection attended, report sent to the insurer) and on Repair evidence (vehicle received, parts ordered, parts delayed, repairs started, repairs complete). A bodyshop / mechanic login may record the workshop steps and is refused the inspection and insurer steps. Justin confirmed that split on 15/10/2026. It is checked on the server.
 
 A genuine live send of the engineer’s report from the CRM records “Engineer's report sent to insurer” by itself. A simulated send does not. The screen says “Simulated, not recorded as sent”. If the report was sent outside the CRM, staff record it by hand, with who it was sent to.
 
 On an open repairable file, a missing required step is shown as “not recorded”, without a date. Parts delayed is not shown as missing. A total loss does not gain those blank lines. A step already recorded stays if the file later becomes a total loss. Steps can be saved out of order. The chronology sorts them by the date on the row.
 
-Between two consecutive recorded steps, an inclusive gap of 15 days or more is flagged until someone explains that pair. 14 inclusive days is not flagged. Both the first day and the last day count. The explanation is kept for the pair it was written for. A later or larger gap is flagged again. The 15 days is a review prompt in Settings, not a legal limit, and is waiting for Justin’s confirmation. The dashboard lists those files as “Repair progress gaps to explain”.
+The gap rule below was updated on 15/10/2026. The 15 inclusive days noted here was a proposed review prompt. Justin confirmed 7 real days. See Decisions confirmed on 15 October 2026.
 
 TEST-0008 has a full demonstration repair history, including one explained gap (“awaiting parts”) between repairs started and repairs complete. TEST-0007 has an unexplained 15-day gap between the inspection booking and the inspection attendance. No other file was backfilled. Hire money, agreed figures, TEST-0006’s money, TEST-0007’s £800, TEST-0009’s vehicle-damage offers and TEST-0005’s unconfirmed storage end were not changed. Hire agreement renewal alerts stay on day 70, day 80 and day 88. No live email was sent.
 
 Tests: `tests/repair-progress.test.ts`. Full suite: 414 passing, 0 failing.
+
+## Storage end and repair-progress gaps (15 October 2026)
+
+Three decisions, confirmed by Justin on 15/10/2026:
+
+1. On a repairable claim, storage stops on whichever is earlier: the date repairs started or the date the repair was authorised. It is still only proposed until a handler confirms it. If only one of those dates is on the file, that date is proposed. A later date that is after the earlier one does not move an unconfirmed proposal. A confirmed storage end is not rewritten. If a confirmed storage end is later than repairs started, the file says “Storage end is after repairs started, review”.
+2. The repair-progress gap threshold is 7 days. The next day counts as 1 day. A gap of 7 days is flagged. 6 is not. The setting is `repair_progress_gap_days`. A stored 15, which was the previous code default, is updated to 7. A different number saved by a handler is left as it is.
+3. A bodyshop / mechanic login may record the workshop steps (vehicle received, parts ordered, parts delayed, repairs started, repairs complete). It may not record inspection or insurer steps. The server checks the role.
+
+Before this change, a gap compared consecutive recorded steps in a fixed conceptual order (inspection booked, inspection attended, report received, report sent, repair authorisation, vehicle received, parts ordered, each parts delay, repairs started, repairs complete), skipping any step that was not on the file. It did not sort that list by date, and it did not compare fixed pairs only. The day count included both the first day and the last day. The threshold was 15. There was no “nothing since the last step” flag. A total loss produced no gap flags.
+
+The gap is now the real days between each repair-progress step and the next one by date. Recovery completed, engineer instructed and the repaired vehicle returned are included. Chasers and letters stay on the chronology and do not reset the gap. On an open repairable file, the last step is also compared with today. Open means the repaired vehicle has not been returned and the claim is not closed. The wording is “No progress recorded for [n] days since [step] on [date]”. An explanation of that open flag comes back after another 7 days with no new step: “Still no progress recorded for [n] days since [step], last explained [date]”. An explanation of a gap between two steps still clears that pair only. A total loss no longer expects workshop steps. A gap between the steps that still apply, and no progress since the last of those steps while the claim is not closed, is still flagged. Workshop “not recorded” lines are not added. A workshop step already recorded stays on the chronology.
+
+TEST-0007’s demonstration inspection attendance was 15/09/2026, after the report received on 02/09/2026. That attendance was moved to 02/09/2026, earlier the same day as the report. Recovery completed 31/08/2026, engineer instructed 01/09/2026, inspection booked 01/09/2026, report received 02/09/2026 and repairs started 07/09/2026 were not moved. The report is not before the inspection. The last repair-progress step is repairs started on 07/09/2026, so the file shows no progress since that step. The £800 hire balance was not written off (£100 received, £800 outstanding).
+
+TEST-0008 still has repairs started on 01/09/2026 before repair authorisation on 11/09/2026. The stored storage end of 11/09/2026 is not rewritten. There is no storage start date, so no new end is confirmed. The file says “Storage end is after repairs started, review”. The earlier “awaiting parts” note was an inclusive count of 21 days from repairs started to repairs complete. Those dates are 20 real days, and authorisation on 11/09/2026 splits them into two gaps of 10 days. The note now says that, and it does not clear either gap. Hire money, the £1,500 offer awaiting decision, and the unresolved stored-versus-calculated flag were not changed.
+
+TEST-0005’s proposed storage end of 01/10/2026 is still unconfirmed. TEST-0003’s storage end of 14/09/2026 is unchanged. TEST-0009’s vehicle-damage offers were not changed. TEST-0006’s money was not changed. Hire agreement renewal alerts stay on day 70, day 80 and day 88. No live email was sent.
+
+Tests: `tests/repair-progress.test.ts` and `tests/hire-storage-end.test.ts`. Full suite: 421 passing, 0 failing.
 
 ## Not yet claimed
 

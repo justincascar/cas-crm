@@ -3,13 +3,47 @@ export type RepairAuthorisationState = {
   withdrawn: boolean;
 };
 
+export type StorageEndBasis = "authorisation" | "repairs_started";
+
+/** Shown when a stored end is later than repairs started. The stored date is not changed. */
+export const STORAGE_END_AFTER_REPAIRS_STARTED = "Storage end is after repairs started, review";
+
 export type StorageAuthorisationEnd =
   | { kind: "open" }
-  | { kind: "suggest"; date: string }
-  | { kind: "matches"; date: string }
-  | { kind: "conflict"; suggestedDate: string; existingDate: string }
-  | { kind: "kept"; date: string; suggestedDate: string }
+  | { kind: "suggest"; date: string; basis: StorageEndBasis; earlierThanAuthorisation: boolean }
+  | { kind: "matches"; date: string; basis: StorageEndBasis; earlierThanAuthorisation: boolean }
+  | { kind: "conflict"; suggestedDate: string; existingDate: string; basis: StorageEndBasis; earlierThanAuthorisation: boolean }
+  | { kind: "kept"; date: string; suggestedDate: string; basis: StorageEndBasis; earlierThanAuthorisation: boolean }
   | { kind: "review"; reasons: string[]; existingDate: string | null; suggestedDate: string | null };
+
+/**
+ * The earlier of repairs started and repair authorisation. Either date alone is the proposal.
+ * A later date that is after the earlier one does not move an unconfirmed proposal.
+ */
+export function repairStorageEndProposal(
+  authorisationDay: string | null,
+  repairsStartedDay: string | null,
+): { date: string; basis: StorageEndBasis; earlierThanAuthorisation: boolean } | null {
+  if (authorisationDay && repairsStartedDay) {
+    if (repairsStartedDay < authorisationDay) {
+      return { date: repairsStartedDay, basis: "repairs_started", earlierThanAuthorisation: true };
+    }
+    return { date: authorisationDay, basis: "authorisation", earlierThanAuthorisation: false };
+  }
+  if (repairsStartedDay) return { date: repairsStartedDay, basis: "repairs_started", earlierThanAuthorisation: false };
+  if (authorisationDay) return { date: authorisationDay, basis: "authorisation", earlierThanAuthorisation: false };
+  return null;
+}
+
+export function proposedStorageEndSentence(basis: StorageEndBasis, earlierThanAuthorisation = false): string {
+  const tail =
+    "Storage is charged up to that date only after you confirm it. Nothing has been written yet. The vehicle can stay at CAS after charging stops.";
+  if (basis === "repairs_started" && earlierThanAuthorisation) {
+    return `This is the date repairs started, which is earlier than the repair authorisation. ${tail}`;
+  }
+  if (basis === "repairs_started") return `This is the date repairs started. ${tail}`;
+  return `This is the date repair authorisation was recorded. ${tail}`;
+}
 
 export type HireReturnGap = {
   returnedDay: string;
@@ -56,38 +90,69 @@ export function storageAuthorisationEndDecision(input: {
   totalLoss: boolean;
   totalLossReview: boolean;
   authorisationDay: string | null;
+  repairsStartedDay?: string | null;
   withdrawn: boolean;
   existingEndDay: string | null;
   keptSuggestionDay: string | null;
 }): StorageAuthorisationEnd {
+  const repairsStartedDay = input.repairsStartedDay || null;
+  const proposal = repairStorageEndProposal(input.authorisationDay, repairsStartedDay);
+  const reasons: string[] = [];
   if (input.totalLossReview) {
+    reasons.push(
+      "This file was marked a total loss after repair authorisation. Any storage end proposed or confirmed for the repair does not stay in force. The date on the file has not been changed. It needs review. Total-loss rules apply from here.",
+    );
+  }
+  if (input.withdrawn && input.existingEndDay) {
+    reasons.push(
+      "Repair authorisation was withdrawn or revised away. The confirmed storage end has not been changed. It needs review.",
+    );
+  }
+  if (input.existingEndDay && repairsStartedDay && input.existingEndDay > repairsStartedDay) {
+    reasons.push(STORAGE_END_AFTER_REPAIRS_STARTED);
+  }
+  if (reasons.length > 0) {
     return {
       kind: "review",
-      reasons: [
-        "This file was marked a total loss after repair authorisation. Any storage end proposed or confirmed for the repair does not stay in force. The date on the file has not been changed. It needs review. Total-loss rules apply from here.",
-      ],
+      reasons,
       existingDate: input.existingEndDay,
-      suggestedDate: input.authorisationDay,
+      suggestedDate: proposal?.date ?? null,
     };
   }
   if (input.totalLoss) return { kind: "open" };
-  if (input.withdrawn && input.existingEndDay) {
+  if (!proposal) return { kind: "open" };
+  if (!input.existingEndDay) {
     return {
-      kind: "review",
-      reasons: [
-        "Repair authorisation was withdrawn or revised away. The confirmed storage end has not been changed. It needs review.",
-      ],
-      existingDate: input.existingEndDay,
-      suggestedDate: null,
+      kind: "suggest",
+      date: proposal.date,
+      basis: proposal.basis,
+      earlierThanAuthorisation: proposal.earlierThanAuthorisation,
     };
   }
-  if (!input.authorisationDay) return { kind: "open" };
-  if (!input.existingEndDay) return { kind: "suggest", date: input.authorisationDay };
-  if (input.existingEndDay === input.authorisationDay) return { kind: "matches", date: input.authorisationDay };
-  if (input.keptSuggestionDay === input.authorisationDay) {
-    return { kind: "kept", date: input.existingEndDay, suggestedDate: input.authorisationDay };
+  if (input.existingEndDay === proposal.date) {
+    return {
+      kind: "matches",
+      date: proposal.date,
+      basis: proposal.basis,
+      earlierThanAuthorisation: proposal.earlierThanAuthorisation,
+    };
   }
-  return { kind: "conflict", suggestedDate: input.authorisationDay, existingDate: input.existingEndDay };
+  if (input.keptSuggestionDay === proposal.date) {
+    return {
+      kind: "kept",
+      date: input.existingEndDay,
+      suggestedDate: proposal.date,
+      basis: proposal.basis,
+      earlierThanAuthorisation: proposal.earlierThanAuthorisation,
+    };
+  }
+  return {
+    kind: "conflict",
+    suggestedDate: proposal.date,
+    existingDate: input.existingEndDay,
+    basis: proposal.basis,
+    earlierThanAuthorisation: proposal.earlierThanAuthorisation,
+  };
 }
 
 export function hireReturnGap(returnedDay: string | null, collectedDay: string | null): HireReturnGap | null {
@@ -110,15 +175,20 @@ export function storageChargeHasEnded(billingEndDay: string | null, today: strin
 
 export function manualStorageEndRefusal(input: {
   authorisationDay: string | null;
+  repairsStartedDay?: string | null;
   existingEndDay: string | null;
   typedEndDay: string | null;
   reason: string;
 }): string | null {
-  if (!input.authorisationDay) return null;
+  const proposal = repairStorageEndProposal(input.authorisationDay, input.repairsStartedDay || null);
+  if (!proposal) return null;
   const typed = input.typedEndDay;
   const existing = input.existingEndDay;
   if (typed === existing) return null;
-  if (typed === input.authorisationDay) return null;
+  if (typed === proposal.date) return null;
   if (input.reason.trim()) return null;
+  if (proposal.basis === "repairs_started") {
+    return "This storage end date is not the date repairs started. Record a reason before saving it.";
+  }
   return "This storage end date is not the repair authorisation date. Record a reason before saving it.";
 }

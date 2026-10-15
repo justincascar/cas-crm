@@ -126,9 +126,10 @@ export default async function SettingsPage({
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Repair progress gap — review prompt</h2>
         <p className="mt-2 text-sm">
-          An inclusive gap of this many days between two recorded repair steps is flagged until someone explains it. 14
-          days is not flagged. {repairProgressGapDays} is. This is a review prompt awaiting confirmation. It is not a
-          legal limit, and it does not change hire agreement renewal days.
+          A gap of this many days between two repair steps, in date order, is flagged until someone explains it. The
+          next day counts as 1. {Math.max(repairProgressGapDays - 1, 0)} is not flagged. {repairProgressGapDays} is.
+          Nothing recorded since the last step for that long is flagged as well. Justin confirmed 7 days on 15/10/2026.
+          It is not a legal limit, and it does not change hire agreement renewal days.
         </p>
         <form method="post" action="/settings/repair-gap" className="mt-4 flex flex-wrap items-end gap-3">
           <label className="text-sm">

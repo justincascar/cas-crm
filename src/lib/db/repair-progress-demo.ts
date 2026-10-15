@@ -3,8 +3,9 @@ import { formatUkDate, londonDateIso, nowUtcIso, utcFromLondonDateTime } from ".
 import { eventLabel } from "../domain/events";
 import {
   REPAIR_PROGRESS_GAP_DAYS_DEFAULT,
+  REPAIR_PROGRESS_GAP_DAYS_PREVIOUS_DEFAULT,
   REPAIR_PROGRESS_GAP_SETTING,
-  inclusiveLondonDays,
+  realLondonDays,
 } from "../domain/repair-progress";
 
 /**
@@ -26,6 +27,13 @@ export function ensureRepairGapSetting(db: DatabaseSync) {
     db.prepare(`INSERT INTO settings(key, value) VALUES (?, ?)`).run(
       REPAIR_PROGRESS_GAP_SETTING,
       String(REPAIR_PROGRESS_GAP_DAYS_DEFAULT),
+    );
+    return;
+  }
+  if (String(existing.value).trim() === String(REPAIR_PROGRESS_GAP_DAYS_PREVIOUS_DEFAULT)) {
+    db.prepare(`UPDATE settings SET value = ? WHERE key = ?`).run(
+      String(REPAIR_PROGRESS_GAP_DAYS_DEFAULT),
+      REPAIR_PROGRESS_GAP_SETTING,
     );
   }
 }
@@ -49,7 +57,7 @@ function ensureTest0008RepairHistory(db: DatabaseSync) {
   const bookedDay = dayOnOrAfter(shiftDay(reportSentDay, -3), accidentDay);
   let vehicleDay = shiftDay(startDay, -2);
   let partsDay = shiftDay(startDay, -1);
-  if (inclusiveLondonDays(`${authDay}T12:00:00.000Z`, `${vehicleDay}T12:00:00.000Z`) >= REPAIR_PROGRESS_GAP_DAYS_DEFAULT) {
+  if (realLondonDays(`${authDay}T12:00:00.000Z`, `${vehicleDay}T12:00:00.000Z`) >= REPAIR_PROGRESS_GAP_DAYS_DEFAULT) {
     const closer = shiftDay(startDay, -1);
     vehicleDay = closer;
     partsDay = closer;
@@ -123,47 +131,103 @@ function ensureTest0008RepairHistory(db: DatabaseSync) {
       ) VALUES (?, 'c8', ?, ?, ?, ?, ?, 'staff-megan', 'system', 'staff')`,
     ).run(step.id, step.type, eventLabel(step.type), step.details, atHour(step.day, step.hour), now);
   }
-  if (one(db, `SELECT id FROM repair_gap_explanations WHERE id = 'gap-c8-parts'`)) return;
-  const span = inclusiveLondonDays(started.occurred_at, done.occurred_at);
+  const span = realLondonDays(started.occurred_at, done.occurred_at);
+  const auth = one<{ occurred_at: string }>(
+    db,
+    `SELECT occurred_at FROM claim_events WHERE claim_id = 'c8' AND event_type = 'repairs_authorised' ORDER BY occurred_at ASC LIMIT 1`,
+  );
+  const note = partsWaitNote(started.occurred_at, done.occurred_at, auth?.occurred_at || null, span);
+  const existing = one<{ note: string; inclusive_days: number }>(
+    db,
+    `SELECT note, inclusive_days FROM repair_gap_explanations WHERE id = 'gap-c8-parts'`,
+  );
+  if (existing) {
+    const canRewrite = existing.note === "awaiting parts" || existing.note.includes("splits this wait");
+    db.prepare(`UPDATE repair_gap_explanations SET inclusive_days = ?, note = ? WHERE id = 'gap-c8-parts'`).run(
+      span,
+      canRewrite ? note : existing.note,
+    );
+    return;
+  }
   if (span < REPAIR_PROGRESS_GAP_DAYS_DEFAULT) return;
   db.prepare(
     `INSERT INTO repair_gap_explanations(
       id, claim_id, from_event_id, to_event_id, inclusive_days, note, actor_id, recorded_at
-    ) VALUES ('gap-c8-parts', 'c8', 'ev-c8-start', 'ev-c8-done', ?, 'awaiting parts', 'staff-megan', ?)`,
-  ).run(span, now);
+    ) VALUES ('gap-c8-parts', 'c8', 'ev-c8-start', 'ev-c8-done', ?, ?, 'staff-megan', ?)`,
+  ).run(span, note, now);
 }
 
+/**
+ * TEST-0007's demonstration inspection was recorded after the report. Move that
+ * milestone so the report is not before the inspection, and leave repairs started
+ * where it already is. The last repair step then stays early enough for a
+ * no-progress flag against the app's today.
+ */
 function ensureTest0007UnexplainedGap(db: DatabaseSync) {
   const instructed = one<{ occurred_at: string }>(db, `SELECT occurred_at FROM claim_events WHERE id = 'ev-c7-eng'`);
-  if (!instructed?.occurred_at) return;
+  const report = one<{ occurred_at: string }>(db, `SELECT occurred_at FROM claim_events WHERE id = 'ev-c7-repr'`);
+  const started = one<{ occurred_at: string }>(db, `SELECT occurred_at FROM claim_events WHERE id = 'ev-c7-start'`);
+  if (!instructed?.occurred_at || !report?.occurred_at || !started?.occurred_at) return;
   const bookedDay = londonDateIso(new Date(instructed.occurred_at));
-  const attendedDay = shiftDay(bookedDay, 14);
-  const now = nowUtcIso();
-  const steps = [
-    {
-      id: "ev-c7-book",
-      type: "engineer_inspection_booked",
-      day: bookedDay,
-      hour: 15,
-      details: "Demonstration test data. Inspection booked. Recorded by Tom Davies.",
-    },
-    {
-      id: "ev-c7-attend",
-      type: "engineer_inspection_attended",
-      day: attendedDay,
-      hour: 10,
-      details: "Demonstration test data. The engineer attended. Recorded by Tom Davies.",
-    },
-  ];
-  for (const step of steps) {
-    if (one(db, `SELECT id FROM claim_events WHERE id = ?`, [step.id])) continue;
-    if (one(db, `SELECT id FROM claim_events WHERE claim_id = 'c7' AND event_type = ? LIMIT 1`, [step.type])) continue;
-    db.prepare(
-      `INSERT INTO claim_events(
-        id, claim_id, event_type, title, details, occurred_at, recorded_at, actor_id, channel, source
-      ) VALUES (?, 'c7', ?, ?, ?, ?, ?, 'staff-tom', 'system', 'staff')`,
-    ).run(step.id, step.type, eventLabel(step.type), step.details, atHour(step.day, step.hour), now);
+  const reportDay = londonDateIso(new Date(report.occurred_at));
+  const startedDay = londonDateIso(new Date(started.occurred_at));
+  let attendedDay = reportDay < startedDay ? reportDay : startedDay;
+  if (attendedDay < bookedDay) attendedDay = bookedDay;
+  let attendedAt = atHour(attendedDay, 10);
+  if (attendedAt > report.occurred_at && attendedDay === reportDay) {
+    const previous = shiftDay(reportDay, -1);
+    attendedAt = previous >= bookedDay ? atHour(previous, 10) : report.occurred_at;
   }
+  const now = nowUtcIso();
+  const booked = {
+    id: "ev-c7-book",
+    type: "engineer_inspection_booked",
+    at: atHour(bookedDay, 15),
+    details: "Demonstration test data. Inspection booked. Recorded by Tom Davies.",
+  };
+  if (!one(db, `SELECT id FROM claim_events WHERE id = ?`, [booked.id])) {
+    if (!one(db, `SELECT id FROM claim_events WHERE claim_id = 'c7' AND event_type = ? LIMIT 1`, [booked.type])) {
+      db.prepare(
+        `INSERT INTO claim_events(
+          id, claim_id, event_type, title, details, occurred_at, recorded_at, actor_id, channel, source
+        ) VALUES (?, 'c7', ?, ?, ?, ?, ?, 'staff-tom', 'system', 'staff')`,
+      ).run(booked.id, booked.type, eventLabel(booked.type), booked.details, booked.at, now);
+    }
+  }
+  const attendId = "ev-c7-attend";
+  const existingAttend = one<{ occurred_at: string }>(db, `SELECT occurred_at FROM claim_events WHERE id = ?`, [attendId]);
+  if (!existingAttend) {
+    if (!one(db, `SELECT id FROM claim_events WHERE claim_id = 'c7' AND event_type = 'engineer_inspection_attended' LIMIT 1`)) {
+      db.prepare(
+        `INSERT INTO claim_events(
+          id, claim_id, event_type, title, details, occurred_at, recorded_at, actor_id, channel, source
+        ) VALUES (?, 'c7', 'engineer_inspection_attended', ?, ?, ?, ?, 'staff-tom', 'system', 'staff')`,
+      ).run(
+        attendId,
+        eventLabel("engineer_inspection_attended"),
+        "Demonstration test data. The engineer attended. Recorded by Tom Davies.",
+        attendedAt,
+        now,
+      );
+    }
+    return;
+  }
+  const attendDay = londonDateIso(new Date(existingAttend.occurred_at));
+  if (attendDay > reportDay || existingAttend.occurred_at > report.occurred_at) {
+    db.prepare(`UPDATE claim_events SET occurred_at = ? WHERE id = ?`).run(attendedAt, attendId);
+  }
+}
+
+function partsWaitNote(startedAt: string, doneAt: string, authorisedAt: string | null, span: number): string {
+  if (!authorisedAt) return "awaiting parts";
+  const startedDay = londonDateIso(new Date(startedAt));
+  const doneDay = londonDateIso(new Date(doneAt));
+  const authDay = londonDateIso(new Date(authorisedAt));
+  if (authDay > startedDay && authDay < doneDay) {
+    return `awaiting parts. Repair authorisation on ${uk(authDay)} splits this wait, so the gaps on either side stay unexplained.`;
+  }
+  void span;
+  return "awaiting parts";
 }
 
 function one<T>(db: DatabaseSync, sql: string, params: Array<string | number> = []): T | undefined {

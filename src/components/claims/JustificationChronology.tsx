@@ -6,7 +6,7 @@ import {
 } from "@/lib/domain/justification-chronology";
 import {
   explainedGapWording,
-  unexplainedGapWording,
+  gapFlagWording,
   type RepairProgressGap,
 } from "@/lib/domain/repair-progress";
 
@@ -36,8 +36,9 @@ export function JustificationChronology({
         <p className="text-sm text-slate">
           Dated steps already on this file. A letter that was only generated is marked Generated only. If this vehicle
           is going through repair and a repair step is not on the file, that is stated underneath, without a date. A
-          long gap between two recorded steps is flagged until someone explains it. This list is taken from the file
-          history and does not change it.
+          gap of 7 days or more between two steps in date order is flagged until someone explains that pair. If nothing
+          has been recorded since the last step for that long, that is flagged too. A chaser does not reset the gap.
+          This list is taken from the file history and does not change it.
         </p>
       </div>
       {stepError ? <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{stepError}</p> : null}
@@ -73,18 +74,20 @@ export function JustificationChronology({
       {progressGaps.length > 0 ? (
         <div className="space-y-3">
           {explained.map((gap) => (
-            <p key={`${gap.fromEventId}-${gap.toEventId}-explained`} className="text-sm text-navy-deep">
-              {explainedGapWording(gap)}
+            <p key={`${gap.fromEventId}-${gap.toEventId}-${gap.historical ? "note" : "explained"}`} className="text-sm text-navy-deep">
+              {gap.kind === "since"
+                ? `No progress since ${gap.fromLabel} on ${gap.stepOn} explained on ${gap.explainedOn}: ${gap.note || ""}`
+                : explainedGapWording(gap)}
             </p>
           ))}
           {unexplained.map((gap) => (
             <form
-              key={`${gap.fromEventId}-${gap.toEventId}`}
+              key={`${gap.fromEventId}-${gap.toEventId}-${gap.still ? "still" : "open"}`}
               method="post"
               action={claimId ? `/claims/${claimId}/repair-gap` : undefined}
               className="space-y-2 rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3"
             >
-              <p className="text-sm font-semibold text-navy-deep">{unexplainedGapWording(gap)}</p>
+              <p className="text-sm font-semibold text-navy-deep">{gapFlagWording(gap)}</p>
               {claimId ? (
                 <>
                   <input type="hidden" name="fromEventId" value={gap.fromEventId} />

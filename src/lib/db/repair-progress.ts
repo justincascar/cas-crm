@@ -4,8 +4,10 @@ import { formatUkDate, nowUtcIso, utcFromLondonDateTime } from "../dates";
 import { eventLabel } from "../domain/events";
 import {
   REPAIR_PROGRESS_GAP_DAYS_DEFAULT,
+  REPAIR_PROGRESS_GAP_DAYS_PREVIOUS_DEFAULT,
   REPAIR_PROGRESS_GAP_SETTING,
   STRUCTURED_REPAIR_RECORD_TYPES,
+  gapFlagWording,
   isInspectionRepairStep,
   isOnceOnlyRepairStep,
   isWorkshopRepairStep,
@@ -55,6 +57,14 @@ export function ensureRepairGapSetting(db: DatabaseSync) {
       REPAIR_PROGRESS_GAP_SETTING,
       String(REPAIR_PROGRESS_GAP_DAYS_DEFAULT),
     );
+    return;
+  }
+  // 15 was the code's proposed default. Justin confirmed 7 on 15/10/2026. A different stored number was chosen by a handler and is left as it is.
+  if (String(existing.value).trim() === String(REPAIR_PROGRESS_GAP_DAYS_PREVIOUS_DEFAULT)) {
+    db.prepare(`UPDATE settings SET value = ? WHERE key = ?`).run(
+      String(REPAIR_PROGRESS_GAP_DAYS_DEFAULT),
+      REPAIR_PROGRESS_GAP_SETTING,
+    );
   }
 }
 
@@ -65,8 +75,9 @@ export function listRepairGapExplanations(claimId: string): RepairGapExplanation
     to_event_id: string;
     inclusive_days: number;
     note: string;
+    recorded_at: string;
   }>(
-    `SELECT id, from_event_id, to_event_id, inclusive_days, note
+    `SELECT id, from_event_id, to_event_id, inclusive_days, note, recorded_at
      FROM repair_gap_explanations WHERE claim_id = ? ORDER BY recorded_at ASC, id ASC`,
     [claimId],
   );
@@ -74,8 +85,9 @@ export function listRepairGapExplanations(claimId: string): RepairGapExplanation
     id: String(row.id),
     fromEventId: String(row.from_event_id),
     toEventId: String(row.to_event_id),
-    inclusiveDays: Number(row.inclusive_days),
+    days: Number(row.inclusive_days),
     note: String(row.note),
+    recordedAt: String(row.recorded_at),
   }));
 }
 
@@ -94,13 +106,13 @@ export function listRepairGapClaims(): RepairGapClaimRow[] {
     client_name: string | null;
     total_loss: number | null;
     later_declared_total_loss: number | null;
+    repaired_vehicle_returned: number | null;
   }>(
-    `SELECT c.id, c.file_reference, p.full_name AS client_name, c.total_loss, c.later_declared_total_loss
+    `SELECT c.id, c.file_reference, p.full_name AS client_name, c.total_loss, c.later_declared_total_loss,
+            c.repaired_vehicle_returned
      FROM claims c
      LEFT JOIN people p ON p.id = c.client_person_id
-     WHERE COALESCE(c.total_loss, 0) = 0
-       AND COALESCE(c.later_declared_total_loss, 0) = 0
-       AND NOT EXISTS (
+     WHERE NOT EXISTS (
          SELECT 1 FROM claim_events closed
          WHERE closed.claim_id = c.id AND closed.event_type = 'case_closed'
        )
@@ -116,7 +128,8 @@ export function listRepairGapClaims(): RepairGapClaimRow[] {
     to_event_id: string;
     inclusive_days: number;
     note: string;
-  }>(`SELECT id, claim_id, from_event_id, to_event_id, inclusive_days, note FROM repair_gap_explanations`);
+    recorded_at: string;
+  }>(`SELECT id, claim_id, from_event_id, to_event_id, inclusive_days, note, recorded_at FROM repair_gap_explanations`);
   const byClaim = new Map<string, RepairProgressEvent[]>();
   for (const event of events) {
     const list = byClaim.get(String(event.claim_id)) ?? [];
@@ -130,25 +143,28 @@ export function listRepairGapClaims(): RepairGapClaimRow[] {
       id: String(note.id),
       fromEventId: String(note.from_event_id),
       toEventId: String(note.to_event_id),
-      inclusiveDays: Number(note.inclusive_days),
+      days: Number(note.inclusive_days),
       note: String(note.note),
+      recordedAt: String(note.recorded_at),
     });
     notesByClaim.set(String(note.claim_id), list);
   }
   const rows: RepairGapClaimRow[] = [];
   for (const claim of claims) {
+    const totalLoss = Number(claim.total_loss) === 1 || Number(claim.later_declared_total_loss) === 1;
     const gaps = repairProgressGaps(byClaim.get(String(claim.id)) ?? [], {
-      totalLoss: false,
+      totalLoss,
       closed: false,
+      returned: Number(claim.repaired_vehicle_returned) === 1,
       thresholdDays: threshold,
       explanations: notesByClaim.get(String(claim.id)) ?? [],
-    }).filter((gap) => !gap.explained);
+    }).filter((gap) => !gap.explained && !gap.historical);
     for (const gap of gaps) {
       rows.push({
         claimId: String(claim.id),
         fileReference: String(claim.file_reference),
         clientName: String(claim.client_name || "Unknown client"),
-        wording: `Unexplained gap of ${gap.inclusiveDays} days between ${gap.fromLabel} and ${gap.toLabel}`,
+        wording: gapFlagWording(gap),
       });
     }
   }
@@ -250,7 +266,7 @@ export function explainRepairProgressGap(input: {
     `INSERT INTO repair_gap_explanations(
       id, claim_id, from_event_id, to_event_id, inclusive_days, note, actor_id, recorded_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, input.claimId, gap.fromEventId, gap.toEventId, gap.inclusiveDays, note, input.actorId, nowUtcIso()],
+    [id, input.claimId, gap.fromEventId, gap.toEventId, gap.days, note, input.actorId, nowUtcIso()],
   );
   return id;
 }
@@ -277,9 +293,14 @@ export function assertRepairStepRole(role: string, step: string) {
 export function gapsForClaim(claimId: string, totalLoss: boolean): RepairProgressGap[] {
   const events = claimProgressEvents(claimId);
   const closed = events.some((event) => event.event_type === "case_closed");
+  const returned = get<{ repaired_vehicle_returned: number | null }>(
+    `SELECT repaired_vehicle_returned FROM claims WHERE id = ?`,
+    [claimId],
+  );
   return repairProgressGaps(events, {
     totalLoss,
     closed,
+    returned: Number(returned?.repaired_vehicle_returned) === 1,
     thresholdDays: getRepairGapThresholdDays(),
     explanations: listRepairGapExplanations(claimId),
   });

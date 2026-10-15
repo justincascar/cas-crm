@@ -3,10 +3,12 @@ import {
   hireReturnGap,
   manualStorageEndRefusal,
   repairAuthorisationState,
+  repairStorageEndProposal,
   storageAuthorisationEndDecision,
   storageChargeHasEnded,
   type HireReturnGap,
   type StorageAuthorisationEnd,
+  type StorageEndBasis,
 } from "../domain/storage-authorisation-end";
 import { recordClaimEvent } from "./chronology";
 import { get, all, run } from "./connection";
@@ -46,6 +48,17 @@ export function repairAuthorisationForClaim(claimId: string) {
   return repairAuthorisationState(events, (occurredAt) => calendarDay(occurredAt));
 }
 
+/** The earliest recorded repairs-started day. A later authorisation does not move this date. */
+export function repairsStartedDayForClaim(claimId: string): string | null {
+  const row = get<{ occurred_at: string }>(
+    `SELECT occurred_at FROM claim_events
+     WHERE claim_id = ? AND event_type = 'repairs_started'
+     ORDER BY occurred_at ASC, id ASC LIMIT 1`,
+    [claimId],
+  );
+  return calendarDay(row?.occurred_at);
+}
+
 function keptSuggestionDay(claimId: string): string | null {
   const row = get<{ details: string | null }>(
     `SELECT details FROM claim_events
@@ -66,10 +79,19 @@ export function storageAuthorisationEndForClaim(claimId: string): StorageAuthori
     totalLoss: Number(claim.total_loss) === 1,
     totalLossReview: claim.storage_authorisation_review === "total_loss",
     authorisationDay: authorisation.day,
+    repairsStartedDay: repairsStartedDayForClaim(claimId),
     withdrawn: authorisation.withdrawn,
     existingEndDay: calendarDay(claim.storage_billing_end_on),
     keptSuggestionDay: keptSuggestionDay(claimId),
   });
+}
+
+function proposalPhrase(basis: StorageEndBasis, earlierThanAuthorisation: boolean): string {
+  if (basis === "repairs_started" && earlierThanAuthorisation) {
+    return "the date repairs started, which is earlier than the repair authorisation";
+  }
+  if (basis === "repairs_started") return "the date repairs started";
+  return "the date repair authorisation was recorded";
 }
 
 export function confirmStorageAuthorisationEnd(input: {
@@ -107,6 +129,8 @@ export function confirmStorageAuthorisationEnd(input: {
     return;
   }
   const date = view.kind === "suggest" ? view.date : view.suggestedDate;
+  const basis = view.kind === "suggest" || view.kind === "conflict" ? view.basis : "authorisation";
+  const earlier = view.kind === "suggest" || view.kind === "conflict" ? view.earlierThanAuthorisation : false;
   run(`UPDATE claims SET storage_billing_end_on = ?, storage_authorisation_review = NULL WHERE id = ?`, [date, input.claimId]);
   const after = readClaim(input.claimId);
   const hireAfter = get<{ billing_end_at: string | null; rate_pence_per_day: number | null }>(
@@ -127,7 +151,7 @@ export function confirmStorageAuthorisationEnd(input: {
     eventType: "storage_end_date_confirmed",
     occurredAt: nowUtcIso(),
     actorId: input.actorId,
-    details: `Staff confirmed storage ends on ${ukDay(date)}, the date repair authorisation was recorded. The vehicle can stay at CAS after this. The daily rate was left as it is.`,
+    details: `Staff confirmed storage ends on ${ukDay(date)}, ${proposalPhrase(basis, earlier)}. The vehicle can stay at CAS after this. The daily rate was left as it is.`,
     source: "staff",
   });
 }
@@ -165,6 +189,7 @@ export function storageEndManualMessage(claimId: string, typedEnd: string, reaso
   const authorisation = repairAuthorisationForClaim(claimId);
   return manualStorageEndRefusal({
     authorisationDay: authorisation.day,
+    repairsStartedDay: repairsStartedDayForClaim(claimId),
     existingEndDay: calendarDay(claim.storage_billing_end_on),
     typedEndDay: calendarDay(typedEnd),
     reason,
@@ -178,14 +203,20 @@ export function recordManualStorageEndReason(input: {
   reason: string;
 }) {
   const authorisation = repairAuthorisationForClaim(input.claimId);
+  const started = repairsStartedDayForClaim(input.claimId);
+  const proposal = repairStorageEndProposal(authorisation.day, started);
   const typed = calendarDay(input.typedEnd);
-  if (!authorisation.day || typed === authorisation.day) return;
+  if (!proposal || typed === proposal.date) return;
+  const compared =
+    proposal.basis === "repairs_started"
+      ? `the date repairs started ${ukDay(proposal.date)}`
+      : `the repair authorisation date ${ukDay(proposal.date)}`;
   recordClaimEvent({
     claimId: input.claimId,
     eventType: "storage_end_date_confirmed",
     occurredAt: nowUtcIso(),
     actorId: input.actorId,
-    details: `Staff set the storage end to ${typed ? ukDay(typed) : "no end date"}, which is not the repair authorisation date ${ukDay(authorisation.day)}. Reason: ${input.reason.trim()}.`,
+    details: `Staff set the storage end to ${typed ? ukDay(typed) : "no end date"}, which is not ${compared}. Reason: ${input.reason.trim()}.`,
     source: "staff",
   });
   run(`UPDATE claims SET storage_authorisation_review = NULL WHERE id = ?`, [input.claimId]);

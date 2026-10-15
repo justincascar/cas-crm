@@ -242,6 +242,89 @@ describe("repairable storage end from authorisation", () => {
       assert.match(String(reason?.details || ""), /12\/09\/2026/);
     });
   });
+
+  it("proposes the repairs-started date when repairs start before authorisation", () => {
+    const db = prepared();
+    withDatabase(db, () => {
+      warmup();
+      assert.equal(storageRow("c6").storage_billing_end_on, null);
+      recordClaimEvent({
+        claimId: "c6",
+        eventType: "repairs_started",
+        occurredAt: "2026-09-01T09:00",
+        actorId: "staff-tom",
+        details: "Repairs started.",
+      });
+      const startedOnly = storageAuthorisationEndForClaim("c6");
+      assert.equal(startedOnly.kind, "suggest");
+      if (startedOnly.kind === "suggest") {
+        assert.equal(startedOnly.date, "2026-09-01");
+        assert.equal(startedOnly.basis, "repairs_started");
+      }
+      assert.equal(storageRow("c6").storage_billing_end_on, null);
+      authorise("c6", "2026-09-11T10:00");
+      const both = storageAuthorisationEndForClaim("c6");
+      assert.equal(both.kind, "suggest");
+      if (both.kind === "suggest") {
+        assert.equal(both.date, "2026-09-01");
+        assert.equal(both.earlierThanAuthorisation, true);
+      }
+      assert.equal(storageRow("c6").storage_billing_end_on, null);
+      ensureStart("c6");
+      confirmStorageAuthorisationEnd({ claimId: "c6", actorId: "staff-tom", choice: "suggested" });
+      assert.equal(storageRow("c6").storage_billing_end_on, "2026-09-01");
+    });
+  });
+
+  it("proposes the authorisation date when that date comes first", () => {
+    const db = prepared();
+    withDatabase(db, () => {
+      warmup();
+      authorise("c4", "2026-09-10T10:00");
+      const first = storageAuthorisationEndForClaim("c4");
+      assert.equal(first.kind, "suggest");
+      if (first.kind === "suggest") {
+        assert.equal(first.date, "2026-09-10");
+        assert.equal(first.basis, "authorisation");
+      }
+      recordClaimEvent({
+        claimId: "c4",
+        eventType: "repairs_started",
+        occurredAt: "2026-09-18T09:00",
+        actorId: "staff-megan",
+        details: "Repairs started later.",
+      });
+      const later = storageAuthorisationEndForClaim("c4");
+      assert.equal(later.kind, "suggest");
+      if (later.kind === "suggest") assert.equal(later.date, "2026-09-10");
+      assert.equal(storageRow("c4").storage_billing_end_on, null);
+    });
+  });
+
+  it("flags a confirmed storage end later than repairs started and does not change it", () => {
+    const db = prepared();
+    withDatabase(db, () => {
+      warmup();
+      authorise("c3", "2026-09-10T10:00");
+      ensureStart("c3");
+      confirmStorageAuthorisationEnd({ claimId: "c3", actorId: "staff-tom", choice: "suggested" });
+      assert.equal(storageRow("c3").storage_billing_end_on, "2026-09-10");
+      recordClaimEvent({
+        claimId: "c3",
+        eventType: "repairs_started",
+        occurredAt: "2026-09-01T09:00",
+        actorId: "staff-tom",
+        details: "Repairs had already started.",
+      });
+      const flagged = storageAuthorisationEndForClaim("c3");
+      assert.equal(flagged.kind, "review");
+      if (flagged.kind === "review") {
+        assert.equal(flagged.reasons.includes("Storage end is after repairs started, review"), true);
+        assert.equal(flagged.existingDate, "2026-09-10");
+      }
+      assert.equal(storageRow("c3").storage_billing_end_on, "2026-09-10");
+    });
+  });
 });
 
 describe("hire period uses the stored chargeable end", () => {
@@ -370,7 +453,15 @@ describe("returned status, existing dates, and total-loss hire", () => {
       storageAuthorisationEndForClaim("c3");
       hireGapForClaim("c3");
       assert.equal(storageRow("c3").storage_billing_end_on, "2026-09-14");
-      assert.equal(storageAuthorisationEndForClaim("c7").kind, "open");
+      const c7View = storageAuthorisationEndForClaim("c7");
+      assert.equal(c7View.kind, "matches");
+      if (c7View.kind === "matches") assert.equal(c7View.date, String(c7).slice(0, 10));
+      const c8View = storageAuthorisationEndForClaim("c8");
+      assert.equal(c8View.kind, "review");
+      if (c8View.kind === "review") {
+        assert.equal(c8View.reasons.includes("Storage end is after repairs started, review"), true);
+        assert.equal(c8View.existingDate, String(c8).slice(0, 10));
+      }
       assert.equal(storageAuthorisationEndForClaim("c10").kind, "open");
     });
   });

@@ -232,8 +232,10 @@ export default async function DashboardPage() {
       <section className="mt-8 rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Repair progress gaps to explain</h2>
         <p className="mb-4 text-sm text-slate">
-          An open repairable file where two recorded repair steps are {repairGapDays} or more days apart, counting both
-          the first day and the last day, and nobody has explained that gap. This is a review prompt, not a legal limit.
+          A repair step {repairGapDays} or more days after the previous one, or nothing recorded for that many days
+          since the last step. The next day counts as 1. {repairGapDays - 1} days is not flagged. An explanation of the
+          gap since the last step is looked at again after another {repairGapDays} days. Chasers do not reset the gap.
+          Confirmed by Justin on 15/10/2026. This is a review prompt, not a legal limit.
         </p>
         {data.repairProgressGaps.length === 0 ? (
           <p className="text-sm text-slate">None.</p>

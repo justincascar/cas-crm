@@ -709,7 +709,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
           { name: "invoiceNo", label: "Invoice no." },
           { name: "startDate", label: "Storage start date", type: "date" },
           { name: "endDate", label: "Storage end date", type: "date" },
-          { name: "endDateReason", label: "Reason, if this end date is not the repair authorisation date", type: "textarea", span: 2 },
+          { name: "endDateReason", label: "Reason, if this end date is not the proposed storage end", type: "textarea", span: 2 },
           { name: "dailyRate", label: "Storage daily rate", type: "gbp" },
           { name: "days", label: "Storage days", type: "number" },
           { name: "netAmount", label: "Net amount", type: "gbp" },

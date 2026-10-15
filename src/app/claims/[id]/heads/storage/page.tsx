@@ -113,10 +113,15 @@ export default async function StorageHeadPage({
           <StorageEndDateReview claimId={id} review={getStorageEndDateReview(id)} returnTo={returnTo} />
         ) : null}
         {startDay ? <StorageAuthorisationEndPanel claimId={id} decision={decision} returnTo={returnTo} /> : (
-          <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">
-            Start date missing. A storage end cannot be proposed or confirmed.
-            {endDay ? ` ${STORAGE_START_MISSING_REVIEW}.` : ""}
-          </p>
+          <>
+            {decision.kind === "review" ? (
+              <StorageAuthorisationEndPanel claimId={id} decision={decision} returnTo={returnTo} />
+            ) : null}
+            <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">
+              Start date missing. A storage end cannot be proposed or confirmed.
+              {endDay ? ` ${STORAGE_START_MISSING_REVIEW}.` : ""}
+            </p>
+          </>
         )}
         <dl className="grid gap-3 text-sm sm:grid-cols-2">
           <div>
@@ -137,7 +142,7 @@ export default async function StorageHeadPage({
             </dd>
           </div>
         </dl>
-        {manualReason ? <p className="text-sm">Reason the end date is not the repair authorisation date: {manualReason}</p> : null}
+        {manualReason ? <p className="text-sm">Reason the end date is not the proposed storage end: {manualReason}</p> : null}
         <ChargeableStorageNote ended={claimStorageChargeEnded(id)} endDay={endDay || null} />
         <p className="text-sm text-slate">
           The car can still be here after charging stops. The dashboard can still show it on site. It is not counted as chargeable storage once
@@ -183,7 +188,7 @@ export default async function StorageHeadPage({
                 <input name="endDate" type="date" defaultValue={endDay} className={field} />
               </label>
               <label className="text-sm sm:col-span-2">
-                Reason, if this end date is not the repair authorisation date
+                Reason, if this end date is not the proposed storage end
                 <textarea name="endDateReason" rows={2} className={field} defaultValue="" />
               </label>
             </>
