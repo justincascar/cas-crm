@@ -112,6 +112,35 @@ describe("EMAIL_SEND_MODE", () => {
     assert.equal(emailSendBanner().text, emailSendMode() === "live" ? LIVE_EMAIL_BANNER : SIMULATED_EMAIL_BANNER);
   });
 
+  it("shows the simulated banner once in the shell, and the live warning on a sending screen", async () => {
+    const { createElement } = await import("react");
+    const { renderToStaticMarkup } = await import("react-dom/server");
+    const { EmailSendModeBanner } = await import("../src/components/EmailSendModeBanner.tsx");
+    const saved = rememberEnv();
+    try {
+      delete process.env[EMAIL_SEND_MODE_ENV];
+      assert.equal(renderToStaticMarkup(createElement(EmailSendModeBanner)), "");
+      process.env[EMAIL_SEND_MODE_ENV] = "simulate";
+      assert.equal(renderToStaticMarkup(createElement(EmailSendModeBanner)), "");
+      process.env[EMAIL_SEND_MODE_ENV] = "live";
+      const live = renderToStaticMarkup(createElement(EmailSendModeBanner));
+      assert.match(live, new RegExp(LIVE_EMAIL_BANNER.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+      assert.doesNotMatch(live, /No live sending/);
+    } finally {
+      restoreEnv(saved);
+    }
+    const claimPage = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/page.tsx"), "utf8");
+    const shell = fs.readFileSync(path.join(process.cwd(), "src/components/AppShell.tsx"), "utf8");
+    const sendScreen = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/work/[screen]/page.tsx"), "utf8");
+    const documents = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/documents/page.tsx"), "utf8");
+    assert.equal(claimPage.includes(SIMULATED_EMAIL_BANNER), false);
+    assert.equal(claimPage.includes("No live sending"), false);
+    assert.match(shell, /\{emailBannerText\}/);
+    assert.match(sendScreen, /EmailSendModeBanner/);
+    assert.match(documents, /EmailSendModeBanner/);
+    assert.match(claimPage, /EmailSendModeBanner/);
+  });
+
   it("does not call Graph in simulate mode when credentials are set", async () => {
     const saved = rememberEnv();
     const db = seeded();

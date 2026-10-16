@@ -10,9 +10,10 @@ describe("opening a claim lands on Overview", () => {
     assert.match(table, /href=\{`\/claims\/\$\{row\.id\}`\}/);
     assert.doesNotMatch(table, /href=\{`\/claims\/\$\{row\.id\}\/work\//);
     assert.match(frame, /const onOverview = pathname === claimPath/);
-    assert.match(frame, /hideScreenNav = onOverview \|\| onHandover \|\| onDocuments \|\| onVehicles/);
-    assert.match(frame, /href=\{`\$\{claimPath\}\/work\/general`\}/);
-    assert.match(frame, />\s*Overview\s*</);
-    assert.match(frame, />\s*File screens\s*</);
+    assert.match(frame, /const showScreenNav = onFileScreens/);
+    assert.match(frame, /work\/general/);
+    assert.match(frame, /Overview/);
+    assert.match(frame, /File screens/);
+    assert.equal((frame.match(/<nav /g) || []).length, 1);
   });
 });

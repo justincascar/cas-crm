@@ -9,7 +9,6 @@ import { EmailSendModeBanner } from "@/components/EmailSendModeBanner";
 import { MailboxSendNotice, SendPreparedEmailForm } from "@/components/claims/SendPreparedEmailForm";
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
 import { liveEmailSending } from "@/lib/email/send-mode";
-import { SIMULATED_EMAIL_BANNER } from "@/lib/email/send-mode-copy";
 import { DOCUMENT_CHASES } from "@/lib/domain/follow-up-chases";
 import {
   claimDocumentGaps,
@@ -68,7 +67,7 @@ export default async function ClaimDocumentsPage({
           Driving licence, insurance certificate and the client&apos;s logbook (V5C) are chased every 24 hours after the client welcome is marked as
           sent. Bank statements start when the hire agreement is generated, then the same 24 hours. Uploading the paper clears the chase straight
           away. A reminder is prepared for you to send. Nothing is sent automatically.
-          {liveSending ? ` Send uses ${CAS_CLAIMS_MAILBOX}.` : ` ${SIMULATED_EMAIL_BANNER}.`}
+          {liveSending ? ` Send uses ${CAS_CLAIMS_MAILBOX}.` : ""}
         </p>
         {DOCUMENT_CHASES.some((paper) => paper.trigger === "welcome" && !paperChases.some((chase) => chase.kind === paper.kind)) ? (
           <p className="mt-3 text-sm">Driving licence, insurance certificate and logbook have not started. The client welcome has not been marked as sent.</p>
@@ -99,7 +98,6 @@ export default async function ClaimDocumentsPage({
                   ) : null}
                   {mailto && prepared ? (
                     <div className="mt-2">
-                      {liveSending ? null : <p className="text-sm font-bold">{SIMULATED_EMAIL_BANNER}.</p>}
                       <SendPreparedEmailForm
                         claimId={id}
                         correspondenceId={prepared.id}

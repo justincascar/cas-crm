@@ -8,7 +8,6 @@ import { STRUCTURED_REPAIR_RECORD_TYPES } from "@/lib/domain/repair-progress";
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
 import { impecuniosityGate } from "@/lib/db/impecuniosity";
 import { liveEmailSending } from "@/lib/email/send-mode";
-import { SIMULATED_EMAIL_BANNER } from "@/lib/email/send-mode-copy";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import Link from "next/link";
 
@@ -53,7 +52,7 @@ export function FileHistory({
           Letters and emails are built from these dates. Email is logged here.{" "}
           {liveEmailSending()
             ? `Send uses ${CAS_CLAIMS_MAILBOX}. Nothing is sent until a person clicks Send. A failed send is not recorded as sent.`
-            : `${SIMULATED_EMAIL_BANNER}. Instruct Engineer is prepared on this file. It is not sent from ${CAS_CLAIMS_MAILBOX}.`}
+            : `Instruct Engineer is prepared on this file. It is not sent from ${CAS_CLAIMS_MAILBOX}.`}
         </p>
       </div>
 

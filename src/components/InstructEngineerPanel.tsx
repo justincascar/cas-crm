@@ -10,7 +10,6 @@ import {
   actionSetClaimEngineer,
 } from "@/app/actions";
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
-import { SIMULATED_EMAIL_BANNER } from "@/lib/email/send-mode-copy";
 import { formatUkDateTime } from "@/lib/dates";
 import type { Engineer } from "@/lib/db/engineers";
 import { buildMailtoHref } from "@/lib/email/mailto";
@@ -140,7 +139,7 @@ export function InstructEngineerPanel({
           </>
         ) : (
           <>
-            {SIMULATED_EMAIL_BANNER}. Instruct Engineer prepares the letter on this file. It is not sent from {CAS_CLAIMS_MAILBOX}.
+            Instruct Engineer prepares the letter on this file. It is not sent from {CAS_CLAIMS_MAILBOX}.
           </>
         )}
       </p>
@@ -233,12 +232,12 @@ export function InstructEngineerPanel({
         </p>
       ) : mailto ? (
         <p className="mt-3 rounded-md border border-ok/40 bg-[#eef6ef] px-4 py-3 text-sm">
-          {SIMULATED_EMAIL_BANNER}. A pre-filled email to <strong>{toAddress}</strong> can be opened in your own email client. The CRM has not sent it
+          A pre-filled email to <strong>{toAddress}</strong> can be opened in your own email client. The CRM has not sent it
           from {CAS_CLAIMS_MAILBOX}.
         </p>
       ) : prepared && preparedId ? (
         <p className="mt-3 rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">
-          {SIMULATED_EMAIL_BANNER}. An instruction was prepared {formatUkDateTime(prepared.created_at)} for {prepared.to_address}.
+          An instruction was prepared {formatUkDateTime(prepared.created_at)} for {prepared.to_address}.
         </p>
       ) : null}
 

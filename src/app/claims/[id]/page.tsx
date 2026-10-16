@@ -7,13 +7,13 @@ import { FileHistory } from "@/components/FileHistory";
 import { JustificationChronology } from "@/components/claims/JustificationChronology";
 import { ClaimWorkflowStatus } from "@/components/ClaimWorkflowStatus";
 import { ChasePanel } from "@/components/ChasePanel";
-import { PageHeader } from "@/components/ClaimTable";
 import { RecordVersionField, SaveClashNotice } from "@/components/SaveClashNotice";
 import { SubmitKeyInput } from "@/components/SubmitKeyInput";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import { requireStaff } from "@/lib/auth/session";
-import { getClaim, listStaff } from "@/lib/db/queries";
+import { figureUnderReviewNote } from "@/lib/claims/claim-summary";
+import { outstandingColumnText } from "@/lib/claims/summary-money";
 import { loadClash, screenVersion, sectionVersion } from "@/lib/db/record-version";
 import { SHARED_CIRCUMSTANCES, SHARED_INSURER_POSITION, SHARED_OWN_INSURER } from "@/lib/db/shared-fields";
 import { gapsForClaim } from "@/lib/db/repair-progress";
@@ -32,14 +32,13 @@ import { HireEndDateReview } from "@/components/claims/HireEndDateReview";
 import { TotalLossPanel } from "@/components/claims/TotalLossPanel";
 import { StorageDateReview } from "@/components/claims/StorageDateReview";
 import { StorageEndDateReview } from "@/components/claims/StorageEndDateReview";
-import { OutstandingSummary } from "@/components/claims/OutstandingSummary";
 import { MailboxSendNotice } from "@/components/claims/SendPreparedEmailForm";
 import { EmailSendModeBanner } from "@/components/EmailSendModeBanner";
 import { liveEmailSending } from "@/lib/email/send-mode";
 import { STORAGE_START_MISSING_REVIEW } from "@/lib/constants";
 import { BANK_DETAILS_MISSING_SETTINGS, paymentDetailsComplete } from "@/lib/domain/payment-details";
 import { getInsurerPaymentDetails } from "@/lib/db/payment-details";
-import { outstandingForClaim } from "@/lib/db/outstanding";
+import { claimOutstandingSummary, getClaim, listStaff } from "@/lib/db/queries";
 import { listOpenPaymentReviews, listPayableHeads, listPaymentsAfterSettlement } from "@/lib/db/payment-review";
 import { PaymentReviewPanel } from "@/components/claims/PaymentReviewPanel";
 import { AwaitingDecisionList } from "@/components/claims/AwaitingDecisionList";
@@ -95,6 +94,7 @@ export default async function ClaimDetailPage({
   const chases = listChasesForClaim(String(claim.id));
   const hireAgreements = listHireAgreements(String(claim.id));
   const claimId = String(claim.id);
+  const moneyByHead = new Map(claimOutstandingSummary(claimId).heads.map((row) => [row.head, row]));
   if (paymentDecision && isPaymentReviewHead(paymentDecision)) redirect(headScreenPath(claimId, paymentDecision));
   const bankDetailsMissing = !paymentDetailsComplete(getInsurerPaymentDetails());
   const reviews = listOpenPaymentReviews(claimId);
@@ -128,45 +128,10 @@ export default async function ClaimDetailPage({
         clash={claimClash && (claimClash.recordKey === id || claimClash.recordKey.startsWith(`${id}:`)) ? claimClash : null}
         reloadHref={`/claims/${id}`}
       />
-      <PageHeader
-        title={`${claim.file_reference}`}
-        subtitle={`${claim.client_name || "Unknown client"} · ${liabilityStatusLabel(String(claim.claim_type))} · ${roadworthinessLabel(String(claim.roadworthiness))} · ${claim.handler_name || "Unassigned"}`}
-        actions={
-          <div className="flex flex-wrap items-center gap-3 text-sm">
-            <Link href={`/claims/${claim.id}/work/comms`} className="rounded-md bg-navy px-4 py-2.5 font-semibold text-white">
-              Email / calls
-            </Link>
-            <Link href={`/claims/${claim.id}/work/general`} className="rounded-md border border-navy px-4 py-2.5 font-semibold text-navy">
-              File screens
-            </Link>
-            <Link href={`/claims/${claim.id}/hire-pack`} className="rounded-md bg-teal px-4 py-2.5 font-semibold text-white">
-              Hire Pack
-            </Link>
-            <Link href="/claims" className="text-teal-dark underline">
-              All claims
-            </Link>
-          </div>
-        }
-      />
 
       {error ? <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p> : null}
       <EmailSendModeBanner />
       <MailboxSendNotice sent={mailboxSent} simulated={mailboxSimulated} error={mailboxError} reportNotice={mailboxReport} />
-
-      <nav aria-label="Heads of loss" className="flex flex-wrap gap-2">
-        <Link href={headScreenPath(claimId, "recovery")} className="rounded-md border border-navy px-4 py-2 text-sm font-semibold text-navy">
-          Recovery
-        </Link>
-        <Link href={headScreenPath(claimId, "storage")} className="rounded-md border border-navy px-4 py-2 text-sm font-semibold text-navy">
-          Storage
-        </Link>
-        <Link href={`/claims/${claimId}/heads/hire`} className="rounded-md border border-navy px-4 py-2 text-sm font-semibold text-navy">
-          Hire
-        </Link>
-        <Link href={`/claims/${claimId}/heads/vehicle`} className="rounded-md border border-navy px-4 py-2 text-sm font-semibold text-navy">
-          Vehicle damage
-        </Link>
-      </nav>
 
       <AwaitingDecisionList claimId={claimId} reviews={reviews} settled={settledPayments} />
 
@@ -184,8 +149,6 @@ export default async function ClaimDetailPage({
       {bankDetailsMissing ? (
         <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm font-semibold">{BANK_DETAILS_MISSING_SETTINGS}</p>
       ) : null}
-
-      <OutstandingSummary items={outstandingForClaim(claimId)} />
 
       <PaymentReviewPanel claimId={claimId} payableHeads={listPayableHeads(claimId)} />
 
@@ -209,36 +172,6 @@ export default async function ClaimDetailPage({
           }
         />
       ))}
-
-      <div className="grid gap-3 md:grid-cols-3">
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border-2 border-navy bg-[#e8eef4] px-5 py-4">
-          <div>
-            <p className="font-serif text-xl text-navy-deep">Email, WhatsApp and calls</p>
-            <p className="text-sm text-slate">Send and file correspondence, record calls, and generate letters on this file.</p>
-          </div>
-          <Link href={`/claims/${claim.id}/work/comms`} className="rounded-md bg-navy px-5 py-3 text-sm font-semibold text-white">
-            Open communications
-          </Link>
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border-2 border-line bg-card px-5 py-4">
-          <div>
-            <p className="font-serif text-xl text-navy-deep">File screens</p>
-            <p className="text-sm text-slate">Client, vehicle, hire, recovery and money — without repeating the same facts on extra screens.</p>
-          </div>
-          <Link href={`/claims/${claim.id}/work/general`} className="rounded-md bg-white px-5 py-3 text-sm font-semibold text-navy ring-1 ring-navy">
-            Open screens
-          </Link>
-        </div>
-        <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border-2 border-teal bg-[#e8f4f2] px-5 py-4">
-          <div>
-            <p className="font-serif text-xl text-navy-deep">Hire Pack</p>
-            <p className="text-sm text-slate">Collect delivery, agreement and collection details, then generate the pack for this file.</p>
-          </div>
-          <Link href={`/claims/${claim.id}/hire-pack`} className="rounded-md bg-teal px-5 py-3 text-sm font-semibold text-white">
-            Open Hire Pack
-          </Link>
-        </div>
-      </div>
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Fact label="Current position" value={String(claim.current_position)} />
@@ -584,7 +517,7 @@ export default async function ClaimDetailPage({
         <div className="rounded-xl border border-line bg-card p-5">
           <h2 className="font-serif text-xl text-navy-deep">Financials on this file</h2>
           <p className="text-sm text-slate">Claimed {formatGbp(data.money.claimed)} · Offered {formatGbp(data.money.offered)} · Agreed {formatGbp(data.money.agreed)} · Received {formatGbp(data.money.received)}</p>
-          <table className="ledger-table mt-3">
+          <table className="ledger-table ledger-fit mt-3">
             <thead>
               <tr>
                 <th>Head</th>
@@ -604,13 +537,8 @@ export default async function ClaimDetailPage({
                 const received = Number(line.received_pence) || 0;
                 const review = isPaymentReviewHead(head) ? loadHeadSection(claimId, head) : null;
                 const agreed = review ? review.agreedPence : agreedRaw > 0 ? agreedRaw : null;
-                const outstanding = review
-                  ? review.outstandingPence
-                  : agreedRaw > 0
-                    ? Math.max(0, agreedRaw - received)
-                    : claimed > 0
-                      ? Math.max(0, claimed - received)
-                      : null;
+                const headMoney = moneyByHead.get(head);
+                const reviewNote = figureUnderReviewNote(claimId, head, headMoney?.claimedPence ?? claimed);
                 return (
                 <tr key={String(line.id)}>
                   <td>
@@ -622,22 +550,16 @@ export default async function ClaimDetailPage({
                       label
                     )}
                   </td>
-                  <td className="tabular">
-                    {formatGbp(claimed)}
-                    {head === "storage" &&
-                    claimed > 0 &&
-                    !String(data.claim.storage_billing_end_on || "").trim()
-                      ? " — provisional"
-                      : ""}
-                    {(head === "hire" || head === "credit_hire") &&
-                    !data.hire.some((episode) => String(episode.billing_end_at || "").trim())
-                      ? " — provisional"
-                      : ""}
-                  </td>
+                  <td className="tabular">{formatGbp(claimed)}</td>
                   <td className="tabular">{agreed == null ? "Not set" : formatGbp(agreed)}</td>
                   <td className="tabular">{formatGbp(Number(line.offered_pence))}</td>
                   <td className="tabular">{formatGbp(received)}</td>
-                  <td className="tabular">{outstanding == null ? "Not set" : formatGbp(outstanding)}</td>
+                  <td className="tabular">
+                    {headMoney
+                      ? outstandingColumnText(headMoney)
+                      : outstandingColumnText({ outstandingPence: null, provisionalClaimedPence: claimed })}
+                    {reviewNote ? <span className="mt-1 block text-xs font-normal text-slate">{reviewNote}</span> : null}
+                  </td>
                 </tr>
                 );
               })}
@@ -701,7 +623,7 @@ export default async function ClaimDetailPage({
             ))}
           </ul>
         </div>
-        <div className="rounded-xl border border-line bg-card p-5">
+        <div id="tasks" className="rounded-xl border border-line bg-card p-5">
           <h2 className="font-serif text-xl text-navy-deep">Tasks</h2>
           <ValidatedForm action={actionAddTask} className="mt-3 grid gap-2">
             <input type="hidden" name="claimId" value={String(claim.id)} />

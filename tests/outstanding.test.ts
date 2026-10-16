@@ -137,7 +137,9 @@ describe("outstanding on a claim", () => {
       assert.equal(saved?.claim.next_action, "Handler typed this note only");
       const page = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/page.tsx"), "utf8");
       assert.match(page, /name="next_action"/);
-      assert.match(page, /OutstandingSummary/);
+      assert.doesNotMatch(page, /<OutstandingSummary/);
+      const summary = fs.readFileSync(path.join(process.cwd(), "src/components/claims/ClaimSummaryView.tsx"), "utf8");
+      assert.match(summary, /open flags/);
       const plain = buildOutstanding({
         tasks: [],
         chases: [],

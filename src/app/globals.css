@@ -84,6 +84,33 @@ body {
   background: #f7f1e6;
 }
 
+.claim-page {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.claim-page .ledger-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
+.claim-page .ledger-table th,
+.claim-page .ledger-table td,
+.claim-page p,
+.claim-page h1,
+.claim-page h2,
+.claim-page h3,
+.claim-page label,
+.claim-page li,
+.claim-page a {
+  overflow-wrap: anywhere;
+}
+
+.claim-page .overflow-x-auto {
+  overflow-x: visible;
+  max-width: 100%;
+}
+
 .letter header {
   margin-bottom: 1.5rem;
 }

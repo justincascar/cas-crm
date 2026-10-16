@@ -1,18 +1,14 @@
 import { emailSendBanner } from "@/lib/email/send-mode";
 
-/** Persistent sending notice. The wording comes only from EMAIL_SEND_MODE. */
+/**
+ * Live-mode warning on a sending screen. The wording comes only from EMAIL_SEND_MODE.
+ * In simulate mode the app shell already shows the banner, so this renders nothing.
+ */
 export function EmailSendModeBanner() {
   const banner = emailSendBanner();
-  const live = banner.mode === "live";
+  if (banner.mode !== "live") return null;
   return (
-    <p
-      role="status"
-      className={
-        live
-          ? "rounded-md border-4 border-[#3d0a0a] bg-overdue px-4 py-3 text-base font-bold text-white"
-          : "rounded-md border-4 border-navy bg-[#d9e4ef] px-4 py-3 text-base font-bold text-navy-deep"
-      }
-    >
+    <p role="status" className="rounded-md border-4 border-[#3d0a0a] bg-overdue px-4 py-3 text-base font-bold text-white">
       {banner.text}
     </p>
   );

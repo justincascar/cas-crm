@@ -609,7 +609,8 @@ describe("payment review — log first, decide later", () => {
     assert.match(page, /headScreenPath/);
     assert.match(page, /AwaitingDecisionList/);
     assert.doesNotMatch(page, /PaymentDecisionScreen/);
-    assert.match(page, /heads\/hire/);
+    const frame = fs.readFileSync(path.join(process.cwd(), "src/components/claim-file/ClaimSectionFrame.tsx"), "utf8");
+    assert.match(frame, /heads\/hire/);
     const dashboard = fs.readFileSync(path.join(process.cwd(), "src/app/page.tsx"), "utf8");
     assert.match(dashboard, /Awaiting decision/);
     assert.match(dashboard, /Payments to review/);

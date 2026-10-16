@@ -38,7 +38,12 @@ export default async function ClaimLayout({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="claim-page min-w-0 space-y-4">
+      <p className="text-sm">
+        <Link href="/claims" className="text-teal-dark underline">
+          ← All claims
+        </Link>
+      </p>
       <ClaimSummary claimId={String(data.claim.id)} />
       <ClaimSectionFrame claimId={String(data.claim.id)} savedKeys={saved}>
         {children}

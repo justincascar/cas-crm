@@ -802,6 +802,20 @@ TEST-0005’s storage end is still unconfirmed. TEST-0009’s vehicle-damage off
 
 Tests: `tests/desk-stage2.test.ts` and `tests/dashboard-desk.test.ts`. Full suite: 487 passing, 0 failing.
 
+## Claim page summary (16 October 2026)
+
+The claim summary stays at the top of the file in the normal page flow. After it scrolls away, one slim bar stays pinned: reference, client, registration, running cost per day, confirmed outstanding, and the next action with its due wording. Clicking the bar returns to the full summary. The full summary is not pinned.
+
+Open flags show as a count with a Show / Hide toggle. Each flag is its own line.
+
+The claim heading under the tabs is removed. The summary is the header. ← All claims goes back to the claims list. Overview, correspondence, file screens, handover, documents, vehicles, repair evidence, Hire Pack, pre-hire checks, financial circumstances, recovery, storage, hire and vehicle damage are one wrapping row of tabs.
+
+The simulated-email sentence is only in the top bar, from `emailSendBanner()`. A live-mode warning still shows on sending screens. The separate Outstanding box on the overview is removed. Provisional outstanding is labelled “Provisional, not final” with the figure. “none” is only used when the figure is final and nothing is owed. A stored figure that still differs from the calculation is marked “Figure under review”. Outstanding is still never below £0, and overpayments stay separate. No calculation, hire-renewal alert, bank-detail rule, storage-end rule or Today’s work order was changed.
+
+TEST-0005’s storage end is still unconfirmed. TEST-0009’s vehicle-damage offers were not changed. TEST-0006’s money was not changed. TEST-0007’s £800 was not written off. No live email was sent. `EMAIL_SEND_MODE` stays `simulate`.
+
+Tests: `tests/claim-summary-bar.test.ts`. Full suite: 493 passing, 0 failing. Type check: 0 errors. Production build passed. Page check: 58 pages, including 14 TEST-0008 screens that fit a 1280px laptop with no sideways scroll.
+
 ## Not yet claimed
 
 - Remove the database path from the dashboard footer before live use. It is there now so a handler on this PC can see where the file is kept. It should not be shown once the system is in live use.

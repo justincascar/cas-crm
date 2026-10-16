@@ -22,52 +22,41 @@ export function ClaimSectionFrame({
   const onVehicles = pathname === `${claimPath}/vehicles` || pathname.startsWith(`${claimPath}/vehicles/`);
   const onFinancial = pathname === `${claimPath}/financial` || pathname.startsWith(`${claimPath}/financial/`);
   const onPrehire = pathname === `${claimPath}/prehire` || pathname.startsWith(`${claimPath}/prehire/`);
-  const onHeads = pathname.includes("/heads/");
-  const hideScreenNav = onOverview || onHandover || onDocuments || onVehicles || onFinancial || onPrehire || onHeads;
+  const onComms = pathname.startsWith(`${claimPath}/work/comms`);
+  const onFileScreens = pathname.startsWith(`${claimPath}/work/`) && !onComms;
+  const showScreenNav = onFileScreens;
   const tabClass = (active: boolean) =>
     `inline-flex min-h-11 items-center rounded-md px-3 py-2 text-sm font-semibold ${
       active ? "bg-navy text-white" : "border border-line bg-white text-navy"
     }`;
+  const tabs = [
+    { href: claimPath, label: "Overview", active: onOverview },
+    { href: `${claimPath}/work/comms`, label: "Email / WhatsApp / Calls", active: onComms },
+    { href: `${claimPath}/work/general`, label: "File screens", active: onFileScreens },
+    { href: `${claimPath}/handover`, label: "Handover", active: onHandover },
+    { href: `${claimPath}/documents`, label: "Documents", active: onDocuments },
+    { href: `${claimPath}/vehicles`, label: "Vehicles", active: onVehicles },
+    { href: `${claimPath}/repair`, label: "Repair evidence", active: pathname.startsWith(`${claimPath}/repair`) },
+    { href: `${claimPath}/hire-pack`, label: "Hire Pack", active: pathname.startsWith(`${claimPath}/hire-pack`) },
+    { href: `${claimPath}/prehire`, label: "Pre-hire checks", active: onPrehire },
+    { href: `${claimPath}/financial`, label: "Financial circumstances", active: onFinancial },
+    { href: `${claimPath}/heads/recovery`, label: "Recovery", active: pathname.startsWith(`${claimPath}/heads/recovery`) },
+    { href: `${claimPath}/heads/storage`, label: "Storage", active: pathname.startsWith(`${claimPath}/heads/storage`) },
+    { href: `${claimPath}/heads/hire`, label: "Hire", active: pathname === `${claimPath}/heads/hire` || pathname.startsWith(`${claimPath}/heads/hire/`) },
+    { href: `${claimPath}/heads/vehicle`, label: "Vehicle damage", active: pathname.startsWith(`${claimPath}/heads/vehicle`) },
+  ];
 
   return (
     <>
-      <nav aria-label="Claim sections" className="flex flex-wrap gap-2 rounded-xl border border-line bg-card px-4 py-3">
-        <Link href={claimPath} className={tabClass(onOverview)}>
-          Overview
-        </Link>
-        <Link href={`${claimPath}/work/comms`} className={tabClass(pathname.startsWith(`${claimPath}/work/comms`))}>
-          Email / WhatsApp / Calls
-        </Link>
-        <Link
-          href={`${claimPath}/work/general`}
-          className={tabClass(pathname.startsWith(`${claimPath}/work/`) && !pathname.startsWith(`${claimPath}/work/comms`))}
-        >
-          File screens
-        </Link>
-        <Link href={`${claimPath}/handover`} className={tabClass(onHandover)}>
-          Handover
-        </Link>
-        <Link href={`${claimPath}/documents`} className={tabClass(onDocuments)}>
-          Documents
-        </Link>
-        <Link href={`${claimPath}/vehicles`} className={tabClass(onVehicles)}>
-          Vehicles
-        </Link>
-        <Link href={`${claimPath}/repair`} className={tabClass(pathname.startsWith(`${claimPath}/repair`))}>
-          Repair evidence
-        </Link>
-        <Link href={`${claimPath}/hire-pack`} className={tabClass(pathname.startsWith(`${claimPath}/hire-pack`))}>
-          Hire Pack
-        </Link>
-        <Link href={`${claimPath}/prehire`} className={tabClass(onPrehire)}>
-          Pre-hire checks
-        </Link>
-        <Link href={`${claimPath}/financial`} className={tabClass(onFinancial)}>
-          Financial circumstances
-        </Link>
+      <nav aria-label="Claim sections" className="flex max-w-full flex-wrap gap-2 rounded-xl border border-line bg-card px-4 py-3">
+        {tabs.map((tab) => (
+          <Link key={tab.href} href={tab.href} className={tabClass(tab.active)} aria-current={tab.active ? "page" : undefined}>
+            {tab.label}
+          </Link>
+        ))}
       </nav>
-      <div className={hideScreenNav ? "" : "grid gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]"}>
-        {hideScreenNav ? null : <ScreenNav claimId={claimId} savedKeys={savedKeys} />}
+      <div className={showScreenNav ? "grid min-w-0 gap-6 lg:grid-cols-[16rem_minmax(0,1fr)]" : "min-w-0"}>
+        {showScreenNav ? <ScreenNav claimId={claimId} savedKeys={savedKeys} /> : null}
         <div className="min-w-0">{children}</div>
       </div>
     </>

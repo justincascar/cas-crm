@@ -91,7 +91,7 @@ describe("vehicles tab", () => {
     assert.match(vehicles, /ClaimAudatexFields/);
     assert.match(vehicles, /Client's own vehicle|Client&apos;s own vehicle/);
     assert.match(layout, /\/vehicles/);
-    assert.match(layout, />\s*Vehicles\s*</);
+    assert.match(layout, /label: "Vehicles"/);
     assert.match(repair, /Audatex codes are on the Vehicles tab/);
     assert.equal(pathAllowedForRole("driver", "/claims/c2/vehicles"), false);
     assert.equal(pathAllowedForRole("mechanic", "/claims/c2/vehicles"), false);

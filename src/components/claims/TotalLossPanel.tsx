@@ -6,7 +6,6 @@ import { sectionVersion } from "@/lib/db/record-version";
 import { SHARED_HIRE_END } from "@/lib/db/shared-fields";
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
 import { liveEmailSending } from "@/lib/email/send-mode";
-import { SIMULATED_EMAIL_BANNER } from "@/lib/email/send-mode-copy";
 import { formatUkDate, formatUkDateTime, nowUtcIso } from "@/lib/dates";
 import { buildMailtoHref } from "@/lib/email/mailto";
 import { getPreparedFollowUpEmail, listFollowUpChases, totalLossPaymentChaseTemplateKey } from "@/lib/db/follow-up-chases";
@@ -125,7 +124,7 @@ export function TotalLossPanel({
           <p className="mt-3 text-slate">
             {liveSending
               ? `Prepared on this file. Send sends it from ${CAS_CLAIMS_MAILBOX}. It is not sent until you click Send.`
-              : `${SIMULATED_EMAIL_BANNER}. Prepared on this file. It is not sent from ${CAS_CLAIMS_MAILBOX}.`}
+              : `Prepared on this file. It is not sent from ${CAS_CLAIMS_MAILBOX}.`}
           </p>
           <button name="intent" value="prepare_email" className="mt-3 min-h-11 rounded-md bg-teal px-3 py-2 text-sm font-semibold text-white" type="submit">
             Prepare notification email
@@ -258,7 +257,7 @@ export function TotalLossPanel({
           <p>
             {liveSending
               ? `A notification email was prepared ${formatUkDateTime(prepared.createdAt)} for ${prepared.toAddress}. It has not been sent.`
-              : `${SIMULATED_EMAIL_BANNER}. A notification email was prepared ${formatUkDateTime(prepared.createdAt)} for ${prepared.toAddress}. It has not been sent from ${CAS_CLAIMS_MAILBOX}.`}
+              : `A notification email was prepared ${formatUkDateTime(prepared.createdAt)} for ${prepared.toAddress}. It has not been sent from ${CAS_CLAIMS_MAILBOX}.`}
           </p>
           <div className="mt-3 flex flex-col gap-2 sm:flex-row">
             <SendPreparedEmailForm claimId={claimId} correspondenceId={prepared.id} returnTo={returnTo} liveSending={liveSending} />
@@ -337,7 +336,7 @@ export function TotalLossPanel({
               <p>
                 {liveSending
                   ? `A payment chase was prepared ${formatUkDateTime(preparedChase.created_at)} for ${preparedChase.to_address}. It has not been sent.`
-                  : `${SIMULATED_EMAIL_BANNER}. A payment chase was prepared ${formatUkDateTime(preparedChase.created_at)} for ${preparedChase.to_address}. It has not been sent from ${CAS_CLAIMS_MAILBOX}.`}
+                  : `A payment chase was prepared ${formatUkDateTime(preparedChase.created_at)} for ${preparedChase.to_address}. It has not been sent from ${CAS_CLAIMS_MAILBOX}.`}
               </p>
               <div className="mt-3 flex flex-col gap-2 sm:flex-row">
                 <SendPreparedEmailForm

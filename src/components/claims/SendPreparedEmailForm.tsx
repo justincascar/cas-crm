@@ -2,7 +2,6 @@
 
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
 import { SIMULATED_REPORT_NOT_RECORDED } from "@/lib/domain/repair-progress";
-import { SIMULATED_EMAIL_BANNER } from "@/lib/email/send-mode-copy";
 
 export function SendPreparedEmailForm({
   claimId,
@@ -50,8 +49,8 @@ export function MailboxSendNotice({
   if (simulated) {
     const report = reportNotice ? ` ${SIMULATED_REPORT_NOT_RECORDED}.` : "";
     return (
-      <p className="rounded-md border-4 border-navy bg-[#d9e4ef] px-4 py-3 text-sm font-bold text-navy-deep">
-        {SIMULATED_EMAIL_BANNER}. The attempt is on this file&apos;s history.{report}
+      <p className="rounded-md border border-line bg-card px-4 py-3 text-sm">
+        The attempt is on this file&apos;s history.{report}
       </p>
     );
   }

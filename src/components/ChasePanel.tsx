@@ -18,7 +18,6 @@ import {
   actionSaveChaseOverride,
 } from "@/app/chase-actions";
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
-import { SIMULATED_EMAIL_BANNER } from "@/lib/email/send-mode-copy";
 import { formatGbp } from "@/lib/money";
 import { paymentComparisonLabel } from "@/lib/domain/storage-charge";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
@@ -370,15 +369,14 @@ export function ChasePanel({
           click Send.
         </p>
       ) : mailto && chase.due ? (
-        <p className="mt-3 rounded-md border-4 border-navy bg-[#d9e4ef] px-4 py-3 text-sm font-bold text-navy-deep">
-          {SIMULATED_EMAIL_BANNER}. A chase email to <strong>{toAddress}</strong> can be recorded on this file. It is not sent from{" "}
-          {CAS_CLAIMS_MAILBOX}.
+        <p className="mt-3 rounded-md border border-line bg-white px-4 py-3 text-sm">
+          A chase email to <strong>{toAddress}</strong> can be recorded on this file. It is not sent from {CAS_CLAIMS_MAILBOX}.
         </p>
       ) : prepared && preparedId && chase.due ? (
         <p className="mt-3 rounded-md border border-warn/40 bg-white px-4 py-3 text-sm">
           {mailboxConnected
             ? `A chase email was prepared ${formatUkDateTime(prepared.created_at)} for ${prepared.to_address}. It has not been sent.`
-            : `${SIMULATED_EMAIL_BANNER}. A chase email was prepared ${formatUkDateTime(prepared.created_at)} for ${prepared.to_address}.`}
+            : `A chase email was prepared ${formatUkDateTime(prepared.created_at)} for ${prepared.to_address}. It is not sent from ${CAS_CLAIMS_MAILBOX}.`}
         </p>
       ) : null}
 

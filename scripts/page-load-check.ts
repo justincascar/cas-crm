@@ -10,12 +10,29 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
+import os from "node:os";
 import path from "node:path";
 import { SESSION_COOKIE } from "../src/lib/auth/constants.ts";
 import { CLAIM_SCREENS } from "../src/lib/claim-screens.ts";
 
 const CLAIM_ID = "c5";
 const HEAD_SCREENS = ["recovery", "storage", "hire", "vehicle"] as const;
+const CLAIM_TAB_PAGES: Array<{ name: string; path: string }> = [
+  { name: "Claim overview (TEST-0008)", path: "/claims/c8" },
+  { name: "Email / WhatsApp / Calls (TEST-0008)", path: "/claims/c8/work/comms" },
+  { name: "File screens (TEST-0008)", path: "/claims/c8/work/general" },
+  { name: "Handover (TEST-0008)", path: "/claims/c8/handover" },
+  { name: "Documents (TEST-0008)", path: "/claims/c8/documents" },
+  { name: "Vehicles (TEST-0008)", path: "/claims/c8/vehicles" },
+  { name: "Repair evidence (TEST-0008)", path: "/claims/c8/repair" },
+  { name: "Hire Pack (TEST-0008)", path: "/claims/c8/hire-pack" },
+  { name: "Pre-hire checks (TEST-0008)", path: "/claims/c8/prehire" },
+  { name: "Financial circumstances (TEST-0008)", path: "/claims/c8/financial" },
+  { name: "Recovery (TEST-0008)", path: "/claims/c8/heads/recovery" },
+  { name: "Storage (TEST-0008)", path: "/claims/c8/heads/storage" },
+  { name: "Hire (TEST-0008)", path: "/claims/c8/heads/hire" },
+  { name: "Vehicle damage (TEST-0008)", path: "/claims/c8/heads/vehicle" },
+];
 
 const PAGES: Array<{ name: string; path: string }> = [
   { name: "Dashboard", path: "/" },
@@ -39,6 +56,7 @@ const PAGES: Array<{ name: string; path: string }> = [
   { name: "Automations", path: "/automations" },
   { name: "Litigation", path: "/litigation" },
   { name: "Settings", path: "/settings" },
+  ...CLAIM_TAB_PAGES,
 ];
 
 const ERROR_TEXT = [
@@ -126,6 +144,192 @@ function pageProblem(response: Response, html: string, finalUrl: string): string
   return null;
 }
 
+function browserExecutable(): string {
+  const candidates = [
+    process.env.CAS_PAGE_CHECK_BROWSER || "",
+    "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+    "C:\\Program Files\\Microsoft\\Edge\\Application\\msedge.exe",
+    "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+    "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe",
+  ].filter(Boolean);
+  const found = candidates.find((file) => fs.existsSync(file));
+  if (!found) throw new Error("No Edge or Chrome browser was found for the sideways-scroll check.");
+  return found;
+}
+
+type CdpMessage = { id?: number; method?: string; result?: { result?: { value?: ScrollMeasure } }; error?: { message: string } };
+
+type ScrollMeasure = {
+  scrollWidth: number;
+  clientWidth: number;
+  path: string;
+  overflow: string;
+};
+
+class BrowserSession {
+  private nextId = 0;
+  private waiters = new Map<number, (message: CdpMessage) => void>();
+  private listeners = new Map<string, Array<() => void>>();
+
+  constructor(private socket: WebSocket) {
+    socket.addEventListener("message", (event) => {
+      const message = JSON.parse(String(event.data)) as CdpMessage;
+      if (message.id && this.waiters.has(message.id)) {
+        const resolve = this.waiters.get(message.id);
+        this.waiters.delete(message.id);
+        resolve?.(message);
+      }
+      if (message.method) {
+        for (const listener of this.listeners.get(message.method) || []) listener();
+      }
+    });
+  }
+
+  send(method: string, params?: object): Promise<CdpMessage> {
+    const id = ++this.nextId;
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`The sideways-scroll browser timed out during ${method}.`)), 20_000);
+      this.waiters.set(id, (message) => {
+        clearTimeout(timer);
+        if (message.error) reject(new Error(message.error.message));
+        else resolve(message);
+      });
+      this.socket.send(JSON.stringify({ id, method, params }));
+    });
+  }
+
+  once(method: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`The sideways-scroll browser timed out waiting for ${method}.`)), 20_000);
+      const list = this.listeners.get(method) || [];
+      const handler = () => {
+        clearTimeout(timer);
+        this.listeners.set(
+          method,
+          (this.listeners.get(method) || []).filter((item) => item !== handler),
+        );
+        resolve();
+      };
+      list.push(handler);
+      this.listeners.set(method, list);
+    });
+  }
+}
+
+async function measureClaimPages(origin: string, cookie: string): Promise<Array<{ path: string; problem: string }>> {
+  const debugPort = await freePort(9222);
+  const userData = fs.mkdtempSync(path.join(os.tmpdir(), "cas-page-check-"));
+  const browser = spawn(
+    browserExecutable(),
+    [
+      "--headless=new",
+      "--disable-gpu",
+      "--no-first-run",
+      "--disable-extensions",
+      "--remote-allow-origins=*",
+      `--remote-debugging-port=${debugPort}`,
+      `--user-data-dir=${userData}`,
+      "about:blank",
+    ],
+    { stdio: "ignore" },
+  );
+  const stopBrowser = () => {
+    if (browser.exitCode === null && !browser.killed) browser.kill();
+    try {
+      fs.rmSync(userData, { recursive: true, force: true });
+    } catch {
+      /* Edge can still be releasing the profile folder. The check does not need that folder afterwards. */
+    }
+  };
+  try {
+    const deadline = Date.now() + 15_000;
+    let socketUrl = "";
+    while (Date.now() < deadline) {
+      try {
+        const list = (await fetch(`http://127.0.0.1:${debugPort}/json/list`).then((response) => response.json())) as Array<{
+          type: string;
+          webSocketDebuggerUrl: string;
+        }>;
+        const page = list.find((item) => item.type === "page" && item.webSocketDebuggerUrl);
+        if (page) {
+          socketUrl = page.webSocketDebuggerUrl;
+          break;
+        }
+      } catch {
+        /* the browser is still starting */
+      }
+      await new Promise((resolve) => setTimeout(resolve, 200));
+    }
+    if (!socketUrl) throw new Error("The sideways-scroll browser did not open a page.");
+    const socket = new WebSocket(socketUrl);
+    await new Promise<void>((resolve, reject) => {
+      socket.addEventListener("open", () => resolve());
+      socket.addEventListener("error", () => reject(new Error("The sideways-scroll browser connection failed.")));
+    });
+    const session = new BrowserSession(socket);
+    await session.send("Page.enable");
+    await session.send("Network.enable");
+    await session.send("Emulation.setDeviceMetricsOverride", {
+      width: 1280,
+      height: 800,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    const cookieValue = cookie.slice(cookie.indexOf("=") + 1);
+    await session.send("Network.setCookie", {
+      name: SESSION_COOKIE,
+      value: cookieValue,
+      url: origin,
+      path: "/",
+    });
+    const problems: Array<{ path: string; problem: string }> = [];
+    for (const page of CLAIM_TAB_PAGES) {
+      const loaded = session.once("Page.loadEventFired");
+      await session.send("Page.navigate", { url: `${origin}${page.path}` });
+      await loaded;
+      const measured = await session.send("Runtime.evaluate", {
+        expression: `new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => {
+          const root = document.documentElement;
+          const scrolling = [];
+          for (const el of document.querySelectorAll("*")) {
+            const style = getComputedStyle(el);
+            if ((style.overflowX === "auto" || style.overflowX === "scroll") && el.scrollWidth > el.clientWidth) {
+              scrolling.push((el.id || el.className || el.tagName).toString().slice(0, 80));
+            }
+          }
+          resolve({
+            scrollWidth: root.scrollWidth,
+            clientWidth: root.clientWidth,
+            path: location.pathname,
+            overflow: scrolling.slice(0, 4).join(" | "),
+          });
+        })))`,
+        awaitPromise: true,
+        returnByValue: true,
+      });
+      const value = measured.result?.result?.value;
+      if (!value) {
+        problems.push({ path: page.path, problem: "the sideways-scroll check did not return a measurement" });
+        continue;
+      }
+      if (value.path === "/login" || value.path.startsWith("/login/")) {
+        problems.push({ path: page.path, problem: "sent back to sign-in" });
+        continue;
+      }
+      if (value.scrollWidth > value.clientWidth) {
+        problems.push({
+          path: page.path,
+          problem: `sideways scroll ${value.scrollWidth}px wider than ${value.clientWidth}px${value.overflow ? ` (${value.overflow})` : ""}`,
+        });
+      }
+    }
+    socket.close();
+    return problems;
+  } finally {
+    stopBrowser();
+  }
+}
+
 async function waitUntilReady(origin: string, child: ChildProcess): Promise<void> {
   const deadline = Date.now() + 30_000;
   let last = "not started";
@@ -206,7 +410,20 @@ async function main() {
         console.log(`PASS  ${where}  ${page.name}`);
       }
     }
-    console.log(`${PAGES.length - failed} passed, ${failed} failed, port ${port}, email mode ${mode || "not set"}.`);
+    const sideways = await measureClaimPages(origin, cookie);
+    for (const page of CLAIM_TAB_PAGES) {
+      const problem = sideways.find((item) => item.path === page.path);
+      if (problem) {
+        failed += 1;
+        console.log(`FAIL  ${page.path}  ${page.name} sideways scroll  ${problem.problem}`);
+      } else {
+        console.log(`PASS  ${page.path}  ${page.name} sideways scroll at 1280px`);
+      }
+    }
+    const scrollFailed = sideways.length;
+    console.log(
+      `${PAGES.length - (failed - scrollFailed)} passed, ${failed - scrollFailed} failed, ${CLAIM_TAB_PAGES.length - scrollFailed} claim pages fit 1280px, ${scrollFailed} scrolled sideways, port ${port}, email mode ${mode || "not set"}.`,
+    );
     if (failed > 0) {
       console.error(serverLog.trim());
       process.exitCode = 1;
