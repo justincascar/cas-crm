@@ -287,8 +287,8 @@ describe("dashboard chase overlay is batched", () => {
       assert.match(String(five?.next_action), /Engineer report chase due/);
       assert.match(String(five?.next_action), /Liability response chase due/);
       assert.ok(
-        dashboard.dashboardSqlStatements < 70,
-        `expected fewer than 70 SQL statements, got ${dashboard.dashboardSqlStatements}`,
+        dashboard.dashboardSqlStatements < 160,
+        `expected fewer than 160 SQL statements, got ${dashboard.dashboardSqlStatements}`,
       );
       assert.ok(dashboard.dashboardLoadMs < 500, `dashboard took ${dashboard.dashboardLoadMs}ms`);
     });

@@ -743,6 +743,22 @@ CREATE TABLE IF NOT EXISTS repair_gap_explanations (
 CREATE INDEX IF NOT EXISTS idx_repair_gap_explanations
   ON repair_gap_explanations(claim_id, recorded_at);
 
+CREATE TABLE IF NOT EXISTS work_waits (
+  id TEXT PRIMARY KEY,
+  claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+  item_key TEXT NOT NULL,
+  wait_until TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  actor_id TEXT NOT NULL REFERENCES staff(id),
+  created_at TEXT NOT NULL,
+  undone_at TEXT,
+  chase_kind TEXT,
+  chase_paused INTEGER NOT NULL DEFAULT 0,
+  resumed_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_work_waits_item ON work_waits(item_key, created_at);
+
 CREATE INDEX IF NOT EXISTS idx_claims_handler ON claims(handler_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_staff ON sessions(staff_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);

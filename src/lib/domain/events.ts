@@ -146,6 +146,9 @@ export const CLAIM_EVENT_TYPES = [
   { key: "roadworthiness_changed", label: "Roadworthiness changed" },
   { key: "audatex_network_code_changed", label: "Audatex network code changed" },
   { key: "audatex_work_provider_code_changed", label: "Audatex work provider code changed" },
+  { key: "call_logged", label: "Call logged" },
+  { key: "work_wait_set", label: "Wait until a date" },
+  { key: "work_wait_cleared", label: "Wait cleared" },
   { key: "other", label: "Other" },
 ] as const;
 

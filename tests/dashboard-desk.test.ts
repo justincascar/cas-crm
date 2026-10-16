@@ -10,7 +10,7 @@ import { seed } from "../src/lib/db/seed.ts";
 import { defaultDashboardScope, resolveDashboardScope } from "../src/lib/domain/dashboard-scope.ts";
 import { dueWording } from "../src/lib/domain/due-wording.ts";
 import { claimedFigureIsConfirmed, lineOutstanding, summariseHeads } from "../src/lib/domain/head-outstanding.ts";
-import { nothingDueLine, todaysWorkRows, type DeskWorkItem } from "../src/lib/domain/todays-work.ts";
+import { blankDeskItem, compareDeskItems, nothingDueLine, todaysWorkRows, type DeskWorkItem } from "../src/lib/domain/todays-work.ts";
 
 function seeded() {
   const schema = fs.readFileSync(path.join(process.cwd(), "src/lib/db/schema.sql"), "utf8");
@@ -39,14 +39,14 @@ function money(db: DatabaseSync, claimId: string, head: string) {
 }
 
 function item(partial: Partial<DeskWorkItem> & Pick<DeskWorkItem, "id" | "claimId" | "fileReference" | "sortDays">): DeskWorkItem {
-  return {
+  return blankDeskItem({
     clientName: "Client",
     handlerName: "Handler",
     item: partial.item || partial.id,
     wording: partial.wording || "",
     tone: partial.tone || "today",
     ...partial,
-  };
+  });
 }
 
 describe("dashboard desk", () => {
@@ -188,7 +188,10 @@ describe("dashboard desk", () => {
     ]);
     const row = summary.heads[0];
     assert.ok(row);
-    assert.equal(row.outstandingPence, -5_000);
+    assert.equal(row.outstandingPence, 0);
+    assert.equal(row.overpaidPence, 5_000);
+    assert.equal(summary.confirmed.outstandingPence, 0);
+    assert.equal(summary.confirmed.overpaidPence, 5_000);
     assert.equal(summary.overpayments.length, 1);
     assert.equal(summary.overpayments[0]?.fileReference, "TEST-0006");
     assert.equal(summary.overpayments[0]?.head, "repairs");
@@ -220,7 +223,7 @@ describe("dashboard desk", () => {
         const refs = all.todaysWork.map((row) => row.fileReference);
         assert.equal(new Set(refs).size, refs.length);
         for (let index = 1; index < all.todaysWork.length; index += 1) {
-          assert.ok(all.todaysWork[index - 1]!.lead.sortDays >= all.todaysWork[index]!.lead.sortDays);
+          assert.ok(compareDeskItems(all.todaysWork[index - 1]!.lead, all.todaysWork[index]!.lead) <= 0);
         }
       });
     } finally {

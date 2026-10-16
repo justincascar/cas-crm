@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_SETTLEMENT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS } from "../auth/roles";
+import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_SETTLEMENT, EXTENDED_WAIT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS } from "../auth/roles";
 
 const TABLES: Record<string, Array<[string, string]>> = {
   correspondence: [
@@ -673,5 +673,24 @@ export function migrate(db: DatabaseSync) {
     );
     CREATE INDEX IF NOT EXISTS idx_repair_gap_explanations
       ON repair_gap_explanations(claim_id, recorded_at);
+    CREATE TABLE IF NOT EXISTS work_waits (
+      id TEXT PRIMARY KEY,
+      claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+      item_key TEXT NOT NULL,
+      wait_until TEXT NOT NULL,
+      reason TEXT NOT NULL,
+      actor_id TEXT NOT NULL REFERENCES staff(id),
+      created_at TEXT NOT NULL,
+      undone_at TEXT,
+      chase_kind TEXT,
+      chase_paused INTEGER NOT NULL DEFAULT 0,
+      resumed_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_work_waits_item ON work_waits(item_key, created_at);
   `);
+  db.prepare(
+    `INSERT OR IGNORE INTO staff_permissions(staff_id, permission)
+     SELECT ?, ?
+     WHERE EXISTS (SELECT 1 FROM staff WHERE id = ?)`,
+  ).run("staff-justin", EXTENDED_WAIT, "staff-justin");
 }

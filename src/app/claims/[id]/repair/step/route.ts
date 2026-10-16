@@ -12,7 +12,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const form = await request.formData();
   const returnTo = String(form.get("returnTo") || "");
   const fallback = `/claims/${id}/repair`;
-  const safeReturn = returnTo.startsWith(`/claims/${id}`) ? returnTo : fallback;
+  const safeReturn = returnTo === "/" || returnTo.startsWith("/?") || returnTo.startsWith(`/claims/${id}`) ? returnTo : fallback;
   const back = (error?: string) => {
     const url = new URL(safeReturn, origin);
     if (error) url.searchParams.set("stepError", error);

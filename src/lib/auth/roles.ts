@@ -94,6 +94,12 @@ export const APPROVE_SETTLEMENT = "approveSettlement";
 export const MANAGE_BANK_DETAILS = "manageBankDetails";
 
 /**
+ * Stored on staff_permissions. A wait longer than 14 days.
+ * Not implied by the administrator role, and not read from the username.
+ */
+export const EXTENDED_WAIT = "extendedWait";
+
+/**
  * True only when this account has been granted approveSettlement.
  * The role is accepted so callers pass it, and it is not consulted.
  */
@@ -115,6 +121,18 @@ export function canManageBankDetails(account: {
 }): boolean {
   void account.role;
   return account.permissions.includes(MANAGE_BANK_DETAILS);
+}
+
+/**
+ * True only when this account has been granted extendedWait.
+ * The role is accepted so callers pass it, and it is not consulted.
+ */
+export function canExtendedWait(account: {
+  role: string | null | undefined;
+  permissions: readonly string[];
+}): boolean {
+  void account.role;
+  return account.permissions.includes(EXTENDED_WAIT);
 }
 
 /** Server-side page allow-list. Office roles may open anything. */

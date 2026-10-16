@@ -1,4 +1,10 @@
-import { canAcceptPaymentSettlement, canApproveSettlement, canManageBankDetails, canOverridePreHireChecks } from "../auth/roles";
+import {
+  canAcceptPaymentSettlement,
+  canApproveSettlement,
+  canExtendedWait,
+  canManageBankDetails,
+  canOverridePreHireChecks,
+} from "../auth/roles";
 import { all, getDb } from "./connection";
 import { migrate } from "./migrate";
 
@@ -33,4 +39,8 @@ export function accountCanApproveSettlement(staffId: string, role: string | null
 
 export function accountCanManageBankDetails(staffId: string, role: string | null | undefined): boolean {
   return canManageBankDetails({ role, permissions: listStaffPermissions(staffId) });
+}
+
+export function accountCanExtendedWait(staffId: string, role: string | null | undefined): boolean {
+  return canExtendedWait({ role, permissions: listStaffPermissions(staffId) });
 }

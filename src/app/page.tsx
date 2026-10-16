@@ -3,22 +3,27 @@ import { cookies } from "next/headers";
 import type { ReactNode } from "react";
 import { ClaimTable, PageHeader, SearchForm } from "@/components/ClaimTable";
 import { RuleHint } from "@/components/dashboard/RuleHint";
-import { TodaysWork } from "@/components/dashboard/TodaysWork";
+import { TodaysWork, type PreparedDeskEmail } from "@/components/dashboard/TodaysWork";
+import { SaveClashNotice } from "@/components/SaveClashNotice";
 import { formatGbp } from "@/lib/money";
 import { requireStaff } from "@/lib/auth/session";
 import { HEAD_LABELS, type HeadOfLoss } from "@/lib/constants";
 import { dbLocation, getDashboard } from "@/lib/db/queries";
 import { formatUkDate } from "@/lib/dates";
-import type { ChaseView } from "@/lib/db/chase";
+import { findPreparedChase, type ChaseView } from "@/lib/db/chase";
+import { chaseStageRowClass, chaseStageTextClass, isChaseKind } from "@/lib/domain/chase";
+import { liveEmailSending } from "@/lib/email/send-mode";
+import { loadClash } from "@/lib/db/record-version";
 import type { PaymentAttentionRow } from "@/lib/db/payment-review";
-import { chaseStageRowClass, chaseStageShortLabel, chaseStageTextClass } from "@/lib/domain/chase";
+import { deskItemTitle, nothingDueLine } from "@/lib/domain/todays-work";
 import { DASHBOARD_SCOPE_COOKIE, resolveDashboardScope, type DashboardScope } from "@/lib/domain/dashboard-scope";
-import { dueTextClass, dueWording, type DueTone } from "@/lib/domain/due-wording";
+import { dueRowClass, dueTextClass, dueWording, type DueTone } from "@/lib/domain/due-wording";
 import type { HeadMoneyRow, OverpaymentNote } from "@/lib/domain/head-outstanding";
-import { nothingDueLine } from "@/lib/domain/todays-work";
 import { BANK_DETAILS_MISSING_SETTINGS, paymentDetailsComplete } from "@/lib/domain/payment-details";
 import { getInsurerPaymentDetails, latestBankDetailsChange } from "@/lib/db/payment-details";
 import { getRepairGapThresholdDays } from "@/lib/db/repair-progress";
+
+type AttentionRow = Omit<PaymentAttentionRow, "head">;
 
 const toneClass: Record<string, string> = {
   info: "border-l-teal",
@@ -38,7 +43,7 @@ function chaseWhen(row: ChaseView): { text: string; tone: DueTone } {
       if (timed.tone === "overdue") return timed;
       return { text: "Overdue", tone: "overdue" };
     }
-    if (row.severity === "amber") return { text: "Approaching", tone: "future" };
+    if (row.severity === "amber") return { text: "Approaching", tone: "soon" };
     return { text: "Due", tone: "today" };
   }
   return dueWording(row.dueAt);
@@ -48,12 +53,10 @@ function AttentionTable({
   title,
   hint,
   rows,
-  stage,
 }: {
   title: string;
   hint: string;
-  rows: PaymentAttentionRow[];
-  stage: string;
+  rows: AttentionRow[];
 }) {
   return (
     <section className="mt-8 rounded-xl border border-line bg-card p-5">
@@ -64,31 +67,32 @@ function AttentionTable({
           <tr>
             <th>File</th>
             <th>Client</th>
-            <th>Stage</th>
-            <th>Next action</th>
-            <th>Since</th>
+            <th>Item</th>
+            <th>When</th>
             <th>Handler</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={row.id} className="bg-[#fff6e8]">
+          {rows.map((row) => {
+            const when = row.occurredAt ? dueWording(row.occurredAt) : { text: "Open", tone: "today" as DueTone };
+            return (
+            <tr key={row.id} className={dueRowClass(when.tone)}>
               <td>
                 <Link href={row.href} className="ref text-teal-dark hover:underline">
                   {row.fileReference}
                 </Link>
               </td>
               <td>{row.clientName}</td>
-              <td className="font-semibold text-warn">{stage}</td>
               <td>
                 <Link href={row.href} className="text-navy-deep underline">
                   {row.label}
                 </Link>
               </td>
-              <td>{row.occurredAt ? formatUkDate(row.occurredAt) : "Open"}</td>
+              <td className={dueTextClass(when.tone)}>{when.text}</td>
               <td>{row.handlerName}</td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </section>
@@ -105,8 +109,7 @@ function ChaseDueTable({ title, hint, rows }: { title: string; hint: string; row
           <tr>
             <th>File</th>
             <th>Client</th>
-            <th>Stage</th>
-            <th>Next action</th>
+            <th>Item</th>
             <th>When</th>
             <th>Handler</th>
           </tr>
@@ -114,21 +117,17 @@ function ChaseDueTable({ title, hint, rows }: { title: string; hint: string; row
         <tbody>
           {rows.map((row) => {
             const when = chaseWhen(row);
-            const stage =
-              row.kind === "hire_agreement_renewal" ? chaseStageShortLabel(row.severity) : when.text;
+            const renewal = row.kind === "hire_agreement_renewal";
             return (
-              <tr key={`${row.kind}-${row.claimId}`} className={chaseStageRowClass(row.severity)}>
+              <tr key={`${row.kind}-${row.claimId}`} className={renewal ? chaseStageRowClass(row.severity) : dueRowClass(when.tone)}>
                 <td>
                   <Link href={`/claims/${row.claimId}`} className="ref text-teal-dark hover:underline">
                     {row.fileReference}
                   </Link>
                 </td>
                 <td>{row.clientName || "Unknown"}</td>
-                <td className={row.kind === "hire_agreement_renewal" ? chaseStageTextClass(row.severity) : dueTextClass(when.tone)}>
-                  {stage}
-                </td>
-                <td>{row.label || row.dueLabel}</td>
-                <td className={dueTextClass(when.tone)}>{when.text}</td>
+                <td>{deskItemTitle(row.label || row.dueLabel)}</td>
+                <td className={renewal ? chaseStageTextClass(row.severity) : dueTextClass(when.tone)}>{when.text}</td>
                 <td>{row.handlerName || "Unassigned"}</td>
               </tr>
             );
@@ -153,9 +152,8 @@ function ClaimedCell({ row }: { row: HeadMoneyRow }) {
 }
 
 function OutstandingCell({ pence }: { pence: number | null }) {
-  if (pence === null) return <span>—</span>;
-  if (pence < 0) return <span className="font-semibold text-overdue">{formatGbp(Math.abs(pence))} overpaid</span>;
-  return <span>{formatGbp(pence)}</span>;
+  if (pence === null) return <span>none</span>;
+  return <span>{formatGbp(Math.max(0, pence))}</span>;
 }
 
 function overpaymentText(note: OverpaymentNote): string {
@@ -187,13 +185,31 @@ function ScopeSwitch({ scope }: { scope: DashboardScope }) {
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ scope?: string }>;
+  searchParams: Promise<{ scope?: string; undo?: string; prepare?: string; workError?: string; clash?: string }>;
 }) {
   const staff = await requireStaff();
   const query = await searchParams;
   const jar = await cookies();
   const scope = resolveDashboardScope(staff, query.scope, jar.get(DASHBOARD_SCOPE_COOKIE)?.value);
   const data = getDashboard({ handlerId: scope === "mine" ? staff.id : null });
+  const clash = loadClash(query.clash);
+  const preparedItem = query.prepare
+    ? data.todaysWork.flatMap((row) => [row.lead, ...row.rest]).find((item) => item.id === query.prepare)
+    : undefined;
+  let prepared: PreparedDeskEmail | null = null;
+  if (preparedItem?.chaseKind && isChaseKind(preparedItem.chaseKind)) {
+    const email = findPreparedChase(preparedItem.chaseKind, preparedItem.claimId);
+    if (email) {
+      prepared = {
+        itemId: preparedItem.id,
+        claimId: preparedItem.claimId,
+        correspondenceId: String(email.id),
+        subject: String(email.subject || ""),
+        to: String(email.to_address || ""),
+        body: String(email.body || ""),
+      };
+    }
+  }
   const path = dbLocation();
   const bankDetailsMissing = !paymentDetailsComplete(getInsurerPaymentDetails());
   const bankChange = latestBankDetailsChange();
@@ -212,8 +228,16 @@ export default async function DashboardPage({
     data.todaysWork.length,
     <section key="today" className="mt-8 rounded-xl border border-line bg-card p-5">
       <h2 className="font-serif text-xl text-navy-deep">Today&apos;s work</h2>
-      <p className="mb-4 text-sm text-slate">One row per claim. The row is that claim&apos;s most urgent item.</p>
-      <TodaysWork rows={data.todaysWork} />
+      <p className="mb-4 text-sm text-slate">One row per claim. The row is that claim&apos;s most urgent item. Deadline first, then money still running, then the rest.</p>
+      {query.workError ? <p className="mb-3 rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{query.workError}</p> : null}
+      <SaveClashNotice clash={clash} reloadHref="/" />
+      <TodaysWork
+        rows={data.todaysWork}
+        bankDetailsMissing={bankDetailsMissing}
+        liveSending={liveEmailSending()}
+        undoId={query.undo || null}
+        prepared={prepared}
+      />
     </section>,
   );
   const sections = DeskSections({ data, repairGapDays, taskHandlers, blocks, keep });
@@ -350,10 +374,23 @@ export default async function DashboardPage({
               </td>
               <td className="tabular">
                 <strong>
-                  <OutstandingCell pence={data.moneyConfirmed.outstandingPence} />
+                  Outstanding <OutstandingCell pence={data.moneyConfirmed.outstandingPence} />
                 </strong>
+                {data.moneyConfirmed.overpaidPence > 0 ? (
+                  <div className="font-semibold">Overpaid {formatGbp(data.moneyConfirmed.overpaidPence)}</div>
+                ) : null}
               </td>
             </tr>
+            {data.moneyConfirmed.overpaidPence > 0 ? (
+              <tr>
+                <td>Overpaid, to review</td>
+                <td>—</td>
+                <td>—</td>
+                <td>—</td>
+                <td>—</td>
+                <td className="tabular font-semibold">{formatGbp(data.moneyConfirmed.overpaidPence)}</td>
+              </tr>
+            ) : null}
             <tr>
               <td>
                 <strong>Provisional totals</strong>
@@ -411,18 +448,28 @@ function DeskSections({
       title="Awaiting decision"
       hint="A payment has been recorded and does not cover that head of loss. It stays here until someone opens it. Recording the payment does not make the choice."
       rows={data.awaitingDecisions}
-      stage="Awaiting decision"
     />,
   );
+  const claimNames = new Map(data.claims.map((row) => [row.id, { client: row.client_name || "Unknown", handler: row.handler_name || "Unassigned" }]));
+  const overpaidRows: AttentionRow[] = data.moneyOverpayments.map((note) => ({
+    id: `overpaid-${note.claimId}-${note.head}`,
+    claimId: note.claimId,
+    fileReference: note.fileReference,
+    clientName: claimNames.get(note.claimId)?.client || "Unknown",
+    handlerName: claimNames.get(note.claimId)?.handler || "Unassigned",
+    label: `Overpaid, to review — ${headName(note.head)} ${formatGbp(note.overpaidPence)}`,
+    href: `/claims/${note.claimId}`,
+    occurredAt: null,
+  }));
+  const reviewRows: AttentionRow[] = [...data.paymentsAfterSettlement, ...overpaidRows];
   keep(
     "Payments to review",
-    data.paymentsAfterSettlement.length,
+    reviewRows.length,
     <AttentionTable
       key="review"
       title="Payments to review"
-      hint="Money arrived on a head that was already accepted as the final figure. It was not added to the agreed or received figures."
-      rows={data.paymentsAfterSettlement}
-      stage="Review"
+      hint="Money arrived on a head that was already accepted as the final figure. It was not added to the agreed or received figures. An overpayment is listed on its own and is not taken off money owed on another head."
+      rows={reviewRows}
     />,
   );
   keep(
@@ -538,21 +585,30 @@ function DeskSections({
           <tr>
             <th>File</th>
             <th>Client</th>
-            <th>Gap</th>
+            <th>Item</th>
+            <th>When</th>
+            <th>Handler</th>
           </tr>
         </thead>
         <tbody>
-          {data.repairProgressGaps.map((row) => (
-            <tr key={`${row.claimId}-${row.wording}`} className="bg-[#fff6e8]">
+          {data.repairProgressGaps.map((row) => {
+            const days = row.days;
+            const overdue = days > 0;
+            const wording = !overdue ? "Due today" : days === 1 ? "Overdue by 1 day" : `Overdue by ${days} days`;
+            return (
+            <tr key={`${row.claimId}-${row.wording}`} className={dueRowClass(overdue ? "overdue" : "today")}>
               <td>
                 <Link href={`/claims/${row.claimId}#hire-repair-chronology`} className="ref text-teal-dark hover:underline">
                   {row.fileReference}
                 </Link>
               </td>
               <td>{row.clientName}</td>
-              <td>{row.wording}</td>
+              <td>{deskItemTitle(row.wording)}</td>
+              <td className={dueTextClass(overdue ? "overdue" : "today")}>{wording}</td>
+              <td>{row.handlerName}</td>
             </tr>
-          ))}
+            );
+          })}
         </tbody>
       </table>
     </section>,

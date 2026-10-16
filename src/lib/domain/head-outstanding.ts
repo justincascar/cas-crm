@@ -48,8 +48,10 @@ export type HeadMoneyRow = {
   offeredPence: number;
   agreedPence: number;
   receivedPence: number;
-  /** Null when no claim on this head has an agreed or confirmed claimed figure. */
+  /** Null when no claim on this head has an agreed or confirmed claimed figure. Never below 0. */
   outstandingPence: number | null;
+  /** Received above the comparison figure. Not taken off outstanding. */
+  overpaidPence: number;
   overpayments: OverpaymentNote[];
 };
 
@@ -62,7 +64,7 @@ export function lineOutstanding(line: OutstandingLineInput): LineOutstanding {
     return {
       basis: "agreed",
       comparisonPence: agreed,
-      outstandingPence: agreed - received,
+      outstandingPence: Math.max(0, agreed - received),
       overpayment: received > agreed,
       receivedExceedsAgreed,
     };
@@ -71,7 +73,7 @@ export function lineOutstanding(line: OutstandingLineInput): LineOutstanding {
     return {
       basis: "confirmed_claimed",
       comparisonPence: claimed,
-      outstandingPence: claimed - received,
+      outstandingPence: Math.max(0, claimed - received),
       overpayment: received > claimed,
       receivedExceedsAgreed: false,
     };
@@ -87,7 +89,14 @@ export function lineOutstanding(line: OutstandingLineInput): LineOutstanding {
 
 export function summariseHeads(lines: OutstandingLineInput[]): {
   heads: HeadMoneyRow[];
-  confirmed: { claimedPence: number; offeredPence: number; agreedPence: number; receivedPence: number; outstandingPence: number | null };
+  confirmed: {
+    claimedPence: number;
+    offeredPence: number;
+    agreedPence: number;
+    receivedPence: number;
+    outstandingPence: number | null;
+    overpaidPence: number;
+  };
   provisional: { claimedPence: number };
   overpayments: OverpaymentNote[];
 } {
@@ -99,6 +108,7 @@ export function summariseHeads(lines: OutstandingLineInput[]): {
   let agreed = 0;
   let received = 0;
   let outstanding = 0;
+  let overpaid = 0;
   let anyOutstanding = false;
 
   for (const line of lines) {
@@ -111,6 +121,7 @@ export function summariseHeads(lines: OutstandingLineInput[]): {
       agreedPence: 0,
       receivedPence: 0,
       outstandingPence: null,
+      overpaidPence: 0,
       overpayments: [],
     };
     const claimed = Math.trunc(line.claimedPence || 0);
@@ -151,6 +162,8 @@ export function summariseHeads(lines: OutstandingLineInput[]): {
       };
       row.overpayments.push(note);
       overpayments.push(note);
+      row.overpaidPence += note.overpaidPence;
+      overpaid += note.overpaidPence;
     }
     byHead.set(line.head, row);
   }
@@ -163,6 +176,7 @@ export function summariseHeads(lines: OutstandingLineInput[]): {
       agreedPence: agreed,
       receivedPence: received,
       outstandingPence: anyOutstanding ? outstanding : null,
+      overpaidPence: overpaid,
     },
     provisional: { claimedPence: provisionalClaimed },
     overpayments,

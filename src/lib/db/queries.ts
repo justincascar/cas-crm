@@ -5,7 +5,7 @@ import { dueFollowUpChases } from "./follow-up-chases";
 import { accidentDateError, isBeforeLondonDay, isSameLondonDay, londonDateIso, londonTodayIso, nowUtcIso } from "../dates";
 import { dueWording } from "../domain/due-wording";
 import { claimedFigureIsConfirmed, summariseHeads } from "../domain/head-outstanding";
-import { todaysWorkRows, type DeskWorkItem, type TodaysWorkRow } from "../domain/todays-work";
+import { blankDeskItem, todaysWorkRows, type DeskWorkItem, type TodaysWorkRow } from "../domain/todays-work";
 import { formatGbp, sumDistinctHeads } from "../money";
 import { all, dbPath, get, getDb, newId, resetSqlStatementCount, run, sqlStatementCount } from "./connection";
 import { touchFleetVersion } from "./fleet";
@@ -13,6 +13,17 @@ import { withImmediateTransaction } from "./record-version";
 import { canReserveVehicle, chaseFileStateFromPosition, chaseStopReason, nextFileReference, parseFileReferenceNumber } from "../domain/rules";
 import { listClaimEvents, recordClaimEvent } from "./chronology";
 import { listFinishedRepairGapClaims, listRepairGapClaims, type RepairGapClaimRow } from "./repair-progress";
+import {
+  claimRunningDaily,
+  fleetConflictItems,
+  hiddenWaitItemIds,
+  listFleetConflicts,
+  waitVersions,
+  litigationDeskItems,
+  noNextActionItems,
+  releaseDueWaits,
+  settlementApprovalItems,
+} from "./desk-work";
 import { listKnownAgentsOn, listKnownInsurersOn } from "./insurers";
 import { KEY_DATE_TYPES, eventLabel, latestDates } from "../domain/events";
 import {
@@ -243,7 +254,7 @@ function renewalDeskWording(row: ChaseView): { text: string; tone: DeskWorkItem[
     if (timed.tone === "overdue") return timed;
     return { text: "Overdue", tone: "overdue", sortDays: 0 };
   }
-  if (row.severity === "amber") return { text: "Approaching", tone: "future", sortDays: -1 };
+  if (row.severity === "amber") return { text: "Approaching", tone: "soon", sortDays: -1 };
   return { text: "Due", tone: "today", sortDays: 0 };
 }
 
@@ -295,33 +306,8 @@ export function getDashboard(filter: { handlerId?: string | null } = {}) {
   );
   const fleetMap = Object.fromEntries(fleet.map((r) => [r.status, Number(r.c)]));
 
-  const lines = all<{
-    claim_id: string;
-    file_reference: string;
-    head_of_loss: string;
-    description: string | null;
-    claimed_pence: number;
-    offered_pence: number;
-    agreed_pence: number;
-    received_pence: number;
-    hire_unconfirmed: number;
-    storage_unconfirmed: number;
-    storage_start_missing: number;
-  }>(
-    `SELECT fl.claim_id, c.file_reference, fl.head_of_loss, fl.description,
-            fl.claimed_pence, fl.offered_pence, fl.agreed_pence, fl.received_pence,
-            CASE WHEN fl.head_of_loss IN ('hire', 'credit_hire') AND NOT EXISTS (
-              SELECT 1 FROM hire_episodes he
-              WHERE he.claim_id = fl.claim_id AND he.billing_end_at IS NOT NULL AND trim(he.billing_end_at) != ''
-            ) THEN 1 ELSE 0 END AS hire_unconfirmed,
-            CASE WHEN fl.head_of_loss = 'storage' AND (
-              c.storage_billing_end_on IS NULL OR trim(c.storage_billing_end_on) = ''
-            ) THEN 1 ELSE 0 END AS storage_unconfirmed,
-            CASE WHEN fl.head_of_loss = 'storage' AND (
-              c.storage_started_on IS NULL OR trim(c.storage_started_on) = ''
-            ) THEN 1 ELSE 0 END AS storage_start_missing
-     FROM financial_lines fl
-     JOIN claims c ON c.id = fl.claim_id
+  const lines = all<MoneyLineRow>(
+    `${MONEY_LINE_SQL}
      ${handlerId ? "WHERE c.handler_id = ?" : ""}`,
     handlerId ? [handlerId] : [],
   );
@@ -377,29 +363,18 @@ export function getDashboard(filter: { handlerId?: string | null } = {}) {
   );
   const hireNotOnFleet = hireFleet.filter((row) => !row.fleet_vehicle_id || row.fleet_status !== "on_hire");
   const activeHireNote = describeActiveHireGap(hireNotOnFleet, Boolean(handlerId));
-  const money = summariseHeads(
-    lines.map((line) => ({
-      claimId: String(line.claim_id),
-      fileReference: String(line.file_reference),
-      head: String(line.head_of_loss),
-      claimedPence: Number(line.claimed_pence) || 0,
-      offeredPence: Number(line.offered_pence) || 0,
-      agreedPence: Number(line.agreed_pence) || 0,
-      receivedPence: Number(line.received_pence) || 0,
-      claimedConfirmed: claimedFigureIsConfirmed({
-        head: String(line.head_of_loss),
-        claimedPence: Number(line.claimed_pence) || 0,
-        description: line.description,
-        hireUnconfirmed: Number(line.hire_unconfirmed) === 1,
-        storageUnconfirmed: Number(line.storage_unconfirmed) === 1,
-        storageStartMissing: Number(line.storage_start_missing) === 1,
-      }),
-    })),
-  );
+  const money = summariseHeads(lines.map(moneyLineInput));
+  releaseDueWaits();
+  const fleetConflicts = listFleetConflicts(handlerId);
+  const runningByClaim = new Map<string, { open: boolean; dailyPence: number }>();
+  for (const gap of repairProgressGaps) {
+    if (!runningByClaim.has(gap.claimId)) runningByClaim.set(gap.claimId, claimRunningDaily(gap.claimId));
+  }
   const workItems: DeskWorkItem[] = [
     ...chasesDue.map((row) => {
       const when = row.kind === "hire_agreement_renewal" ? renewalDeskWording(row) : dueWording(row.dueAt);
-      return {
+      const pastLimit = row.kind === "hire_agreement_renewal" && row.severity === "red_overdue";
+      return blankDeskItem({
         id: `chase-${row.kind}-${row.claimId}`,
         claimId: row.claimId,
         fileReference: row.fileReference || row.claimId,
@@ -409,17 +384,20 @@ export function getDashboard(filter: { handlerId?: string | null } = {}) {
         wording: when.text,
         tone: when.tone,
         sortDays: when.sortDays,
-      };
+        tier: pastLimit ? 1 : 3,
+        chaseKind: row.kind,
+        prepareChase: true,
+      });
     }),
-    ...repairProgressGaps.map((row) => gapWorkItem(row)),
+    ...repairProgressGaps.map((row) => gapWorkItem(row, runningByClaim.get(row.claimId))),
     ...awaitingDecisions.map((row) => attentionWorkItem(row, "decision")),
     ...paymentsAfterSettlement.map((row) => attentionWorkItem(row, "review")),
     ...tasks.flatMap((task) => {
       if (!task.claim_id || !task.due_at) return [];
       const when = dueWording(String(task.due_at));
-      if (when.tone !== "overdue" && when.tone !== "today") return [];
+      if (when.tone !== "overdue" && when.tone !== "today" && when.tone !== "soon") return [];
       return [
-        {
+        blankDeskItem({
           id: `task-${task.id}`,
           claimId: String(task.claim_id),
           fileReference: task.file_reference || String(task.claim_id),
@@ -429,10 +407,19 @@ export function getDashboard(filter: { handlerId?: string | null } = {}) {
           wording: when.text,
           tone: when.tone,
           sortDays: when.sortDays,
-        },
+        }),
       ];
     }),
+    ...litigationDeskItems(handlerId),
+    ...settlementApprovalItems(handlerId),
+    ...noNextActionItems(handlerId),
+    ...fleetConflictItems(fleetConflicts),
   ];
+  const hidden = hiddenWaitItemIds();
+  const versions = waitVersions();
+  const visibleWork = workItems
+    .filter((item) => !hidden.has(item.id))
+    .map((item) => ({ ...item, waitVersion: versions.get(item.id) || "" }));
 
   const claimHref = (key: string) => withHandlerQuery(`/claims?queue=${key}`, handlerId);
   const cards: DashboardCard[] = [
@@ -486,7 +473,8 @@ export function getDashboard(filter: { handlerId?: string | null } = {}) {
     dashboardSqlStatements: sqlStatements,
     repairProgressGaps,
     finishedRepairGaps,
-    todaysWork: todaysWorkRows(workItems),
+    todaysWork: todaysWorkRows(visibleWork),
+    fleetConflicts,
     moneyHeads: money.heads,
     moneyConfirmed: money.confirmed,
     moneyProvisional: money.provisional,
@@ -519,10 +507,14 @@ function describeActiveHireGap(
   return scope ? `${scope} ${lead}` : lead;
 }
 
-function gapWorkItem(row: RepairGapClaimRow): DeskWorkItem {
+function gapWorkItem(
+  row: RepairGapClaimRow,
+  running?: { open: boolean; dailyPence: number },
+): DeskWorkItem {
   const days = row.days;
   const overdue = days > 0;
-  return {
+  const tier = running?.open ? 2 : 3;
+  return blankDeskItem({
     id: `gap-${row.claimId}-${row.wording}`,
     claimId: row.claimId,
     fileReference: row.fileReference,
@@ -532,7 +524,11 @@ function gapWorkItem(row: RepairGapClaimRow): DeskWorkItem {
     wording: overdue ? (days === 1 ? "Overdue by 1 day" : `Overdue by ${days} days`) : "Due today",
     tone: overdue ? "overdue" : "today",
     sortDays: overdue ? days : 0,
-  };
+    tier,
+    runningDailyPence: tier === 2 ? running?.dailyPence ?? 0 : null,
+    progressDays: tier === 2 ? days : null,
+    recordStep: true,
+  });
 }
 
 function attentionWorkItem(
@@ -541,7 +537,7 @@ function attentionWorkItem(
 ): DeskWorkItem {
   const when = dueWording(row.occurredAt);
   const openNow = when.tone === "unknown";
-  return {
+  return blankDeskItem({
     id: `${source}-${row.id}`,
     claimId: row.claimId,
     fileReference: row.fileReference,
@@ -551,7 +547,62 @@ function attentionWorkItem(
     wording: openNow ? "Due today" : when.text,
     tone: openNow ? "today" : when.tone,
     sortDays: openNow ? 0 : when.sortDays,
+  });
+}
+
+const MONEY_LINE_SQL = `SELECT fl.claim_id, c.file_reference, fl.head_of_loss, fl.description,
+            fl.claimed_pence, fl.offered_pence, fl.agreed_pence, fl.received_pence,
+            CASE WHEN fl.head_of_loss IN ('hire', 'credit_hire') AND NOT EXISTS (
+              SELECT 1 FROM hire_episodes he
+              WHERE he.claim_id = fl.claim_id AND he.billing_end_at IS NOT NULL AND trim(he.billing_end_at) != ''
+            ) THEN 1 ELSE 0 END AS hire_unconfirmed,
+            CASE WHEN fl.head_of_loss = 'storage' AND (
+              c.storage_billing_end_on IS NULL OR trim(c.storage_billing_end_on) = ''
+            ) THEN 1 ELSE 0 END AS storage_unconfirmed,
+            CASE WHEN fl.head_of_loss = 'storage' AND (
+              c.storage_started_on IS NULL OR trim(c.storage_started_on) = ''
+            ) THEN 1 ELSE 0 END AS storage_start_missing
+     FROM financial_lines fl
+     JOIN claims c ON c.id = fl.claim_id`;
+
+type MoneyLineRow = {
+  claim_id: string;
+  file_reference: string;
+  head_of_loss: string;
+  description: string | null;
+  claimed_pence: number;
+  offered_pence: number;
+  agreed_pence: number;
+  received_pence: number;
+  hire_unconfirmed: number;
+  storage_unconfirmed: number;
+  storage_start_missing: number;
+};
+
+function moneyLineInput(line: MoneyLineRow) {
+  return {
+    claimId: String(line.claim_id),
+    fileReference: String(line.file_reference),
+    head: String(line.head_of_loss),
+    claimedPence: Number(line.claimed_pence) || 0,
+    offeredPence: Number(line.offered_pence) || 0,
+    agreedPence: Number(line.agreed_pence) || 0,
+    receivedPence: Number(line.received_pence) || 0,
+    claimedConfirmed: claimedFigureIsConfirmed({
+      head: String(line.head_of_loss),
+      claimedPence: Number(line.claimed_pence) || 0,
+      description: line.description,
+      hireUnconfirmed: Number(line.hire_unconfirmed) === 1,
+      storageUnconfirmed: Number(line.storage_unconfirmed) === 1,
+      storageStartMissing: Number(line.storage_start_missing) === 1,
+    }),
   };
+}
+
+/** The same outstanding figures as the dashboard money table, for one claim. */
+export function claimOutstandingSummary(claimId: string) {
+  const lines = all<MoneyLineRow>(`${MONEY_LINE_SQL} WHERE c.id = ?`, [claimId]);
+  return summariseHeads(lines.map(moneyLineInput));
 }
 
 export function getClaim(idOrRef: string) {

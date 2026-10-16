@@ -780,9 +780,31 @@ TEST-0005’s storage end is still unconfirmed. TEST-0009’s vehicle-damage off
 
 Tests: `tests/dashboard-desk.test.ts`. Full suite: 477 passing, 0 failing.
 
+## Today’s work, second stage (16 October 2026)
+
+Staff can do the ordinary desk jobs from Today’s work without opening the file first. The existing colours and wording stay. Approving a settlement, changing bank details, accepting a reduced figure, and a letter before action are still not buttons on a row.
+
+An overpayment no longer reduces money owed on another head. Outstanding on a head is never below £0. The extra is its own “Overpaid, to review” row on the money table and in Payments to review. Courtesy with no comparison figure stays “none”.
+
+A hire that is still active while the assigned vehicle is not marked on hire is flagged: “Fleet record conflict: [registration] is marked [status] but is on hire to [reference]”. TEST-0010 shows this. The vehicle was not taken out of maintenance, and the hire was not reassigned. The existing tile note remains.
+
+Item titles no longer repeat the word “Overdue”. The when-column still says “Overdue by [n] days”. The day count is unchanged.
+
+Today’s work is still one row per claim. The row is that claim’s highest item. “+n more” opens the rest. Deadline comes first (litigation deadlines that have a source, hire agreements past the 88-day limit, settlement approvals waiting for Justin, fleet record conflicts, and an open claim with no next action and no due date), ordered by days overdue. Then money still running with a repair-progress gap, ordered by the daily rate times the days with no progress. The row shows “£[amount]/day running”. The rate is the hire daily rate plus the storage daily rate already on the file, and only while that charge is still running. Then everything else, most overdue first. The labels are Deadline, Money running and Other.
+
+From a row, staff can log a call, prepare the chaser email, record a repair step on the same form as the file, wait until a date, or open the claim. A call, a wait and an undo are filed on the claim history. A promised date sets the wait to the day after that date. A wait needs a reason, hides the item until that date, and does not delete the chase or the earlier entry. The usual maximum is 14 days. A longer wait needs `extendedWait`, which is stored only on Justin’s staff row (`staff-justin`). It is not granted by the administrator role and not granted by the username. The server checks it. Waiting on a chase pauses it and starts it again on that date. Undo is available for 10 seconds. Preparing a chaser still uses simulated sending, still refuses a payment email when bank details are missing in Settings, and still rechecks before a send. Nothing is sent live.
+
+Every claim page has a summary that stays on screen while scrolling: the file, client, registration, insurer and reference, handler, liability and roadworthiness as stored, the stage, the daily running charge, a money table that matches the dashboard (outstanding never below £0, overpayment separate), the next action, and the open flags. Saving a claim with no next action warns the handler and still saves. No next action was invented for the existing files.
+
+Lists use the same columns: File, Client, Item, When, Handler. Red is overdue, amber is due within 2 days, green is later, and grey is waiting until a set date. Hire renewal alerts stay amber at day 70 and red at day 80 and day 88.
+
+TEST-0005’s storage end is still unconfirmed. TEST-0009’s vehicle-damage offers were not changed. TEST-0006’s money was not changed. TEST-0007’s £800 was not written off. No live email was sent. `EMAIL_SEND_MODE` stays `simulate`.
+
+Tests: `tests/desk-stage2.test.ts` and `tests/dashboard-desk.test.ts`. Full suite: 487 passing, 0 failing.
+
 ## Not yet claimed
 
 - Remove the database path from the dashboard footer before live use. It is there now so a handler on this PC can see where the file is kept. It should not be shown once the system is in live use.
 - Financial summary and the Assessed damage notes fields remain non-authoritative working notes, pending a later decision on whether to keep them.
 - Loss-of-use is earmarked for redesign into an automated chronology. Its current fields stay in place until that stage. They are typed notes on the hidden screen. The hire and repair chronology does not read them.
-- Stages 2–5 (finer permissions, live integrations, payment packs from CAS templates, litigation issue, backups/restore/deploy). Working dashboard is not production readiness.
+- Finer permissions beyond the named staff permissions, live integrations, payment packs from CAS templates, litigation issue, and backups/restore/deploy. The working dashboard is not production readiness. `extendedWait` is only on Justin’s staff row.

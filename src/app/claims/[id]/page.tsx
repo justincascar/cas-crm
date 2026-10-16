@@ -81,10 +81,11 @@ export default async function ClaimDetailPage({
     clash?: string;
     payWarn?: string;
     payAmount?: string;
+    nextWarning?: string;
   }>;
 }) {
   const { id } = await params;
-  const { error, tlError, tlMail, mailboxError, mailboxSent, mailboxSimulated, mailboxReport, paymentDecision, stepError, stepSaved, clash, payWarn, payAmount } = await searchParams;
+  const { error, tlError, tlMail, mailboxError, mailboxSent, mailboxSimulated, mailboxReport, paymentDecision, stepError, stepSaved, clash, payWarn, payAmount, nextWarning } = await searchParams;
   const claimClash = loadClash(clash);
   await requireStaff();
   const data = getClaim(id);
@@ -118,6 +119,11 @@ export default async function ClaimDetailPage({
 
   return (
     <div className="space-y-6">
+      {nextWarning ? (
+        <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">
+          This file has no next action. The save was kept. It stays on Today&apos;s work until a next action is set.
+        </p>
+      ) : null}
       <SaveClashNotice
         clash={claimClash && (claimClash.recordKey === id || claimClash.recordKey.startsWith(`${id}:`)) ? claimClash : null}
         reloadHref={`/claims/${id}`}

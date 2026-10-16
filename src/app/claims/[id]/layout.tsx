@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { ClaimSectionFrame } from "@/components/claim-file/ClaimSectionFrame";
-import { ClaimWorkflowStatusSummary } from "@/components/ClaimWorkflowStatus";
+import { ClaimSummary } from "@/components/claims/ClaimSummary";
 import { isOfficeRole, pathAllowedForRole } from "@/lib/auth/roles";
 import { requireSignedIn } from "@/lib/auth/session";
 import { getClaim } from "@/lib/db/queries";
@@ -39,18 +39,7 @@ export default async function ClaimLayout({
 
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-line bg-card px-4 py-3">
-        <div>
-          <p className="font-mono text-sm text-teal-dark">{String(data.claim.file_reference)}</p>
-          <p className="text-sm text-slate">
-            {String(data.claim.client_name || "Unknown client")} · {String(data.claim.current_position)}
-          </p>
-          <ClaimWorkflowStatusSummary
-            liabilityStatus={String(data.claim.claim_type || "")}
-            roadworthiness={String(data.claim.roadworthiness || "")}
-          />
-        </div>
-      </div>
+      <ClaimSummary claimId={String(data.claim.id)} />
       <ClaimSectionFrame claimId={String(data.claim.id)} savedKeys={saved}>
         {children}
       </ClaimSectionFrame>

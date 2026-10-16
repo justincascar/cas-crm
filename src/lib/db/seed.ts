@@ -1,6 +1,6 @@
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { DEMO_STAFF, demoPasswordFor } from "../auth/demo-staff";
-import { ACCEPT_PAYMENT_SETTLEMENT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS } from "../auth/roles";
+import { ACCEPT_PAYMENT_SETTLEMENT, EXTENDED_WAIT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS } from "../auth/roles";
 import { hashPasswordSync } from "../auth/passwords";
 import {
   FILE_REFERENCE_PREFIX_DEFAULT,
@@ -74,6 +74,10 @@ export function seed(db: DatabaseSync) {
   run(db, `INSERT OR IGNORE INTO staff_permissions(staff_id, permission) VALUES (?, ?)`, [
     "staff-justin",
     MANAGE_BANK_DETAILS,
+  ]);
+  run(db, `INSERT OR IGNORE INTO staff_permissions(staff_id, permission) VALUES (?, ?)`, [
+    "staff-justin",
+    EXTENDED_WAIT,
   ]);
 
   const people: Array<Record<string, string | null>> = [

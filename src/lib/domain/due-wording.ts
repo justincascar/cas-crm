@@ -1,7 +1,7 @@
 import { formatUkDate, londonDateIso, londonTodayIso } from "../dates";
 import { realLondonDays } from "./repair-progress";
 
-export type DueTone = "overdue" | "today" | "future" | "unknown";
+export type DueTone = "overdue" | "today" | "soon" | "future" | "waiting" | "unknown";
 
 export type DueWording = {
   text: string;
@@ -38,11 +38,24 @@ export function dueWording(dueAt: string | null | undefined, today = londonToday
       sortDays: days,
     };
   }
-  return { text: formatUkDate(day), tone: "future", sortDays: -realLondonDays(today, day) };
+  const until = realLondonDays(today, day);
+  if (until <= 2) return { text: formatUkDate(day), tone: "soon", sortDays: -until };
+  return { text: formatUkDate(day), tone: "future", sortDays: -until };
 }
 
+/** Red overdue, amber due within 2 days, green later, grey waiting. */
 export function dueTextClass(tone: DueTone): string {
   if (tone === "overdue") return "font-semibold text-overdue";
-  if (tone === "today") return "font-semibold text-warn";
+  if (tone === "today" || tone === "soon") return "font-semibold text-warn";
+  if (tone === "future") return "font-semibold text-ok";
+  if (tone === "waiting") return "font-semibold text-slate";
+  return "";
+}
+
+export function dueRowClass(tone: DueTone): string {
+  if (tone === "overdue") return "bg-[#f8ecec]";
+  if (tone === "today" || tone === "soon") return "bg-[#fff6e8]";
+  if (tone === "future") return "bg-[#eef6ee]";
+  if (tone === "waiting") return "bg-[#eceae4]";
   return "";
 }

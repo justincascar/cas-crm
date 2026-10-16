@@ -13,7 +13,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (!isOfficeRole(staff.role)) return NextResponse.redirect(fallback, 303);
   const form = await request.formData();
   const returnTo = String(form.get("returnTo") || "");
-  const safeReturn = returnTo.startsWith(`/claims/${id}`) ? returnTo : `/claims/${id}`;
+  const safeReturn = returnTo === "/" || returnTo.startsWith("/?") || returnTo.startsWith(`/claims/${id}`) ? returnTo : `/claims/${id}`;
   const back = (name: "mailboxError" | "mailboxSent" | "mailboxSimulated", value: string, reportNotice?: string) => {
     const url = new URL(safeReturn, origin);
     url.searchParams.set(name, value);

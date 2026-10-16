@@ -19,7 +19,7 @@ export function OutstandingSummary({ items }: { items: OutstandingItem[] }) {
       ) : (
         <ul className="mt-4 space-y-2">
           {items.map((item) => (
-            <li key={item.id} className={`rounded-md px-3 py-2 text-sm ${rowClass(item)}`}>
+            <li id={`flag-${item.id}`} key={item.id} className={`rounded-md px-3 py-2 text-sm ${rowClass(item)}`}>
               {item.label}
             </li>
           ))}
