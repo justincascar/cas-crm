@@ -6,14 +6,18 @@
  *
  * Starts `next start` on a free port (from 3100). It does not use port 3000 and does not stop another server.
  * Signs in as the Justin test user from docs/AUTH-NOTES.md. It only reads pages. It does not submit forms or send email.
+ * After sign-in, and before any page is opened, it hashes the database. Opening the pages must not change that hash.
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
 import path from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { SESSION_COOKIE } from "../src/lib/auth/constants.ts";
 import { CLAIM_SCREENS } from "../src/lib/claim-screens.ts";
+import { dbPath, get, withDatabase } from "../src/lib/db/connection.ts";
+import { databaseFingerprint, fingerprintChanges } from "../src/lib/db/database-fingerprint.ts";
 
 const CLAIM_ID = "c5";
 const HEAD_SCREENS = ["recovery", "storage", "hire", "vehicle"] as const;
@@ -347,6 +351,41 @@ async function waitUntilReady(origin: string, child: ChildProcess): Promise<void
   throw new Error(`The server did not answer on ${origin} (${last}).`);
 }
 
+function warmDatabase() {
+  const db = new DatabaseSync(dbPath());
+  try {
+    withDatabase(db, () => {
+      get(`SELECT id FROM claims LIMIT 1`);
+    });
+  } finally {
+    db.close();
+  }
+}
+
+function readFingerprint() {
+  const db = new DatabaseSync(dbPath());
+  try {
+    db.exec("PRAGMA query_only = ON;");
+    return databaseFingerprint(db);
+  } finally {
+    db.close();
+  }
+}
+
+async function signIn(origin: string): Promise<string> {
+  const response = await fetch(`${origin}/login/submit`, {
+    method: "POST",
+    redirect: "manual",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({ username: "justin", password: justinPassword(), next: "/" }),
+  });
+  const cookie = sessionCookie(response);
+  if (!cookie || response.status !== 303) {
+    throw new Error("Sign-in did not return a session. No claim page was opened.");
+  }
+  return cookie;
+}
+
 async function main() {
   if (!fs.existsSync(path.join(process.cwd(), ".next", "BUILD_ID"))) {
     console.error("There is no production build. Run npm run build, then npm run check:pages.");
@@ -360,6 +399,7 @@ async function main() {
     return;
   }
 
+  warmDatabase();
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
   const nextBin = path.join(process.cwd(), "node_modules", "next", "dist", "bin", "next");
@@ -382,19 +422,8 @@ async function main() {
 
   try {
     await waitUntilReady(origin, child);
-    const signedIn = await fetchWithCookie(`${origin}/login/submit`, "", {
-      method: "POST",
-      headers: { "content-type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({ username: "justin", password: justinPassword(), next: "/" }),
-    });
-    const cookie = signedIn.cookie;
-    const signedInPath = new URL(signedIn.url).pathname;
-    if (!cookie || signedInPath === "/login" || signedInPath.startsWith("/login/")) {
-      console.error("Sign-in did not return a session. Nothing else was opened.");
-      console.error(serverLog.trim());
-      process.exitCode = 1;
-      return;
-    }
+    const cookie = await signIn(origin);
+    const beforePages = readFingerprint();
 
     let failed = 0;
     for (const page of PAGES) {
@@ -421,10 +450,16 @@ async function main() {
       }
     }
     const scrollFailed = sideways.length;
+    const databaseChanges = fingerprintChanges(beforePages, readFingerprint());
+    if (databaseChanges.length > 0) {
+      console.log(`FAIL  database changed while pages were opened: ${databaseChanges.join("; ")}`);
+    } else {
+      console.log("PASS  database unchanged after opening every page");
+    }
     console.log(
-      `${PAGES.length - (failed - scrollFailed)} passed, ${failed - scrollFailed} failed, ${CLAIM_TAB_PAGES.length - scrollFailed} claim pages fit 1280px, ${scrollFailed} scrolled sideways, port ${port}, email mode ${mode || "not set"}.`,
+      `${PAGES.length - (failed - scrollFailed)} passed, ${failed - scrollFailed} failed, ${CLAIM_TAB_PAGES.length - scrollFailed} claim pages fit 1280px, ${scrollFailed} scrolled sideways, database ${databaseChanges.length === 0 ? "unchanged" : "changed"}, port ${port}, email mode ${mode || "not set"}.`,
     );
-    if (failed > 0) {
+    if (failed > 0 || databaseChanges.length > 0) {
       console.error(serverLog.trim());
       process.exitCode = 1;
     }

@@ -23,7 +23,7 @@ import {
 } from "@/lib/domain/storage-charge";
 import { formatGbp } from "@/lib/money";
 import { latestChargeDecision } from "@/lib/db/charge-decision";
-import { figureFlag, refreshFollowedFigure } from "@/lib/db/figure-resolution";
+import { figureFlag } from "@/lib/db/figure-resolution";
 import { accountCanAcceptPaymentSettlement, accountCanApproveSettlement } from "@/lib/db/permissions";
 import { getClaim } from "@/lib/db/queries";
 import { getScreenData } from "@/lib/db/screens";
@@ -35,7 +35,7 @@ import {
   effectiveStorageRatePence,
   latestManualStorageEndReason,
   storageChargeForClaim,
-  syncStorageClaimed,
+  storageLineForClaim,
 } from "@/lib/db/storage-charge";
 import { getStorageDateReview, getStorageEndDateReview } from "@/lib/db/storage-recovery-date";
 import { getDefaultVehicleLocation } from "@/lib/db/vehicle-location";
@@ -65,8 +65,6 @@ export default async function StorageHeadPage({
   const query = await searchParams;
   const data = getClaim(id);
   if (!data) notFound();
-  refreshFollowedFigure(id, "storage");
-  syncStorageClaimed(id);
   const saved = getScreenData(id, "storage");
   const defaults = storageLocationFromSetting(getDefaultVehicleLocation());
   const blankLocation = storageLocationWasBlank(saved);
@@ -74,6 +72,7 @@ export default async function StorageHeadPage({
   const startDay = data.claim.storage_started_on ? String(data.claim.storage_started_on).slice(0, 10) : "";
   const endDay = data.claim.storage_billing_end_on ? String(data.claim.storage_billing_end_on).slice(0, 10) : "";
   const charge = storageChargeForClaim(id);
+  const storageRecorded = Boolean(storageLineForClaim(id));
   const rate = effectiveStorageRatePence(data.claim.storage_rate_pence == null ? null : Number(data.claim.storage_rate_pence));
   const decision = storageAuthorisationEndForClaim(id);
   const manualReason = latestManualStorageEndReason(id);
@@ -240,6 +239,18 @@ export default async function StorageHeadPage({
 
       <section className="space-y-3 rounded-xl border border-line bg-card p-5" aria-label="Storage charge">
         <h2 className="font-serif text-xl text-navy-deep">Storage charge</h2>
+        {storageRecorded ? null : <p className="text-sm font-semibold">No storage recorded yet</p>}
+        {!storageRecorded && charge?.status === "calculated" ? (
+          <form method="post" action={`/claims/${id}/record-charge`}>
+            <input type="hidden" name="head" value="storage" />
+            <p className="mb-3 text-sm text-slate">
+              The calculated charge is shown below. It is recorded only when you press Record storage.
+            </p>
+            <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
+              Record storage
+            </button>
+          </form>
+        ) : null}
         <p className="text-sm text-slate">{STORAGE_INCLUSIVE_DAY_NOTE} Net, VAT and the total are calculated. They are not typed.</p>
         {charge?.status === "missing_start" ? <p className="text-sm font-semibold">Start date missing</p> : null}
         {charge?.status === "end_before_start" ? (

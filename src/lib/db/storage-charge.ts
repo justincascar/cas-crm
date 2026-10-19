@@ -110,6 +110,14 @@ function headLine(claimId: string, head: "storage" | "recovery") {
   );
 }
 
+export function recoveryLineForClaim(claimId: string) {
+  return headLine(claimId, "recovery") ?? null;
+}
+
+export function storageLineForClaim(claimId: string) {
+  return headLine(claimId, "storage") ?? null;
+}
+
 function writeClaimed(input: {
   claimId: string;
   head: "storage" | "recovery";

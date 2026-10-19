@@ -172,8 +172,8 @@ function ItemRows({
         <td>
           <span className="mr-2 rounded border border-line px-1.5 py-0.5 text-xs text-slate">{tierLabel(item.tier)}</span>
           {item.item}
-          {showRunning ? (
-            <span className="mt-1 block text-sm font-semibold text-navy-deep">{formatGbp(item.runningDailyPence || 0)}/day running</span>
+          {showRunning && item.runningDailyPence != null && item.runningDailyPence > 0 ? (
+            <span className="mt-1 block text-sm font-semibold text-navy-deep">{formatGbp(item.runningDailyPence)}/day running</span>
           ) : null}
         </td>
         <td className={dueTextClass(item.tone)}>{item.wording}</td>

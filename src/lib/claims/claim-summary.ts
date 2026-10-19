@@ -78,10 +78,10 @@ export function figureUnderReviewNote(claimId: string, head: string, storedPence
   return flag.differs ? FIGURE_UNDER_REVIEW : null;
 }
 
-export function runningDailyLabel(running: { open: boolean; dailyPence: number }): string {
+export function runningDailyLabel(running: { dailyPence: number; rateMissing?: boolean }): string {
   if (running.dailyPence > 0) return `${formatGbp(running.dailyPence)}/day`;
-  if (running.open) return "No daily rate";
-  return `${formatGbp(0)}/day`;
+  if (running.rateMissing) return "Daily rate missing";
+  return "Not running";
 }
 
 export function buildClaimSummaryModel(claimId: string): ClaimSummaryModel | null {
@@ -164,9 +164,9 @@ export function buildClaimSummaryModel(claimId: string): ClaimSummaryModel | nul
     steps: claimStageSteps(totalLoss),
     stage,
     runningText:
-      running.open && running.dailyPence > 0
+      running.dailyPence > 0
         ? `${formatGbp(running.dailyPence)}/day running`
-        : running.open
+        : running.rateMissing
           ? "Charges still running — no daily rate on the file"
           : "No hire or storage charge running",
     runningDaily: runningDailyLabel(running),

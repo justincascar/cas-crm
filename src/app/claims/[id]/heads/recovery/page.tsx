@@ -15,12 +15,12 @@ import { formatUkDate } from "@/lib/dates";
 import { headScreenPath } from "@/lib/domain/head-screen";
 import { formatGbp } from "@/lib/money";
 import { latestChargeDecision } from "@/lib/db/charge-decision";
-import { figureFlag, refreshFollowedFigure } from "@/lib/db/figure-resolution";
+import { figureFlag } from "@/lib/db/figure-resolution";
 import { loadHeadSection } from "@/lib/db/head-screen";
 import { accountCanAcceptPaymentSettlement, accountCanApproveSettlement } from "@/lib/db/permissions";
 import { getClaim, listKnownAgents, listKnownInsurers } from "@/lib/db/queries";
 import { seedScreenDefaults } from "@/lib/db/screens";
-import { recoveryCarrierName, recoveryClaimForClaim, recoveryJobForClaim, syncRecoveryClaimed } from "@/lib/db/storage-charge";
+import { recoveryCarrierName, recoveryClaimForClaim, recoveryJobForClaim, recoveryLineForClaim } from "@/lib/db/storage-charge";
 import { getDefaultVehicleLocation } from "@/lib/db/vehicle-location";
 import { getScreenData } from "@/lib/db/screens";
 import { loadClash, screenVersion, sectionVersion } from "@/lib/db/record-version";
@@ -52,8 +52,8 @@ export default async function RecoveryHeadPage({
   if (!data) notFound();
   const def = getClaimScreen("recovery");
   if (!def) notFound();
-  refreshFollowedFigure(id, "recovery");
-  const decision = syncRecoveryClaimed(id);
+  const decision = recoveryClaimForClaim(id);
+  const recorded = Boolean(recoveryLineForClaim(id));
   const job = recoveryJobForClaim(id);
   const screen = getScreenData(id, "recovery");
   const storage = getScreenData(id, "storage");
@@ -129,7 +129,22 @@ export default async function RecoveryHeadPage({
 
       <section className="space-y-3 rounded-xl border border-line bg-card p-5" aria-label="Recovery charge">
         <h2 className="font-serif text-xl text-navy-deep">Recovery charge</h2>
-        <p className="text-sm">{chargeNote}</p>
+        {recorded ? (
+          <p className="text-sm">{chargeNote}</p>
+        ) : (
+          <p className="text-sm font-semibold">No recovery recorded yet</p>
+        )}
+        {!recorded && decision.write && decision.totalPence > 0 ? (
+          <form method="post" action={`/claims/${id}/record-charge`}>
+            <input type="hidden" name="head" value="recovery" />
+            <p className="mb-3 text-sm text-slate">
+              The calculated charge is shown below. It is recorded only when you press Record recovery.
+            </p>
+            <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
+              Record recovery
+            </button>
+          </form>
+        ) : null}
         <p className="text-sm font-semibold tabular">
           Net {formatGbp(decision.netPence)} · VAT {formatGbp(decision.vatPence)} · Total {formatGbp(decision.totalPence)}
         </p>

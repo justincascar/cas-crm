@@ -15,13 +15,15 @@ import { listClaimEvents, recordClaimEvent } from "./chronology";
 import { listFinishedRepairGapClaims, listRepairGapClaims, type RepairGapClaimRow } from "./repair-progress";
 import {
   claimRunningDaily,
+  type ClaimRunningDaily,
   fleetConflictItems,
   hiddenWaitItemIds,
   listFleetConflicts,
   waitVersions,
   litigationDeskItems,
+  moneyFollowUpItems,
+  storageRunningForClaims,
   noNextActionItems,
-  releaseDueWaits,
   settlementApprovalItems,
 } from "./desk-work";
 import { listKnownAgentsOn, listKnownInsurersOn } from "./insurers";
@@ -364,12 +366,56 @@ export function getDashboard(filter: { handlerId?: string | null } = {}) {
   const hireNotOnFleet = hireFleet.filter((row) => !row.fleet_vehicle_id || row.fleet_status !== "on_hire");
   const activeHireNote = describeActiveHireGap(hireNotOnFleet, Boolean(handlerId));
   const money = summariseHeads(lines.map(moneyLineInput));
-  releaseDueWaits();
   const fleetConflicts = listFleetConflicts(handlerId);
-  const runningByClaim = new Map<string, { open: boolean; dailyPence: number }>();
+  const runningByClaim = new Map<string, ClaimRunningDaily>();
+  const runningLabels = new Map<string, { fileReference: string; clientName: string; handlerName: string }>();
   for (const gap of repairProgressGaps) {
     if (!runningByClaim.has(gap.claimId)) runningByClaim.set(gap.claimId, claimRunningDaily(gap.claimId));
+    runningLabels.set(gap.claimId, {
+      fileReference: gap.fileReference,
+      clientName: gap.clientName,
+      handlerName: gap.handlerName,
+    });
   }
+  const storageCandidates = all<{
+    id: string;
+    file_reference: string;
+    client_name: string | null;
+    handler_name: string | null;
+  }>(
+    `SELECT c.id, c.file_reference, p.full_name AS client_name, s.name AS handler_name
+     FROM claims c
+     LEFT JOIN people p ON p.id = c.client_person_id
+     LEFT JOIN staff s ON s.id = c.handler_id
+     WHERE NOT EXISTS (
+       SELECT 1 FROM claim_events closed
+       WHERE closed.claim_id = c.id AND closed.event_type = 'case_closed'
+     )
+     AND c.storage_started_on IS NOT NULL AND trim(c.storage_started_on) != ''
+     AND (c.storage_billing_end_on IS NULL OR trim(c.storage_billing_end_on) = '')
+     ${handlerId ? "AND c.handler_id = ?" : ""}`,
+    handlerId ? [handlerId] : [],
+  );
+  const unassessedStorage = storageCandidates.filter((row) => !runningByClaim.has(String(row.id)));
+  const storageRunning = storageRunningForClaims(unassessedStorage.map((row) => String(row.id)));
+  for (const row of unassessedStorage) {
+    const claimId = String(row.id);
+    const running = storageRunning.get(claimId);
+    if (!running) continue;
+    runningLabels.set(claimId, {
+      fileReference: String(row.file_reference),
+      clientName: String(row.client_name || "Unknown"),
+      handlerName: String(row.handler_name || "Unassigned"),
+    });
+    runningByClaim.set(claimId, running);
+  }
+  const moneyFollowUps = moneyFollowUpItems(
+    [...runningByClaim.entries()].flatMap(([claimId, running]) => {
+      const label = runningLabels.get(claimId);
+      if (!label) return [];
+      return [{ claimId, ...label, running }];
+    }),
+  );
   const workItems: DeskWorkItem[] = [
     ...chasesDue.map((row) => {
       const when = row.kind === "hire_agreement_renewal" ? renewalDeskWording(row) : dueWording(row.dueAt);
@@ -414,6 +460,7 @@ export function getDashboard(filter: { handlerId?: string | null } = {}) {
     ...settlementApprovalItems(handlerId),
     ...noNextActionItems(handlerId),
     ...fleetConflictItems(fleetConflicts),
+    ...moneyFollowUps,
   ];
   const hidden = hiddenWaitItemIds();
   const versions = waitVersions();
@@ -513,7 +560,8 @@ function gapWorkItem(
 ): DeskWorkItem {
   const days = row.days;
   const overdue = days > 0;
-  const tier = running?.open ? 2 : 3;
+  const daily = running?.open && (running.dailyPence || 0) > 0 ? running.dailyPence : 0;
+  const tier = daily > 0 ? 2 : 3;
   return blankDeskItem({
     id: `gap-${row.claimId}-${row.wording}`,
     claimId: row.claimId,
@@ -525,7 +573,7 @@ function gapWorkItem(
     tone: overdue ? "overdue" : "today",
     sortDays: overdue ? days : 0,
     tier,
-    runningDailyPence: tier === 2 ? running?.dailyPence ?? 0 : null,
+    runningDailyPence: tier === 2 ? daily : null,
     progressDays: tier === 2 ? days : null,
     recordStep: true,
   });

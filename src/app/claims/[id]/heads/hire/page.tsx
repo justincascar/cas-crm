@@ -13,13 +13,13 @@ import { HIRE_INCLUSIVE_DAY_NOTE, HIRE_NOT_STARTED, FAULT_COURTESY_NOT_CREDIT_HI
 import { ukDayLabel } from "@/lib/domain/storage-charge";
 import { formatGbp } from "@/lib/money";
 import { latestChargeDecision } from "@/lib/db/charge-decision";
-import { figureFlag, refreshFollowedFigure } from "@/lib/db/figure-resolution";
+import { figureFlag } from "@/lib/db/figure-resolution";
 import { accountCanAcceptPaymentSettlement, accountCanApproveSettlement } from "@/lib/db/permissions";
 import { getClaim } from "@/lib/db/queries";
 import { loadClash, sectionVersion } from "@/lib/db/record-version";
 import { SaveClashNotice } from "@/components/SaveClashNotice";
 import { SeparateRecordConfirm } from "@/components/SeparateRecordConfirm";
-import { adoptHireClaimedIfNone, hireChargeForClaim } from "@/lib/db/hire-charge";
+import { hireChargeForClaim } from "@/lib/db/hire-charge";
 import { loadHeadSection } from "@/lib/db/head-screen";
 import { agreedOnFor, listChargeOffers } from "@/lib/db/vehicle-offers";
 
@@ -42,8 +42,6 @@ export default async function HireHeadPage({
   const hireClash = loadClash(query.clash);
   const data = getClaim(id);
   if (!data) notFound();
-  refreshFollowedFigure(id, "hire");
-  adoptHireClaimedIfNone(id);
   const view = hireChargeForClaim(id);
   const section = loadHeadSection(id, "hire");
   const charge = view.charge;
@@ -144,6 +142,18 @@ export default async function HireHeadPage({
 
       <section className="space-y-3 rounded-xl border border-line bg-card p-5" aria-label="Hire charge">
         <h2 className="font-serif text-xl text-navy-deep">Hire charge</h2>
+        {view.stored.claimedPence > 0 ? null : <p className="text-sm font-semibold">No hire recorded yet</p>}
+        {view.stored.claimedPence <= 0 && charge.status === "calculated" ? (
+          <form method="post" action={`/claims/${id}/record-charge`}>
+            <input type="hidden" name="head" value="hire" />
+            <p className="mb-3 text-sm text-slate">
+              The calculated charge is shown below. It is recorded only when you press Record hire.
+            </p>
+            <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
+              Record hire
+            </button>
+          </form>
+        ) : null}
         <p className="text-sm text-slate">{HIRE_INCLUSIVE_DAY_NOTE} Days, net, VAT and the total are calculated. They are not typed.</p>
         {charge.status === "not_started" ? <p className="text-sm font-semibold">{HIRE_NOT_STARTED}</p> : null}
         {charge.status === "courtesy" ? <p className="text-sm font-semibold">{FAULT_COURTESY_NOT_CREDIT_HIRE}</p> : null}

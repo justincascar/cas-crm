@@ -128,6 +128,15 @@ export function ensureKnownInsurers(db: DatabaseSync) {
   ensureKnownAgents(db);
 }
 
+function storedText(value: string | null | undefined): string {
+  return (value || "").trim();
+}
+
+function keepOrFill(current: string | null, incoming: string, fillBlanksOnly: boolean): string | null {
+  if (fillBlanksOnly) return storedText(current) || incoming || null;
+  return incoming || storedText(current) || null;
+}
+
 export function rememberInsurerOn(
   db: DatabaseSync,
   input: KnownInsurer,
@@ -141,7 +150,9 @@ export function rememberInsurerOn(
   const postcode = blankInsurerField(input.postcode);
   const telephone = blankInsurerField(input.telephone);
   const email = blankInsurerField(input.email);
-  const existing = db.prepare(`SELECT id FROM known_insurers WHERE name_key = ?`).get(key) as { id: string } | undefined;
+  const existing = db.prepare(`SELECT id, name, address, postcode, telephone, email FROM known_insurers WHERE name_key = ?`).get(key) as
+    | { id: string; name: string; address: string | null; postcode: string | null; telephone: string | null; email: string | null }
+    | undefined;
   if (!existing) {
     db.prepare(
       `INSERT INTO known_insurers(id, name, name_key, address, postcode, telephone, email, updated_at)
@@ -149,28 +160,24 @@ export function rememberInsurerOn(
     ).run(`insurer_${crypto.randomUUID()}`, name, key, address || null, postcode || null, telephone || null, email || null, now);
     return;
   }
-  if (opts?.fillBlanksOnly) {
-    db.prepare(
-      `UPDATE known_insurers SET
-        address = COALESCE(NULLIF(address, ''), ?),
-        postcode = COALESCE(NULLIF(postcode, ''), ?),
-        telephone = COALESCE(NULLIF(telephone, ''), ?),
-        email = COALESCE(NULLIF(email, ''), ?),
-        updated_at = ?
-       WHERE id = ?`,
-    ).run(address || null, postcode || null, telephone || null, email || null, now, existing.id);
+  const fillBlanksOnly = Boolean(opts?.fillBlanksOnly);
+  const nextName = fillBlanksOnly ? existing.name : name;
+  const nextAddress = keepOrFill(existing.address, address, fillBlanksOnly);
+  const nextPostcode = keepOrFill(existing.postcode, postcode, fillBlanksOnly);
+  const nextTelephone = keepOrFill(existing.telephone, telephone, fillBlanksOnly);
+  const nextEmail = keepOrFill(existing.email, email, fillBlanksOnly);
+  if (
+    storedText(existing.name) === storedText(nextName) &&
+    storedText(existing.address) === storedText(nextAddress) &&
+    storedText(existing.postcode) === storedText(nextPostcode) &&
+    storedText(existing.telephone) === storedText(nextTelephone) &&
+    storedText(existing.email) === storedText(nextEmail)
+  ) {
     return;
   }
   db.prepare(
-    `UPDATE known_insurers SET
-      name = ?,
-      address = COALESCE(NULLIF(?, ''), address),
-      postcode = COALESCE(NULLIF(?, ''), postcode),
-      telephone = COALESCE(NULLIF(?, ''), telephone),
-      email = COALESCE(NULLIF(?, ''), email),
-      updated_at = ?
-     WHERE id = ?`,
-  ).run(name, address, postcode, telephone, email, now, existing.id);
+    `UPDATE known_insurers SET name = ?, address = ?, postcode = ?, telephone = ?, email = ?, updated_at = ? WHERE id = ?`,
+  ).run(nextName, nextAddress, nextPostcode, nextTelephone, nextEmail, now, existing.id);
 }
 
 export function listKnownInsurersOn(db: DatabaseSync): KnownInsurer[] {
@@ -289,7 +296,22 @@ export function rememberAgentOn(
   const handlerName = blankInsurerField(input.handlerName);
   const handlerEmail = blankInsurerField(input.handlerEmail);
   const handlerTel = blankInsurerField(input.handlerTel);
-  const existing = db.prepare(`SELECT id FROM known_agents WHERE name_key = ?`).get(key) as { id: string } | undefined;
+  const existing = db.prepare(
+    `SELECT id, name, address, postcode, telephone, email, handler_name, handler_email, handler_tel
+     FROM known_agents WHERE name_key = ?`,
+  ).get(key) as
+    | {
+        id: string;
+        name: string;
+        address: string | null;
+        postcode: string | null;
+        telephone: string | null;
+        email: string | null;
+        handler_name: string | null;
+        handler_email: string | null;
+        handler_tel: string | null;
+      }
+    | undefined;
   if (!existing) {
     db.prepare(
       `INSERT INTO known_agents(id, name, name_key, address, postcode, telephone, email, handler_name, handler_email, handler_tel, updated_at)
@@ -309,44 +331,44 @@ export function rememberAgentOn(
     );
     return;
   }
-  if (opts?.fillBlanksOnly) {
-    db.prepare(
-      `UPDATE known_agents SET
-        address = COALESCE(NULLIF(address, ''), ?),
-        postcode = COALESCE(NULLIF(postcode, ''), ?),
-        telephone = COALESCE(NULLIF(telephone, ''), ?),
-        email = COALESCE(NULLIF(email, ''), ?),
-        handler_name = COALESCE(NULLIF(handler_name, ''), ?),
-        handler_email = COALESCE(NULLIF(handler_email, ''), ?),
-        handler_tel = COALESCE(NULLIF(handler_tel, ''), ?),
-        updated_at = ?
-       WHERE id = ?`,
-    ).run(
-      address || null,
-      postcode || null,
-      telephone || null,
-      email || null,
-      handlerName || null,
-      handlerEmail || null,
-      handlerTel || null,
-      now,
-      existing.id,
-    );
+  const fillBlanksOnly = Boolean(opts?.fillBlanksOnly);
+  const nextName = fillBlanksOnly ? existing.name : name;
+  const nextAddress = keepOrFill(existing.address, address, fillBlanksOnly);
+  const nextPostcode = keepOrFill(existing.postcode, postcode, fillBlanksOnly);
+  const nextTelephone = keepOrFill(existing.telephone, telephone, fillBlanksOnly);
+  const nextEmail = keepOrFill(existing.email, email, fillBlanksOnly);
+  const nextHandlerName = keepOrFill(existing.handler_name, handlerName, fillBlanksOnly);
+  const nextHandlerEmail = keepOrFill(existing.handler_email, handlerEmail, fillBlanksOnly);
+  const nextHandlerTel = keepOrFill(existing.handler_tel, handlerTel, fillBlanksOnly);
+  if (
+    storedText(existing.name) === storedText(nextName) &&
+    storedText(existing.address) === storedText(nextAddress) &&
+    storedText(existing.postcode) === storedText(nextPostcode) &&
+    storedText(existing.telephone) === storedText(nextTelephone) &&
+    storedText(existing.email) === storedText(nextEmail) &&
+    storedText(existing.handler_name) === storedText(nextHandlerName) &&
+    storedText(existing.handler_email) === storedText(nextHandlerEmail) &&
+    storedText(existing.handler_tel) === storedText(nextHandlerTel)
+  ) {
     return;
   }
   db.prepare(
     `UPDATE known_agents SET
-      name = ?,
-      address = COALESCE(NULLIF(?, ''), address),
-      postcode = COALESCE(NULLIF(?, ''), postcode),
-      telephone = COALESCE(NULLIF(?, ''), telephone),
-      email = COALESCE(NULLIF(?, ''), email),
-      handler_name = COALESCE(NULLIF(?, ''), handler_name),
-      handler_email = COALESCE(NULLIF(?, ''), handler_email),
-      handler_tel = COALESCE(NULLIF(?, ''), handler_tel),
-      updated_at = ?
+      name = ?, address = ?, postcode = ?, telephone = ?, email = ?,
+      handler_name = ?, handler_email = ?, handler_tel = ?, updated_at = ?
      WHERE id = ?`,
-  ).run(name, address, postcode, telephone, email, handlerName, handlerEmail, handlerTel, now, existing.id);
+  ).run(
+    nextName,
+    nextAddress,
+    nextPostcode,
+    nextTelephone,
+    nextEmail,
+    nextHandlerName,
+    nextHandlerEmail,
+    nextHandlerTel,
+    now,
+    existing.id,
+  );
 }
 
 export function listKnownAgentsOn(db: DatabaseSync): KnownInsurer[] {

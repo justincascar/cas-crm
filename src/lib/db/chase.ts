@@ -1140,7 +1140,6 @@ function recoveryReadyFromBatch(
 }
 
 export function listChasesForClaim(claimId: string, asAt: string = nowUtcIso()): ChaseView[] {
-  syncOutstandingPaymentChases([claimId]);
   const facts = loadChaseFacts([claimId]);
   const rows = all<ChaseRow & { rule_key: string }>(
     `SELECT id, status, paused, interval_days, reason, interval_override_days, interval_override_reason, rule_key
@@ -1164,7 +1163,6 @@ type ListedChaseRow = ChaseRow & {
 };
 
 export function listDueChases(asAt: string = nowUtcIso()): ChaseView[] {
-  syncOutstandingPaymentChases();
   const rows = all<ListedChaseRow>(
     `SELECT a.id, a.claim_id, a.rule_key, a.status, a.paused, a.interval_days, a.reason,
             a.interval_override_days, a.interval_override_reason,
