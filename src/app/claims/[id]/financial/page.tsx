@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/ClaimTable";
 import { isAdministrator } from "@/lib/auth/roles";
 import { requireStaff } from "@/lib/auth/session";
@@ -33,7 +33,7 @@ import {
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
-export default async function FinancialCircumstancesPage({
+export async function FinancialCircumstancesScreen({
   params,
   searchParams,
 }: {
@@ -395,4 +395,21 @@ export default async function FinancialCircumstancesPage({
       </section>
     </div>
   );
+}
+
+export default async function Page({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const { id } = await params;
+  const query = await searchParams;
+  const target = new URL(`http://local/claims/${id}/hire`);
+  target.searchParams.set("section", "financial");
+  for (const [key, value] of Object.entries(query)) {
+    if (value) target.searchParams.set(key, value);
+  }
+  redirect(`${target.pathname}${target.search}`);
 }

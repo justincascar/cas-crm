@@ -149,6 +149,8 @@ export const CLAIM_EVENT_TYPES = [
   { key: "call_logged", label: "Call logged" },
   { key: "work_wait_set", label: "Wait until a date" },
   { key: "work_wait_cleared", label: "Wait cleared" },
+  { key: "step_not_needed", label: "Step marked not needed" },
+  { key: "repair_estimate_agreed_with_client", label: "Repair estimate agreed with the client" },
   { key: "other", label: "Other" },
 ] as const;
 

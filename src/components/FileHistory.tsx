@@ -96,7 +96,11 @@ export function FileHistory({
             What happened
             <select name="eventType" className={field} defaultValue="initial_letter_tp_insurer">
               {CLAIM_EVENT_TYPES.filter(
-                (t) => t.key !== "document_generated" && !(STRUCTURED_REPAIR_RECORD_TYPES as readonly string[]).includes(t.key),
+                (t) =>
+                  t.key !== "document_generated" &&
+                  t.key !== "step_not_needed" &&
+                  t.key !== "repair_estimate_agreed_with_client" &&
+                  !(STRUCTURED_REPAIR_RECORD_TYPES as readonly string[]).includes(t.key),
               ).map((t) => (
                 <option key={t.key} value={t.key}>
                   {t.label}

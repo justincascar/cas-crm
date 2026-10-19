@@ -9,11 +9,9 @@ describe("opening a claim lands on Overview", () => {
     const frame = fs.readFileSync(path.join(process.cwd(), "src/components/claim-file/ClaimSectionFrame.tsx"), "utf8");
     assert.match(table, /href=\{`\/claims\/\$\{row\.id\}`\}/);
     assert.doesNotMatch(table, /href=\{`\/claims\/\$\{row\.id\}\/work\//);
-    assert.match(frame, /const onOverview = pathname === claimPath/);
-    assert.match(frame, /const showScreenNav = onFileScreens/);
-    assert.match(frame, /work\/general/);
-    assert.match(frame, /Overview/);
-    assert.match(frame, /File screens/);
+    assert.match(frame, /const showScreenNav = current === "details"/);
+    assert.match(frame, /Steps/);
+    assert.match(frame, /Details/);
     assert.equal((frame.match(/<nav /g) || []).length, 1);
   });
 });

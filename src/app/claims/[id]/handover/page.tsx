@@ -125,7 +125,7 @@ function scanFor(scans: HandoverScan[], slot: "pre" | "post") {
   return scans.find((scan) => scan.slot === slot) || null;
 }
 
-export default async function HandoverPage({
+export async function HandoverScreen({
   params,
   searchParams,
 }: {
@@ -346,4 +346,22 @@ export default async function HandoverPage({
       </section>
     </div>
   );
+}
+
+export default async function Page(props: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; job?: string }>;
+}) {
+  const staffUser = await requireSignedIn();
+  if (isOfficeRole(staffUser.role)) {
+    const { id } = await props.params;
+    const query = await props.searchParams;
+    const target = new URL(`http://local/claims/${id}/hire`);
+    target.searchParams.set("section", "handover");
+    if (query.error) target.searchParams.set("error", query.error);
+    if (query.saved) target.searchParams.set("saved", query.saved);
+    if (query.job) target.searchParams.set("job", query.job);
+    redirect(`${target.pathname}${target.search}`);
+  }
+  return HandoverScreen(props);
 }

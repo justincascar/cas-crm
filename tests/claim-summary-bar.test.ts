@@ -70,8 +70,7 @@ const sample: ClaimSummaryModel = {
   handler: "Megan Price",
   insurerLine: "AXA · AX-CL-1002",
   statusLine: "Non-fault · Unroadworthy · Insurer Admitted",
-  steps: ["Open", "Repairs"],
-  stage: "Repairs",
+  stageLine: "Repairs done and car returned · Waiting",
   runningText: "£79.00/day running",
   runningDaily: "£79.00/day",
   charges: [
@@ -80,6 +79,7 @@ const sample: ClaimSummaryModel = {
       label: "Hire",
       details: ["Hire until repaired vehicle returned"],
       claimed: "£1,896.00",
+      offered: "—",
       agreed: "—",
       received: "£0.00",
       outstanding: `${PROVISIONAL_NOT_FINAL} £1,896.00`,
@@ -160,30 +160,28 @@ describe("claim summary bar", () => {
     assert.equal(document.querySelector("[data-claim-slim-bar]"), null);
   });
 
-  it("opens and closes the flag list", async () => {
-    await renderSummary(sample);
-    assert.equal(document.querySelector("[data-claim-summary] ul"), null);
-    const show = [...document.querySelectorAll("button")].find((button) => button.textContent === "Show");
-    assert.ok(show);
-    assert.match(document.querySelector("[data-claim-summary]")?.textContent || "", /2 open flags/);
-    const { act } = await import("react");
+  it("lists problems once, without a second flag toggle on the summary", async () => {
+    const { createElement, act } = await import("react");
+    const { createRoot } = await import("react-dom/client");
+    const { ClaimProblems } = await import("../src/components/claims/ClaimProblems.tsx");
+    const root = createRoot(document.getElementById("root")!) as { render: (node: unknown) => void };
     await act(async () => {
-      show.click();
+      root.render(
+        createElement(ClaimProblems, {
+          flags: [
+            ...sample.flags,
+            { id: "task:late", href: "/claims/c8#tasks", label: "Overdue task: Call the client" },
+          ],
+        }),
+      );
     });
-    const list = document.querySelector("[data-claim-summary] ul");
-    assert.ok(list);
-    const links = [...list.querySelectorAll("a")];
-    assert.equal(links.length, 2);
-    assert.equal(links[0]?.textContent, "Task due today: Customer return of repaired vehicle");
-    assert.equal(links[0]?.getAttribute("href"), "/claims/c8#tasks");
-    assert.equal(links[1]?.getAttribute("href"), "/claims/c8/work/comms");
-    assert.equal(links.every((link) => link.classList.contains("no-underline")), true);
-    const hide = [...document.querySelectorAll("button")].find((button) => button.textContent === "Hide");
-    assert.ok(hide);
-    await act(async () => {
-      hide.click();
-    });
-    assert.equal(document.querySelector("[data-claim-summary] ul"), null);
+    const box = document.querySelector("[data-claim-problems]");
+    assert.ok(box);
+    assert.match(box.textContent || "", /3 open flags/);
+    assert.match(box.textContent || "", /Task: Call the client/);
+    assert.equal((box.textContent || "").includes("Overdue task:"), false);
+    assert.equal([...document.querySelectorAll("button")].some((button) => button.textContent === "Show"), false);
+    assert.equal(document.querySelector("[data-claim-summary]"), null);
   });
 
   it("uses one claim navigation row and does not repeat the claim heading under the tabs", () => {
@@ -191,26 +189,11 @@ describe("claim summary bar", () => {
     const page = read("src/app/claims/[id]/page.tsx");
     const layout = read("src/app/claims/[id]/layout.tsx");
     assert.equal((frame.match(/<nav /g) || []).length, 1);
-    for (const label of [
-      "Overview",
-      "Email / WhatsApp / Calls",
-      "File screens",
-      "Handover",
-      "Documents",
-      "Vehicles",
-      "Repair evidence",
-      "Hire Pack",
-      "Pre-hire checks",
-      "Financial circumstances",
-      "Recovery",
-      "Storage",
-      "Hire",
-      "Vehicle damage",
-    ]) {
-      assert.match(frame, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    for (const label of ["Steps", "Details", "Hire", "Money", "Documents", "Messages", "History"]) {
+      assert.match(frame, new RegExp(label));
     }
-    assert.match(frame, /aria-current=\{tab\.active \? "page" : undefined\}/);
-    assert.match(frame, /flex-wrap/);
+    assert.match(frame, /aria-current=\{active \? "page" : undefined\}/);
+    assert.match(frame, /flex-nowrap/);
     assert.doesNotMatch(frame, /overflow-x-auto/);
     assert.match(layout, /← All claims/);
     assert.match(layout, /href="\/claims"/);

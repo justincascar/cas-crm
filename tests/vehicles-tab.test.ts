@@ -90,8 +90,8 @@ describe("vehicles tab", () => {
     assert.doesNotMatch(overview, /Gearbox:/);
     assert.match(vehicles, /ClaimAudatexFields/);
     assert.match(vehicles, /Client's own vehicle|Client&apos;s own vehicle/);
-    assert.match(layout, /\/vehicles/);
-    assert.match(layout, /label: "Vehicles"/);
+    assert.match(layout, /details: "Details"/);
+    assert.doesNotMatch(layout, /label: "Vehicles"/);
     assert.match(repair, /Audatex codes are on the Vehicles tab/);
     assert.equal(pathAllowedForRole("driver", "/claims/c2/vehicles"), false);
     assert.equal(pathAllowedForRole("mechanic", "/claims/c2/vehicles"), false);

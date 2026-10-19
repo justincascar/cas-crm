@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { actionGenerateHireAgreement, actionGenerateHirePack, actionGenerateStorageRecovery, actionSaveHirePack } from "@/app/actions";
 import { getGtaMarkupPercent } from "@/lib/db/hire-agreement";
 import { GTA_GROUPS, GTA_NOT_CLASSIFIED, GTA_RATE_PERIOD_LABEL, gtaGroupLabel, groupChargedAboveClient, normaliseGtaGroup, standardDailyRatePence } from "@/lib/documents/gta";
@@ -24,7 +24,7 @@ function pounds(pence: string | number | null | undefined) {
   return n ? String(n) : "";
 }
 
-export default async function HirePackPage({
+export async function HirePackScreen({
   params,
   searchParams,
 }: {
@@ -437,4 +437,21 @@ function Money({ name, label, value }: { name: string; label: string; value: str
       <input name={name} inputMode="decimal" className={field} defaultValue={value} placeholder="0.00" />
     </label>
   );
+}
+
+export default async function Page({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const { id } = await params;
+  const query = await searchParams;
+  const target = new URL(`http://local/claims/${id}/hire`);
+  target.searchParams.set("section", "pack");
+  for (const [key, value] of Object.entries(query)) {
+    if (value) target.searchParams.set(key, value);
+  }
+  redirect(`${target.pathname}${target.search}`);
 }

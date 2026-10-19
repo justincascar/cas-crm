@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { screensByGroup } from "@/lib/claim-screens";
+import { headTabPath, workScreenTabPath } from "@/lib/domain/claim-tabs";
 import { headScreenPath } from "@/lib/domain/head-screen";
 
 const DOT: Record<string, string> = {
@@ -37,8 +38,8 @@ export function ScreenNav({
               {group.screens.map((screen) => {
                 const href =
                   screen.key === "storage" || screen.key === "recovery"
-                    ? headScreenPath(claimId, screen.key)
-                    : `/claims/${claimId}/work/${screen.key}`;
+                    ? headTabPath(claimId, screen.key)
+                    : workScreenTabPath(claimId, screen.key);
                 const active = path === href;
                 return (
                   <li key={screen.key}>

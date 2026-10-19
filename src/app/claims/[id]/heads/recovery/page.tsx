@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/ClaimTable";
 import { ScreenForm } from "@/components/claim-file/ScreenForm";
 import { ChargeDecisionPanel } from "@/components/claims/ChargeDecisionPanel";
@@ -39,7 +39,7 @@ function shownDay(value: string | null | undefined) {
   return formatUkDate(text);
 }
 
-export default async function RecoveryHeadPage({
+export async function RecoveryHeadScreen({
   params,
   searchParams,
 }: {
@@ -270,4 +270,20 @@ export default async function RecoveryHeadPage({
       />
     </div>
   );
+}
+
+export default async function Page({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const { id } = await params;
+  const query = await searchParams;
+  const target = new URL(`http://local/claims/${id}/money/recovery`);
+  for (const [key, value] of Object.entries(query)) {
+    if (typeof value === "string" && value) target.searchParams.set(key, value);
+  }
+  redirect(`${target.pathname}${target.search}`);
 }

@@ -13,7 +13,7 @@ const field = "mt-1 w-full max-w-full rounded-md border border-line bg-white px-
 const photoAccept = "image/jpeg,image/png,image/webp,image/gif";
 const fileAccept = "application/pdf,image/jpeg,image/png,image/webp,image/gif,text/plain,.pdf,.txt,.csv,.jpg,.jpeg,.png";
 
-export default async function RepairEvidencePage({
+export async function RepairEvidenceScreen({
   params,
   searchParams,
 }: {
@@ -116,4 +116,22 @@ export default async function RepairEvidencePage({
       </section>
     </div>
   );
+}
+
+export default async function Page(props: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; stepError?: string; stepSaved?: string }>;
+}) {
+  const staff = await requireSignedIn();
+  const { id } = await props.params;
+  if (isOfficeRole(staff.role)) {
+    const query = await props.searchParams;
+    const target = new URL(`http://local/claims/${id}/documents`);
+    target.searchParams.set("section", "repair");
+    for (const [key, value] of Object.entries(query)) {
+      if (value) target.searchParams.set(key, value);
+    }
+    redirect(`${target.pathname}${target.search}`);
+  }
+  return RepairEvidenceScreen(props);
 }

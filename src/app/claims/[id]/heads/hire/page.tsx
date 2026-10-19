@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/ClaimTable";
 import { ChargeDecisionPanel } from "@/components/claims/ChargeDecisionPanel";
 import { ChargeOffers } from "@/components/claims/ChargeOffers";
@@ -29,7 +29,7 @@ function shownDay(value: string | null) {
   return formatUkDate(value);
 }
 
-export default async function HireHeadPage({
+export async function HireHeadScreen({
   params,
   searchParams,
 }: {
@@ -256,4 +256,20 @@ export default async function HireHeadPage({
       />
     </div>
   );
+}
+
+export default async function Page({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const { id } = await params;
+  const query = await searchParams;
+  const target = new URL(`http://local/claims/${id}/money/hire`);
+  for (const [key, value] of Object.entries(query)) {
+    if (typeof value === "string" && value) target.searchParams.set(key, value);
+  }
+  redirect(`${target.pathname}${target.search}`);
 }

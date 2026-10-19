@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/ClaimTable";
 import { requireStaff } from "@/lib/auth/session";
 import { accountCanOverridePreHireChecks } from "@/lib/db/permissions";
@@ -23,7 +23,7 @@ import { getClaim } from "@/lib/db/queries";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
-export default async function PrehireChecksPage({
+export async function PrehireChecksScreen({
   params,
   searchParams,
 }: {
@@ -244,4 +244,21 @@ function OverrideForm({ claimId, checkKind, intro }: { claimId: string; checkKin
       </button>
     </form>
   );
+}
+
+export default async function Page({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | undefined>>;
+}) {
+  const { id } = await params;
+  const query = await searchParams;
+  const target = new URL(`http://local/claims/${id}/hire`);
+  target.searchParams.set("section", "checks");
+  for (const [key, value] of Object.entries(query)) {
+    if (value) target.searchParams.set(key, value);
+  }
+  redirect(`${target.pathname}${target.search}`);
 }

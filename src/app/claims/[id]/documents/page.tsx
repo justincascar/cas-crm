@@ -17,6 +17,7 @@ import {
 } from "@/lib/db/claim-documents";
 import { CLAIM_DOCUMENT_TYPES } from "@/lib/domain/claim-documents";
 import { getClaim } from "@/lib/db/queries";
+import { RepairEvidenceScreen } from "../repair/page";
 
 const field = "mt-1 w-full max-w-full rounded-md border border-line bg-white px-3 py-3 text-base";
 
@@ -31,11 +32,19 @@ export default async function ClaimDocumentsPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; mailboxError?: string; mailboxSent?: string; mailboxSimulated?: string; mailboxReport?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; mailboxError?: string; mailboxSent?: string; mailboxSimulated?: string; mailboxReport?: string; section?: string; stepError?: string; stepSaved?: string }>;
 }) {
   await requireStaff();
   const { id } = await params;
   const query = await searchParams;
+  if (query.section === "repair") {
+    return (
+      <RepairEvidenceScreen
+        params={Promise.resolve({ id })}
+        searchParams={Promise.resolve({ error: query.error, saved: query.saved, stepError: query.stepError, stepSaved: query.stepSaved })}
+      />
+    );
+  }
   const data = getClaim(id);
   if (!data) notFound();
   const documents = listClaimFileDocuments(id);
@@ -54,6 +63,11 @@ export default async function ClaimDocumentsPage({
         <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.error}</p>
       ) : null}
       <EmailSendModeBanner />
+      <p className="text-sm">
+        <Link href={`/claims/${id}/documents?section=repair`} className="font-semibold text-teal-dark underline">
+          Repair evidence
+        </Link>
+      </p>
       <MailboxSendNotice sent={query.mailboxSent} simulated={query.mailboxSimulated} error={query.mailboxError} reportNotice={query.mailboxReport} />
       {query.saved ? (
         <p className="rounded-md border border-teal/40 bg-[#eef8f6] px-4 py-3 text-sm">

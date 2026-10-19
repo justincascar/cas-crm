@@ -36,6 +36,16 @@ const CLAIM_TAB_PAGES: Array<{ name: string; path: string }> = [
   { name: "Storage (TEST-0008)", path: "/claims/c8/heads/storage" },
   { name: "Hire (TEST-0008)", path: "/claims/c8/heads/hire" },
   { name: "Vehicle damage (TEST-0008)", path: "/claims/c8/heads/vehicle" },
+  { name: "Details (TEST-0008)", path: "/claims/c8/details" },
+  { name: "Hire tab (TEST-0008)", path: "/claims/c8/hire" },
+  { name: "Money tab (TEST-0008)", path: "/claims/c8/money" },
+  { name: "Messages (TEST-0008)", path: "/claims/c8/messages" },
+  { name: "History (TEST-0008)", path: "/claims/c8/history" },
+  { name: "Print chronology (TEST-0008)", path: "/claims/c8/history/print" },
+  { name: "Work client redirect (TEST-0005)", path: "/claims/c5/work/client" },
+  { name: "Storage redirect (TEST-0005)", path: "/claims/c5/heads/storage" },
+  { name: "Hire head redirect (TEST-0005)", path: "/claims/c5/heads/hire" },
+  { name: "Recovery redirect (TEST-0008)", path: "/claims/c8/heads/recovery" },
 ];
 
 const PAGES: Array<{ name: string; path: string }> = [

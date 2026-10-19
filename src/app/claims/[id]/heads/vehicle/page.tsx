@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/ClaimTable";
 import { HeadOfLossScreen } from "@/components/claims/HeadOfLossScreen";
 import { PaymentReviewPanel } from "@/components/claims/PaymentReviewPanel";
@@ -13,7 +13,7 @@ import { accountCanAcceptPaymentSettlement } from "@/lib/db/permissions";
 import { getClaim } from "@/lib/db/queries";
 import { agreedOnFor, listVehicleOffers, undatedOfferPence, vehicleOfferHead } from "@/lib/db/vehicle-offers";
 
-export default async function VehicleDamagePage({
+export async function VehicleDamageScreen({
   params,
   searchParams,
 }: {
@@ -102,4 +102,20 @@ export default async function VehicleDamagePage({
       />
     </div>
   );
+}
+
+export default async function Page({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const { id } = await params;
+  const query = await searchParams;
+  const target = new URL(`http://local/claims/${id}/money/vehicle`);
+  for (const [key, value] of Object.entries(query)) {
+    if (typeof value === "string" && value) target.searchParams.set(key, value);
+  }
+  redirect(`${target.pathname}${target.search}`);
 }

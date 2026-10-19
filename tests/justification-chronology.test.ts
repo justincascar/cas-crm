@@ -319,7 +319,7 @@ describe("hire and repair chronology", () => {
     assert.match(view, /Sent/);
     assert.match(view, /is not recorded/);
     assert.equal(view.includes("recordClaimEvent"), false);
-    const page = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/page.tsx"), "utf8");
+    const page = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/history/page.tsx"), "utf8");
     assert.match(page, /totalLoss=\{Number\(claim\.total_loss\) === 1 \|\| Number\(claim\.later_declared_total_loss\) === 1\}/);
   });
 
@@ -330,7 +330,7 @@ describe("hire and repair chronology", () => {
     );
     assert.equal(source.includes("recordClaimEvent"), false);
     assert.equal(source.includes("INSERT"), false);
-    const page = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/page.tsx"), "utf8");
+    const page = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/history/page.tsx"), "utf8");
     assert.match(page, /JustificationChronology/);
 
     const db = seeded();

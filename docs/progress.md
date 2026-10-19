@@ -854,9 +854,38 @@ TEST-0005’s storage end is still unconfirmed. TEST-0009’s vehicle-damage off
 
 Tests: `tests/new-claim-recovery.test.ts`. Full suite: 510 passing, 0 failing. Type check: 0 errors. Production build passed. Page check: 58 pages, 14 TEST-0008 screens fit a 1280px laptop with no sideways scroll, and the database was unchanged.
 
+## Claim page around the 10 steps (19 October 2026)
+
+The claim page is now the 10 steps. The old 14 tabs are seven: Steps, Details, Hire, Money, Documents, Messages and History. Old addresses still open and redirect to the matching tab. The driver and mechanic screens are unchanged.
+
+Each step is read from the file history. There is no separate status field. A step that cannot be read from an event stays Not started, and the page says so. Opening a page still writes nothing.
+
+Step 7, agreeing the repair estimate with the client, had no existing event that meant that. The button records `repair_estimate_agreed_with_client`: the date, who, and a note. It does not change the agreed figure. A total loss still uses the existing `total_loss_agreed_confirmed` event.
+
+Staff can mark a step Not needed only with a reason. That is a new history line. The server refuses a blank reason.
+
+The stage line and the next action on the claim page come from the current step, unless staff have already typed a next action (including “Pre-hire checks and choose a vehicle”, a wait, or a promised date). A typed next action is left as it is. The claims list still shows a due chase in the next-action column, as before. Nothing is written when the page is opened.
+
+A draft saved twice in the same millisecond now gets a distinct version, so the later person is still refused. The two-person rule is unchanged.
+
+TEST-0005’s storage end is still unconfirmed. TEST-0009’s vehicle-damage offers were not changed. TEST-0006’s money was not changed. TEST-0007’s £800 was not written off. No live email was sent. `EMAIL_SEND_MODE` stays `simulate`.
+
+Tests: `tests/claim-steps.test.ts`. Full suite: 521 passing, 0 failing. Type check: 0 errors. Production build passed. Page check: 68 pages, 24 claim screens fit a 1280px laptop with no sideways scroll, old addresses redirect, and the database was unchanged.
+
 ## Open decision — 19 October 2026
 
 - Recovery mileage charging is undecided. The mileage box has been taken off the new-claim form. Justin has not decided how mileage will be charged. A mileage amount already stored on a file is left as it is.
+- Fault-claim steps are proposed, and are waiting for Justin to confirm. They are not a confirmed rule. The proposal is:
+  1. Basic details captured — applies.
+  2. Recovery or collection — applies. Not needed when the vehicle is roadworthy.
+  3. Hire vehicle — applies when the client needs a car. Fault courtesy is not credit hire. Not needed when the client does not need a car.
+  4. Initial letter to the third-party insurer — not needed. The letter to the client’s own insurer applies instead.
+  5. Instruct engineer — applies.
+  6. Engineer’s report received — applies.
+  7. Agree the repair estimate with the client, or the valuation on a total loss — applies.
+  8. Send the report and estimate to the third-party insurer — not needed.
+  9. Repairs and return, or payment and salvage on a total loss — applies.
+  10. Payments — applies for each charge on the file.
 
 ## Not yet claimed
 

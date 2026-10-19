@@ -6,6 +6,7 @@ import { HireVehiclePanel, ReserveHirePanel } from "@/components/claim-file/Hire
 import { ScreenForm } from "@/components/claim-file/ScreenForm";
 import { PageHeader } from "@/components/ClaimTable";
 import { CLAIM_SCREENS, getClaimScreen, screensByGroup } from "@/lib/claim-screens";
+import { workScreenTabPath } from "@/lib/domain/claim-tabs";
 import { headScreenPath } from "@/lib/domain/head-screen";
 import { requireStaff } from "@/lib/auth/session";
 import { getClaim, listFleet, listKnownAgents, listKnownInsurers, listReservations } from "@/lib/db/queries";
@@ -33,7 +34,7 @@ import { EmailSendModeBanner } from "@/components/EmailSendModeBanner";
 import { liveEmailSending } from "@/lib/email/send-mode";
 import { listCasInsuranceDocuments } from "@/lib/db/company-insurance";
 
-export default async function ClaimWorkScreenPage({
+export async function ClaimWorkScreen({
   params,
   searchParams,
 }: {
@@ -301,7 +302,7 @@ function NavigationScreen({ claimId }: { claimId: string }) {
           .map((screen) => (
             <div key={screen.key} className="flex items-center justify-between gap-2 border-b border-line py-2">
               <span className="text-sm">{screen.label}</span>
-              <Link href={`/claims/${claimId}/work/${screen.key}`} className="text-xs font-semibold text-teal-dark">
+              <Link href={workScreenTabPath(claimId, screen.key)} className="text-xs font-semibold text-teal-dark">
                 GO TO
               </Link>
             </div>
@@ -310,4 +311,9 @@ function NavigationScreen({ claimId }: { claimId: string }) {
       <p className="sm:col-span-2 text-xs text-slate">{CLAIM_SCREENS.length} screens on this file, matching the current CRM viewing pane.</p>
     </div>
   );
+}
+
+export default async function Page({ params }: { params: Promise<{ id: string; screen: string }> }) {
+  const { id, screen } = await params;
+  redirect(workScreenTabPath(id, screen));
 }

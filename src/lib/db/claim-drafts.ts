@@ -59,11 +59,16 @@ export function saveClaimDraft(input: {
   payload: Record<string, string>;
   actorId: string;
 }): { id: string; version: string; savedLabel: string } {
-  const now = nowUtcIso();
   const payload = JSON.stringify(input.payload);
+  const stamp = (previous: string | null) => {
+    const now = nowUtcIso();
+    if (!previous || now > previous) return now;
+    return new Date(new Date(previous).getTime() + 1).toISOString();
+  };
   const existingId = (input.draftId || "").trim();
   if (!existingId) {
     const id = newId("draft");
+    const now = stamp(null);
     run(
       `INSERT INTO claim_drafts(id, payload_json, created_at, created_by, updated_at, updated_by)
        VALUES (?, ?, ?, ?, ?, ?)`,
@@ -87,6 +92,7 @@ export function saveClaimDraft(input: {
       existingId,
     );
   }
+  const now = stamp(current.updated_at);
   run(`UPDATE claim_drafts SET payload_json = ?, updated_at = ?, updated_by = ? WHERE id = ?`, [
     payload,
     now,

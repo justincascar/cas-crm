@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { ClaimAudatexFields } from "@/components/ClaimAudatexFields";
 import { PageHeader } from "@/components/ClaimTable";
 import { requireStaff } from "@/lib/auth/session";
@@ -29,7 +29,7 @@ function SpecList({ lines }: { lines: VehicleSpecLine[] }) {
   );
 }
 
-export default async function ClaimVehiclesPage({ params }: { params: Promise<{ id: string }> }) {
+export async function ClaimVehiclesScreen({ params }: { params: Promise<{ id: string }> }) {
   await requireStaff();
   const { id } = await params;
   const data = getClaim(id);
@@ -122,4 +122,9 @@ export default async function ClaimVehiclesPage({ params }: { params: Promise<{ 
       </div>
     </div>
   );
+}
+
+export default async function Page({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  redirect(`/claims/${id}/details/vehicles`);
 }
