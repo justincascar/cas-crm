@@ -11,7 +11,8 @@ import { PaymentReviewPanel } from "@/components/claims/PaymentReviewPanel";
 import { SeparateRecordConfirm } from "@/components/SeparateRecordConfirm";
 import { requireStaff } from "@/lib/auth/session";
 import { getClaimScreen } from "@/lib/claim-screens";
-import { formatUkDate } from "@/lib/dates";
+import { formatUkDate, formatUkTime } from "@/lib/dates";
+import { recoveryDisplayLines, recoveryReviewFlags } from "@/lib/db/recovery-display";
 import { headScreenPath } from "@/lib/domain/head-screen";
 import { formatGbp } from "@/lib/money";
 import { latestChargeDecision } from "@/lib/db/charge-decision";
@@ -61,6 +62,8 @@ export default async function RecoveryHeadPage({
   const from = String(job?.location || screen.location || "").trim();
   const who = recoveryCarrierName(id) || String(screen.name || "").trim();
   const date = job?.recovered_at || screen.recoveryDate || "";
+  const recoveryLines = recoveryDisplayLines(id);
+  const recoveryFlags = recoveryReviewFlags(id);
   const section = loadHeadSection(id, "recovery");
   const calculated = decision.totalPence > 0 ? decision.totalPence : null;
   const flag = figureFlag(id, "recovery", section.claimedPence, calculated);
@@ -109,8 +112,11 @@ export default async function RecoveryHeadPage({
         <p className="text-sm text-slate">Taken from the recovery job and the recovery screen. Saving the charges below does not change a storage date.</p>
         <dl className="grid gap-3 text-sm sm:grid-cols-2">
           <div>
-            <dt className="text-slate">Date</dt>
-            <dd>{shownDay(date)}</dd>
+            <dt className="text-slate">Date and time</dt>
+            <dd>
+              {shownDay(date)}
+              {date && date.includes("T") ? ` ${formatUkTime(date)}` : ""}
+            </dd>
           </div>
           <div>
             <dt className="text-slate">From</dt>
@@ -125,6 +131,28 @@ export default async function RecoveryHeadPage({
             <dd>{who || "Not recorded"}</dd>
           </div>
         </dl>
+        {recoveryFlags.length ? (
+          <ul className="space-y-2">
+            {recoveryFlags.map((flagText) => (
+              <li key={flagText} className="rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2 text-sm">
+                {flagText}
+              </li>
+            ))}
+          </ul>
+        ) : null}
+        {recoveryLines.length ? (
+          <div>
+            <h3 className="text-sm font-semibold text-navy-deep">Each charge</h3>
+            <ul className="mt-2 space-y-1 text-sm">
+              {recoveryLines.map((line) => (
+                <li key={line.key}>
+                  {line.label}: {formatGbp(line.netPence)} net, VAT {formatGbp(line.vatPence)}, {formatGbp(line.grossPence)}
+                  {line.reason ? ` — ${line.reason}` : ""}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
       </section>
 
       <section className="space-y-3 rounded-xl border border-line bg-card p-5" aria-label="Recovery charge">

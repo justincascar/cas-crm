@@ -18,6 +18,8 @@ import { all, get, newId, run } from "./connection";
 import { MITIGATION_QUESTIONNAIRE } from "../domain/impecuniosity";
 import { impecuniosityGate, latestMitigationForPack, type ImpecuniosityGate } from "./impecuniosity";
 import { recordClaimEvent } from "./chronology";
+import { DRAFT_WORDING_NOT_APPROVED } from "../documents/template-approval";
+import { recoveryLinesPlain } from "./recovery-display";
 
 export type HirePackData = Record<string, string | number | null>;
 
@@ -309,7 +311,7 @@ export function generateStorageRecoveryDocument(claimId: string, actorId: string
     claimId,
     eventType: "document_generated",
     occurredAt: nowUtcIso(),
-    details: `Storage & Recovery Agreement version ${version} generated as a standalone document${pack.srMissing.length ? `. Missing: ${pack.srMissing.join(", ")}` : ""}. Solicitor-reviewed standalone wording is still to come.`,
+    details: `Storage & Recovery Agreement version ${version} generated as a draft. ${DRAFT_WORDING_NOT_APPROVED}. It was not sent.${pack.srMissing.length ? ` Missing: ${pack.srMissing.join(", ")}` : ""}`,
     actorId,
     channel: "letter",
     documentId,
@@ -523,6 +525,7 @@ export function renderStorageRecovery(pack: NonNullable<ReturnType<typeof getHir
 ${missingBanner}
 <p><strong>${CAS_COMPANY.name}</strong></p>
 <h2>Storage &amp; Recovery Agreement</h2>
+<p><strong>${DRAFT_WORDING_NOT_APPROVED}</strong></p>
 <p>${STORAGE_RECOVERY_STANDALONE_BANNER}</p>
 <p>Document number: <strong>${escape(String(pack.srNumber))}</strong> &nbsp; File: ${escape(pack.ctx.agreementNumber)}</p>
 <p>This document does not use a hire agreement number and does not require a Hire Agreement on the file.</p>
@@ -535,6 +538,9 @@ ${missingBanner}
 <p>Damage: ${escape(v(s.own_vehicle_damage))}</p>
 <p>Recovered on: ${escape(recoveredOn)}</p>
 <p>Storage daily rate: ${money(s.storage_daily_pence || pack.claim.storage_rate_pence)} &nbsp; Recovery: ${money(s.recovery_pence)}</p>
+${recoveryLinesPlain(String(pack.claim.id || ""))
+  .map((line) => `<p>${escape(line)}</p>`)
+  .join("")}
 <p>${CAS_COMPANY.name} will not accept responsibility for any valuables left in the vehicle at point of collection including removable car stereo and satellite navigation equipment.</p>
 <p>Signed by the client: ______________________ (upload signed copy — not fabricated)</p>
 <p>Signed for and on behalf of ${CAS_COMPANY.name}: ______________________</p>

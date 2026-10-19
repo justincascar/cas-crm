@@ -10,6 +10,8 @@ import { listRepairGapClaims } from "@/lib/db/repair-progress";
 import { formatGbp } from "@/lib/money";
 import { formatVehicleRegistration } from "@/lib/text";
 import { confirmedOutstandingPence, FIGURE_UNDER_REVIEW, outstandingColumnText } from "@/lib/claims/summary-money";
+import { recoveryDisplayLines, recoveryReviewFlags } from "@/lib/db/recovery-display";
+import { recoveryLineLabel } from "@/lib/domain/recovery-fees";
 
 const INSURER_POSITION: Record<string, string> = {
   pending: "Pending",
@@ -115,6 +117,14 @@ export function buildClaimSummaryModel(claimId: string): ClaimSummaryModel | nul
     list.push(description);
     details.set(head, list);
   }
+  const recoveryLines = recoveryDisplayLines(id).map(recoveryLineLabel);
+  if (recoveryLines.length) {
+    const list = details.get("recovery") ?? [];
+    for (const label of recoveryLines) {
+      if (!list.includes(label)) list.push(label);
+    }
+    details.set("recovery", list);
+  }
   const headOrder = [
     ...HEADS_OF_LOSS.filter((head) => byHead.has(head)),
     ...money.heads.map((row) => row.head).filter((head) => !HEADS_OF_LOSS.includes(head as HeadOfLoss)),
@@ -149,6 +159,11 @@ export function buildClaimSummaryModel(claimId: string): ClaimSummaryModel | nul
         label: gap.wording,
       })),
     ...(conflict ? [{ id: "fleet", href: `/claims/${id}#fleet-conflict`, label: conflict.text }] : []),
+    ...recoveryReviewFlags(id).map((label, index) => ({
+      id: `recovery-review-${index}`,
+      href: `/claims/${id}/heads/recovery`,
+      label,
+    })),
   ];
   const nextAction = String(claim.next_action || "").trim();
   const due = dueWording(claim.next_action_due ? String(claim.next_action_due) : null);

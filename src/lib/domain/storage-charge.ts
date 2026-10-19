@@ -190,6 +190,10 @@ export function recoveryJobNetPence(job: {
   forklift_pence?: number | null;
   mileage_pence?: number | null;
   manual_pence?: number | null;
+  specialist_winch_pence?: number | null;
+  skates_pence?: number | null;
+  waiting_pence?: number | null;
+  second_operator_pence?: number | null;
 } | null | undefined): number {
   if (!job) return 0;
   return (
@@ -199,7 +203,11 @@ export function recoveryJobNetPence(job: {
     (Number(job.winch_pence) || 0) +
     (Number(job.forklift_pence) || 0) +
     (Number(job.mileage_pence) || 0) +
-    (Number(job.manual_pence) || 0)
+    (Number(job.manual_pence) || 0) +
+    (Number(job.specialist_winch_pence) || 0) +
+    (Number(job.skates_pence) || 0) +
+    (Number(job.waiting_pence) || 0) +
+    (Number(job.second_operator_pence) || 0)
   );
 }
 

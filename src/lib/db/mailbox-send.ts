@@ -26,6 +26,7 @@ import {
 } from "./engineers";
 import { documentChaseTemplateKey, markDocumentChaseSent, markTotalLossPaymentChaseSent, totalLossPaymentChaseTemplateKey } from "./follow-up-chases";
 import { markTotalLossNoticeSent, TOTAL_LOSS_NOTICE_TEMPLATE } from "./total-loss";
+import { sendBlockedForUnapproved } from "../documents/template-approval";
 
 const ENGINEER_INSTRUCTION_TEMPLATE = "engineer_instruction";
 
@@ -63,6 +64,8 @@ export async function sendPreparedCorrespondence(input: {
   const subject = String(row.subject || "").trim();
   let body = String(row.body || "").trim();
   if (!to || !subject || !body) throw new Error("This prepared email is missing a recipient, subject or message. Nothing was sent.");
+  const unapproved = sendBlockedForUnapproved({ templateKey: row.template_key, body });
+  if (unapproved) throw new Error(unapproved);
   const loaded = loadClaimEmailAttachments(input.claimId, input.attachmentIds || []);
   if (!loaded.ok) throw new Error(loaded.error);
   const paymentTemplate = CHASE_KINDS.find((kind) => {

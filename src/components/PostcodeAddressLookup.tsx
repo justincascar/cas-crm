@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { actionLookupPostcode } from "@/app/actions";
+import { LOOKUP_NOT_CONNECTED } from "@/lib/lookups/not-connected";
 import { formatPostcode, formatPostcodeLive, isCompleteUkPostcode, toStartCase, toStartCaseLive } from "@/lib/text";
 
 export type PickedAddress = { line1: string; town: string; postcode: string };
@@ -44,6 +45,7 @@ export function PostcodeAddressLookup({
   const [msg, setMsg] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
   const [looking, setLooking] = useState(false);
+  const [licensed, setLicensed] = useState(false);
 
   async function findAddresses(raw: string) {
     const query = formatPostcode(raw);
@@ -61,6 +63,7 @@ export function PostcodeAddressLookup({
     try {
       const res = await actionLookupPostcode(query);
       if (id !== requestId.current) return;
+      setLicensed(Boolean(res.licensedPaf));
       if (res.formattedPostcode) onPostcode(formatPostcode(res.formattedPostcode));
       if (res.town) onTown(toStartCase(res.town));
       setOptions(res.results);
@@ -152,6 +155,7 @@ export function PostcodeAddressLookup({
             {looking ? "Finding…" : "Find address"}
           </button>
         </div>
+        {licensed ? null : <p className="mt-1 text-xs text-slate">{LOOKUP_NOT_CONNECTED}</p>}
       </div>
 
       <div className="sm:col-span-2">

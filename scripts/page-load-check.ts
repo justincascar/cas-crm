@@ -405,7 +405,7 @@ async function main() {
   const nextBin = path.join(process.cwd(), "node_modules", "next", "dist", "bin", "next");
   const child = spawn(process.execPath, [nextBin, "start", "--port", String(port), "--hostname", "127.0.0.1"], {
     cwd: process.cwd(),
-    env: process.env,
+    env: { ...process.env, CAS_PAGE_CHECK: "1" },
     stdio: ["ignore", "pipe", "pipe"],
   });
   let serverLog = "";

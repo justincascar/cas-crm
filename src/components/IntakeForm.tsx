@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, type FormEvent } from "react";
 import {
   actionCreateClaim,
   actionLookupCompliance,
@@ -18,6 +18,9 @@ import { mergeInsurerDetails, type KnownInsurer } from "@/lib/insurers";
 import { clientDobKind, counterpartDobKind } from "@/lib/age";
 import { ASK_MID_URL, GOV_MOT_URL, GOV_TAX_URL } from "@/lib/lookups/compliance";
 import { googleMapsSearchUrl } from "@/lib/lookups/maps";
+import { JOURNEY_OPTIONS, LIGHTING_OPTIONS, ROAD_SURFACE_OPTIONS, WEATHER_OPTIONS } from "@/lib/domain/intake-choices";
+import { filledPounds, RECOVERY_FEE_DEFS, RECOVERY_TYPED_EXTRAS } from "@/lib/domain/recovery-fees";
+import { LOOKUP_NOT_CONNECTED } from "@/lib/lookups/not-connected";
 import { VEHICLE_MANUAL_HINT } from "@/lib/lookups/vehicle";
 import {
   formatVehicleRegistration,
@@ -96,14 +99,14 @@ function PersonFields({ prefix, skipOther, kind }: { prefix: string; skipOther?:
       ) : (
         <label className="block text-sm">
           Telephone
-          <input name={`${prefix}telephone`} {...casingInputProps(`${prefix}telephone`, "text", field)} />
+          <MobileField name={`${prefix}telephone`} className={field} />
         </label>
       )}
       {skipOther ? (
         <>
           <label className="block text-sm">
             Other contact number
-            <input name={`${prefix}otherTel`} disabled={skip} {...casingInputProps(`${prefix}otherTel`, "text", field)} />
+            <MobileField name={`${prefix}otherTel`} className={field} />
           </label>
           <label className="flex items-center gap-2 text-sm sm:col-span-2">
             <input
@@ -211,6 +214,7 @@ function VehicleFields({
           <button type="button" className="rounded-md border border-line px-3 py-2 text-sm" onClick={lookupVehicle}>
             Search vehicle
           </button>
+          <p className="w-full text-xs text-slate">{LOOKUP_NOT_CONNECTED}</p>
           <button type="button" className="rounded-md border border-line px-3 py-2 text-sm" onClick={checkCompliance}>
             Check tax, MOT and insurance
           </button>
@@ -481,12 +485,7 @@ function ThirdPartyBlock({
         />
         <label className="block text-sm">
           Telephone
-          <input
-            name={`${prefix}insurerTel`}
-            value={insurerTel}
-            onChange={(e) => setInsurerTel(e.target.value)}
-            className={field}
-          />
+          <MobileField name={`${prefix}insurerTel`} value={insurerTel} onChange={setInsurerTel} className={field} />
         </label>
         <label className="block text-sm">
           Email
@@ -516,7 +515,7 @@ function ThirdPartyBlock({
         </label>
         <label className="block text-sm">
           Handler telephone
-          <input name={`${prefix}handlerTel`} {...casingInputProps(`${prefix}handlerTel`, "text", field)} />
+          <MobileField name={`${prefix}handlerTel`} className={field} />
         </label>
       </div>
       <h4 className="font-serif text-base text-navy-deep">TPI agent</h4>
@@ -548,12 +547,7 @@ function ThirdPartyBlock({
         />
         <label className="block text-sm">
           Telephone
-          <input
-            name={`${prefix}agentTel`}
-            value={agentTel}
-            onChange={(e) => setAgentTel(e.target.value)}
-            className={field}
-          />
+          <MobileField name={`${prefix}agentTel`} value={agentTel} onChange={setAgentTel} className={field} />
         </label>
         <label className="block text-sm">
           Email
@@ -590,12 +584,7 @@ function ThirdPartyBlock({
         </label>
         <label className="block text-sm">
           Handler telephone
-          <input
-            name={`${prefix}agentHandlerTel`}
-            value={agentHandlerTel}
-            onChange={(e) => setAgentHandlerTel(e.target.value)}
-            className={field}
-          />
+          <MobileField name={`${prefix}agentHandlerTel`} value={agentHandlerTel} onChange={setAgentHandlerTel} className={field} />
         </label>
       </div>
       <label className="block text-sm max-w-xs">
@@ -610,6 +599,38 @@ function ThirdPartyBlock({
   );
 }
 
+function ChoiceField({
+  name,
+  label,
+  options,
+  initial = "",
+  otherInitial = "",
+}: {
+  name: string;
+  label: string;
+  options: readonly { value: string; label: string }[];
+  initial?: string;
+  otherInitial?: string;
+}) {
+  const [value, setValue] = useState(initial);
+  return (
+    <label className="block text-sm">
+      {label}
+      <select name={name} className={field} value={value} onChange={(event) => setValue(event.target.value)}>
+        <option value="">Not stated</option>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+      {value === "other" ? (
+        <input name={`${name}Other`} defaultValue={otherInitial} className={field} placeholder="Type what Other means" />
+      ) : null}
+    </label>
+  );
+}
+
 export function IntakeForm({
   staff,
   nextRef,
@@ -617,6 +638,10 @@ export function IntakeForm({
   errorField,
   insurers,
   agents,
+  fees,
+  defaults = {},
+  draftId: initialDraftId = "",
+  draftVersion: initialDraftVersion = "",
 }: {
   staff: Staff[];
   nextRef: string;
@@ -624,19 +649,67 @@ export function IntakeForm({
   errorField?: string;
   insurers: KnownInsurer[];
   agents: KnownInsurer[];
+  fees: Record<string, number>;
+  defaults?: Record<string, string>;
+  draftId?: string;
+  draftVersion?: string;
 }) {
-  const [role, setRole] = useState("owner_driver");
-  const [needsRecovery, setNeedsRecovery] = useState(false);
-  const [police, setPolice] = useState("no");
-  const [witnesses, setWitnesses] = useState("no");
-  const [photosAtScene, setPhotosAtScene] = useState("no");
-  const [tp2, setTp2] = useState(false);
-  const [tp3, setTp3] = useState(false);
-  const [location, setLocation] = useState("");
+  const [role, setRole] = useState(defaults.clientRole || "owner_driver");
+  const [needsRecovery, setNeedsRecovery] = useState(defaults.needsRecovery === "yes");
+  const [needsReplacement, setNeedsReplacement] = useState(defaults.needsReplacement === "yes");
+  const [police, setPolice] = useState(defaults.policeAttended || "no");
+  const [witnesses, setWitnesses] = useState(defaults.witnesses === "yes" || Number(defaults.witnessCount || "0") > 0 ? "yes" : "no");
+  const [witnessCount, setWitnessCount] = useState(Math.max(Number(defaults.witnessCount || "0") > 0 ? Number(defaults.witnessCount) : defaults.witnesses === "yes" ? 1 : 0, 0));
+  const [photosAtScene, setPhotosAtScene] = useState(defaults.photosAtScene || "no");
+  const [tp2, setTp2] = useState(defaults.includeTp2 === "yes");
+  const [tp3, setTp3] = useState(defaults.includeTp3 === "yes");
+  const [location, setLocation] = useState(defaults.location || "");
+  const [draftId, setDraftId] = useState(initialDraftId);
+  const [draftVersion, setDraftVersion] = useState(initialDraftVersion);
+  const [savedLabel, setSavedLabel] = useState("");
+  const [draftClash, setDraftClash] = useState("");
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
   const maps = useMemo(() => googleMapsSearchUrl(location), [location]);
+  const versionRef = useRef(initialDraftVersion);
+  const idRef = useRef(initialDraftId);
+  const timerRef = useRef(0);
+
+  function scheduleDraftSave(event: FormEvent<HTMLFormElement>) {
+    const form = event.currentTarget;
+    window.clearTimeout(timerRef.current);
+    timerRef.current = window.setTimeout(() => {
+      const data = new FormData(form);
+      const fields: Record<string, string> = {};
+      for (const [key, value] of data.entries()) {
+        if (typeof value !== "string") continue;
+        fields[key] = value;
+      }
+      void fetch("/claims/drafts", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ draftId: idRef.current, version: versionRef.current, fields }),
+      })
+        .then(async (response) => {
+          const body = (await response.json()) as { id?: string; version?: string; savedLabel?: string; error?: string };
+          if (response.status === 409) {
+            setDraftClash(body.error || "Someone else saved this draft. Your entries are still on this page.");
+            return;
+          }
+          if (!response.ok || !body.id || !body.version) return;
+          idRef.current = body.id;
+          versionRef.current = body.version;
+          setDraftId(body.id);
+          setDraftVersion(body.version);
+          setSavedLabel(body.savedLabel || "");
+          setDraftClash("");
+        })
+        .catch(() => undefined);
+    }, 700);
+  }
 
   return (
-    <ValidatedForm action={actionCreateClaim} className="space-y-6" initialError={error} initialErrorField={errorField}>
+    <>
+    <ValidatedForm action={actionCreateClaim} className="space-y-6" initialError={error} initialErrorField={errorField} onInput={scheduleDraftSave} onChange={scheduleDraftSave} encType="multipart/form-data">
       {error ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
       ) : null}
@@ -644,6 +717,21 @@ export function IntakeForm({
         Next demonstration reference: <strong>{nextRef}</strong>. Opening this file does not start hire charges. Lookups,
         WhatsApp and email are simulated until the live accounts are connected.
       </p>
+      <input type="hidden" name="draftId" value={draftId} />
+      <input type="hidden" name="draftVersion" value={draftVersion} />
+      <input type="hidden" name="recoveryFormVersion" value="fees" />
+      <input type="hidden" name="agreementChannel" value="none" />
+      {savedLabel ? <p className="text-sm text-teal-dark">{savedLabel}</p> : null}
+      {draftClash ? (
+        <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">
+          {draftClash} Your entries are still in the boxes.{" "}
+          {draftId ? (
+            <a className="font-semibold text-navy underline" href={`/claims/new?draft=${draftId}`}>
+              Reload the latest version
+            </a>
+          ) : null}
+        </p>
+      ) : null}
 
       <Section n={1} title="Client details">
         <label className="block text-sm max-w-sm">
@@ -665,6 +753,44 @@ export function IntakeForm({
           </div>
         ) : null}
       </Section>
+
+      <section className="space-y-3 rounded-xl border border-line bg-card p-5">
+        <h2 className="font-serif text-xl text-navy-deep">File setup</h2>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <label className="block text-sm">
+            Liability status
+            <select name="claimType" className={field} defaultValue={defaults.claimType || ""}>
+              <option value="">Not yet decided</option>
+              <option value="non_fault">Non-fault</option>
+              <option value="fault">Fault</option>
+              <option value="disputed">Disputed / unclear</option>
+            </select>
+          </label>
+          <label className="block text-sm">
+            Roadworthiness
+            <select name="roadworthiness" className={field} defaultValue={defaults.roadworthiness || ""}>
+              <option value="">Not yet decided</option>
+              <option value="roadworthy">Roadworthy</option>
+              <option value="unroadworthy">Unroadworthy</option>
+            </select>
+          </label>
+          <label className="block text-sm">
+            Handler
+            <select name="handlerId" className={field} defaultValue={defaults.handlerId || "staff-sian"}>
+              {staff.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <p className="text-xs text-slate">
+          Leave liability status and roadworthiness as not yet decided if you do not yet know. Do not guess Fault or
+          Roadworthy. Disputed / unclear is a valid liability status. The two answers are independent. AI does not certify
+          roadworthiness.
+        </p>
+      </section>
 
       <Section n={2} title="Vehicle details">
         <VehicleFields prefix="veh_" matchLabel="Details match the client" />
@@ -759,44 +885,57 @@ export function IntakeForm({
         ) : null}
         <label className="block text-sm max-w-xs">
           Any witnesses
-          <select name="witnesses" className={field} value={witnesses} onChange={(e) => setWitnesses(e.target.value)}>
+          <select
+            name="witnesses"
+            className={field}
+            value={witnesses}
+            onChange={(e) => {
+              setWitnesses(e.target.value);
+              if (e.target.value === "yes" && witnessCount < 1) setWitnessCount(1);
+              if (e.target.value === "no") setWitnessCount(0);
+            }}
+          >
             <option value="no">No</option>
             <option value="yes">Yes</option>
           </select>
         </label>
+        <input type="hidden" name="witnessCount" value={String(witnessCount)} />
+        {witnesses === "yes"
+          ? Array.from({ length: witnessCount }, (_, index) => (
+              <div key={index} className="grid gap-3 rounded-md border border-dashed border-line p-3 sm:grid-cols-2">
+                <label className="block text-sm">
+                  Witness {index + 1} name
+                  <input name={`witness_${index}_name`} defaultValue={defaults[`witness_${index}_name`] || ""} {...casingInputProps(`witness_${index}_name`, "text", field)} />
+                </label>
+                <label className="block text-sm">
+                  Contact number
+                  <MobileField name={`witness_${index}_telephone`} defaultValue={defaults[`witness_${index}_telephone`] || ""} className={field} />
+                </label>
+                <label className="block text-sm">
+                  Postcode
+                  <input name={`witness_${index}_postcode`} defaultValue={defaults[`witness_${index}_postcode`] || ""} {...casingInputProps(`witness_${index}_postcode`, "text", field)} />
+                </label>
+                <label className="block text-sm">
+                  Town
+                  <input name={`witness_${index}_town`} defaultValue={defaults[`witness_${index}_town`] || ""} {...casingInputProps(`witness_${index}_town`, "text", field)} />
+                </label>
+                <label className="block text-sm sm:col-span-2">
+                  Address (manual if no postcode)
+                  <input name={`witness_${index}_address`} defaultValue={defaults[`witness_${index}_address`] || ""} {...casingInputProps(`witness_${index}_address`, "text", field)} />
+                </label>
+              </div>
+            ))
+          : null}
         {witnesses === "yes" ? (
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-sm">
-              Witness name
-              <input name="witness_name" {...casingInputProps("witness_name", "text", field)} />
-            </label>
-            <label className="block text-sm">
-              Contact number
-              <input name="witness_telephone" className={field} />
-            </label>
-            <label className="block text-sm">
-              Postcode
-              <input name="witness_postcode" {...casingInputProps("witness_postcode", "text", field)} />
-            </label>
-            <label className="block text-sm">
-              Town
-              <input name="witness_town" {...casingInputProps("witness_town", "text", field)} />
-            </label>
-            <label className="block text-sm sm:col-span-2">
-              Address (manual if no postcode)
-              <input name="witness_address" {...casingInputProps("witness_address", "text", field)} />
-            </label>
-          </div>
+          <button type="button" className="rounded-md border border-line px-3 py-2 text-sm" onClick={() => setWitnessCount((count) => count + 1)}>
+            Add another witness
+          </button>
         ) : null}
         <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block text-sm">
-            Weather conditions
-            <input name="weather" {...casingInputProps("weather", "text", field)} />
-          </label>
-          <label className="block text-sm">
-            Purpose of journey
-            <input name="journeyPurpose" {...casingInputProps("journeyPurpose", "text", field)} />
-          </label>
+          <ChoiceField name="weather" label="Weather conditions" options={WEATHER_OPTIONS} initial={defaults.weather || ""} otherInitial={defaults.weatherOther || ""} />
+          <ChoiceField name="journeyPurpose" label="Purpose of journey" options={JOURNEY_OPTIONS} initial={defaults.journeyPurpose || ""} otherInitial={defaults.journeyPurposeOther || ""} />
+          <ChoiceField name="roadSurface" label="Road surface" options={ROAD_SURFACE_OPTIONS} initial={defaults.roadSurface || ""} otherInitial={defaults.roadSurfaceOther || ""} />
+          <ChoiceField name="lighting" label="Lighting" options={LIGHTING_OPTIONS} initial={defaults.lighting || ""} />
           <label className="block text-sm">
             Approx speed of client vehicle
             <input name="clientSpeed" className={field} />
@@ -816,88 +955,175 @@ export function IntakeForm({
           />
           Client needs recovery
         </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            name="needsReplacement"
+            type="checkbox"
+            value="yes"
+            checked={needsReplacement}
+            onChange={(e) => setNeedsReplacement(e.target.checked)}
+          />
+          Client needs a replacement vehicle
+        </label>
       </Section>
 
+      {needsReplacement ? (
+        <Section n={5} title="Replacement vehicle">
+          <p className="text-xs text-slate">This records what is needed. It does not book a car or start hire.</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm">
+              Date needed from
+              <input name="hireNeededFrom" type="date" defaultValue={defaults.hireNeededFrom || ""} className={field} />
+            </label>
+            <label className="block text-sm">
+              Vehicle type/size
+              <input name="hireVehicleType" defaultValue={defaults.hireVehicleType || ""} {...casingInputProps("hireVehicleType", "text", field)} />
+            </label>
+            <label className="block text-sm">
+              Manual or automatic
+              <select name="hireTransmission" className={field} defaultValue={defaults.hireTransmission || ""}>
+                <option value="">Not stated</option>
+                <option value="manual">Manual</option>
+                <option value="automatic">Automatic</option>
+              </select>
+            </label>
+            <label className="block text-sm">
+              Number of seats
+              <input name="hireSeats" inputMode="numeric" defaultValue={defaults.hireSeats || ""} className={field} />
+            </label>
+            <label className="block text-sm sm:col-span-2">
+              Client’s own vehicle group (GTA), if known
+              <input name="hireGtaGroup" defaultValue={defaults.hireGtaGroup || ""} className={field} />
+            </label>
+          </div>
+          <p className="text-xs text-slate">The hire rate is based on this group.</p>
+          <div className="flex flex-wrap gap-4 text-sm">
+            <label className="flex items-center gap-2"><input name="hireTaxi" type="checkbox" value="yes" defaultChecked={defaults.hireTaxi === "yes"} /> Taxi/PCO</label>
+            <label className="flex items-center gap-2"><input name="hireWheelchair" type="checkbox" value="yes" defaultChecked={defaults.hireWheelchair === "yes"} /> Wheelchair access</label>
+            <label className="flex items-center gap-2"><input name="hireTowbar" type="checkbox" value="yes" defaultChecked={defaults.hireTowbar === "yes"} /> Towbar</label>
+          </div>
+          <label className="block text-sm">
+            Other special requirement
+            <input name="hireOther" defaultValue={defaults.hireOther || ""} {...casingInputProps("hireOther", "text", field)} />
+          </label>
+        </Section>
+      ) : null}
+
       {needsRecovery ? (
-        <Section n={5} title="Recovery">
+        <Section n={6} title="Recovery">
           <label className="block text-sm">
             Recovery location
-            <input name="recoveryLocation" defaultValue={location} {...casingInputProps("recoveryLocation", "text", field)} />
+            <input name="recoveryLocation" defaultValue={defaults.recoveryLocation || location} {...casingInputProps("recoveryLocation", "text", field)} />
           </label>
           <label className="flex items-center gap-2 text-sm">
-            <input name="notifyDriverWhatsapp" type="checkbox" value="yes" />
+            <input name="notifyDriverWhatsapp" type="checkbox" value="yes" defaultChecked={defaults.notifyDriverWhatsapp === "yes"} />
             Send location and client details to the recovery driver via WhatsApp (simulated)
           </label>
           <label className="flex items-center gap-2 text-sm">
-            <input name="notifyClientWhatsapp" type="checkbox" value="yes" />
+            <input name="notifyClientWhatsapp" type="checkbox" value="yes" defaultChecked={defaults.notifyClientWhatsapp === "yes"} />
             Message the client that recovery is on the way (simulated)
           </label>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm">
               Recovery date
-              <input name="recoveryDate" type="date" className={field} />
+              <input name="recoveryDate" type="date" defaultValue={defaults.recoveryDate || ""} className={field} />
             </label>
             <label className="block text-sm">
-              Recovery charge
-              <input name="recoveryCharge" className={field} placeholder="395.00" />
-            </label>
-            <label className="block text-sm">
-              Winch
-              <input name="recoveryWinch" className={field} placeholder="0.00" />
-            </label>
-            <label className="block text-sm">
-              Out of hours
-              <input name="recoveryOoh" className={field} placeholder="0.00" />
-            </label>
-            <label className="block text-sm">
-              Environmental
-              <input name="recoveryEnvironmental" className={field} placeholder="0.00" />
-            </label>
-            <label className="block text-sm">
-              Forklift
-              <input name="recoveryForklift" className={field} placeholder="0.00" />
-            </label>
-            <label className="block text-sm">
-              Mileage charge
-              <input name="recoveryMileage" className={field} placeholder="0.00" />
-            </label>
-            <label className="block text-sm">
-              Manual charge
-              <input name="recoveryManual" className={field} placeholder="0.00" />
+              Recovery time
+              <input name="recoveryTime" type="time" defaultValue={defaults.recoveryTime || ""} className={field} />
             </label>
           </div>
-          <p className="text-xs text-slate">Enter the actual amounts. Defaults are not added automatically.</p>
+          <div className="space-y-3">
+            {RECOVERY_FEE_DEFS.map((fee) => {
+              const pounds = filledPounds(fees[fee.key] ?? fee.defaultPence);
+              const ticked = defaults[`recoveryTick_${fee.key}`] ? defaults[`recoveryTick_${fee.key}`] === "yes" : fee.key === "standard";
+              return (
+                <div key={fee.key} className="grid gap-2 sm:grid-cols-[1fr_8rem_1fr] sm:items-end">
+                  <label className="flex items-center gap-2 text-sm">
+                    <input name={`recoveryTick_${fee.key}`} type="checkbox" value="yes" defaultChecked={ticked} />
+                    {fee.label}
+                  </label>
+                  <label className="block text-sm">
+                    Amount (£)
+                    <input name={`recoveryAmount_${fee.key}`} defaultValue={defaults[`recoveryAmount_${fee.key}`] || pounds} className={field} />
+                  </label>
+                  <label className="block text-sm">
+                    Reason if this is not the standard fee
+                    <input name={`recoveryReason_${fee.key}`} defaultValue={defaults[`recoveryReason_${fee.key}`] || ""} className={field} />
+                  </label>
+                </div>
+              );
+            })}
+            {RECOVERY_TYPED_EXTRAS.map((extra) => (
+              <div key={extra.key} className="grid gap-2 sm:grid-cols-[1fr_8rem_1fr] sm:items-end">
+                <label className="flex items-center gap-2 text-sm">
+                  <input name={`recoveryTick_${extra.key}`} type="checkbox" value="yes" defaultChecked={defaults[`recoveryTick_${extra.key}`] === "yes"} />
+                  {extra.label}
+                </label>
+                <label className="block text-sm">
+                  Amount (£)
+                  <input name={`recoveryAmount_${extra.key}`} defaultValue={defaults[`recoveryAmount_${extra.key}`] || ""} className={field} />
+                </label>
+                <label className="block text-sm">
+                  Reason
+                  <input name={`recoveryReason_${extra.key}`} defaultValue={defaults[`recoveryReason_${extra.key}`] || ""} className={field} />
+                </label>
+              </div>
+            ))}
+            <div className="grid gap-2 sm:grid-cols-2">
+              <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                <input name="recoveryTick_manual" type="checkbox" value="yes" defaultChecked={defaults.recoveryTick_manual === "yes"} />
+                Manual charge
+              </label>
+              <label className="block text-sm">
+                Description
+                <input name="recoveryManualDescription" defaultValue={defaults.recoveryManualDescription || ""} className={field} />
+              </label>
+              <label className="block text-sm">
+                Amount (£)
+                <input name="recoveryAmount_manual" defaultValue={defaults.recoveryAmount_manual || ""} className={field} />
+              </label>
+              <label className="block text-sm sm:col-span-2">
+                Reason
+                <input name="recoveryReason_manual" defaultValue={defaults.recoveryReason_manual || ""} className={field} />
+              </label>
+            </div>
+          </div>
+          <p className="text-xs text-slate">Each ticked fee is plus VAT. Unticked fees are not charged. Mileage is not on this form.</p>
           <label className="flex items-center gap-2 text-sm">
-            <input name="inheritedRecovery" type="checkbox" value="yes" />
-            There is an inherited recovery charge (upload the receipt on the file after saving — amount is not invented)
+            <input name="inheritedRecovery" type="checkbox" value="yes" defaultChecked={defaults.inheritedRecovery === "yes"} />
+            There is an inherited recovery charge
           </label>
-          <label className="block text-sm">
-            Inherited recovery note
-            <input name="inheritedNote" {...casingInputProps("inheritedNote", "text", field)} />
-          </label>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <label className="block text-sm sm:col-span-2">
+              Company that charged it
+              <input name="inheritedCompany" defaultValue={defaults.inheritedCompany || ""} {...casingInputProps("inheritedCompany", "text", field)} />
+            </label>
+            <label className="block text-sm">
+              Net amount on the receipt (£)
+              <input name="inheritedNet" defaultValue={defaults.inheritedNet || ""} className={field} />
+            </label>
+            <label className="block text-sm">
+              VAT on the receipt (£)
+              <input name="inheritedVat" defaultValue={defaults.inheritedVat || ""} className={field} />
+            </label>
+            <label className="block text-sm sm:col-span-2">
+              Receipt
+              <input name="inheritedReceipt" type="file" className={field} />
+            </label>
+          </div>
           <label className="block text-sm max-w-xs">
-            Storage rate per day
-            <input name="storageRate" className={field} placeholder="39.00" />
+            Storage rate per day (£)
+            <input name="storageRate" defaultValue={defaults.storageRate || "39"} className={field} />
           </label>
           <p className="text-xs text-slate">
-            Storage starts on the same day as recovery. A storage billing end date is not invented.
+            Storage starts on the recovery date when recovery is recorded. A storage billing end date is not invented.
           </p>
-          <label className="block text-sm max-w-sm">
-            Send credit recovery and storage agreement
-            <select name="agreementChannel" className={field} defaultValue="none">
-              <option value="none">Do not send yet</option>
-              <option value="whatsapp">WhatsApp (simulated)</option>
-              <option value="email">Email (simulated)</option>
-              <option value="both">WhatsApp and email (simulated)</option>
-            </select>
-          </label>
           <p className="text-xs text-slate">
-            The agreement is generated unsigned from the facts on this file. CAS template wording is still outstanding.
+            The credit recovery and storage agreement can be prepared as a draft. CAS template wording is still outstanding, so it is not sent.
           </p>
         </Section>
-      ) : (
-        <input type="hidden" name="agreementChannel" value="none" />
-      )}
+      ) : null}
 
       <Section n={6} title="Third-party details">
         <ThirdPartyBlock prefix="tp1_" title="Third party 1" insurers={insurers} agents={agents} />
@@ -920,45 +1146,59 @@ export function IntakeForm({
       </Section>
 
       <section className="space-y-3 rounded-xl border border-line bg-card p-5">
-        <h2 className="font-serif text-xl text-navy-deep">File setup</h2>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <h2 className="font-serif text-xl text-navy-deep">Insurance (MID) check</h2>
+        <p className="text-sm text-slate">Lookup not connected yet – please type the details. This records a manual askMID check. It does not look the vehicle up.</p>
+        <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-sm">
-            Liability status
-            <select name="claimType" className={field} defaultValue="">
-              <option value="">Not yet decided</option>
-              <option value="non_fault">Non-fault</option>
-              <option value="fault">Fault</option>
-              <option value="disputed">Disputed / unclear</option>
+            Date checked
+            <input name="midCheckedOn" type="date" defaultValue={defaults.midCheckedOn || ""} className={field} />
+          </label>
+          <label className="block text-sm">
+            Accident date searched
+            <input name="midAccidentOn" type="date" defaultValue={defaults.midAccidentOn || ""} className={field} />
+          </label>
+          <label className="block text-sm">
+            Registration searched
+            <input name="midRegistration" defaultValue={defaults.midRegistration || ""} className={field} />
+          </label>
+          <label className="block text-sm">
+            Result
+            <select name="midResult" className={field} defaultValue={defaults.midResult || ""}>
+              <option value="">Not recorded</option>
+              <option value="insurer">Insurer found</option>
+              <option value="no_record">No record found</option>
             </select>
           </label>
           <label className="block text-sm">
-            Roadworthiness
-            <select name="roadworthiness" className={field} defaultValue="">
-              <option value="">Not yet decided</option>
-              <option value="roadworthy">Roadworthy</option>
-              <option value="unroadworthy">Unroadworthy</option>
-            </select>
+            Insurer
+            <input name="midInsurerName" defaultValue={defaults.midInsurerName || ""} className={field} />
           </label>
           <label className="block text-sm">
-            Handler
-            <select name="handlerId" className={field} defaultValue="staff-sian">
-              {staff.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
+            Policy number
+            <input name="midPolicy" defaultValue={defaults.midPolicy || ""} className={field} />
           </label>
         </div>
-        <p className="text-xs text-slate">
-          Leave liability status and roadworthiness as not yet decided if you do not yet know. Do not guess Fault or
-          Roadworthy. Disputed / unclear is a valid liability status. The two answers are independent. AI does not certify
-          roadworthiness.
-        </p>
+      </section>
+
+      <div className="flex flex-wrap items-center gap-3">
         <button className="rounded-md bg-teal px-5 py-3 text-sm font-semibold text-white" type="submit">
           Create claim
         </button>
-      </section>
+      </div>
     </ValidatedForm>
+    {draftId ? (
+      <form action="/claims/drafts/discard" method="post" className="mt-4 space-y-2 rounded-xl border border-line bg-card p-5">
+        <input type="hidden" name="draftId" value={draftId} />
+        <input type="hidden" name="draftVersion" value={draftVersion} />
+        <label className="flex items-center gap-2 text-sm">
+          <input name="confirmDiscard" type="checkbox" value="yes" checked={confirmDiscard} onChange={(event) => setConfirmDiscard(event.target.checked)} />
+          I want to discard this draft
+        </label>
+        <button type="submit" className="rounded-md border border-line px-4 py-2 text-sm" disabled={!confirmDiscard}>
+          Discard draft
+        </button>
+      </form>
+    ) : null}
+    </>
   );
 }

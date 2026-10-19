@@ -248,11 +248,24 @@ type RecoveryJob = {
   forklift_pence: number | null;
   mileage_pence: number | null;
   manual_pence: number | null;
+  specialist_winch_pence: number | null;
+  skates_pence: number | null;
+  waiting_pence: number | null;
+  second_operator_pence: number | null;
+  charge_lines_json: string | null;
+  inherited: number | null;
+  inherited_note: string | null;
+  inherited_company: string | null;
+  inherited_net_pence: number | null;
+  inherited_vat_pence: number | null;
+  manual_description: string | null;
 };
 
 export function recoveryJobForClaim(claimId: string) {
   return get<RecoveryJob>(
-    `SELECT location, recovered_at, charge_pence, ooh_pence, environmental_pence, winch_pence, forklift_pence, mileage_pence, manual_pence
+    `SELECT location, recovered_at, charge_pence, ooh_pence, environmental_pence, winch_pence, forklift_pence, mileage_pence, manual_pence,
+            specialist_winch_pence, skates_pence, waiting_pence, second_operator_pence, charge_lines_json,
+            inherited, inherited_note, inherited_company, inherited_net_pence, inherited_vat_pence, manual_description
      FROM recovery_jobs WHERE claim_id = ? ORDER BY id LIMIT 1`,
     [claimId],
   );

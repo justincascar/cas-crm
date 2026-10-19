@@ -9,7 +9,8 @@ import { formatGbp } from "@/lib/money";
 import { requireStaff } from "@/lib/auth/session";
 import { HEAD_LABELS, type HeadOfLoss } from "@/lib/constants";
 import { dbLocation, getDashboard } from "@/lib/db/queries";
-import { formatUkDate } from "@/lib/dates";
+import { formatUkDate, formatUkDateTime } from "@/lib/dates";
+import { draftPayload, listOpenClaimDrafts } from "@/lib/db/claim-drafts";
 import { findPreparedChase, type ChaseView } from "@/lib/db/chase";
 import { chaseStageRowClass, chaseStageTextClass, isChaseKind } from "@/lib/domain/chase";
 import { liveEmailSending } from "@/lib/email/send-mode";
@@ -223,6 +224,8 @@ export default async function DashboardPage({
     else blocks.push(node);
   };
 
+  const drafts = listOpenClaimDrafts();
+
   keep(
     "Today's work",
     data.todaysWork.length,
@@ -282,6 +285,29 @@ export default async function DashboardPage({
           </Link>
         ))}
       </section>
+
+      {drafts.length ? (
+        <section className="mt-8 rounded-xl border border-line bg-card p-5">
+          <h2 className="font-serif text-xl text-navy-deep">New enquiries / incomplete</h2>
+          <ul className="mt-3 space-y-2 text-sm">
+            {drafts.map((draft) => {
+              const fields = draftPayload(draft);
+              const name = [fields.client_forename, fields.client_surname].filter(Boolean).join(" ") || "Unnamed enquiry";
+              return (
+                <li key={draft.id} className="flex flex-wrap items-center justify-between gap-2">
+                  <span>
+                    {name}
+                    <span className="ml-2 text-slate">saved {formatUkDateTime(draft.updated_at)}</span>
+                  </span>
+                  <Link className="font-semibold text-navy" href={`/claims/new?draft=${draft.id}`}>
+                    Continue
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ) : null}
 
       {sections}
 

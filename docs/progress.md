@@ -828,6 +828,36 @@ TEST-0008 had no recovery line in the demonstration data. The £474.00 recovery 
 
 Tests: `tests/page-open-writes.test.ts`. Full suite: 498 passing, 0 failing. Type check: 0 errors. Production build passed. Page check: 58 pages, 14 TEST-0008 screens fit a 1280px laptop with no sideways scroll, and the database was unchanged.
 
+## New claim form and recovery charges (19 October 2026)
+
+The new-claim form keeps a draft on the server as staff type. The dashboard lists it under New enquiries / incomplete. A draft does not send a message, start a charge or write history. Create claim does that. Discarding a draft asks for confirmation. If two people save the same draft, the later save is refused and names who saved it and when.
+
+Ticking “Client needs a replacement vehicle” records the hire request. It does not book a car or start hire. The next action becomes “Pre-hire checks and choose a vehicle”.
+
+Recovery fees are tick boxes. Standard recovery is filled in at £395. Environmental £150, winching £95, forklift £85 and out of hours £100 are filled in when ticked. Specialist winching, skates/dollies, waiting time, second operator and a manual charge are typed, and each needs a short reason. The fees live in Settings. Changing a setting does not change a fee already stored on a file. Each charge is its own line, plus VAT at 20%, on the Recovery page, the agreement and the payment-pack wording.
+
+An inherited charge records the company, the net and the VAT from the receipt, and a receipt can be uploaded. It is labelled “Inherited charge (paid to [company])”.
+
+A recovery time sits next to the recovery date. The server refuses a recovery before the accident. Storage still starts on the recovery date only when recovery is recorded.
+
+TEST-0013 is left as it was typed. £195 stays in the note and is flagged “Inherited recovery charge needs review: £195 was typed in a note”. The recovery time stays 09:00 and is flagged “Recovery time needs review: 09:00 is before the accident at 14:30”. No company, VAT or corrected time was invented.
+
+The credit recovery and storage agreement is still waiting for CAS-approved wording. It can be kept as a draft marked “DRAFT – wording not approved by CAS”. It is not sent, including when email is in simulate mode. Create claim does not send it. Photo requests, “recovery on the way” and the recovery job to the driver can still go out under the usual simulate rules.
+
+Weather, purpose of journey, road surface and lighting are lists. Other needs the typed words. Every phone box warns if the number is not a UK number of the right length, and Save anyway keeps an overseas number and records that choice. More than one witness can be added. Liability, roadworthiness and handler sit just after the client details.
+
+Postcode and registration lookup say “Lookup not connected yet – please type the details” while no live service is connected. The insurance check records a manual askMID result in the history. It does not look the vehicle up.
+
+An item whose wait-until date has passed comes back on Today’s work by the list itself. A paused chase resumes when the server starts and again every 30 minutes. Opening the dashboard does not do that write.
+
+TEST-0005’s storage end is still unconfirmed. TEST-0009’s vehicle-damage offers were not changed. TEST-0006’s money was not changed. TEST-0007’s £800 was not written off. No live email was sent. `EMAIL_SEND_MODE` stays `simulate`.
+
+Tests: `tests/new-claim-recovery.test.ts`. Full suite: 510 passing, 0 failing. Type check: 0 errors. Production build passed. Page check: 58 pages, 14 TEST-0008 screens fit a 1280px laptop with no sideways scroll, and the database was unchanged.
+
+## Open decision — 19 October 2026
+
+- Recovery mileage charging is undecided. The mileage box has been taken off the new-claim form. Justin has not decided how mileage will be charged. A mileage amount already stored on a file is left as it is.
+
 ## Not yet claimed
 
 - Remove the database path from the dashboard footer before live use. It is there now so a handler on this PC can see where the file is kept. It should not be shown once the system is in live use.

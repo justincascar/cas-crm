@@ -13,6 +13,9 @@ import {
   updateClaimWorkflowStatus,
 } from "@/lib/db/queries";
 import { createClaimFromIntake, intakeFieldErrors, intakeFromFormData } from "@/lib/db/intake";
+import { run } from "@/lib/db/connection";
+import { insertStoredDocument } from "@/lib/db/documents-store";
+import { storeFileCopy } from "@/lib/storage/files";
 import { complianceLookup } from "@/lib/lookups/compliance";
 import {
   generateClaimDocument,
@@ -61,6 +64,25 @@ export async function actionCreateClaim(formData: FormData) {
   let result: { id: string };
   try {
     result = await createClaimFromIntake(input);
+    const receipt = formData.get("inheritedReceipt");
+    if (receipt instanceof File && receipt.size > 0 && input.recovery?.inherited) {
+      const stored = storeFileCopy({
+        relDir: `${result.id}/receipts`,
+        originalFilename: receipt.name || "inherited-recovery-receipt",
+        buffer: Buffer.from(await receipt.arrayBuffer()),
+      });
+      const documentId = insertStoredDocument({
+        title: "Inherited recovery receipt",
+        documentType: "inherited_recovery_receipt",
+        claimId: result.id,
+        originalFilename: receipt.name || "inherited-recovery-receipt",
+        storedRelpath: stored.storedRelpath,
+        mimeType: receipt.type || "application/octet-stream",
+        byteSize: stored.byteSize,
+        createdBy: input.handlerId,
+      });
+      run(`UPDATE recovery_jobs SET receipt_document_id = ? WHERE claim_id = ?`, [documentId, result.id]);
+    }
   } catch (error) {
     if (error instanceof FieldValidationError) {
       redirect(`/claims/new${errorQuery(error.message, error.field)}`);

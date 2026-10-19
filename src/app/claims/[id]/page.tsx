@@ -18,6 +18,7 @@ import { loadClash, screenVersion, sectionVersion } from "@/lib/db/record-versio
 import { SHARED_CIRCUMSTANCES, SHARED_INSURER_POSITION, SHARED_OWN_INSURER } from "@/lib/db/shared-fields";
 import { gapsForClaim } from "@/lib/db/repair-progress";
 import { THIRD_PARTY_VEHICLE_EMPTY, vehicleIsRecorded, vehicleSummary } from "@/lib/domain/vehicle-display";
+import { LOOKUP_NOT_CONNECTED } from "@/lib/lookups/not-connected";
 import { findPreparedChase, listChasesForClaim } from "@/lib/db/chase";
 import { isChaseKind } from "@/lib/domain/chase";
 import { listHireAgreements } from "@/lib/db/chronology";
@@ -213,6 +214,26 @@ export default async function ClaimDetailPage({
           {claim.police_ref ? ` · Police ref: ${String(claim.police_ref)}` : ""}
         </p>
       ) : null}
+
+      <form action={`/claims/${claim.id}/mid-check`} method="post" className="space-y-3 rounded-xl border border-line bg-card p-5">
+        <h2 className="font-serif text-xl text-navy-deep">Insurance (MID) check</h2>
+        <p className="text-sm text-slate">{LOOKUP_NOT_CONNECTED} Record a manual askMID check. The CRM does not look this up.</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="block text-sm">Date checked<input name="midCheckedOn" type="date" className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" /></label>
+          <label className="block text-sm">Accident date searched<input name="midAccidentOn" type="date" className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" /></label>
+          <label className="block text-sm">Registration searched<input name="midRegistration" className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" /></label>
+          <label className="block text-sm">Result
+            <select name="midResult" className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" defaultValue="">
+              <option value="">Choose</option>
+              <option value="insurer">Insurer found</option>
+              <option value="no_record">No record found</option>
+            </select>
+          </label>
+          <label className="block text-sm">Insurer<input name="midInsurerName" className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" /></label>
+          <label className="block text-sm">Policy number<input name="midPolicy" className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" /></label>
+        </div>
+        <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">Record manual check</button>
+      </form>
 
       <JustificationChronology
         events={data.events}

@@ -25,3 +25,60 @@ export function mobileNumberError(value: string | null | undefined): string | nu
   }
   return null;
 }
+
+const SAVE_ANYWAY = " Use Save anyway for an overseas number.";
+
+/** A telephone box: mobile, or a general number that may be a landline or a mobile. Not a template name. */
+export function isPhoneBoxName(name: string): boolean {
+  if (/template/i.test(name)) return false;
+  return /mobile|telephone|phone|tel/i.test(name);
+}
+
+/** National form starting with 0, or null when it does not start with 0 or +44. */
+export function ukNationalNumber(value: string | null | undefined): string | null {
+  const compact = (value || "").trim().replace(/[\s()-]/g, "");
+  if (!compact) return null;
+  if (compact.startsWith("+44")) {
+    const rest = compact.slice(3).replace(/\D/g, "");
+    if (!rest) return null;
+    return `0${rest}`;
+  }
+  if (compact.startsWith("0")) {
+    const digits = compact.replace(/\D/g, "");
+    return digits || null;
+  }
+  return null;
+}
+
+/**
+ * One check for every phone box.
+ * A mobile must start 07 or +447 and be 11 national digits.
+ * A general phone accepts a UK landline or mobile (0 or +44, 10 or 11 digits).
+ * Empty is left alone. A failure is a warning, not a silent block.
+ */
+export function phoneFieldError(name: string, value: string | null | undefined): string | null {
+  const raw = (value || "").trim();
+  if (!raw) return null;
+  const mobile = isMobileFieldName(name);
+  const national = ukNationalNumber(raw);
+  if (mobile) {
+    if (national && /^07\d{9}$/.test(national)) return null;
+    if (raw.startsWith("+") || raw.startsWith("00")) {
+      return `A mobile number starts with 07 or +447 and has the right length.${SAVE_ANYWAY}`;
+    }
+    const existing = mobileNumberError(raw);
+    if (existing) return `${existing}${SAVE_ANYWAY}`;
+    if (!national?.startsWith("07")) {
+      return `A mobile number starts with 07 or +447.${SAVE_ANYWAY}`;
+    }
+    return `A mobile number starts with 07 or +447 and has the right length.${SAVE_ANYWAY}`;
+  }
+  if (!national || !/^0\d{9,10}$/.test(national)) {
+    return `That does not look like a UK number. It should start with 0 or +44 and be the right length.${SAVE_ANYWAY}`;
+  }
+  return null;
+}
+
+export function saveAnywayFieldName(fieldName: string): string {
+  return `saveAnyway_${fieldName}`;
+}

@@ -8,6 +8,8 @@ import { requireStaff } from "@/lib/auth/session";
 import { dbLocation, getSettings, listStaff } from "@/lib/db/queries";
 import { getDefaultVehicleLocation } from "@/lib/db/vehicle-location";
 import { getStorageDailyRatePence } from "@/lib/db/storage-charge";
+import { recoveryFeeSchedule } from "@/lib/db/recovery-fee-settings";
+import { RECOVERY_FEE_DEFS, filledPounds } from "@/lib/domain/recovery-fees";
 import { getAgreementApproachingDay, getAgreementMaxDays, getChaseIntervalDays } from "@/lib/db/chase";
 import { getRepairGapThresholdDays } from "@/lib/db/repair-progress";
 import { listInsurerPaymentTerms } from "@/lib/db/insurers";
@@ -432,6 +434,28 @@ export default async function SettingsPage({
             Save storage rate
           </button>
         </ValidatedForm>
+      </section>
+      <section className="rounded-xl border border-line bg-card p-5">
+        <h2 className="font-serif text-xl text-navy-deep">Recovery standard fees</h2>
+        <p className="mt-1 text-sm text-slate">
+          These fill in on a new claim. Changing a fee here does not change a fee already stored on a file. Amounts are plus VAT.
+        </p>
+        <form action="/settings/recovery-fees" method="post" className="mt-4 grid gap-3 sm:grid-cols-2">
+          <RecordVersionField version={versionFor("settings-recovery-fees")} />
+          {RECOVERY_FEE_DEFS.map((fee) => (
+            <label key={fee.key} className="block text-sm">
+              {fee.label} (£)
+              <input
+                name={fee.settingKey}
+                defaultValue={filledPounds(recoveryFeeSchedule()[fee.key])}
+                className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
+              />
+            </label>
+          ))}
+          <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white sm:col-span-2">
+            Save recovery fees
+          </button>
+        </form>
       </section>
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Default vehicle location</h2>

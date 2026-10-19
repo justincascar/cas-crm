@@ -7,6 +7,7 @@ import { ensureEngineers } from "./engineers";
 import { ensureKnownInsurers } from "./insurers";
 import { ensureDefaultVehicleLocationSetting } from "./vehicle-location";
 import { ensureStorageDailyRateSetting } from "./storage-charge";
+import { ensureRecoveryFeeSettings } from "./recovery-fee-settings";
 import { clearFalseDemonstrationHireCollection } from "./demo-jobs";
 import { ensureTest0005StorageDemonstration } from "./test-0005-storage";
 import { ensureTest0008HireDemonstration } from "./test-0008-hire";
@@ -43,6 +44,7 @@ function openDatabase(): DatabaseSync {
   ensureEngineers(db);
   ensureDefaultVehicleLocationSetting(db);
   ensureStorageDailyRateSetting(db);
+  ensureRecoveryFeeSettings(db);
   ensureChaseSettings(db);
   ensureDemoChases(db);
   ensureStaffAuth(db);
@@ -65,6 +67,7 @@ function prepareExistingDatabase(db: DatabaseSync) {
   ensureEngineers(db);
   ensureDefaultVehicleLocationSetting(db);
   ensureStorageDailyRateSetting(db);
+  ensureRecoveryFeeSettings(db);
   ensureChaseSettings(db);
   ensureDemoChases(db);
   ensureStaffAuth(db);

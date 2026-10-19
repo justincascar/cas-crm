@@ -89,6 +89,26 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["audatex_work_provider_code", "TEXT"],
     ["engineer_id", "TEXT"],
     ["hire_agreement_number", "TEXT"],
+    ["road_surface", "TEXT"],
+    ["lighting", "TEXT"],
+    ["needs_replacement", "INTEGER NOT NULL DEFAULT 0"],
+    ["hire_needed_from", "TEXT"],
+    ["hire_vehicle_type", "TEXT"],
+    ["hire_transmission", "TEXT"],
+    ["hire_seats", "INTEGER"],
+    ["hire_special_json", "TEXT"],
+    ["hire_gta_group", "TEXT"],
+  ],
+  recovery_jobs: [
+    ["charge_lines_json", "TEXT"],
+    ["inherited_company", "TEXT"],
+    ["inherited_net_pence", "INTEGER"],
+    ["inherited_vat_pence", "INTEGER"],
+    ["manual_description", "TEXT"],
+    ["specialist_winch_pence", "INTEGER NOT NULL DEFAULT 0"],
+    ["skates_pence", "INTEGER NOT NULL DEFAULT 0"],
+    ["waiting_pence", "INTEGER NOT NULL DEFAULT 0"],
+    ["second_operator_pence", "INTEGER NOT NULL DEFAULT 0"],
   ],
   claim_screen_data: [["updated_by", "TEXT"]],
   claim_third_parties: [
@@ -693,4 +713,16 @@ export function migrate(db: DatabaseSync) {
      SELECT ?, ?
      WHERE EXISTS (SELECT 1 FROM staff WHERE id = ?)`,
   ).run("staff-justin", EXTENDED_WAIT, "staff-justin");
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS claim_drafts (
+      id TEXT PRIMARY KEY,
+      payload_json TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      created_by TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      updated_by TEXT NOT NULL,
+      discarded_at TEXT,
+      claim_id TEXT
+    );
+  `);
 }

@@ -1,11 +1,14 @@
 import { INDICATIVE_DEFAULTS } from "../constants";
 import { accidentDateError, nowUtcIso, occurredFromForm, londonDateIso } from "../dates";
-import { mobileNumberError } from "../phone-number";
+import { phoneFieldError } from "../phone-number";
+import { JOURNEY_OPTIONS, LIGHTING_OPTIONS, ROAD_SURFACE_OPTIONS, WEATHER_OPTIONS, storedChoice } from "../domain/intake-choices";
+import { recoveryBeforeAccidentMessage } from "../domain/recovery-review";
+import { sumRecoveryLines, type RecoveryMoneyLine } from "../domain/recovery-fees";
+import { DRAFT_WORDING_NOT_APPROVED, sendBlockedForUnapproved } from "../documents/template-approval";
+import { parseRecoveryForm, recoveryInstantFromParts } from "./intake-recovery-form";
+import { finishClaimDraft } from "./claim-drafts";
 import { clientDobKind, counterpartDobKind, dobSaveError } from "../age";
 import { storageStartFromRecovery, recoveryChargeTotalPence } from "../domain/rules";
-import { SimulatedEmailGateway } from "../email/gateway";
-
-const prototypeMailbox = new SimulatedEmailGateway();
 import { formatGbp, grossFromNet } from "../money";
 import { whatsappGateway } from "../whatsapp/gateway";
 import { readFormText } from "../text";
@@ -19,6 +22,7 @@ import {
   roadworthinessLabel,
 } from "../domain/claim-status";
 import { getDb } from "./connection";
+import { FieldValidationError } from "../form-validation";
 import { rememberAgentOn, rememberInsurerOn } from "./insurers";
 
 export type IntakePerson = {
@@ -100,6 +104,7 @@ export type IntakeInput = {
   policeDetails?: string;
   witnesses?: string;
   witness?: { name?: string; telephone?: string; postcode?: string; addressLine1?: string; town?: string };
+  witnessList?: Array<{ name?: string; telephone?: string; postcode?: string; addressLine1?: string; town?: string }>;
   photosAtScene?: string;
   requestScenePhotosWhatsapp?: boolean;
   weather?: string;
@@ -117,8 +122,18 @@ export type IntakeInput = {
     forkliftPence?: number;
     mileagePence?: number;
     manualPence?: number;
+    time?: string;
     inherited?: boolean;
     inheritedNote?: string;
+    inheritedCompany?: string;
+    inheritedNetPence?: number | null;
+    inheritedVatPence?: number | null;
+    manualDescription?: string;
+    specialistWinchPence?: number;
+    skatesPence?: number;
+    waitingPence?: number;
+    secondOperatorPence?: number;
+    lines?: RecoveryMoneyLine[];
     storageRatePence?: number;
     notifyDriverWhatsapp?: boolean;
     notifyClientWhatsapp?: boolean;
@@ -127,6 +142,30 @@ export type IntakeInput = {
   thirdParties: IntakeThirdParty[];
   claimType?: string;
   roadworthiness?: string;
+  needsReplacement?: boolean;
+  hire?: {
+    neededFrom?: string;
+    vehicleType?: string;
+    transmission?: string;
+    seats?: string;
+    taxi?: boolean;
+    wheelchair?: boolean;
+    towbar?: boolean;
+    other?: string;
+    gtaGroup?: string;
+  };
+  roadSurface?: string;
+  lighting?: string;
+  savedAnyway?: string[];
+  draftId?: string;
+  mid?: {
+    checkedOn?: string;
+    accidentOn?: string;
+    registration?: string;
+    result?: string;
+    insurer?: string;
+    policy?: string;
+  };
 };
 
 function blank(value: string | null | undefined): string {
@@ -151,17 +190,23 @@ export function accidentAtFromParts(date?: string, time?: string): string | unde
   return occurredFromForm(`${d}T${t.length === 5 ? t : "00:00"}`);
 }
 
+function phoneKept(input: IntakeInput, field: string): boolean {
+  return Boolean(input.savedAnyway?.includes(field));
+}
+
+function pushPhone(errors: { field: string; message: string }[], input: IntakeInput, field: string, value: string | undefined) {
+  if (phoneKept(input, field)) return;
+  const message = phoneFieldError(field, value);
+  if (message) errors.push({ field, message });
+}
+
 export function intakeFieldErrors(input: IntakeInput): { field: string; message: string }[] {
   const errors: { field: string; message: string }[] = [];
-  const clientMobile = mobileNumberError(input.client.mobile);
-  if (clientMobile) errors.push({ field: "client_mobile", message: clientMobile });
+  pushPhone(errors, input, "client_mobile", input.client.mobile);
   const clientErr = dobSaveError(input.client.dob, clientDobKind(input.clientRole), Boolean(input.client.dobConfirmed));
   if (clientErr) errors.push({ field: "client_dob", message: clientErr });
   if (input.clientRole === "owner" || input.clientRole === "driver") {
-    if (input.counterpart?.mobile) {
-      const counterpartMobileErr = mobileNumberError(input.counterpart.mobile);
-      if (counterpartMobileErr) errors.push({ field: "counterpart_mobile", message: counterpartMobileErr });
-    }
+    pushPhone(errors, input, "counterpart_mobile", input.counterpart?.mobile);
     const counterpartErr = dobSaveError(
       input.counterpart?.dob,
       counterpartDobKind(input.clientRole),
@@ -171,6 +216,20 @@ export function intakeFieldErrors(input: IntakeInput): { field: string; message:
   }
   const accident = accidentDateError(input.accidentDate);
   if (accident) errors.push({ field: "accidentDate", message: accident });
+  pushPhone(errors, input, "client_otherTel", input.client.otherTel);
+  pushPhone(errors, input, "witness_telephone", input.witness?.telephone);
+  for (const [index, witness] of (input.witnessList || []).entries()) {
+    pushPhone(errors, input, `witness_${index}_telephone`, witness.telephone);
+  }
+  if (input.needsRecovery && input.recovery?.date && !input.recovery.time && !input.recovery.date.includes("T")) {
+    errors.push({ field: "recoveryTime", message: "Enter the recovery time." });
+  }
+  if (input.needsRecovery && input.accidentDate && input.recovery?.date && input.recovery.time) {
+    const accidentAt = accidentAtFromParts(input.accidentDate, input.accidentTime);
+    const recoveryAt = recoveryInstantFromParts(input.recovery.date, input.recovery.time);
+    const blocked = recoveryBeforeAccidentMessage(accidentAt, recoveryAt);
+    if (blocked) errors.push({ field: "recoveryTime", message: blocked });
+  }
   return errors;
 }
 
@@ -270,7 +329,8 @@ function recoveryAgreementHtml(input: {
         <p><strong>Complete Accident Solutions Ltd</strong></p>
         <p>Storage &amp; Recovery Agreement — ${escapeHtml(input.fileReference)}-SR</p>
       </header>
-      <p class="text-sm">Standalone document. It is not a page of a Hire Agreement and does not require a hire agreement on the file. Solicitor-reviewed standalone wording is still to come. This page records the facts captured on intake. It is not a signed contract and has not been executed.</p>
+      <p class="text-sm"><strong>${DRAFT_WORDING_NOT_APPROVED}</strong></p>
+      <p class="text-sm">Standalone document. It is not a page of a Hire Agreement and does not require a hire agreement on the file. Solicitor-reviewed standalone wording is still to come. This page records the facts captured on intake. It is not a signed contract and has not been executed. It has not been sent.</p>
       <h3>Your Own Vehicle Details</h3>
       <p>This is the client's own damaged vehicle being recovered and stored — not a hire vehicle.</p>
       <p>Client: ${escapeHtml(input.clientName)}</p>
@@ -336,7 +396,13 @@ export async function createClaimFromIntake(input: IntakeInput) {
     if (hasCounterpart) counterpartId = insertPerson(input.counterpart, "phone").id;
   }
 
-  const recoveryAt = input.needsRecovery && input.recovery?.date ? occurredFromForm(input.recovery.date) : null;
+  const recoveryAt = input.needsRecovery ? recoveryInstantFromParts(input.recovery?.date, input.recovery?.time) : null;
+  if (input.needsRecovery && input.recovery?.date && !recoveryAt) {
+    throw new Error("Enter the recovery time.");
+  }
+  const accidentInstant = accidentAtFromParts(input.accidentDate, input.accidentTime);
+  const tooEarly = recoveryBeforeAccidentMessage(accidentInstant, recoveryAt);
+  if (tooEarly) throw new Error(tooEarly);
   const storageStarted = storageStartFromRecovery(recoveryAt);
   const storageRate =
     input.recovery?.storageRatePence && input.recovery.storageRatePence > 0
@@ -370,7 +436,11 @@ export async function createClaimFromIntake(input: IntakeInput) {
       normalizeRoadworthiness(input.roadworthiness),
       "New enquiry — intake captured",
       input.handlerId || "staff-sian",
-      input.needsRecovery ? "Arrange or confirm recovery and replacement transport" : "Review new file",
+      input.needsReplacement
+        ? "Pre-hire checks and choose a vehicle"
+        : input.needsRecovery
+          ? "Arrange or confirm recovery and replacement transport"
+          : "Review new file",
       now,
       clientPerson.id,
       vehicleId,
@@ -393,6 +463,36 @@ export async function createClaimFromIntake(input: IntakeInput) {
       input.needsRecovery ? storageRate : null,
     ],
   );
+
+  const hire = input.hire;
+  const special = hire
+    ? JSON.stringify({
+        taxi: Boolean(hire.taxi),
+        wheelchair: Boolean(hire.wheelchair),
+        towbar: Boolean(hire.towbar),
+        other: hire.other || "",
+      })
+    : null;
+  run(
+    `UPDATE claims SET road_surface = ?, lighting = ?, needs_replacement = ?, hire_needed_from = ?, hire_vehicle_type = ?,
+      hire_transmission = ?, hire_seats = ?, hire_special_json = ?, hire_gta_group = ?
+     WHERE id = ?`,
+    [
+      optional(input.roadSurface),
+      optional(input.lighting),
+      input.needsReplacement ? 1 : 0,
+      optional(hire?.neededFrom),
+      optional(hire?.vehicleType),
+      optional(hire?.transmission),
+      hire?.seats ? Number.parseInt(hire.seats, 10) || null : null,
+      special,
+      optional(hire?.gtaGroup),
+      id,
+    ],
+  );
+  if (hire?.gtaGroup) {
+    run(`UPDATE vehicles SET gta_group = ? WHERE id = ?`, [hire.gtaGroup, vehicleId]);
+  }
 
   run(`INSERT INTO claim_parties(id, claim_id, person_id, role, is_primary) VALUES (?, ?, ?, 'client', 1)`, [
     newId("party"),
@@ -443,18 +543,25 @@ export async function createClaimFromIntake(input: IntakeInput) {
     ],
   );
 
-  if (input.witnesses === "yes" && (input.witness?.name || input.witness?.telephone)) {
+  const witnessRows =
+    input.witnessList && input.witnessList.length > 0
+      ? input.witnessList
+      : input.witnesses === "yes" && (input.witness?.name || input.witness?.telephone)
+        ? [input.witness]
+        : [];
+  for (const witness of witnessRows) {
+    if (!witness?.name && !witness?.telephone) continue;
     run(
       `INSERT INTO claim_witnesses(id, claim_id, full_name, telephone, postcode, address_line1, town, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         newId("wit"),
         id,
-        blank(input.witness?.name),
-        optional(input.witness?.telephone),
-        optional(input.witness?.postcode),
-        optional(input.witness?.addressLine1),
-        optional(input.witness?.town),
+        blank(witness?.name),
+        optional(witness?.telephone),
+        optional(witness?.postcode),
+        optional(witness?.addressLine1),
+        optional(witness?.town),
         now,
       ],
     );
@@ -582,9 +689,27 @@ export async function createClaimFromIntake(input: IntakeInput) {
       mileage: input.recovery.mileagePence || 0,
       manual: input.recovery.manualPence || 0,
     };
-    const total = recoveryChargeTotalPence(parts);
+    const totals = input.recovery.lines?.length ? sumRecoveryLines(input.recovery.lines) : null;
+    const total = totals ? totals.netPence : recoveryChargeTotalPence(parts);
     const recId = newId("rec");
-    if (total) addClaimedLine(id, "recovery", "Recovery charges as entered on intake", total);
+    if (totals && totals.grossPence > 0) {
+      run(
+        `INSERT INTO financial_lines(
+          id, claim_id, head_of_loss, description, quantity, unit, rate_pence, net_pence, vat_pence, gross_pence,
+          claimed_pence, offered_pence, agreed_pence, received_pence, offer_status
+        ) VALUES (?, ?, 'recovery', ?, 1, 'item', ?, ?, ?, ?, ?, 0, 0, 0, NULL)`,
+        [
+          newId("fin"),
+          id,
+          "Recovery charges as entered on intake",
+          totals.netPence,
+          totals.netPence,
+          totals.vatPence,
+          totals.grossPence,
+          totals.grossPence,
+        ],
+      );
+    } else if (total) addClaimedLine(id, "recovery", "Recovery charges as entered on intake", total);
     if (input.recovery.inherited) {
       run(
         `INSERT INTO notes(id, claim_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)`,
@@ -650,6 +775,23 @@ export async function createClaimFromIntake(input: IntakeInput) {
         agreementDocumentId,
         storageStarted,
         storageRate,
+      ],
+    );
+    run(
+      `UPDATE recovery_jobs SET charge_lines_json = ?, inherited_company = ?, inherited_net_pence = ?, inherited_vat_pence = ?,
+        manual_description = ?, specialist_winch_pence = ?, skates_pence = ?, waiting_pence = ?, second_operator_pence = ?
+       WHERE id = ?`,
+      [
+        input.recovery.lines?.length ? JSON.stringify(input.recovery.lines) : null,
+        optional(input.recovery.inheritedCompany),
+        input.recovery.inheritedNetPence ?? null,
+        input.recovery.inheritedVatPence ?? null,
+        optional(input.recovery.manualDescription),
+        input.recovery.specialistWinchPence || 0,
+        input.recovery.skatesPence || 0,
+        input.recovery.waitingPence || 0,
+        input.recovery.secondOperatorPence || 0,
+        recId,
       ],
     );
   }
@@ -763,35 +905,59 @@ export async function createClaimFromIntake(input: IntakeInput) {
       "Recovery on the way",
     );
   }
-  if (agreementDocumentId && input.recovery?.sendAgreementChannel && input.recovery.sendAgreementChannel !== "none") {
-    const channel = input.recovery.sendAgreementChannel;
-    const body = `Please read and sign the credit recovery and storage agreement for file ${ref}. Prototype: not a live send. Unsigned copies stay unsigned.`;
-    if (channel === "email" || channel === "both") {
-      const send = await prototypeMailbox.send({
-        to: input.client.email || "unknown@example.invalid",
-        subject: `Our ref: ${ref}  Recovery and storage agreement`,
-        body,
-      });
-      run(
-        `INSERT INTO correspondence(
-          id, claim_id, direction, channel, subject, preview, body, to_address, from_address, unread, sent_status, created_at
-        ) VALUES (?, ?, 'outgoing', 'email', ?, ?, ?, ?, 'CAS prototype', 0, ?, ?)`,
-        [
-          newId("corr"),
-          id,
-          `Our ref: ${ref}  Recovery and storage agreement`,
-          body,
-          body,
-          input.client.email || "Unknown",
-          send.ok ? send.status : send.status,
-          now,
-        ],
-      );
-    }
-    if ((channel === "whatsapp" || channel === "both") && input.client.mobile) {
-      await simulateWhatsApp(id, input.handlerId, input.client.mobile, body, "Recovery and storage agreement");
-    }
+  if (agreementDocumentId) {
+    const blocked = sendBlockedForUnapproved({
+      templateKey: "recovery_storage_agreement",
+      body: DRAFT_WORDING_NOT_APPROVED,
+    });
+    recordClaimEvent({
+      claimId: id,
+      eventType: "other",
+      occurredAt: now,
+      details: blocked || "The credit recovery and storage agreement was not sent.",
+      actorId: input.handlerId,
+      source: "system",
+    });
   }
+
+  if (input.mid && (input.mid.result || input.mid.insurer || input.mid.registration)) {
+    const result = (input.mid.result || "").trim();
+    const insurer = result === "no_record" ? "No record found" : optional(input.mid.insurer);
+    run(
+      `INSERT INTO mid_lookups(id, claim_id, registration, accident_on, lookup_on, insurer, checker_id, evidence, source)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'manual')`,
+      [
+        newId("mid"),
+        id,
+        blank(input.mid.registration || input.vehicle.registration),
+        optional(input.mid.accidentOn) || (accidentAt ? londonDateIso(new Date(accidentAt)) : null),
+        optional(input.mid.checkedOn) || now,
+        insurer,
+        input.handlerId,
+        result === "no_record"
+          ? "Manual askMID check. No record found. Not scraped."
+          : `Manual askMID check. Insurer ${insurer || "not stated"}. Policy ${optional(input.mid.policy) || "not stated"}. Not scraped.`,
+      ],
+    );
+    recordClaimEvent({
+      claimId: id,
+      eventType: "other",
+      occurredAt: now,
+      details:
+        result === "no_record"
+          ? "Manual askMID check recorded. No record found. The CRM did not look this up."
+          : `Manual askMID check recorded. ${insurer || "Insurer not stated"}. Policy ${optional(input.mid.policy) || "not stated"}. The CRM did not look this up.`,
+      actorId: input.handlerId,
+      source: "staff",
+    });
+  }
+  for (const field of input.savedAnyway || []) {
+    run(
+      `INSERT INTO audit_log(id, at, actor_id, action, entity, entity_id, details) VALUES (?, ?, ?, 'phone_saved_anyway', 'claim', ?, ?)`,
+      [newId("audit"), now, input.handlerId, id, `Phone saved anyway: ${field}`],
+    );
+  }
+  finishClaimDraft(input.draftId, id, input.handlerId);
 
   return { id, fileReference: ref, hireStatus: "none" as const, chargesStarted: false };
 }
@@ -877,10 +1043,45 @@ export function thirdPartyFromForm(formData: FormData, prefix: string, included:
   };
 }
 
+function readStoredChoice(
+  formData: FormData,
+  name: string,
+  otherName: string,
+  options: readonly { value: string; label: string }[],
+  label: string,
+): string {
+  const value = String(formData.get(name) || "").trim();
+  if (!value) return "";
+  if (!options.some((item) => item.value === value)) return value;
+  const result = storedChoice({ value, other: String(formData.get(otherName) || ""), options });
+  if (result.error) throw new FieldValidationError(otherName, `Type the other ${label}.`);
+  return result.stored || "";
+}
+
+function witnessFromIndex(formData: FormData, index: number) {
+  return {
+    name: readFormText(formData, `witness_${index}_name`),
+    telephone: readFormText(formData, `witness_${index}_telephone`),
+    postcode: readFormText(formData, `witness_${index}_postcode`),
+    addressLine1: readFormText(formData, `witness_${index}_address`),
+    town: readFormText(formData, `witness_${index}_town`),
+  };
+}
+
 export function intakeFromFormData(formData: FormData): IntakeInput {
   const needsRecovery = formFlag(formData, "needsRecovery");
   const includeTp2 = formFlag(formData, "includeTp2");
   const includeTp3 = formFlag(formData, "includeTp3");
+  const parsedRecovery = parseRecoveryForm(formData, readFormText);
+  if (parsedRecovery.fieldError) {
+    throw new FieldValidationError(parsedRecovery.fieldError.field, parsedRecovery.fieldError.message);
+  }
+  const witnessCount = Number.parseInt(String(formData.get("witnessCount") || "0"), 10);
+  const witnessList = Number.isFinite(witnessCount) && witnessCount > 0
+    ? Array.from({ length: witnessCount }, (_, index) => witnessFromIndex(formData, index)).filter((row) => row.name || row.telephone)
+    : [];
+  const savedAnyway = [...formData.keys()].filter((key) => key.startsWith("saveAnyway_") && formData.get(key) === "yes").map((key) => key.slice("saveAnyway_".length));
+  const midResult = String(formData.get("midResult") || "").trim();
   return {
     handlerId: String(formData.get("handlerId") || "staff-sian"),
     clientRole: String(formData.get("clientRole") || "owner_driver"),
@@ -896,38 +1097,49 @@ export function intakeFromFormData(formData: FormData): IntakeInput {
     policeAttended: String(formData.get("policeAttended") || ""),
     policeRef: String(formData.get("policeRef") || ""),
     policeDetails: readFormText(formData, "policeDetails"),
-    witnesses: String(formData.get("witnesses") || "no"),
-    witness: {
+    witnesses: witnessList.length > 0 ? "yes" : String(formData.get("witnesses") || "no"),
+    witness: witnessList[0] || {
       name: readFormText(formData, "witness_name"),
       telephone: readFormText(formData, "witness_telephone"),
       postcode: readFormText(formData, "witness_postcode"),
       addressLine1: readFormText(formData, "witness_address"),
       town: readFormText(formData, "witness_town"),
     },
+    witnessList,
     photosAtScene: String(formData.get("photosAtScene") || "no"),
     requestScenePhotosWhatsapp: formFlag(formData, "requestScenePhotosWhatsapp"),
-    weather: readFormText(formData, "weather"),
-    journeyPurpose: readFormText(formData, "journeyPurpose"),
+    weather: readStoredChoice(formData, "weather", "weatherOther", WEATHER_OPTIONS, "weather"),
+    journeyPurpose: readStoredChoice(formData, "journeyPurpose", "journeyPurposeOther", JOURNEY_OPTIONS, "purpose of journey"),
+    roadSurface: readStoredChoice(formData, "roadSurface", "roadSurfaceOther", ROAD_SURFACE_OPTIONS, "road surface"),
+    lighting: readStoredChoice(formData, "lighting", "lightingOther", LIGHTING_OPTIONS, "lighting"),
     clientSpeed: String(formData.get("clientSpeed") || ""),
     tpSpeed: String(formData.get("tpSpeed") || ""),
     needsRecovery,
-    recovery: {
-      location: readFormText(formData, "recoveryLocation"),
-      date: String(formData.get("recoveryDate") || ""),
-      chargePence: poundsToPence(String(formData.get("recoveryCharge") || "")),
-      winchPence: poundsToPence(String(formData.get("recoveryWinch") || "")),
-      oohPence: poundsToPence(String(formData.get("recoveryOoh") || "")),
-      environmentalPence: poundsToPence(String(formData.get("recoveryEnvironmental") || "")),
-      forkliftPence: poundsToPence(String(formData.get("recoveryForklift") || "")),
-      mileagePence: poundsToPence(String(formData.get("recoveryMileage") || "")),
-      manualPence: poundsToPence(String(formData.get("recoveryManual") || "")),
-      inherited: formFlag(formData, "inheritedRecovery"),
-      inheritedNote: readFormText(formData, "inheritedNote"),
-      storageRatePence: poundsToPence(String(formData.get("storageRate") || "")),
-      notifyDriverWhatsapp: formFlag(formData, "notifyDriverWhatsapp"),
-      notifyClientWhatsapp: formFlag(formData, "notifyClientWhatsapp"),
-      sendAgreementChannel: String(formData.get("agreementChannel") || "none"),
+    needsReplacement: formFlag(formData, "needsReplacement"),
+    hire: {
+      neededFrom: String(formData.get("hireNeededFrom") || ""),
+      vehicleType: readFormText(formData, "hireVehicleType"),
+      transmission: String(formData.get("hireTransmission") || ""),
+      seats: String(formData.get("hireSeats") || ""),
+      taxi: formFlag(formData, "hireTaxi"),
+      wheelchair: formFlag(formData, "hireWheelchair"),
+      towbar: formFlag(formData, "hireTowbar"),
+      other: readFormText(formData, "hireOther"),
+      gtaGroup: readFormText(formData, "hireGtaGroup"),
     },
+    savedAnyway,
+    draftId: String(formData.get("draftId") || ""),
+    mid: midResult
+      ? {
+          checkedOn: String(formData.get("midCheckedOn") || ""),
+          accidentOn: String(formData.get("midAccidentOn") || ""),
+          registration: readFormText(formData, "midRegistration"),
+          result: midResult,
+          insurer: readFormText(formData, "midInsurerName"),
+          policy: String(formData.get("midPolicy") || ""),
+        }
+      : undefined,
+    recovery: parsedRecovery,
     thirdParties: [
       thirdPartyFromForm(formData, "tp1_", true),
       thirdPartyFromForm(formData, "tp2_", includeTp2),

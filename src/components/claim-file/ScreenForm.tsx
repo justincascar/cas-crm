@@ -22,7 +22,7 @@ import { displayValue } from "@/lib/screen-display";
 import type { ScreenValues } from "@/lib/db/screens";
 import type { KnownInsurer } from "@/lib/insurers";
 import { kindForField } from "@/lib/text";
-import { isMobileFieldName } from "@/lib/phone-number";
+import { isPhoneBoxName } from "@/lib/phone-number";
 
 const control = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
@@ -321,7 +321,7 @@ export function ScreenForm({
                   />
                 );
               }
-              if (isMobileFieldName(field.name)) {
+              if (isPhoneBoxName(field.name)) {
                 return (
                   <label key={field.name} className={`block text-sm ${field.span === 2 ? "sm:col-span-2" : ""}`}>
                     {field.label}

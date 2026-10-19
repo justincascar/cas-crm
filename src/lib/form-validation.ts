@@ -1,6 +1,6 @@
 import { accidentDateError } from "./dates";
 import { dobKindForField, dobSaveError, isDobFieldName, type DobKind } from "./age";
-import { isMobileFieldName, mobileNumberError } from "./phone-number";
+import { isPhoneBoxName, phoneFieldError, saveAnywayFieldName } from "./phone-number";
 import { somethingElseGap } from "./domain/recovery-charges";
 
 export const FIELD_INVALID_CLASS = "field-invalid";
@@ -67,7 +67,7 @@ export function namedFieldError(
   value: string,
   options?: { dobKind?: DobKind; dobConfirmed?: boolean },
 ): string | null {
-  if (isMobileFieldName(name)) return mobileNumberError(value);
+  if (isPhoneBoxName(name)) return phoneFieldError(name, value);
   if (name === "accidentDate" || name === "accident_date") return accidentDateError(value);
   if (isDobFieldName(name)) {
     return dobSaveError(value, options?.dobKind || dobKindForField("", name), Boolean(options?.dobConfirmed));
@@ -125,7 +125,13 @@ function namedValue(form: HTMLFormElement, name: string): string {
   return "";
 }
 
+function saveAnywayChecked(form: HTMLFormElement, fieldName: string): boolean {
+  const el = form.elements.namedItem(saveAnywayFieldName(fieldName));
+  return el instanceof HTMLInputElement && el.checked;
+}
+
 export function customErrorForControl(el: FormControl, form: HTMLFormElement): string | null {
+  if (isPhoneBoxName(el.name) && saveAnywayChecked(form, el.name)) return null;
   const named = namedFieldError(el.name, el.value, {
     dobKind: dobKindFromControl(el),
     dobConfirmed: confirmChecked(form, el.name),

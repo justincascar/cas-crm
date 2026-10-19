@@ -2,7 +2,7 @@ import { accidentDateError, nowUtcIso, londonDateIso, occurredFromForm } from ".
 import { FieldValidationError } from "../form-validation";
 import { CLAIM_SCREENS, getClaimScreen } from "../claim-screens";
 import { dobConfirmName, dobKindForField, dobSaveError, isDobFieldName } from "../age";
-import { isMobileFieldName, mobileNumberError } from "../phone-number";
+import { isPhoneBoxName, phoneFieldError } from "../phone-number";
 import { formatTypedValue } from "../text";
 import { get, all, getDb, newId, run } from "./connection";
 import { withImmediateTransaction, writeScreenIfCurrent } from "./record-version";
@@ -93,6 +93,9 @@ export function valuesFromForm(formData: FormData, screenKey: string): ScreenVal
   for (const key of ["clientPanels", "tpPanels", "crossHire", "crossHireNotes"]) {
     if (formData.has(key)) values[key] = String(formData.get(key) || "");
   }
+  for (const [key, value] of formData.entries()) {
+    if (String(key).startsWith("saveAnyway_")) values[String(key)] = String(value);
+  }
   if (screenKey === "recovery") return normaliseRecoveryScreen(values);
   return values;
 }
@@ -133,9 +136,10 @@ export function screenSaveFieldError(
   const claim = get<{ client_role: string | null }>(`SELECT client_role FROM claims WHERE id = ?`, [claimId]);
   for (const section of def.sections) {
     for (const field of section.fields) {
-      if (isMobileFieldName(field.name)) {
-        const mobileErr = mobileNumberError(values[field.name]);
-        if (mobileErr) return { field: field.name, message: mobileErr };
+      if (isPhoneBoxName(field.name)) {
+        const kept = values[`saveAnyway_${field.name}`] === "yes";
+        const phoneErr = kept ? null : phoneFieldError(field.name, values[field.name]);
+        if (phoneErr) return { field: field.name, message: phoneErr };
       }
       if (!isDobFieldName(field.name)) continue;
       const err = dobSaveError(
@@ -379,6 +383,14 @@ export function saveScreenData(
 }
 
 function applySideEffects(claimId: string, screenKey: string, values: ScreenValues, actorId: string) {
+  const now = nowUtcIso();
+  for (const [key, value] of Object.entries(values)) {
+    if (!key.startsWith("saveAnyway_") || value !== "yes") continue;
+    run(
+      `INSERT INTO audit_log(id, at, actor_id, action, entity, entity_id, details) VALUES (?, ?, ?, 'phone_saved_anyway', 'claim', ?, ?)`,
+      [newId("audit"), now, actorId, claimId, `Phone saved anyway: ${key.slice("saveAnyway_".length)}`],
+    );
+  }
   const claim = get<{
     id: string;
     client_person_id: string | null;
