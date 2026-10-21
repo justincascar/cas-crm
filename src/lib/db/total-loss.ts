@@ -256,6 +256,23 @@ export function saveTotalLossReport(input: {
     details: `Engineer's total-loss figures saved. Agreed and paid amounts were not changed.${varianceNote}${mismatchNote}`,
     source: "staff",
   });
+  if (next.disposal === "sold" || next.disposal === "returned" || next.disposal === "bought_by_cas") {
+    const already = get<{ id: string }>(
+      `SELECT id FROM claim_events WHERE claim_id = ? AND event_type = 'salvage_collected' LIMIT 1`,
+      [input.claimId],
+    );
+    if (!already) {
+      const returned = next.returnedOn && /^\d{4}-\d{2}-\d{2}/.test(next.returnedOn) ? next.returnedOn : at;
+      recordClaimEvent({
+        claimId: input.claimId,
+        eventType: "salvage_collected",
+        occurredAt: returned,
+        actorId: input.actorId,
+        details: `Salvage recorded as ${next.disposal}. Agreed and paid amounts were not changed.`,
+        source: "staff",
+      });
+    }
+  }
   return next;
 }
 

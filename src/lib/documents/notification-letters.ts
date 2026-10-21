@@ -28,7 +28,7 @@ export function suggestedLetterTemplateKey(liabilityStatus: string | null | unde
 export function letterSuggestionNote(liabilityStatus: string | null | undefined): string {
   const value = normalizeLiabilityStatus(liabilityStatus);
   if (value === "fault") {
-    return "This file is Fault, so the letter to the client's own insurer is offered. You can still pick another document.";
+    return "This file is Fault, so the letter to the client's own insurer is offered. The third-party insurer letter is not sent on a fault claim.";
   }
   if (value === "non_fault") {
     return "This file is Non-fault, so the initial letter to the third-party insurer is offered. You can still pick another document.";

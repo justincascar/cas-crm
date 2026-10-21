@@ -8,7 +8,6 @@ import { get, withDatabase } from "../src/lib/db/connection.ts";
 import { migrate } from "../src/lib/db/migrate.ts";
 import { claimOutstandingSummary, getClaim } from "../src/lib/db/queries.ts";
 import { seed } from "../src/lib/db/seed.ts";
-import { dueWording } from "../src/lib/domain/due-wording.ts";
 import { buildClaimSummaryModel, runningDailyLabel } from "../src/lib/claims/claim-summary.ts";
 import { claimRunningDaily } from "../src/lib/db/desk-work.ts";
 import { confirmedOutstandingPence, outstandingColumnText, PROVISIONAL_NOT_FINAL } from "../src/lib/claims/summary-money.ts";
@@ -89,6 +88,9 @@ const sample: ClaimSummaryModel = {
   ],
   outstandingTotal: "£0.00",
   nextAction: "Arrange customer collection of repaired vehicle",
+  staffNote: null,
+  staffNoteBy: null,
+  staffNoteOn: null,
   dueText: "Overdue by 25 days",
   dueClass: "font-semibold text-overdue",
   flags: [
@@ -258,8 +260,10 @@ describe("claim summary bar", () => {
             formatGbp(confirmedOutstandingPence(money.confirmed.outstandingPence) - money.confirmed.overpaidPence),
           );
         }
-        assert.equal(model.nextAction, String(claimRow?.next_action || "None set"));
-        assert.equal(model.dueText, claimRow?.next_action_due ? dueWording(String(claimRow.next_action_due)).text : "No due date");
+        assert.equal(model.nextAction, "Send letter");
+        assert.match(model.stageLine, /Initial letter to the third-party insurer · To do/);
+        assert.equal(model.staffNote, String(claimRow?.next_action || ""));
+        assert.equal(model.dueText, "No due date");
         assert.equal(model.charges.length, money.heads.length);
         for (const head of money.heads) {
           const charge: (typeof model.charges)[number] | undefined = model.charges.find((row) => row.head === head.head);

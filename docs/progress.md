@@ -872,20 +872,32 @@ TEST-0005’s storage end is still unconfirmed. TEST-0009’s vehicle-damage off
 
 Tests: `tests/claim-steps.test.ts`. Full suite: 521 passing, 0 failing. Type check: 0 errors. Production build passed. Page check: 68 pages, 24 claim screens fit a 1280px laptop with no sideways scroll, old addresses redirect, and the database was unchanged.
 
+## Steps for each kind of claim (21 October 2026)
+
+Justin confirmed the fault-claim steps on 21 October 2026. That confirmation replaces the proposal that was waiting in the decision log.
+
+A step is Not needed only when someone has answered no, or has marked it not needed with a reason. The server refuses a blank reason. If nobody has answered, the step says Not decided yet and both the main button and Not needed stay available. Hire on TEST-0013 is that case.
+
+The next action and its due date come from the first open step, the same step as the stage line. A next action staff have typed is kept and shown as a note. It does not replace the step. Today’s work uses the same step. Opening the page does not write that next action into the database.
+
+The words on a step are To do, Not started, In progress, Waiting on someone, or Done. In progress is used only when something has actually begun.
+
+A repairable non-fault claim no longer asks the client to agree the repair estimate. Older `repair_estimate_agreed_with_client` history lines are kept. Staff choose an engineer, an Audatex estimate, or both. The report step is done only when every chosen item has been received. Audatex figures are typed by hand. There is no link to Audatex. Recording them does not change claimed, agreed or received.
+
+A fault claim uses the ten steps in the decision log. The third-party letter is not created. The client’s car is not recorded as returned before the excess is on the history, unless that save is by Justin’s staff row using `releaseWithoutExcess` and a reason. The invoice is the authorised amount minus the excess. Changing a file from non-fault to fault, or from repairable to total loss, switches the steps and keeps the history.
+
+Where a demonstration file was marked complete with no history event, a demonstration event was added using a date already stored on the file. TEST-0008 recovery uses the roadworthiness assessment date, because no separate recovery date is stored. Its engineer instruction uses the inspection booking already on the file. Its storage end uses the storage end already stored. TEST-0009’s report-received flag has no stored report date, so no report event was added and that step says it cannot be told from the history. TEST-0009 was not converted into a fault claim. TEST-0004 is the demonstration fault file.
+
+Saving a recovery date, a storage end, or a salvage outcome now writes the matching history event. A flag on its own does not mark the step done.
+
+TEST-0005’s storage end is still unconfirmed. TEST-0009’s vehicle-damage offers were not changed. TEST-0006’s money was not changed. TEST-0007’s £800 was not written off. No live email was sent. `EMAIL_SEND_MODE` stays `simulate`.
+
+Tests: `tests/claim-steps.test.ts`. Full suite: 527 passing, 0 failing. Type check: 0 errors. Production build passed. Page check: 68 pages, 24 claim screens fit a 1280px laptop with no sideways scroll, old addresses redirect, and the database was unchanged.
+
 ## Open decision — 19 October 2026
 
 - Recovery mileage charging is undecided. The mileage box has been taken off the new-claim form. Justin has not decided how mileage will be charged. A mileage amount already stored on a file is left as it is.
-- Fault-claim steps are proposed, and are waiting for Justin to confirm. They are not a confirmed rule. The proposal is:
-  1. Basic details captured — applies.
-  2. Recovery or collection — applies. Not needed when the vehicle is roadworthy.
-  3. Hire vehicle — applies when the client needs a car. Fault courtesy is not credit hire. Not needed when the client does not need a car.
-  4. Initial letter to the third-party insurer — not needed. The letter to the client’s own insurer applies instead.
-  5. Instruct engineer — applies.
-  6. Engineer’s report received — applies.
-  7. Agree the repair estimate with the client, or the valuation on a total loss — applies.
-  8. Send the report and estimate to the third-party insurer — not needed.
-  9. Repairs and return, or payment and salvage on a total loss — applies.
-  10. Payments — applies for each charge on the file.
+- Fault-claim steps were confirmed by Justin on 21 October 2026. They are no longer a proposal. A fault claim uses: basic details; recovery if the car is undriveable; a courtesy car if one is needed, with no daily charge to an insurer; notify the client’s own insurer and record their claim number; send the Audatex estimate to that insurer, with no engineer; authorisation received via Audatex; repairs done; excess paid by the client; car returned to the client; then invoice the client’s own insurer for the authorised amount minus the excess. The third-party insurer letter is not sent. The car is not recorded as returned before the excess is paid unless the staff row has `releaseWithoutExcess`. That permission is on Justin’s staff row only. It is not granted by the administrator role or by a username. A total loss, including a fault file later marked a total loss, keeps the total-loss steps.
 
 ## Not yet claimed
 

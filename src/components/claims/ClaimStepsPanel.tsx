@@ -1,22 +1,19 @@
 import Link from "next/link";
-import { RuleHint } from "@/components/dashboard/RuleHint";
 import { SubmitKeyInput } from "@/components/SubmitKeyInput";
-import type { ClaimStepView } from "@/lib/domain/claim-steps";
-import { FAULT_STEP_PROPOSAL } from "@/lib/domain/claim-steps";
+import type { ClaimStepForm, ClaimStepView } from "@/lib/domain/claim-steps";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
 function stateClass(state: ClaimStepView["state"]): string {
   if (state === "done") return "text-ok";
   if (state === "waiting" || state === "in_progress") return "text-navy";
-  if (state === "not_needed") return "text-slate";
+  if (state === "not_needed" || state === "not_decided") return "text-slate";
   return "text-ink";
 }
 
 export function ClaimStepsPanel({
   claimId,
   steps,
-  fault,
   error,
   saved,
 }: {
@@ -28,15 +25,12 @@ export function ClaimStepsPanel({
 }) {
   return (
     <section aria-label="Claim steps" className="space-y-3" data-claim-steps>
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="font-serif text-xl text-navy-deep">Steps</h2>
-        {fault ? <RuleHint text={FAULT_STEP_PROPOSAL.join(" ")} /> : null}
-      </div>
+      <h2 className="font-serif text-xl text-navy-deep">Steps</h2>
       {error ? <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p> : null}
       {saved ? <p className="rounded-md border border-ok/40 bg-[#eef6ef] px-4 py-3 text-sm">Saved on the file history.</p> : null}
       <ol className="space-y-3">
         {steps.map((step, index) => (
-          <li key={step.key} id={`step-${step.key}`} className="rounded-xl border border-line bg-card px-4 py-3">
+          <li key={step.key} id={`step-${step.key}`} className="rounded-xl border border-line bg-card px-4 py-3" data-step={step.key} data-state={step.state}>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
               <h3 className="text-sm font-semibold text-navy-deep">
                 {index + 1}. {step.title}
@@ -87,8 +81,9 @@ export function ClaimStepsPanel({
                 details
               </Link>
             </div>
-            {step.buttonForm === "report" ? <ReportForm claimId={claimId} /> : null}
-            {step.buttonForm === "agree" ? <AgreeForm claimId={claimId} /> : null}
+            {step.forms.map((form) => (
+              <StepForm key={form} claimId={claimId} form={form} />
+            ))}
             {step.state !== "done" && step.state !== "not_needed" ? (
               <details className="mt-3">
                 <summary className="cursor-pointer text-sm text-slate">Not needed</summary>
@@ -102,9 +97,22 @@ export function ClaimStepsPanel({
   );
 }
 
+function StepForm({ claimId, form }: { claimId: string; form: ClaimStepForm }) {
+  if (form === "report") return <ReportForm claimId={claimId} />;
+  if (form === "route") return <RouteForm claimId={claimId} />;
+  if (form === "audatex_sent") return <AudatexForm claimId={claimId} intent="audatex_sent" />;
+  if (form === "audatex_received") return <ReceivedForm claimId={claimId} />;
+  if (form === "audatex_auth") return <AudatexForm claimId={claimId} intent="audatex_auth" />;
+  if (form === "own_insurer") return <OwnInsurerForm claimId={claimId} />;
+  if (form === "excess") return <ExcessForm claimId={claimId} />;
+  if (form === "return") return <ReturnForm claimId={claimId} />;
+  if (form === "invoice") return <InvoiceForm claimId={claimId} intent="invoice" label="Record invoice sent" />;
+  return <InvoiceForm claimId={claimId} intent="invoice_paid" label="Record invoice paid" />;
+}
+
 function ReportForm({ claimId }: { claimId: string }) {
   return (
-    <form action={`/claims/${claimId}/steps/report`} method="post" encType="multipart/form-data" className="mt-3 grid gap-2 sm:grid-cols-[auto_1fr_auto] sm:items-end">
+    <form action={`/claims/${claimId}/steps/report`} method="post" encType="multipart/form-data" className="mt-3 grid gap-2">
       <input type="hidden" name="returnTo" value={`/claims/${claimId}`} />
       <SubmitKeyInput />
       <label className="text-sm">
@@ -115,31 +123,213 @@ function ReportForm({ claimId }: { claimId: string }) {
         Upload the report
         <input name="document" type="file" className={field} />
       </label>
-      <button type="submit" className="rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white">
+      <button type="submit" className="w-fit rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white">
         Record report received
       </button>
     </form>
   );
 }
 
-function AgreeForm({ claimId }: { claimId: string }) {
+function RouteForm({ claimId }: { claimId: string }) {
   return (
-    <form action={`/claims/${claimId}/steps/agree`} method="post" className="mt-3 grid gap-2">
+    <form action={`/claims/${claimId}/steps/save`} method="post" className="mt-3 grid gap-2">
       <input type="hidden" name="returnTo" value={`/claims/${claimId}`} />
+      <input type="hidden" name="intent" value="route" />
       <SubmitKeyInput />
-      <div className="grid gap-2 sm:grid-cols-2">
-        <label className="text-sm">
-          Date agreed
-          <input name="occurredOn" type="date" required className={field} />
-        </label>
-        <label className="text-sm">
-          Note
-          <input name="note" required className={field} />
-        </label>
-      </div>
-      <RuleHint text="This records the date, who agreed it, and the note. It does not change the agreed figure." />
+      <label className="text-sm">
+        Engineer, Audatex estimate, or both
+        <select name="route" required className={field} defaultValue="">
+          <option value="" disabled>
+            Choose
+          </option>
+          <option value="engineer">Engineer</option>
+          <option value="audatex">Audatex estimate</option>
+          <option value="both">Both</option>
+        </select>
+      </label>
+      <label className="text-sm">
+        Date
+        <input name="occurredOn" type="date" required className={field} />
+      </label>
+      <p className="text-sm text-slate">There is no link to Audatex. The figures are typed on this file.</p>
       <button type="submit" className="w-fit rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white">
-        Record agreement
+        Save choice
+      </button>
+    </form>
+  );
+}
+
+function AudatexForm({ claimId, intent }: { claimId: string; intent: "audatex_sent" | "audatex_auth" }) {
+  const authorising = intent === "audatex_auth";
+  return (
+    <form action={`/claims/${claimId}/steps/save`} method="post" encType="multipart/form-data" className="mt-3 grid gap-2">
+      <input type="hidden" name="returnTo" value={`/claims/${claimId}`} />
+      <input type="hidden" name="intent" value={intent} />
+      <SubmitKeyInput />
+      <label className="text-sm">
+        {authorising ? "Date authorised" : "Date sent"}
+        <input name="occurredOn" type="date" required className={field} />
+      </label>
+      <label className="text-sm">
+        Audatex reference
+        <input name="reference" required className={field} />
+      </label>
+      <label className="text-sm">
+        Estimate total (£)
+        <input name="estimate" inputMode="decimal" required className={field} />
+      </label>
+      <label className="text-sm">
+        Labour (£), if given
+        <input name="labour" inputMode="decimal" className={field} />
+      </label>
+      <label className="text-sm">
+        Parts (£), if given
+        <input name="parts" inputMode="decimal" className={field} />
+      </label>
+      <label className="text-sm">
+        Paint (£), if given
+        <input name="paint" inputMode="decimal" className={field} />
+      </label>
+      {authorising ? (
+        <>
+          <label className="text-sm">
+            Authorised total (£)
+            <input name="authorised" inputMode="decimal" required className={field} />
+          </label>
+          <Reduction label="Hourly rate reduction" amount="hourly" note="hourlyNote" />
+          <Reduction label="Repair time reduction" amount="times" note="timesNote" />
+          <Reduction label="Parts reduction" amount="partsReduction" note="partsNote" />
+          <Reduction label="Other reduction" amount="other" note="otherNote" />
+          <label className="text-sm">
+            Authorisation document
+            <input name="document" type="file" className={field} />
+          </label>
+          <p className="text-sm text-slate">Saving these figures does not change claimed, agreed or received. Use the existing agreed-figure screen if this amount should be the agreed figure.</p>
+        </>
+      ) : null}
+      <button type="submit" className="w-fit rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white">
+        {authorising ? "Record authorisation" : "Record Audatex estimate sent"}
+      </button>
+    </form>
+  );
+}
+
+function Reduction({ label, amount, note }: { label: string; amount: string; note: string }) {
+  return (
+    <div className="grid gap-2 sm:grid-cols-2">
+      <label className="text-sm">
+        {label} (£)
+        <input name={amount} inputMode="decimal" className={field} />
+      </label>
+      <label className="text-sm">
+        Note
+        <input name={note} className={field} />
+      </label>
+    </div>
+  );
+}
+
+function ReceivedForm({ claimId }: { claimId: string }) {
+  return (
+    <form action={`/claims/${claimId}/steps/save`} method="post" className="mt-3 grid gap-2">
+      <input type="hidden" name="returnTo" value={`/claims/${claimId}`} />
+      <input type="hidden" name="intent" value="audatex_received" />
+      <SubmitKeyInput />
+      <label className="text-sm">
+        Date estimate received
+        <input name="occurredOn" type="date" required className={field} />
+      </label>
+      <button type="submit" className="w-fit rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white">
+        Record estimate received
+      </button>
+    </form>
+  );
+}
+
+function OwnInsurerForm({ claimId }: { claimId: string }) {
+  return (
+    <form action={`/claims/${claimId}/steps/save`} method="post" className="mt-3 grid gap-2">
+      <input type="hidden" name="returnTo" value={`/claims/${claimId}`} />
+      <input type="hidden" name="intent" value="own_insurer" />
+      <SubmitKeyInput />
+      <label className="text-sm">
+        Date notified
+        <input name="occurredOn" type="date" required className={field} />
+      </label>
+      <label className="text-sm">
+        Their claim number
+        <input name="claimNumber" required className={field} />
+      </label>
+      <label className="text-sm">
+        Note
+        <input name="note" className={field} />
+      </label>
+      <button type="submit" className="w-fit rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white">
+        Record notification
+      </button>
+    </form>
+  );
+}
+
+function ExcessForm({ claimId }: { claimId: string }) {
+  return (
+    <form action={`/claims/${claimId}/steps/save`} method="post" className="mt-3 grid gap-2">
+      <input type="hidden" name="returnTo" value={`/claims/${claimId}`} />
+      <input type="hidden" name="intent" value="excess" />
+      <SubmitKeyInput />
+      <label className="text-sm">
+        Amount paid (£)
+        <input name="amount" inputMode="decimal" required className={field} />
+      </label>
+      <label className="text-sm">
+        Date paid
+        <input name="occurredOn" type="date" required className={field} />
+      </label>
+      <label className="text-sm">
+        How it was paid
+        <input name="method" required className={field} />
+      </label>
+      <button type="submit" className="w-fit rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white">
+        Record excess paid
+      </button>
+    </form>
+  );
+}
+
+function ReturnForm({ claimId }: { claimId: string }) {
+  return (
+    <form action={`/claims/${claimId}/steps/save`} method="post" className="mt-3 grid gap-2">
+      <input type="hidden" name="returnTo" value={`/claims/${claimId}`} />
+      <input type="hidden" name="intent" value="return" />
+      <SubmitKeyInput />
+      <label className="text-sm">
+        Date returned
+        <input name="occurredOn" type="date" required className={field} />
+      </label>
+      <label className="text-sm">
+        Reason, only if the excess is not yet paid
+        <input name="reason" className={field} />
+      </label>
+      <p className="text-sm text-slate">Returning the car before the excess is paid needs the releaseWithoutExcess permission and a reason.</p>
+      <button type="submit" className="w-fit rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white">
+        Record car returned
+      </button>
+    </form>
+  );
+}
+
+function InvoiceForm({ claimId, intent, label }: { claimId: string; intent: string; label: string }) {
+  return (
+    <form action={`/claims/${claimId}/steps/save`} method="post" className="mt-3 grid gap-2">
+      <input type="hidden" name="returnTo" value={`/claims/${claimId}`} />
+      <input type="hidden" name="intent" value={intent} />
+      <SubmitKeyInput />
+      <label className="text-sm">
+        Date
+        <input name="occurredOn" type="date" required className={field} />
+      </label>
+      <button type="submit" className="w-fit rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white">
+        {label}
       </button>
     </form>
   );

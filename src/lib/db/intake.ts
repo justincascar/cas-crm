@@ -834,6 +834,16 @@ export async function createClaimFromIntake(input: IntakeInput) {
       source: "staff",
     });
   }
+  if (input.needsReplacement !== undefined) {
+    recordClaimEvent({
+      claimId: id,
+      eventType: "hire_decision",
+      occurredAt: now,
+      details: input.needsReplacement ? "Replacement vehicle: yes." : "Replacement vehicle: no.",
+      actorId: input.handlerId,
+      source: "staff",
+    });
+  }
   if (accidentAt) {
     recordClaimEvent({
       claimId: id,

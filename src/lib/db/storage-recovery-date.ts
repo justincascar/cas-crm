@@ -1,7 +1,9 @@
-import { formatUkDate, londonDateIso, nowUtcIso } from "../dates";
+import { formatUkDate, londonDateIso, nowUtcIso, utcFromLondonDateTime } from "../dates";
 import { get, newId, run } from "./connection";
 import { SHARED_RECOVERY_AT, SHARED_STORAGE_END, SHARED_STORAGE_START, claimColumns, guardSharedFields, recoveryAt } from "./shared-fields";
 import { recordClaimEvent } from "./chronology";
+import { assertFaultCarReturn } from "./fault-return";
+import { recordRecoveryCompletedOnce, recordStorageEndedOnce } from "./claim-step-record";
 
 export type StorageDateReview = {
   jobDate: string;
@@ -112,7 +114,15 @@ export function applyClientRecoveryActualDate(input: {
     writeStorageStart(input.claimId, jobDate, claim.storage_status);
     wroteStorage = true;
   }
-  if (!recoveryDay) writeRecoveredAt(input.claimId, jobDate, recovery?.id || null, claim.recovery_status);
+  if (!recoveryDay) {
+    writeRecoveredAt(input.claimId, jobDate, recovery?.id || null, claim.recovery_status);
+    recordRecoveryCompletedOnce({
+      claimId: input.claimId,
+      actorId: input.actorId,
+      occurredAt: input.actualOccurredAt,
+      details: `Recovery recorded on ${ukDay(jobDate)}.`,
+    });
+  }
   run(`UPDATE claims SET storage_date_review_on = NULL WHERE id = ?`, [input.claimId]);
   if (wroteStorage) {
     recordClaimEvent({
@@ -181,6 +191,12 @@ export function confirmStorageRecoveryDate(input: {
     });
     writeStorageStart(input.claimId, jobDate, claim.storage_status);
     writeRecoveredAt(input.claimId, jobDate, recovery?.id || null, claim.recovery_status);
+    recordRecoveryCompletedOnce({
+      claimId: input.claimId,
+      actorId: input.actorId,
+      occurredAt: nowUtcIso(),
+      details: `Recovery recorded on ${ukDay(jobDate)}. Staff confirmed this day.`,
+    });
     run(`UPDATE claims SET storage_date_review_on = NULL WHERE id = ?`, [input.claimId]);
     recordClaimEvent({
       claimId: input.claimId,
@@ -256,20 +272,26 @@ export function applyClientReturnActualDate(input: {
   claimId: string;
   actualOccurredAt: string;
   actorId: string;
+  releaseReason?: string;
 }): ApplyStorageEndResult {
   const jobDate = calendarDay(input.actualOccurredAt);
   if (!jobDate) throw new Error("Enter the date and time this happened.");
+  assertFaultCarReturn({ claimId: input.claimId, actorId: input.actorId, releaseReason: input.releaseReason });
   const claim = readStorageEnd(input.claimId);
   if (!claim) throw new Error("File not found.");
   const storageEndDay = calendarDay(claim.storage_billing_end_on);
+  const reason = String(input.releaseReason || "").trim();
+  const release = reason
+    ? ` Returned before the excess was paid. Reason: ${reason}. Permission: releaseWithoutExcess.`
+    : "";
   recordClaimEvent({
     claimId: input.claimId,
     eventType: "vehicle_returned",
     occurredAt: input.actualOccurredAt,
     actorId: input.actorId,
     details: storageEndDay
-      ? `The client's vehicle was returned on ${ukDay(jobDate)}. This is the physical return. Chargeable storage end stays ${ukDay(storageEndDay)}.`
-      : `The client's vehicle was returned on ${ukDay(jobDate)}. This is the physical return. No chargeable storage end was written.`,
+      ? `The client's vehicle was returned on ${ukDay(jobDate)}. This is the physical return. Chargeable storage end stays ${ukDay(storageEndDay)}.${release}`
+      : `The client's vehicle was returned on ${ukDay(jobDate)}. This is the physical return. No chargeable storage end was written.${release}`,
     source: "staff",
   });
   return { status: "already_matches", date: jobDate };
@@ -318,6 +340,12 @@ export function confirmStorageEndDate(input: {
     });
     writeStorageEnd(input.claimId, jobDate);
     run(`UPDATE claims SET storage_end_review_on = NULL WHERE id = ?`, [input.claimId]);
+    recordStorageEndedOnce({
+      claimId: input.claimId,
+      actorId: input.actorId,
+      occurredAt: utcFromLondonDateTime(`${jobDate}T09:00`),
+      details: `Storage ended on ${ukDay(jobDate)}. Staff confirmed this day.`,
+    });
     recordClaimEvent({
       claimId: input.claimId,
       eventType: "storage_end_date_confirmed",

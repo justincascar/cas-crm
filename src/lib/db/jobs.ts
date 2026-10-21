@@ -4,6 +4,7 @@ import { storeFileCopy } from "../storage/files";
 import { all, get, newId, run } from "./connection";
 import { insertStoredDocument } from "./documents-store";
 import { applyHireCollectionActualDate } from "./hire-collection-date";
+import { assertFaultCarReturn } from "./fault-return";
 import { applyClientRecoveryActualDate, applyClientReturnActualDate } from "./storage-recovery-date";
 
 export const REPAIR_KINDS = [
@@ -222,6 +223,9 @@ export function assignDayJob(input: {
     actualDriverId = driver.id;
     actualOccurredAt = requireLondonDateTime(input.actualOccurredAt);
     completedAt = nowUtcIso();
+  }
+  if (kind === "client_return" && input.completed) {
+    assertFaultCarReturn({ claimId, actorId: actor.id });
   }
   const existing = get<{ id: string; completed_at: string | null }>(
     `SELECT id, completed_at FROM day_assignments

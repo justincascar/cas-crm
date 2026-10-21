@@ -1,5 +1,6 @@
 import {
   deriveClaimSteps,
+  type AudatexFacts,
   type ClaimPaymentLineInput,
   type ClaimStepChase,
   type ClaimStepView,
@@ -51,10 +52,43 @@ export function loadClaimSteps(claimId: string): ClaimStepView[] | null {
       : "";
   const signedRate = [...hireView.agreements].reverse().find((row) => row.signed && row.ratePence && row.ratePence > 0)?.ratePence || null;
   const dailyRatePence = hireView.continuingRatePence && hireView.continuingRatePence > 0 ? hireView.continuingRatePence : signedRate;
-  const salvage = get<{ disposal: string | null; returned_on: string | null }>(
-    `SELECT disposal, returned_on FROM total_loss_reports WHERE claim_id = ?`,
+  const audatexRow = get<{
+    reference: string | null;
+    estimate_total_pence: number | null;
+    labour_pence: number | null;
+    parts_pence: number | null;
+    paint_pence: number | null;
+    authorised_total_pence: number | null;
+    reduction_hourly_pence: number | null;
+    reduction_hourly_note: string | null;
+    reduction_times_pence: number | null;
+    reduction_times_note: string | null;
+    reduction_parts_pence: number | null;
+    reduction_parts_note: string | null;
+    reduction_other_pence: number | null;
+    reduction_other_note: string | null;
+  }>(
+    `SELECT reference, estimate_total_pence, labour_pence, parts_pence, paint_pence, authorised_total_pence,
+            reduction_hourly_pence, reduction_hourly_note, reduction_times_pence, reduction_times_note,
+            reduction_parts_pence, reduction_parts_note, reduction_other_pence, reduction_other_note
+     FROM audatex_estimates WHERE claim_id = ? ORDER BY recorded_at DESC LIMIT 1`,
     [id],
   );
+  const audatex: AudatexFacts | null = audatexRow
+    ? {
+        reference: audatexRow.reference,
+        estimatePence: audatexRow.estimate_total_pence,
+        labourPence: audatexRow.labour_pence,
+        partsPence: audatexRow.parts_pence,
+        paintPence: audatexRow.paint_pence,
+        authorisedPence: audatexRow.authorised_total_pence,
+        hourly: { pence: audatexRow.reduction_hourly_pence, note: audatexRow.reduction_hourly_note },
+        times: { pence: audatexRow.reduction_times_pence, note: audatexRow.reduction_times_note },
+        partsReduction: { pence: audatexRow.reduction_parts_pence, note: audatexRow.reduction_parts_note },
+        other: { pence: audatexRow.reduction_other_pence, note: audatexRow.reduction_other_note },
+      }
+    : null;
+  const storageStatus = String(claim.storage_status || "");
   const recoveryCharge = (byHead.get("recovery")?.claimedPence || 0) > 0 || data.recoveryJobs.some((job) => Number(job.charge_pence) > 0);
 
   function pay(key: ClaimPaymentLineInput["key"], head: string, label: string, endConfirmed: boolean | null): ClaimPaymentLineInput {
@@ -77,7 +111,6 @@ export function loadClaimSteps(claimId: string): ClaimStepView[] | null {
   }
 
   const hireStatus = String(claim.hire_status || "");
-  const storageStatus = String(claim.storage_status || "");
   return deriveClaimSteps({
     claimId: id,
     claimType: String(claim.claim_type || ""),
@@ -97,9 +130,15 @@ export function loadClaimSteps(claimId: string): ClaimStepView[] | null {
     agreementDone: data.agreements.length > 0,
     dailyRatePence,
     recoveryFlagComplete: ["complete", "completed"].includes(String(claim.recovery_status || "")),
+    reportFlagged: String(claim.engineering_status || "") === "report_received",
+    storageOnFile:
+      (storageStatus !== "" && storageStatus !== "none") ||
+      Boolean(String(claim.storage_started_on || "").trim()) ||
+      Boolean(String(claim.storage_billing_end_on || "").trim()),
     storageEndedOn: storageStatus === "ended" && claim.storage_billing_end_on ? String(claim.storage_billing_end_on) : null,
     hireEndedOn: hireStatus === "ended" && hireView.confirmedEndDay ? hireView.confirmedEndDay : null,
-    salvageRecorded: Boolean(salvage?.disposal || salvage?.returned_on),
+    salvageRecorded: false,
+    audatex,
     qualifyingOffHireOn:
       Number(claim.payment_qualifies_off_hire) === 1 && claim.off_hire_scheduled_on ? String(claim.off_hire_scheduled_on) : null,
     events,

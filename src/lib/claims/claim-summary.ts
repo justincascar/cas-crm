@@ -1,5 +1,5 @@
 import { HEAD_LABELS, HEADS_OF_LOSS, type HeadOfLoss } from "@/lib/constants";
-import { currentClaimStep, resolveDisplayedNextAction } from "@/lib/domain/claim-steps";
+import { currentClaimStep, resolveDisplayedNextAction, stepStageLabel } from "@/lib/domain/claim-steps";
 import { liabilityStatusLabel, roadworthinessLabel } from "@/lib/domain/claim-status";
 import { loadClaimSteps } from "@/lib/claims/load-claim-steps";
 import { dueTextClass, dueWording } from "@/lib/domain/due-wording";
@@ -9,6 +9,7 @@ import { outstandingForClaim } from "@/lib/db/outstanding";
 import { claimOutstandingSummary, getClaim } from "@/lib/db/queries";
 import { listRepairGapClaims } from "@/lib/db/repair-progress";
 import { formatGbp } from "@/lib/money";
+import { formatUkDate } from "@/lib/dates";
 import { formatVehicleRegistration } from "@/lib/text";
 import { confirmedOutstandingPence, FIGURE_UNDER_REVIEW, outstandingColumnText } from "@/lib/claims/summary-money";
 import { recoveryDisplayLines, recoveryReviewFlags } from "@/lib/db/recovery-display";
@@ -55,6 +56,9 @@ export type ClaimSummaryModel = {
   charges: ClaimSummaryCharge[];
   outstandingTotal: string;
   nextAction: string;
+  staffNote: string | null;
+  staffNoteBy: string | null;
+  staffNoteOn: string | null;
   dueText: string;
   dueClass: string;
   flags: ClaimSummaryFlag[];
@@ -162,6 +166,9 @@ export function buildClaimSummaryModel(claimId: string): ClaimSummaryModel | nul
       label,
     })),
   ];
+  const noteEvent = displayed.note
+    ? [...data.events].reverse().find((event) => event.event_type === "next_action_noted" && String(event.details || "").trim() === displayed.note)
+    : null;
   const due = dueWording(displayed.dueAt);
   const registration = claim.registration ? formatVehicleRegistration(String(claim.registration)) : "Not recorded";
 
@@ -172,7 +179,7 @@ export function buildClaimSummaryModel(claimId: string): ClaimSummaryModel | nul
     handler: String(claim.handler_name || "Unassigned"),
     insurerLine: `${insurerName || "Insurer not recorded"}${insurerRef ? ` · ${insurerRef}` : ""}`,
     statusLine: `${liabilityStatusLabel(String(claim.claim_type))} · ${roadworthinessLabel(String(claim.roadworthiness))} · Insurer ${storedLabel(claim.insurer_liability_position ? String(claim.insurer_liability_position) : "", INSURER_POSITION)}`,
-    stageLine: current ? `${current.title} · ${current.state === "done" ? "Done" : current.state === "in_progress" ? "In progress" : current.state === "waiting" ? "Waiting" : current.state === "not_needed" ? "Not needed" : "Not started"}` : "Not started",
+    stageLine: current ? `${current.title} · ${stepStageLabel(current)}` : "Done",
     runningText:
       running.dailyPence > 0
         ? `${formatGbp(running.dailyPence)}/day running`
@@ -182,7 +189,10 @@ export function buildClaimSummaryModel(claimId: string): ClaimSummaryModel | nul
     runningDaily: runningDailyLabel(running),
     charges,
     outstandingTotal: formatGbp(confirmedOutstandingPence(money.confirmed.outstandingPence)),
-    nextAction: displayed.action || "None set",
+    nextAction: displayed.action || "No open step",
+    staffNote: displayed.note,
+    staffNoteBy: noteEvent?.actor_name ? String(noteEvent.actor_name) : null,
+    staffNoteOn: noteEvent?.occurred_at ? formatUkDate(String(noteEvent.occurred_at)) : null,
     dueText: displayed.dueAt ? due.text : "No due date",
     dueClass: displayed.dueAt ? dueTextClass(due.tone) : "",
     flags,

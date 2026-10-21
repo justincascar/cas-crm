@@ -167,9 +167,6 @@ export async function actionUpdateClaim(formData: FormData) {
   }
   revalidatePath(`/claims/${id}`);
   revalidatePath("/");
-  if (!String(formData.get("next_action") || "").trim()) {
-    redirect(`/claims/${id}?nextWarning=1`);
-  }
   return { ok: true };
 }
 

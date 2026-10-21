@@ -4,6 +4,7 @@ import {
   canExtendedWait,
   canManageBankDetails,
   canOverridePreHireChecks,
+  canReleaseWithoutExcess,
 } from "../auth/roles";
 import { all, getDb } from "./connection";
 import { migrate } from "./migrate";
@@ -43,4 +44,8 @@ export function accountCanManageBankDetails(staffId: string, role: string | null
 
 export function accountCanExtendedWait(staffId: string, role: string | null | undefined): boolean {
   return canExtendedWait({ role, permissions: listStaffPermissions(staffId) });
+}
+
+export function accountCanReleaseWithoutExcess(staffId: string, role: string | null | undefined): boolean {
+  return canReleaseWithoutExcess({ role, permissions: listStaffPermissions(staffId) });
 }

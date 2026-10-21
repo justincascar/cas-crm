@@ -1,5 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
-import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_SETTLEMENT, EXTENDED_WAIT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS } from "../auth/roles";
+import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_SETTLEMENT, EXTENDED_WAIT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS, RELEASE_WITHOUT_EXCESS } from "../auth/roles";
 
 const TABLES: Record<string, Array<[string, string]>> = {
   correspondence: [
@@ -724,5 +724,45 @@ export function migrate(db: DatabaseSync) {
       discarded_at TEXT,
       claim_id TEXT
     );
+  `);
+  db.prepare(
+    `INSERT OR IGNORE INTO staff_permissions(staff_id, permission)
+     SELECT ?, ?
+     WHERE EXISTS (SELECT 1 FROM staff WHERE id = ?)`,
+  ).run("staff-justin", RELEASE_WITHOUT_EXCESS, "staff-justin");
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS audatex_estimates (
+      id TEXT PRIMARY KEY,
+      claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+      sent_on TEXT,
+      reference TEXT,
+      estimate_total_pence INTEGER,
+      labour_pence INTEGER,
+      parts_pence INTEGER,
+      paint_pence INTEGER,
+      authorised_total_pence INTEGER,
+      reduction_hourly_pence INTEGER,
+      reduction_hourly_note TEXT,
+      reduction_times_pence INTEGER,
+      reduction_times_note TEXT,
+      reduction_parts_pence INTEGER,
+      reduction_parts_note TEXT,
+      reduction_other_pence INTEGER,
+      reduction_other_note TEXT,
+      document_id TEXT,
+      recorded_at TEXT NOT NULL,
+      recorded_by TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_audatex_estimates ON audatex_estimates(claim_id, recorded_at);
+    CREATE TABLE IF NOT EXISTS client_excess_payments (
+      id TEXT PRIMARY KEY,
+      claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+      amount_pence INTEGER NOT NULL,
+      paid_on TEXT NOT NULL,
+      method TEXT NOT NULL,
+      recorded_at TEXT NOT NULL,
+      recorded_by TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_client_excess_payments ON client_excess_payments(claim_id, recorded_at);
   `);
 }

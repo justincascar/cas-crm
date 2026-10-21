@@ -1,4 +1,5 @@
-import { accidentDateError, nowUtcIso, londonDateIso, occurredFromForm } from "../dates";
+import { accidentDateError, nowUtcIso, londonDateIso, occurredFromForm, utcFromLondonDateTime } from "../dates";
+import { recordRecoveryCompletedOnce, recordStorageEndedOnce } from "./claim-step-record";
 import { FieldValidationError } from "../form-validation";
 import { CLAIM_SCREENS, getClaimScreen } from "../claim-screens";
 import { dobConfirmName, dobKindForField, dobSaveError, isDobFieldName } from "../age";
@@ -547,6 +548,14 @@ function applySideEffects(claimId: string, screenKey: string, values: ScreenValu
         reason,
       });
     }
+    if (hasEnd && values.endDate && values.endDate !== (beforeEnd?.storage_billing_end_on || "")) {
+      recordStorageEndedOnce({
+        claimId,
+        actorId,
+        occurredAt: utcFromLondonDateTime(`${values.endDate}T09:00`),
+        details: `Storage ended on ${values.endDate.split("-").reverse().join("/")}. Recorded when the storage screen was saved.`,
+      });
+    }
     getStorageDateReview(claimId);
     getStorageEndDateReview(claimId);
   }
@@ -572,6 +581,17 @@ function applySideEffects(claimId: string, screenKey: string, values: ScreenValu
         ],
       );
       getStorageDateReview(claimId);
+      if (values.recoveryDate) {
+        recordRecoveryCompletedOnce({
+          claimId,
+          actorId,
+          occurredAt: utcFromLondonDateTime(`${values.recoveryDate}T09:00`),
+          details: `Recovery recorded on ${values.recoveryDate.split("-").reverse().join("/")}. Recorded when the recovery screen was saved.`,
+        });
+        run(`UPDATE claims SET recovery_status = 'complete' WHERE id = ? AND (recovery_status IS NULL OR recovery_status = '' OR recovery_status = 'none' OR recovery_status = 'required')`, [
+          claimId,
+        ]);
+      }
     }
   }
 

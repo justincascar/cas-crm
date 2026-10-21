@@ -151,6 +151,17 @@ export const CLAIM_EVENT_TYPES = [
   { key: "work_wait_cleared", label: "Wait cleared" },
   { key: "step_not_needed", label: "Step marked not needed" },
   { key: "repair_estimate_agreed_with_client", label: "Repair estimate agreed with the client" },
+  { key: "hire_decision", label: "Replacement vehicle decision" },
+  { key: "inspection_route_chosen", label: "Engineer or Audatex chosen" },
+  { key: "audatex_estimate_sent", label: "Audatex estimate sent" },
+  { key: "audatex_estimate_received", label: "Audatex estimate received" },
+  { key: "audatex_authorisation_recorded", label: "Audatex authorisation recorded" },
+  { key: "own_claim_number_recorded", label: "Client's own insurer claim number recorded" },
+  { key: "excess_paid", label: "Client excess paid" },
+  { key: "fault_invoice_sent", label: "Invoice sent to the client's own insurer" },
+  { key: "fault_invoice_paid", label: "Client's own insurer invoice paid" },
+  { key: "next_action_noted", label: "Next-action note" },
+  { key: "salvage_collected", label: "Salvage collected" },
   { key: "other", label: "Other" },
 ] as const;
 

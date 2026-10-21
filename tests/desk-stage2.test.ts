@@ -224,11 +224,11 @@ describe("stage 2 desk", () => {
     }
   });
 
-  it("puts a claim with no next action in tier 1", () => {
+  it("uses the open step for today's work and does not let a typed note replace it", () => {
     const db = seeded();
     try {
       withDatabase(db, () => {
-        db.prepare(`UPDATE claims SET next_action = NULL, next_action_due = NULL WHERE file_reference = 'TEST-0004'`).run();
+        db.prepare(`UPDATE claims SET next_action = 'Call the client about the courtesy car', next_action_due = NULL WHERE file_reference = 'TEST-0004'`).run();
         const claim = db.prepare(`SELECT id FROM claims WHERE file_reference = 'TEST-0004'`).get() as { id: string };
         listClaims();
         const all = getDashboard();
@@ -236,8 +236,10 @@ describe("stage 2 desk", () => {
         assert.ok(row);
         const blank = [row.lead, ...row.rest].find((item) => item.id === `next-${claim.id}`);
         assert.ok(blank);
-        assert.equal(blank.tier, 1);
-        assert.equal(blank.item, "No next action set");
+        assert.equal(blank.tier, 3);
+        assert.equal(blank.item, "Open messages");
+        assert.equal(blank.wording, "No due date");
+        assert.equal(blank.item.includes("Call the client"), false);
       });
     } finally {
       db.close();

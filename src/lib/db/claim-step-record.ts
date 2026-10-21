@@ -1,7 +1,11 @@
 import { isOfficeRole } from "../auth/roles";
-import { isClaimStepKey, type ClaimStepKey } from "../domain/claim-steps";
+import { faultInvoicePence, isClaimStepKey, type ClaimStepKey } from "../domain/claim-steps";
 import { utcFromLondonDateTime } from "../dates";
+import { nowUtcIso } from "../dates";
+import { poundsToPence } from "./intake";
+import { get, newId, run } from "./connection";
 import { recordClaimEvent } from "./chronology";
+import { assertFaultCarReturn } from "./fault-return";
 
 function requireDay(value: string, label: string): string {
   const day = value.trim();
@@ -68,3 +72,374 @@ export function recordRepairEstimateAgreed(input: {
 }
 
 export type { ClaimStepKey };
+
+function optionalPence(raw: string): number | null {
+  if (!raw.trim()) return null;
+  const pence = poundsToPence(raw);
+  if (pence < 0) throw new Error("Enter an amount in pounds.");
+  return pence;
+}
+
+function requiredPence(raw: string, label: string): number {
+  if (!raw.trim()) throw new Error(`Enter the ${label}.`);
+  const pence = poundsToPence(raw);
+  if (pence < 0) throw new Error(`Enter the ${label}.`);
+  return pence;
+}
+
+function reduction(penceRaw: string, noteRaw: string, label: string): { pence: number | null; note: string | null } {
+  const note = noteRaw.trim();
+  const pence = optionalPence(penceRaw);
+  if (pence != null && !note) throw new Error(`Enter a note for the ${label}.`);
+  return { pence, note: note || null };
+}
+
+export function recordRecoveryCompletedOnce(input: { claimId: string; actorId: string; occurredAt: string; details: string }) {
+  const existing = get<{ id: string }>(
+    `SELECT id FROM claim_events WHERE claim_id = ? AND event_type = 'recovery_completed' LIMIT 1`,
+    [input.claimId],
+  );
+  if (existing) return null;
+  return recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "recovery_completed",
+    occurredAt: input.occurredAt,
+    actorId: input.actorId,
+    details: input.details,
+    source: "staff",
+  });
+}
+
+export function recordStorageEndedOnce(input: { claimId: string; actorId: string; occurredAt: string; details: string }) {
+  const existing = get<{ id: string }>(
+    `SELECT id FROM claim_events WHERE claim_id = ? AND event_type = 'storage_ended' LIMIT 1`,
+    [input.claimId],
+  );
+  if (existing) return null;
+  return recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "storage_ended",
+    occurredAt: input.occurredAt,
+    actorId: input.actorId,
+    details: input.details,
+    source: "staff",
+  });
+}
+
+export function recordHireDecision(input: { claimId: string; actorId: string; needsReplacement: boolean; occurredAt: string }) {
+  return recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "hire_decision",
+    occurredAt: input.occurredAt,
+    actorId: input.actorId,
+    details: input.needsReplacement ? "Replacement vehicle: yes." : "Replacement vehicle: no.",
+    source: "staff",
+  });
+}
+
+export function recordInspectionRoute(input: {
+  claimId: string;
+  actorId: string;
+  role: string;
+  route: string;
+  occurredOn: string;
+}) {
+  assertOffice(input.role);
+  const route = input.route.trim();
+  if (route !== "engineer" && route !== "audatex" && route !== "both") {
+    throw new Error("Choose engineer, an Audatex estimate, or both.");
+  }
+  const occurredAt = requireDay(input.occurredOn, "the date");
+  const words = route === "both" ? "engineer and an Audatex estimate" : route === "audatex" ? "an Audatex estimate" : "an engineer";
+  return recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "inspection_route_chosen",
+    occurredAt,
+    actorId: input.actorId,
+    details: `Route: ${route}. Staff chose ${words}. There is no link to Audatex.`,
+    source: "staff",
+  });
+}
+
+type AudatexMoney = {
+  reference: string;
+  estimatePence: number;
+  labourPence: number | null;
+  partsPence: number | null;
+  paintPence: number | null;
+  authorisedPence: number | null;
+  hourlyPence: number | null;
+  hourlyNote: string | null;
+  timesPence: number | null;
+  timesNote: string | null;
+  partsReductionPence: number | null;
+  partsReductionNote: string | null;
+  otherPence: number | null;
+  otherNote: string | null;
+  documentId: string | null;
+};
+
+function insertAudatex(claimId: string, actorId: string, sentOn: string | null, money: AudatexMoney) {
+  run(
+    `INSERT INTO audatex_estimates(
+      id, claim_id, sent_on, reference, estimate_total_pence, labour_pence, parts_pence, paint_pence,
+      authorised_total_pence, reduction_hourly_pence, reduction_hourly_note, reduction_times_pence, reduction_times_note,
+      reduction_parts_pence, reduction_parts_note, reduction_other_pence, reduction_other_note, document_id, recorded_at, recorded_by
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      newId("audatex"),
+      claimId,
+      sentOn,
+      money.reference,
+      money.estimatePence,
+      money.labourPence,
+      money.partsPence,
+      money.paintPence,
+      money.authorisedPence,
+      money.hourlyPence,
+      money.hourlyNote,
+      money.timesPence,
+      money.timesNote,
+      money.partsReductionPence,
+      money.partsReductionNote,
+      money.otherPence,
+      money.otherNote,
+      money.documentId,
+      nowUtcIso(),
+      actorId,
+    ],
+  );
+}
+
+function moneyFromForm(form: {
+  reference: string;
+  estimate: string;
+  labour: string;
+  parts: string;
+  paint: string;
+  authorised: string;
+  hourly: string;
+  hourlyNote: string;
+  times: string;
+  timesNote: string;
+  partsReduction: string;
+  partsNote: string;
+  other: string;
+  otherNote: string;
+  documentId: string | null;
+  requireAuthorised: boolean;
+}): AudatexMoney {
+  const reference = form.reference.trim();
+  if (!reference) throw new Error("Enter the Audatex reference.");
+  const hourly = reduction(form.hourly, form.hourlyNote, "hourly rate reduction");
+  const times = reduction(form.times, form.timesNote, "repair time reduction");
+  const partsReduction = reduction(form.partsReduction, form.partsNote, "parts reduction");
+  const other = reduction(form.other, form.otherNote, "other reduction");
+  return {
+    reference,
+    estimatePence: requiredPence(form.estimate, "estimate total"),
+    labourPence: optionalPence(form.labour),
+    partsPence: optionalPence(form.parts),
+    paintPence: optionalPence(form.paint),
+    authorisedPence: form.requireAuthorised ? requiredPence(form.authorised, "authorised total") : optionalPence(form.authorised),
+    hourlyPence: hourly.pence,
+    hourlyNote: hourly.note,
+    timesPence: times.pence,
+    timesNote: times.note,
+    partsReductionPence: partsReduction.pence,
+    partsReductionNote: partsReduction.note,
+    otherPence: other.pence,
+    otherNote: other.note,
+    documentId: form.documentId,
+  };
+}
+
+/** Records an Audatex estimate by hand. It does not change claimed, agreed or received. */
+export function recordAudatexEstimate(input: {
+  claimId: string;
+  actorId: string;
+  role: string;
+  kind: "sent" | "received" | "authorised";
+  occurredOn: string;
+  reference: string;
+  estimate: string;
+  labour: string;
+  parts: string;
+  paint: string;
+  authorised: string;
+  hourly: string;
+  hourlyNote: string;
+  times: string;
+  timesNote: string;
+  partsReduction: string;
+  partsNote: string;
+  other: string;
+  otherNote: string;
+  documentId?: string | null;
+}) {
+  assertOffice(input.role);
+  const occurredAt = requireDay(input.occurredOn, "the date");
+  if (input.kind === "received") {
+    return recordClaimEvent({
+      claimId: input.claimId,
+      eventType: "audatex_estimate_received",
+      occurredAt,
+      actorId: input.actorId,
+      details: "Audatex estimate received. Recorded by hand. There is no link to Audatex.",
+      source: "staff",
+    });
+  }
+  const money = moneyFromForm({ ...input, documentId: input.documentId || null, requireAuthorised: input.kind === "authorised" });
+  insertAudatex(input.claimId, input.actorId, input.kind === "sent" ? occurredAt : null, money);
+  if (input.kind === "sent") {
+    return recordClaimEvent({
+      claimId: input.claimId,
+      eventType: "audatex_estimate_sent",
+      occurredAt,
+      actorId: input.actorId,
+      details: `Audatex estimate sent. Reference: ${money.reference}. Recorded by hand. There is no link to Audatex. Claimed, agreed and received were not changed.`,
+      source: "staff",
+    });
+  }
+  return recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "audatex_authorisation_recorded",
+    occurredAt,
+    actorId: input.actorId,
+    details: `Audatex authorisation recorded. Reference: ${money.reference}. Authorised pence: ${money.authorisedPence}. Estimate pence: ${money.estimatePence}. Recorded by hand. Claimed, agreed and received were not changed.`,
+    source: "staff",
+  });
+}
+
+export function recordOwnInsurerNotified(input: {
+  claimId: string;
+  actorId: string;
+  role: string;
+  occurredOn: string;
+  claimNumber: string;
+  note: string;
+}) {
+  assertOffice(input.role);
+  const claimNumber = input.claimNumber.trim();
+  if (!claimNumber) throw new Error("Enter the insurer's claim number.");
+  const occurredAt = requireDay(input.occurredOn, "the date");
+  const note = input.note.trim();
+  run(`UPDATE claims SET own_claim_ref = ? WHERE id = ?`, [claimNumber, input.claimId]);
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "initial_letter_own_insurer",
+    occurredAt,
+    actorId: input.actorId,
+    details: `Client's own insurer notified.${note ? ` ${note}` : ""} Recorded on the file.`,
+    source: "staff",
+  });
+  return recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "own_claim_number_recorded",
+    occurredAt,
+    actorId: input.actorId,
+    details: `Claim number: ${claimNumber}`,
+    source: "staff",
+  });
+}
+
+export function recordClientExcessPaid(input: {
+  claimId: string;
+  actorId: string;
+  role: string;
+  occurredOn: string;
+  amount: string;
+  method: string;
+}) {
+  assertOffice(input.role);
+  const method = input.method.trim();
+  if (!method) throw new Error("Enter how the excess was paid.");
+  const amountPence = requiredPence(input.amount, "excess amount");
+  const occurredAt = requireDay(input.occurredOn, "the date the excess was paid");
+  const id = newId("excess");
+  run(
+    `INSERT INTO client_excess_payments(id, claim_id, amount_pence, paid_on, method, recorded_at, recorded_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [id, input.claimId, amountPence, occurredAt, method, nowUtcIso(), input.actorId],
+  );
+  return recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "excess_paid",
+    occurredAt,
+    actorId: input.actorId,
+    details: `Excess paid. Amount pence: ${amountPence}. Method: ${method}.`,
+    source: "staff",
+  });
+}
+
+export function recordFaultCarReturn(input: {
+  claimId: string;
+  actorId: string;
+  role: string;
+  occurredOn: string;
+  reason: string;
+}) {
+  assertOffice(input.role);
+  const occurredAt = requireDay(input.occurredOn, "the date the car was returned");
+  assertFaultCarReturn({ claimId: input.claimId, actorId: input.actorId, releaseReason: input.reason });
+  const paid = get<{ id: string }>(
+    `SELECT id FROM claim_events WHERE claim_id = ? AND event_type = 'excess_paid' LIMIT 1`,
+    [input.claimId],
+  );
+  const reason = input.reason.trim();
+  return recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "vehicle_returned",
+    occurredAt,
+    actorId: input.actorId,
+    details: paid
+      ? "Car returned to the client. The excess was already recorded as paid."
+      : `Car returned to the client before the excess was paid. Reason: ${reason}. Permission: releaseWithoutExcess.`,
+    source: "staff",
+  });
+}
+
+export function recordFaultInvoice(input: {
+  claimId: string;
+  actorId: string;
+  role: string;
+  occurredOn: string;
+  kind: "sent" | "paid";
+}) {
+  assertOffice(input.role);
+  const occurredAt = requireDay(input.occurredOn, "the date");
+  const authorised = get<{ authorised_total_pence: number | null }>(
+    `SELECT authorised_total_pence FROM audatex_estimates
+     WHERE claim_id = ? AND authorised_total_pence IS NOT NULL
+     ORDER BY recorded_at DESC LIMIT 1`,
+    [input.claimId],
+  );
+  const excess = get<{ amount_pence: number }>(
+    `SELECT amount_pence FROM client_excess_payments WHERE claim_id = ? ORDER BY recorded_at DESC LIMIT 1`,
+    [input.claimId],
+  );
+  const authEvent = get<{ id: string }>(
+    `SELECT id FROM claim_events WHERE claim_id = ? AND event_type = 'audatex_authorisation_recorded' LIMIT 1`,
+    [input.claimId],
+  );
+  const excessEvent = get<{ id: string }>(
+    `SELECT id FROM claim_events WHERE claim_id = ? AND event_type = 'excess_paid' LIMIT 1`,
+    [input.claimId],
+  );
+  if (!authEvent || !excessEvent || authorised?.authorised_total_pence == null || !excess) {
+    throw new Error("The invoice needs the Audatex authorisation and the client's excess on the history.");
+  }
+  const invoice = faultInvoicePence(authorised.authorised_total_pence, excess.amount_pence);
+  if (invoice == null) throw new Error("The invoice could not be worked out.");
+  return recordClaimEvent({
+    claimId: input.claimId,
+    eventType: input.kind === "sent" ? "fault_invoice_sent" : "fault_invoice_paid",
+    occurredAt,
+    actorId: input.actorId,
+    details:
+      input.kind === "sent"
+        ? `Invoice sent to the client's own insurer. Amount pence: ${invoice}. Authorised pence: ${authorised.authorised_total_pence}. Excess pence: ${excess.amount_pence}. Claimed, agreed and received were not changed.`
+        : `Invoice paid by the client's own insurer. Amount pence: ${invoice}. Claimed, agreed and received were not changed.`,
+    source: "staff",
+  });
+}

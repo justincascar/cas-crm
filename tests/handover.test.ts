@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, it } from "node:test";
+import { recordClaimEvent } from "../src/lib/db/chronology.ts";
 import { withDatabase } from "../src/lib/db/connection.ts";
 import { generateHireAgreementDocument } from "../src/lib/db/hire-agreement.ts";
 import {
@@ -612,6 +613,13 @@ describe("vehicle handover records", () => {
     withDatabase(db, () => {
       const when = "2026-10-01T14:30";
       const happened = utcFromLondonDateTime(when);
+      recordClaimEvent({
+        claimId: "c4",
+        eventType: "excess_paid",
+        occurredAt: "2026-10-01T09:00:00.000Z",
+        actorId: "staff-justin",
+        details: "Excess paid. Amount pence: 35000. Method: Card in the office. Demonstration setup so the return can be recorded.",
+      });
       for (const kind of ["hire_delivered", "hire_collected", "client_recovered", "client_returned"] as const) {
         const saved = recordVehicleHandover({
           ...handover({ mileage: "4100" }),

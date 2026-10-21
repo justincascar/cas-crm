@@ -100,6 +100,12 @@ export const MANAGE_BANK_DETAILS = "manageBankDetails";
 export const EXTENDED_WAIT = "extendedWait";
 
 /**
+ * Stored on staff_permissions. Returning the car on a fault claim before the excess is paid.
+ * Not implied by the administrator role, and not read from the username.
+ */
+export const RELEASE_WITHOUT_EXCESS = "releaseWithoutExcess";
+
+/**
  * True only when this account has been granted approveSettlement.
  * The role is accepted so callers pass it, and it is not consulted.
  */
@@ -133,6 +139,18 @@ export function canExtendedWait(account: {
 }): boolean {
   void account.role;
   return account.permissions.includes(EXTENDED_WAIT);
+}
+
+/**
+ * True only when this account has been granted releaseWithoutExcess.
+ * The role is accepted so callers pass it, and it is not consulted.
+ */
+export function canReleaseWithoutExcess(account: {
+  role: string | null | undefined;
+  permissions: readonly string[];
+}): boolean {
+  void account.role;
+  return account.permissions.includes(RELEASE_WITHOUT_EXCESS);
 }
 
 /** Server-side page allow-list. Office roles may open anything. */

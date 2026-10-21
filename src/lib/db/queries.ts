@@ -6,6 +6,7 @@ import { accidentDateError, isBeforeLondonDay, isSameLondonDay, londonDateIso, l
 import { dueWording } from "../domain/due-wording";
 import { claimedFigureIsConfirmed, summariseHeads } from "../domain/head-outstanding";
 import { blankDeskItem, todaysWorkRows, type DeskWorkItem, type TodaysWorkRow } from "../domain/todays-work";
+import { currentClaimStep, deriveClaimSteps } from "../domain/claim-steps";
 import { formatGbp, sumDistinctHeads } from "../money";
 import { all, dbPath, get, getDb, newId, resetSqlStatementCount, run, sqlStatementCount } from "./connection";
 import { touchFleetVersion } from "./fleet";
@@ -23,7 +24,6 @@ import {
   litigationDeskItems,
   moneyFollowUpItems,
   storageRunningForClaims,
-  noNextActionItems,
   settlementApprovalItems,
 } from "./desk-work";
 import { listKnownAgentsOn, listKnownInsurersOn } from "./insurers";
@@ -260,6 +260,146 @@ function renewalDeskWording(row: ChaseView): { text: string; tone: DeskWorkItem[
   return { text: "Due", tone: "today", sortDays: 0 };
 }
 
+function stepNextActionItems(handlerId: string | null, chases: ChaseView[]): DeskWorkItem[] {
+  const rows = all<{
+    id: string;
+    file_reference: string;
+    client_name: string | null;
+    handler_name: string | null;
+    claim_type: string | null;
+    roadworthiness: string | null;
+    needs_replacement: number | null;
+    needs_recovery: number | null;
+    created_at: string | null;
+    accident_at: string | null;
+    registration: string | null;
+    own_insurer_name: string | null;
+    total_loss: number | null;
+    later_declared_total_loss: number | null;
+    hire_status: string | null;
+    recovery_status: string | null;
+    engineering_status: string | null;
+    storage_status: string | null;
+    storage_started_on: string | null;
+    storage_billing_end_on: string | null;
+    payment_qualifies_off_hire: number | null;
+    off_hire_scheduled_on: string | null;
+    hire_count: number | null;
+    reservation_count: number | null;
+    agreement_count: number | null;
+  }>(
+    `SELECT c.id, c.file_reference, p.full_name AS client_name, s.name AS handler_name,
+            c.claim_type, c.roadworthiness, c.needs_replacement, c.needs_recovery, c.created_at, c.accident_at,
+            v.registration, c.own_insurer_name, c.total_loss, c.later_declared_total_loss, c.hire_status,
+            c.recovery_status, c.engineering_status, c.storage_status, c.storage_started_on, c.storage_billing_end_on,
+            c.payment_qualifies_off_hire, c.off_hire_scheduled_on,
+            (SELECT COUNT(*) FROM hire_episodes he WHERE he.claim_id = c.id) AS hire_count,
+            (SELECT COUNT(*) FROM reservations r WHERE r.claim_id = c.id) AS reservation_count,
+            (SELECT COUNT(*) FROM agreements a JOIN hire_episodes hea ON hea.id = a.hire_episode_id WHERE hea.claim_id = c.id) AS agreement_count
+     FROM claims c
+     LEFT JOIN people p ON p.id = c.client_person_id
+     LEFT JOIN vehicles v ON v.id = c.client_vehicle_id
+     LEFT JOIN staff s ON s.id = c.handler_id
+     WHERE NOT EXISTS (
+         SELECT 1 FROM claim_events closed
+         WHERE closed.claim_id = c.id AND closed.event_type = 'case_closed'
+       )
+       ${handlerId ? "AND c.handler_id = ?" : ""}
+     ORDER BY c.file_reference`,
+    handlerId ? [handlerId] : [],
+  );
+  if (rows.length === 0) return [];
+  const ids = rows.map((row) => String(row.id));
+  const events = all<{ claim_id: string; event_type: string; occurred_at: string; details: string | null }>(
+    `SELECT claim_id, event_type, occurred_at, details FROM claim_events WHERE claim_id IN (${ids.map(() => "?").join(",")})`,
+    ids,
+  );
+  const eventsByClaim = new Map<string, Array<{ event_type: string; occurred_at: string; details: string | null }>>();
+  for (const event of events) {
+    const list = eventsByClaim.get(String(event.claim_id)) || [];
+    list.push({
+      event_type: String(event.event_type),
+      occurred_at: String(event.occurred_at),
+      details: event.details ? String(event.details) : null,
+    });
+    eventsByClaim.set(String(event.claim_id), list);
+  }
+  const chasesByClaim = new Map<string, ChaseView[]>();
+  for (const chase of chases) {
+    const list = chasesByClaim.get(chase.claimId) || [];
+    list.push(chase);
+    chasesByClaim.set(chase.claimId, list);
+  }
+  return rows.flatMap((row) => {
+    const id = String(row.id);
+    const claimType = String(row.claim_type || "");
+    const hireStatus = String(row.hire_status || "");
+    const storageStatus = String(row.storage_status || "");
+    const hireCount = Number(row.hire_count) || 0;
+    const reservationCount = Number(row.reservation_count) || 0;
+    const steps = deriveClaimSteps({
+      claimId: id,
+      claimType,
+      roadworthiness: String(row.roadworthiness || ""),
+      needsReplacement: Number(row.needs_replacement) === 1,
+      needsRecovery: Number(row.needs_recovery) === 1,
+      createdAt: row.created_at ? String(row.created_at) : null,
+      clientName: String(row.client_name || ""),
+      accidentAt: row.accident_at ? String(row.accident_at) : null,
+      registration: row.registration ? String(row.registration) : "",
+      insurerExpected: claimType === "fault" || claimType === "non_fault",
+      insurerName: String(row.own_insurer_name || ""),
+      totalLoss: Number(row.total_loss) === 1 || Number(row.later_declared_total_loss) === 1,
+      hasHireEvidence: hireCount > 0 || reservationCount > 0 || (hireStatus !== "" && hireStatus !== "none"),
+      prehireDone: false,
+      vehicleChosen: hireCount > 0 || reservationCount > 0,
+      agreementDone: (Number(row.agreement_count) || 0) > 0,
+      dailyRatePence: null,
+      recoveryFlagComplete: ["complete", "completed"].includes(String(row.recovery_status || "")),
+      reportFlagged: String(row.engineering_status || "") === "report_received",
+      storageOnFile:
+        (storageStatus !== "" && storageStatus !== "none") ||
+        Boolean(String(row.storage_started_on || "").trim()) ||
+        Boolean(String(row.storage_billing_end_on || "").trim()),
+      storageEndedOn: storageStatus === "ended" && row.storage_billing_end_on ? String(row.storage_billing_end_on) : null,
+      hireEndedOn: null,
+      salvageRecorded: false,
+      qualifyingOffHireOn:
+        Number(row.payment_qualifies_off_hire) === 1 && row.off_hire_scheduled_on ? String(row.off_hire_scheduled_on) : null,
+      events: eventsByClaim.get(id) || [],
+      chases: (chasesByClaim.get(id) || []).map((chase) => ({
+        kind: String(chase.kind),
+        active: chase.active,
+        due: chase.due,
+        outcomeOnFile: chase.outcomeOnFile,
+        intervalDays: chase.frozenIntervalDays,
+        dueAt: chase.dueAt,
+        handlerState: chase.handlerState,
+      })),
+      payments: [],
+    });
+    const step = currentClaimStep(steps);
+    if (!step) return [];
+    const due = step.dueAt ? dueWording(step.dueAt) : null;
+    const tier = due && (due.tone === "overdue" || due.tone === "today") ? 1 : 3;
+    return [
+      blankDeskItem({
+        id: `next-${id}`,
+        claimId: id,
+        fileReference: String(row.file_reference),
+        clientName: String(row.client_name || "Unknown"),
+        handlerName: String(row.handler_name || "Unassigned"),
+        item: step.buttonLabel || step.title,
+        wording: due ? due.text : "No due date",
+        tone: due ? due.tone : "unknown",
+        sortDays: due ? due.sortDays : 0,
+        tier,
+        recordStep: true,
+      }),
+    ];
+  });
+}
+
 export function getDashboard(filter: { handlerId?: string | null } = {}) {
   resetSqlStatementCount();
   const started = Date.now();
@@ -458,7 +598,7 @@ export function getDashboard(filter: { handlerId?: string | null } = {}) {
     }),
     ...litigationDeskItems(handlerId),
     ...settlementApprovalItems(handlerId),
-    ...noNextActionItems(handlerId),
+    ...stepNextActionItems(handlerId, chasesDue),
     ...fleetConflictItems(fleetConflicts),
     ...moneyFollowUps,
   ];
@@ -1058,6 +1198,7 @@ export function updateClaimWorkflowStatus(
 }
 
 export function updateClaimPosition(id: string, fields: Record<string, string>, actorId?: string) {
+  const previousNote = get<{ next_action: string | null }>(`SELECT next_action FROM claims WHERE id = ?`, [id]);
   const allowed = [
     "current_position", "circumstances", "accident_location", "cas_liability_assessment",
     "insurer_liability_position", "roadworthiness_reasons", "next_action", "next_action_due",
@@ -1085,6 +1226,20 @@ export function updateClaimPosition(id: string, fields: Record<string, string>, 
   }
   if (actorId && ("liabilityStatus" in statusPatch || "roadworthiness" in statusPatch)) {
     updateClaimWorkflowStatus(id, statusPatch, actorId);
+  }
+  if (actorId && "next_action" in fields) {
+    const next = String(fields.next_action || "").trim();
+    const previous = String(previousNote?.next_action || "").trim();
+    if (next && next !== previous) {
+      recordClaimEvent({
+        claimId: id,
+        eventType: "next_action_noted",
+        occurredAt: nowUtcIso(),
+        actorId,
+        details: next,
+        source: "staff",
+      });
+    }
   }
 }
 

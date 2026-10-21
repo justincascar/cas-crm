@@ -406,6 +406,12 @@ export function generateClaimDocument(input: {
   if (!isDocumentTemplateKey(input.templateKey)) {
     throw new Error("Unknown document template.");
   }
+  if (input.templateKey === "initial_tp_insurer") {
+    const liability = get<{ claim_type: string | null }>(`SELECT claim_type FROM claims WHERE id = ?`, [input.claimId]);
+    if (liability?.claim_type === "fault") {
+      throw new Error("The third-party insurer letter does not apply on a fault claim. It was not created.");
+    }
+  }
   const blocked = impecuniosityRefusal(input.claimId, input.templateKey, "");
   if (blocked) throw new Error(blocked);
   const letterDate = occurredFromForm(input.letterDate);

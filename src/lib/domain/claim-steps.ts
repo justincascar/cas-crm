@@ -3,11 +3,12 @@ import { formatGbp } from "../money";
 import { dispatchFromHistoryNote } from "./justification-chronology";
 
 /**
- * The ten steps on a claim, read from history.
+ * The steps on a claim, read from history.
  * Nothing here writes a status, a date, or an event.
  *
- * Fault claims: which steps apply is a proposal, waiting for Justin to confirm.
- * It is not a confirmed rule.
+ * Fault steps were confirmed by Justin on 21 October 2026.
+ * A repairable non-fault file uses the repairable list.
+ * A total loss uses the total-loss list. History already written stays on the file.
  */
 
 export const CLAIM_STEP_KEYS = [
@@ -17,15 +18,42 @@ export const CLAIM_STEP_KEYS = [
   "initial_letter",
   "engineer",
   "engineer_report",
-  "agree",
   "send_report",
+  "repair_authorisation",
+  "agree",
   "finish",
   "payments",
+  "own_insurer",
+  "audatex_send",
+  "audatex_auth",
+  "repairs",
+  "excess",
+  "return_car",
+  "fault_invoice",
 ] as const;
 
 export type ClaimStepKey = (typeof CLAIM_STEP_KEYS)[number];
 
-export type ClaimStepState = "done" | "in_progress" | "waiting" | "not_started" | "not_needed";
+export type ClaimStepState =
+  | "done"
+  | "in_progress"
+  | "waiting"
+  | "not_started"
+  | "to_do"
+  | "not_needed"
+  | "not_decided";
+
+export type ClaimStepForm =
+  | "report"
+  | "route"
+  | "audatex_sent"
+  | "audatex_received"
+  | "audatex_auth"
+  | "excess"
+  | "return"
+  | "invoice"
+  | "invoice_paid"
+  | "own_insurer";
 
 export type ClaimStepEvent = {
   event_type: string;
@@ -46,7 +74,6 @@ export type ClaimStepChase = {
 export type ClaimPaymentLineInput = {
   key: "repairs" | "recovery" | "storage" | "hire";
   label: string;
-  /** False when hire or storage still has no confirmed end. Null when this charge has no end date. */
   endConfirmed: boolean | null;
   chargeRecorded: boolean;
   requestSent: boolean;
@@ -54,6 +81,21 @@ export type ClaimPaymentLineInput = {
   receivedPence: number;
   paidInFull: boolean;
   partPaid: boolean;
+};
+
+export type AudatexReduction = { pence: number | null; note: string | null };
+
+export type AudatexFacts = {
+  reference: string | null;
+  estimatePence: number | null;
+  labourPence: number | null;
+  partsPence: number | null;
+  paintPence: number | null;
+  authorisedPence: number | null;
+  hourly: AudatexReduction;
+  times: AudatexReduction;
+  partsReduction: AudatexReduction;
+  other: AudatexReduction;
 };
 
 export type ClaimStepInput = {
@@ -66,7 +108,6 @@ export type ClaimStepInput = {
   clientName: string;
   accidentAt: string | null;
   registration: string;
-  /** True when this file's liability already says which insurer the letter goes to. */
   insurerExpected: boolean;
   insurerName: string;
   totalLoss: boolean;
@@ -76,10 +117,15 @@ export type ClaimStepInput = {
   agreementDone: boolean;
   dailyRatePence: number | null;
   recoveryFlagComplete: boolean;
+  /** Engineering status says the report is in, with no report event. */
+  reportFlagged?: boolean;
+  /** Storage is on the file (a start, an end date, or a status other than none). */
+  storageOnFile?: boolean;
   storageEndedOn: string | null;
   hireEndedOn: string | null;
   salvageRecorded: boolean;
   qualifyingOffHireOn: string | null;
+  audatex?: AudatexFacts | null;
   events: ClaimStepEvent[];
   chases: ClaimStepChase[];
   payments: ClaimPaymentLineInput[];
@@ -97,45 +143,31 @@ export type ClaimStepView = {
   historyLines: ClaimStepLine[];
   buttonLabel: string | null;
   buttonHref: string | null;
-  buttonForm: "report" | "agree" | null;
+  forms: ClaimStepForm[];
   detailsHref: string;
   progressDone: number | null;
   progressTotal: number | null;
   missingCount: number;
   missingHref: string | null;
+  dueAt: string | null;
 };
 
 export type DisplayedNextAction = {
   action: string;
   dueAt: string | null;
   fromStaff: boolean;
+  note: string | null;
 };
 
-/**
- * Proposed for a fault claim. Not confirmed.
- * 1 Basic details — applies.
- * 2 Recovery or collection — applies, and is not needed when the vehicle is roadworthy.
- * 3 Hire — applies when the client needs a car. It is courtesy, not credit hire.
- * 4 The third-party letter does not apply. The letter to the client's own insurer does.
- * 5 Instruct engineer — applies.
- * 6 Engineer's report — applies.
- * 7 Agree the repair estimate, or the valuation on a total loss — applies.
- * 8 Sending the report to the third-party insurer does not apply.
- * 9 Repairs and return, or total-loss payment and salvage — applies.
- * 10 Payments — applies for a charge that is on the file.
- */
-export const FAULT_STEP_PROPOSAL = [
-  "Basic details captured — applies.",
-  "Recovery or collection — applies. Not needed when the vehicle is roadworthy.",
-  "Hire vehicle — applies when the client needs a car. Fault courtesy is not credit hire. Not needed when the client does not need a car.",
-  "Initial letter to the third-party insurer — not needed. The letter to the client's own insurer applies instead.",
-  "Instruct engineer — applies.",
-  "Engineer's report received — applies.",
-  "Agree the repair estimate with the client, or the valuation on a total loss — applies.",
-  "Send the report and estimate to the third-party insurer — not needed.",
-  "Repairs and return, or payment and salvage on a total loss — applies.",
-  "Payments — applies for each charge on the file.",
-] as const;
+export function stepStageLabel(step: ClaimStepView): string {
+  if (step.state === "to_do") return "To do";
+  if (step.state === "in_progress") return "In progress";
+  if (step.state === "waiting") return "Waiting";
+  if (step.state === "not_started") return "Not started";
+  if (step.state === "not_decided") return "Not decided yet";
+  if (step.state === "not_needed") return "Not needed";
+  return "Done";
+}
 
 function latest(events: ClaimStepEvent[], type: string): ClaimStepEvent | null {
   let found: ClaimStepEvent | null = null;
@@ -172,6 +204,12 @@ function chasePhrase(chase: ClaimStepChase | null): string | null {
   return next ? `${every}, next ${next}` : every;
 }
 
+function chaseDue(chase: ClaimStepChase | null): string | null {
+  if (!chase || chase.outcomeOnFile || chase.handlerState === "cancelled") return null;
+  if (!chase.active && !chase.due) return null;
+  return chase.dueAt;
+}
+
 function notNeeded(events: ClaimStepEvent[], key: ClaimStepKey): { reason: string; at: string } | null {
   const marker = `Step ${key} marked not needed.`;
   let found: ClaimStepEvent | null = null;
@@ -194,7 +232,6 @@ function letterWords(event: ClaimStepEvent): string {
   return "Recorded on the file";
 }
 
-/** A mailbox simulation, or a generated draft, is not a send. A hand record on the file is. */
 function reportSendCounts(event: ClaimStepEvent | null): boolean {
   if (!event) return false;
   const details = event.details || "";
@@ -229,6 +266,46 @@ function line(label: string, iso: string | null | undefined): ClaimStepLine | nu
   return { label, date };
 }
 
+function moneyLine(label: string, pence: number | null | undefined): ClaimStepLine | null {
+  if (pence == null || !Number.isFinite(pence)) return null;
+  return { label, date: formatGbp(pence) };
+}
+
+function hireAnswer(events: ClaimStepEvent[]): "yes" | "no" | null {
+  const event = latest(events, "hire_decision");
+  const details = event?.details || "";
+  if (/replacement vehicle: no/i.test(details)) return "no";
+  if (/replacement vehicle: yes/i.test(details)) return "yes";
+  return null;
+}
+
+function inspectionRoute(events: ClaimStepEvent[], instructed: boolean): "engineer" | "audatex" | "both" | null {
+  const event = latest(events, "inspection_route_chosen");
+  const details = event?.details || "";
+  if (/Route: both/i.test(details)) return "both";
+  if (/Route: audatex/i.test(details)) return "audatex";
+  if (/Route: engineer/i.test(details)) return "engineer";
+  if (instructed) return "engineer";
+  return null;
+}
+
+function excessFrom(events: ClaimStepEvent[]): { pence: number; at: string; method: string } | null {
+  const event = latest(events, "excess_paid");
+  if (!event) return null;
+  const details = event.details || "";
+  const amount = details.match(/Amount pence: (\d+)/);
+  const method = details.match(/Method: ([^.]+)/);
+  if (!amount) return null;
+  return { pence: Number(amount[1]), at: event.occurred_at, method: (method?.[1] || "").trim() };
+}
+
+function claimNumberFrom(events: ClaimStepEvent[]): string | null {
+  const event = latest(events, "own_claim_number_recorded");
+  if (!event) return null;
+  const match = (event.details || "").match(/Claim number: (.+)$/);
+  return match?.[1]?.trim() || null;
+}
+
 function paymentText(row: ClaimPaymentLineInput): string {
   if ((row.key === "hire" || row.key === "storage") && row.endConfirmed === false) {
     return "Not ready (end date not confirmed)";
@@ -243,9 +320,43 @@ function paymentText(row: ClaimPaymentLineInput): string {
   return "Not started";
 }
 
+function audatexLines(facts: AudatexFacts | null | undefined, showAuthorised: boolean): ClaimStepLine[] {
+  if (!facts) return [];
+  const lines = [
+    facts.reference ? { label: "Audatex reference", date: facts.reference } : null,
+    moneyLine("Estimate", facts.estimatePence),
+    moneyLine("Labour", facts.labourPence),
+    moneyLine("Parts", facts.partsPence),
+    moneyLine("Paint", facts.paintPence),
+  ];
+  if (showAuthorised) {
+    lines.push(moneyLine("Authorised", facts.authorisedPence));
+    if (facts.estimatePence != null && facts.authorisedPence != null) {
+      lines.push({ label: "Difference", date: formatGbp(facts.estimatePence - facts.authorisedPence) });
+    }
+    const reductions: Array<[string, AudatexReduction]> = [
+      ["Hourly rate reduction", facts.hourly],
+      ["Repair time reduction", facts.times],
+      ["Parts reduction", facts.partsReduction],
+      ["Other reduction", facts.other],
+    ];
+    for (const [label, reduction] of reductions) {
+      if (reduction.pence == null && !reduction.note) continue;
+      const amount = reduction.pence == null ? "" : formatGbp(reduction.pence);
+      const note = reduction.note ? (amount ? `${amount} · ${reduction.note}` : reduction.note) : amount;
+      if (note) lines.push({ label, date: note });
+    }
+  }
+  return lines.filter((item): item is ClaimStepLine => Boolean(item));
+}
+
+export function faultInvoicePence(authorisedPence: number | null, excessPence: number | null): number | null {
+  if (authorisedPence == null || excessPence == null) return null;
+  return Math.max(0, authorisedPence - excessPence);
+}
+
 export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
   const fault = isFault(input.claimType);
-  const base = path(input.claimId, "");
   const events = input.events;
   const opened = latest(events, "file_opened");
   const recoveryEvent = latest(events, "recovery_completed");
@@ -261,7 +372,6 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
     (!instructed || report.occurred_at >= instructed.occurred_at)
       ? report
       : null;
-  const agreedRepair = latest(events, "repair_estimate_agreed_with_client");
   const agreedValuation = latest(events, "total_loss_agreed_confirmed");
   const reportSent = latest(events, "engineer_report_sent_to_insurer");
   const valuationSent = latest(events, "total_loss_notice_sent");
@@ -270,7 +380,20 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
   const returned = latest(events, "vehicle_returned");
   const hireEndedEvent = latest(events, "hire_ended");
   const storageEndedEvent = latest(events, "storage_ended");
+  const storageStartedEvent = latest(events, "storage_started");
   const paymentReceived = latest(events, "total_loss_payment_received");
+  const authorised = latest(events, "repairs_authorised");
+  const audatexSent = latest(events, "audatex_estimate_sent");
+  const audatexReceived = latest(events, "audatex_estimate_received");
+  const audatexAuthorised = latest(events, "audatex_authorisation_recorded");
+  const salvageEvent = latest(events, "salvage_collected");
+  const invoiceSent = latest(events, "fault_invoice_sent");
+  const invoicePaid = latest(events, "fault_invoice_paid");
+  const route = inspectionRoute(events, Boolean(instructed));
+  const hireChoice = hireAnswer(events);
+  const excess = excessFrom(events);
+  const ownClaimNumber = claimNumberFrom(events);
+  const mode = input.totalLoss ? "total_loss" : fault ? "fault" : "repairable";
 
   const missing: string[] = [];
   if (blank(input.clientName)) missing.push("client name");
@@ -278,36 +401,51 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
   if (blank(input.registration)) missing.push("registration");
   if (input.insurerExpected && blank(input.insurerName)) missing.push("insurer");
 
-  const detailsDate = opened?.occurred_at || input.createdAt;
-  const details: ClaimStepView = {
-    key: "details",
-    title: "Basic details captured",
-    state: "done",
-    statusText: doneText(detailsDate),
-    detail: null,
-    lines: [],
-    historyLines: [],
-    buttonLabel: missing.length ? "Open details" : null,
-    buttonHref: missing.length ? path(input.claimId, "details") : null,
-    buttonForm: null,
-    detailsHref: path(input.claimId, "details"),
-    progressDone: null,
-    progressTotal: null,
-    missingCount: missing.length,
-    missingHref: missing.length ? path(input.claimId, "details") : null,
-  };
-
-  const steps: ClaimStepView[] = [details];
+  const steps: ClaimStepView[] = [detailsStep()];
   steps.push(recoveryStep());
   steps.push(hireStep());
+  if (mode === "fault") {
+    steps.push(ownInsurerStep());
+    steps.push(audatexSendStep());
+    steps.push(audatexAuthStep());
+    steps.push(repairsOnlyStep());
+    steps.push(excessStep());
+    steps.push(returnStep());
+    steps.push(invoiceStep());
+    return steps;
+  }
   steps.push(letterStep());
-  steps.push(engineerStep());
-  steps.push(reportStep());
-  steps.push(agreeStep());
-  steps.push(sendStep());
+  if (mode === "repairable") {
+    steps.push(engineerChoiceStep());
+    steps.push(receivedStep());
+    steps.push(sendRepairStep());
+    steps.push(authorisationStep());
+  } else {
+    steps.push(engineerInstructStep());
+    steps.push(reportOnlyStep());
+    steps.push(agreeValuationStep());
+    steps.push(sendValuationStep());
+  }
   steps.push(finishStep());
   steps.push(paymentsStep());
   return steps;
+
+  function shell(partial: Omit<ClaimStepView, "lines" | "historyLines" | "forms" | "dueAt" | "progressDone" | "progressTotal" | "missingCount" | "missingHref" | "detail" | "buttonLabel" | "buttonHref"> & Partial<ClaimStepView>): ClaimStepView {
+    return {
+      detail: null,
+      lines: [],
+      historyLines: [],
+      forms: [],
+      progressDone: null,
+      progressTotal: null,
+      missingCount: 0,
+      missingHref: null,
+      dueAt: null,
+      buttonLabel: null,
+      buttonHref: null,
+      ...partial,
+    };
+  }
 
   function applyNotNeeded(key: ClaimStepKey, view: ClaimStepView): ClaimStepView {
     if (view.state === "done") return view;
@@ -320,29 +458,36 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
       detail: null,
       buttonLabel: null,
       buttonHref: null,
-      buttonForm: null,
+      forms: [],
     };
+  }
+
+  function detailsStep(): ClaimStepView {
+    const detailsDate = opened?.occurred_at || input.createdAt;
+    return shell({
+      key: "details",
+      title: "Basic details",
+      state: "done",
+      statusText: doneText(detailsDate),
+      buttonLabel: missing.length ? "Open details" : null,
+      buttonHref: missing.length ? path(input.claimId, "details") : null,
+      detailsHref: path(input.claimId, "details"),
+      missingCount: missing.length,
+      missingHref: missing.length ? path(input.claimId, "details") : null,
+    });
   }
 
   function recoveryStep(): ClaimStepView {
     const href = path(input.claimId, "money/recovery");
-    let view: ClaimStepView = {
+    let view = shell({
       key: "recovery",
-      title: "Recovery or collection",
-      state: "not_started",
-      statusText: "Not started",
-      detail: null,
-      lines: [],
-      historyLines: [],
+      title: "Recovery",
+      state: "to_do",
+      statusText: "To do",
       buttonLabel: "Record recovery",
       buttonHref: href,
-      buttonForm: null,
       detailsHref: href,
-      progressDone: null,
-      progressTotal: null,
-      missingCount: 0,
-      missingHref: null,
-    };
+    });
     if (recoveryEvent) {
       view = { ...view, state: "done", statusText: doneText(recoveryEvent.occurred_at), buttonLabel: null, buttonHref: null };
     } else if (input.roadworthiness === "roadworthy") {
@@ -353,63 +498,74 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
         buttonLabel: null,
         buttonHref: null,
       };
+    } else if (!input.roadworthiness || input.roadworthiness === "unknown") {
+      view = { ...view, state: "not_decided", statusText: "Not decided yet" };
     } else if (input.recoveryFlagComplete) {
       view = {
         ...view,
         state: "not_started",
         statusText: "Not started",
-        detail: "Cannot tell from the history. No recovery event is on the file.",
+        detail: "Cannot tell from the history. Recovery is marked complete, and there is no recovery event.",
       };
-    } else if (input.roadworthiness === "unroadworthy" || input.needsRecovery) {
-      view = { ...view, state: "in_progress", statusText: "In progress" };
     }
     return applyNotNeeded("recovery", view);
   }
 
   function hireStep(): ClaimStepView {
     const href = path(input.claimId, "hire");
+    const courtesy = mode === "fault";
     const checks = [input.prehireDone, input.vehicleChosen, input.agreementDone, Boolean(hireStarted)];
-    const progressDone = checks.filter(Boolean).length;
-    let view: ClaimStepView = {
+    const begun = checks.filter(Boolean).length;
+    let view = shell({
       key: "hire",
-      title: "Hire vehicle",
-      state: "in_progress",
-      statusText: "In progress",
-      detail: null,
-      lines: [],
-      historyLines: [],
-      buttonLabel: "Arrange hire",
+      title: courtesy ? "Courtesy car" : "Hire",
+      state: "to_do",
+      statusText: "To do",
+      detail: courtesy ? "This is a courtesy car, not credit hire. There is no daily charge to an insurer." : null,
+      buttonLabel: courtesy ? "Arrange courtesy car" : "Arrange hire",
       buttonHref: href,
-      buttonForm: null,
       detailsHref: href,
-      progressDone: hireStarted ? null : progressDone,
-      progressTotal: hireStarted ? null : 4,
-      missingCount: 0,
-      missingHref: null,
-    };
+    });
     if (hireStarted) {
-      const rate = input.dailyRatePence && input.dailyRatePence > 0 ? `${formatGbp(input.dailyRatePence)}/day` : null;
       const since = uk(hireStarted.occurred_at);
+      const rate = !courtesy && input.dailyRatePence && input.dailyRatePence > 0 ? `${formatGbp(input.dailyRatePence)}/day` : null;
       view = {
         ...view,
         state: "done",
         statusText: doneText(hireStarted.occurred_at),
-        detail: since ? `On hire since ${since}${rate ? `, ${rate}` : ""}` : rate,
+        detail: courtesy
+          ? "Courtesy car on the file. This is not credit hire, so there is no daily charge to an insurer."
+          : since
+            ? `On hire since ${since}${rate ? `, ${rate}` : ""}`
+            : rate,
         buttonLabel: null,
         buttonHref: null,
-        progressDone: null,
-        progressTotal: null,
       };
-    } else if (!input.needsReplacement && !input.hasHireEvidence) {
+    } else if (hireChoice === "no") {
       view = {
         ...view,
         state: "not_needed",
-        statusText: "Not needed. The client does not need a replacement vehicle.",
+        statusText: courtesy
+          ? "Not needed. The client does not need a courtesy car."
+          : "Not needed. The client does not need a replacement vehicle.",
         detail: null,
         buttonLabel: null,
         buttonHref: null,
-        progressDone: null,
-        progressTotal: null,
+      };
+    } else if (!input.needsReplacement && !input.hasHireEvidence && hireChoice !== "yes") {
+      view = {
+        ...view,
+        state: "not_decided",
+        statusText: "Not decided yet",
+        detail: courtesy ? "This is a courtesy car, not credit hire. There is no daily charge to an insurer." : null,
+      };
+    } else if (begun > 0) {
+      view = {
+        ...view,
+        state: "in_progress",
+        statusText: "In progress",
+        progressDone: begun,
+        progressTotal: 4,
       };
     }
     return applyNotNeeded("hire", view);
@@ -417,64 +573,206 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
 
   function letterStep(): ClaimStepView {
     const href = path(input.claimId, "messages");
-    const event = fault ? ownLetter : tpLetter;
-    const chase = chasePhrase(chaseFor(input.chases, "liability_response"));
-    let view: ClaimStepView = {
+    const chase = chaseFor(input.chases, "liability_response");
+    const phrase = chasePhrase(chase);
+    let view = shell({
       key: "initial_letter",
-      title: fault ? "Initial letter to the client's own insurer" : "Initial letter to the third-party insurer",
-      state: "in_progress",
-      statusText: "In progress",
-      detail: null,
-      lines: [],
-      historyLines: [],
+      title: "Initial letter to the third-party insurer",
+      state: "to_do",
+      statusText: "To do",
       buttonLabel: "Send letter",
       buttonHref: href,
-      buttonForm: null,
       detailsHref: href,
-      progressDone: null,
-      progressTotal: null,
-      missingCount: 0,
-      missingHref: null,
-    };
-    if (event) {
-      const words = letterWords(event);
+    });
+    if (tpLetter) {
       view = {
         ...view,
         state: "done",
-        statusText: doneText(event.occurred_at, words),
-        detail: chase ? `Waiting on the insurer, ${chase}` : null,
+        statusText: doneText(tpLetter.occurred_at, letterWords(tpLetter)),
+        detail: phrase ? `Waiting on the insurer, ${phrase}` : null,
         buttonLabel: null,
         buttonHref: null,
+        dueAt: null,
       };
     }
     return applyNotNeeded("initial_letter", view);
   }
 
-  function engineerStep(): ClaimStepView {
+  function engineerChoiceStep(): ClaimStepView {
     const href = path(input.claimId, "messages");
-    let view: ClaimStepView = {
+    const wantsEngineer = route === "engineer" || route === "both";
+    const wantsAudatex = route === "audatex" || route === "both";
+    const engineerDone = !wantsEngineer || Boolean(instructed);
+    const audatexDone = !wantsAudatex || Boolean(audatexSent);
+    const total = (wantsEngineer ? 1 : 0) + (wantsAudatex ? 1 : 0);
+    const doneCount = (wantsEngineer && instructed ? 1 : 0) + (wantsAudatex && audatexSent ? 1 : 0);
+    let view = shell({
       key: "engineer",
-      title: "Instruct engineer",
-      state: "in_progress",
-      statusText: "In progress",
-      detail: null,
-      lines: [],
-      historyLines: [],
-      buttonLabel: "Instruct",
-      buttonHref: href,
-      buttonForm: null,
+      title: "Engineer and/or Audatex estimate",
+      state: "to_do",
+      statusText: "To do",
+      buttonLabel: null,
+      buttonHref: null,
       detailsHref: href,
-      progressDone: null,
-      progressTotal: null,
-      missingCount: 0,
-      missingHref: null,
+      forms: ["route"],
+      lines: audatexLines(audatexSent ? input.audatex : null, false),
+    });
+    if (!route) {
+      return applyNotNeeded("engineer", view);
+    }
+    view = {
+      ...view,
+      forms: wantsAudatex && !audatexSent ? ["audatex_sent"] : [],
+      buttonLabel: wantsEngineer && !instructed ? "Instruct engineer" : null,
+      buttonHref: wantsEngineer && !instructed ? href : null,
+      detail: `Chosen: ${route === "both" ? "engineer and Audatex" : route === "audatex" ? "Audatex estimate" : "engineer"}.`,
     };
-    if (instructed) {
-      const words = letterWords(instructed);
+    if (engineerDone && audatexDone) {
+      const when = [instructed?.occurred_at, audatexSent?.occurred_at].filter(Boolean).sort().at(-1) || null;
+      view = { ...view, state: "done", statusText: doneText(when), buttonLabel: null, buttonHref: null, forms: [], progressDone: null, progressTotal: null };
+    } else if (doneCount > 0) {
+      view = { ...view, state: "in_progress", statusText: "In progress", progressDone: doneCount, progressTotal: total };
+    }
+    return applyNotNeeded("engineer", view);
+  }
+
+  function receivedStep(): ClaimStepView {
+    const wantsEngineer = route === "engineer" || route === "both";
+    const wantsAudatex = route === "audatex" || route === "both";
+    const engineerIn = !wantsEngineer || Boolean(reportOnFile);
+    const audatexIn = !wantsAudatex || Boolean(audatexReceived);
+    const sentSomething = (wantsEngineer && instructed) || (wantsAudatex && audatexSent);
+    const chase = chaseFor(input.chases, "engineer_report");
+    const phrase = chasePhrase(chase);
+    const who = wantsEngineer && wantsAudatex ? "the engineer and Audatex" : wantsAudatex ? "Audatex" : "the engineer";
+    let view = shell({
+      key: "engineer_report",
+      title: "Report or estimate received",
+      state: "not_started",
+      statusText: "Not started",
+      detailsHref: path(input.claimId, "documents"),
+      lines: audatexLines(audatexReceived ? input.audatex : null, false),
+    });
+    if (!route) {
+      return applyNotNeeded("engineer_report", view);
+    }
+    if (input.reportFlagged && wantsEngineer && !reportOnFile) {
+      view = {
+        ...view,
+        detail: "Cannot tell from the history. The file is marked report received, and there is no report-received event.",
+      };
+      return applyNotNeeded("engineer_report", view);
+    }
+    if (engineerIn && audatexIn) {
+      const when = [reportOnFile?.occurred_at, audatexReceived?.occurred_at].filter(Boolean).sort().at(-1) || null;
+      view = { ...view, state: "done", statusText: doneText(when), forms: [] };
+    } else if (sentSomething && ((wantsEngineer && reportOnFile) || (wantsAudatex && audatexReceived))) {
+      view = {
+        ...view,
+        state: "in_progress",
+        statusText: "In progress",
+        forms: [
+          ...(wantsEngineer && instructed && !reportOnFile ? (["report"] as const) : []),
+          ...(wantsAudatex && audatexSent && !audatexReceived ? (["audatex_received"] as const) : []),
+        ],
+      };
+    } else if (sentSomething) {
+      view = {
+        ...view,
+        state: "waiting",
+        statusText: phrase ? `Waiting on ${who}, ${phrase}` : `Waiting on ${who}`,
+        dueAt: chaseDue(chase),
+        forms: [
+          ...(wantsEngineer && instructed ? (["report"] as const) : []),
+          ...(wantsAudatex && audatexSent ? (["audatex_received"] as const) : []),
+        ],
+      };
+    }
+    return applyNotNeeded("engineer_report", view);
+  }
+
+  function sendRepairStep(): ClaimStepView {
+    const href = path(input.claimId, "documents");
+    const received = route ? receivedReady() : false;
+    const counts = reportSendCounts(reportSent);
+    let view = shell({
+      key: "send_report",
+      title: "Send the report and estimate to the third-party insurer",
+      state: received ? "to_do" : "not_started",
+      statusText: received ? "To do" : "Not started",
+      buttonLabel: "Send report",
+      buttonHref: href,
+      detailsHref: href,
+    });
+    if (reportSent && counts) {
       view = {
         ...view,
         state: "done",
-        statusText: doneText(instructed.occurred_at, words),
+        statusText: doneText(reportSent.occurred_at, reportSendWords(reportSent)),
+        buttonLabel: null,
+        buttonHref: null,
+      };
+    } else if (reportSent && !counts) {
+      view = { ...view, detail: "A simulated or generated item is on the file. It is not treated as sent." };
+    }
+    return applyNotNeeded("send_report", view);
+  }
+
+  function receivedReady(): boolean {
+    const wantsEngineer = route === "engineer" || route === "both";
+    const wantsAudatex = route === "audatex" || route === "both";
+    if (!route) return false;
+    if (wantsEngineer && !reportOnFile) return false;
+    if (wantsAudatex && !audatexReceived) return false;
+    return true;
+  }
+
+  function authorisationStep(): ClaimStepView {
+    const href = path(input.claimId, "repair");
+    const chase = chaseFor(input.chases, "repair_authorisation");
+    const phrase = chasePhrase(chase);
+    const sent = reportSent && reportSendCounts(reportSent);
+    let view = shell({
+      key: "repair_authorisation",
+      title: "Repair authorisation or payment agreed by the insurer",
+      state: sent ? "waiting" : "not_started",
+      statusText: sent ? (phrase ? `Waiting on the insurer, ${phrase}` : "Waiting on the insurer") : "Not started",
+      buttonLabel: sent ? "Record authorisation" : null,
+      buttonHref: sent ? href : null,
+      detailsHref: href,
+      dueAt: sent ? chaseDue(chase) : null,
+      lines: audatexLines(audatexAuthorised ? input.audatex : null, true),
+    });
+    if (authorised) {
+      view = {
+        ...view,
+        state: "done",
+        statusText: doneText(authorised.occurred_at),
+        detail: phrase,
+        buttonLabel: null,
+        buttonHref: null,
+        dueAt: null,
+      };
+    }
+    return applyNotNeeded("repair_authorisation", view);
+  }
+
+  function engineerInstructStep(): ClaimStepView {
+    const href = path(input.claimId, "messages");
+    let view = shell({
+      key: "engineer",
+      title: "Instruct engineer",
+      state: "to_do",
+      statusText: "To do",
+      buttonLabel: "Instruct",
+      buttonHref: href,
+      detailsHref: href,
+    });
+    if (instructed) {
+      view = {
+        ...view,
+        state: "done",
+        statusText: doneText(instructed.occurred_at, letterWords(instructed)),
         buttonLabel: null,
         buttonHref: null,
       };
@@ -482,136 +780,76 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
     return applyNotNeeded("engineer", view);
   }
 
-  function reportStep(): ClaimStepView {
-    const chase = chasePhrase(chaseFor(input.chases, "engineer_report"));
-    let view: ClaimStepView = {
+  function reportOnlyStep(): ClaimStepView {
+    const chase = chaseFor(input.chases, "engineer_report");
+    const phrase = chasePhrase(chase);
+    let view = shell({
       key: "engineer_report",
       title: "Engineer's report received",
       state: "not_started",
       statusText: "Not started",
-      detail: null,
-      lines: [],
-      historyLines: [],
-      buttonLabel: instructed ? "Record report received" : null,
-      buttonHref: null,
-      buttonForm: instructed ? "report" : null,
       detailsHref: path(input.claimId, "documents"),
-      progressDone: null,
-      progressTotal: null,
-      missingCount: 0,
-      missingHref: null,
-    };
+      forms: instructed ? ["report"] : [],
+    });
     if (reportOnFile) {
+      view = { ...view, state: "done", statusText: doneText(reportOnFile.occurred_at), forms: [] };
+    } else if (input.reportFlagged) {
       view = {
         ...view,
-        state: "done",
-        statusText: doneText(reportOnFile.occurred_at),
-        buttonLabel: null,
-        buttonForm: null,
+        detail: "Cannot tell from the history. The file is marked report received, and there is no report-received event.",
+        forms: instructed ? ["report"] : [],
       };
     } else if (instructed) {
       view = {
         ...view,
         state: "waiting",
-        statusText: chase ? `Waiting on the engineer, ${chase}` : "Waiting on the engineer",
+        statusText: phrase ? `Waiting on the engineer, ${phrase}` : "Waiting on the engineer",
+        dueAt: chaseDue(chase),
       };
     }
     return applyNotNeeded("engineer_report", view);
   }
 
-  function agreeStep(): ClaimStepView {
-    const title = input.totalLoss ? "Agree valuation with the client" : "Agree repair estimate with the client";
-    const event = input.totalLoss ? agreedValuation : agreedRepair;
-    const href = input.totalLoss ? path(input.claimId, "details/assessed-damage") : null;
-    let view: ClaimStepView = {
+  function agreeValuationStep(): ClaimStepView {
+    const href = path(input.claimId, "details/assessed-damage");
+    let view = shell({
       key: "agree",
-      title,
+      title: "Agree valuation with the client",
       state: "not_started",
       statusText: "Not started",
-      detail: input.totalLoss
-        ? null
-        : "No history event records that the repair estimate was agreed with the client.",
-      lines: [],
-      historyLines: [],
-      buttonLabel: input.totalLoss ? "Agree valuation" : "Record agreement",
+      buttonLabel: "Agree valuation",
       buttonHref: href,
-      buttonForm: input.totalLoss ? null : "agree",
-      detailsHref: input.totalLoss ? path(input.claimId, "details/assessed-damage") : `${base}#agree-estimate`,
-      progressDone: null,
-      progressTotal: null,
-      missingCount: 0,
-      missingHref: null,
-    };
-    if (event) {
-      view = {
-        ...view,
-        state: "done",
-        statusText: doneText(event.occurred_at),
-        detail: null,
-        buttonLabel: null,
-        buttonHref: null,
-        buttonForm: null,
-      };
+      detailsHref: href,
+    });
+    if (agreedValuation) {
+      view = { ...view, state: "done", statusText: doneText(agreedValuation.occurred_at), buttonLabel: null, buttonHref: null };
+    } else if (reportOnFile || input.totalLoss) {
+      view = { ...view, state: "to_do", statusText: "To do" };
     }
     return applyNotNeeded("agree", view);
   }
 
-  function sendStep(): ClaimStepView {
-    const href = input.totalLoss ? path(input.claimId, "messages") : path(input.claimId, "documents");
-    if (fault && !input.totalLoss) {
-      return applyNotNeeded("send_report", {
-        key: "send_report",
-        title: "Send report and estimate to the third-party insurer",
-        state: "not_needed",
-        statusText: "Not needed. Fault claim: the report is not sent to a third-party insurer. This is proposed, and is waiting for confirmation.",
-        detail: null,
-        lines: [],
-        historyLines: [],
-        buttonLabel: null,
-        buttonHref: null,
-        buttonForm: null,
-        detailsHref: href,
-        progressDone: null,
-        progressTotal: null,
-        missingCount: 0,
-        missingHref: null,
-      });
-    }
-    const event = input.totalLoss ? valuationSent : reportSent;
-    const counts = input.totalLoss ? Boolean(valuationSent) : reportSendCounts(reportSent);
-    const chase = chasePhrase(
-      chaseFor(input.chases, input.totalLoss ? "settlement_payment" : "repair_authorisation"),
-    );
-    let view: ClaimStepView = {
+  function sendValuationStep(): ClaimStepView {
+    const href = path(input.claimId, "messages");
+    const chase = chaseFor(input.chases, "settlement_payment");
+    const phrase = chasePhrase(chase);
+    let view = shell({
       key: "send_report",
-      title: input.totalLoss ? "Send valuation to the insurer" : "Send report and estimate to the third-party insurer",
-      state: reportOnFile || input.totalLoss ? "in_progress" : "not_started",
-      statusText: reportOnFile || input.totalLoss ? "In progress" : "Not started",
-      detail: null,
-      lines: [],
-      historyLines: [],
-      buttonLabel: input.totalLoss ? "Send valuation" : "Send report",
+      title: "Send valuation to the insurer",
+      state: "to_do",
+      statusText: "To do",
+      buttonLabel: "Send valuation",
       buttonHref: href,
-      buttonForm: null,
       detailsHref: href,
-      progressDone: null,
-      progressTotal: null,
-      missingCount: 0,
-      missingHref: null,
-    };
-    if (event && counts) {
+    });
+    if (valuationSent) {
       view = {
         ...view,
         state: "done",
-        statusText: doneText(event.occurred_at, input.totalLoss ? letterWords(event) : reportSendWords(event)),
-        detail: chase ? `Waiting on the insurer, ${chase}` : null,
+        statusText: doneText(valuationSent.occurred_at, letterWords(valuationSent)),
+        detail: phrase ? `Waiting on the insurer, ${phrase}` : null,
         buttonLabel: null,
         buttonHref: null,
-      };
-    } else if (event && !counts) {
-      view = {
-        ...view,
-        detail: "A simulated or generated item is on the file. It is not treated as sent.",
       };
     }
     return applyNotNeeded("send_report", view);
@@ -622,32 +860,27 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
       line("Repairs started", repairsStarted?.occurred_at),
       line("Repairs complete", repairsComplete?.occurred_at),
       line("Car returned to client", returned?.occurred_at),
-      line("Hire ended", hireEndedEvent?.occurred_at || input.hireEndedOn),
-      line("Storage ended", storageEndedEvent?.occurred_at || input.storageEndedOn),
+      line("Hire ended", hireEndedEvent?.occurred_at),
+      line("Storage ended", storageEndedEvent?.occurred_at),
     ].filter((item): item is ClaimStepLine => Boolean(item));
     if (input.totalLoss) {
       const lines = [
         line("Payment received", paymentReceived?.occurred_at),
         line("Hire end confirmed", input.qualifyingOffHireOn),
+        line("Salvage collected", salvageEvent?.occurred_at),
       ].filter((item): item is ClaimStepLine => Boolean(item));
-      let view: ClaimStepView = {
+      let view = shell({
         key: "finish",
         title: "Payment received and salvage collected",
         state: "not_started",
         statusText: "Not started",
-        detail: input.salvageRecorded ? null : "Salvage collection is not on the history.",
+        detail: salvageEvent ? null : "Salvage collection is not on the history.",
         lines,
         historyLines: repairLines,
-        buttonLabel: null,
         buttonHref: path(input.claimId, "money/vehicle"),
-        buttonForm: null,
         detailsHref: path(input.claimId, "money/vehicle"),
-        progressDone: null,
-        progressTotal: null,
-        missingCount: 0,
-        missingHref: null,
-      };
-      if (paymentReceived && input.salvageRecorded) {
+      });
+      if (paymentReceived && salvageEvent) {
         view = { ...view, state: "done", statusText: doneText(paymentReceived.occurred_at), detail: null, buttonHref: null };
       } else if (paymentReceived) {
         view = { ...view, state: "waiting", statusText: "Waiting on salvage collection" };
@@ -656,28 +889,34 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
       }
       return applyNotNeeded("finish", view);
     }
-    const href = path(input.claimId, "documents");
-    let view: ClaimStepView = {
+    const href = path(input.claimId, "repair");
+    const hireApplies = Boolean(hireStarted);
+    const storageApplies = Boolean(storageStartedEvent) || Boolean(input.storageOnFile);
+    const hireOk = !hireApplies || Boolean(hireEndedEvent);
+    const storageOk = !storageApplies || Boolean(storageEndedEvent);
+    let view = shell({
       key: "finish",
       title: "Repairs done and car returned",
       state: "not_started",
       statusText: "Not started",
-      detail: null,
       lines: repairLines,
-      historyLines: [],
       buttonLabel: "Record workshop step",
       buttonHref: href,
-      buttonForm: null,
       detailsHref: href,
-      progressDone: null,
-      progressTotal: null,
-      missingCount: 0,
-      missingHref: null,
-    };
-    if (returned) {
+    });
+    if (!hireEndedEvent && input.hireEndedOn) {
+      view = { ...view, detail: "Cannot tell from the history. Hire is marked ended, and there is no hire-ended event." };
+    } else if (!storageEndedEvent && input.storageEndedOn) {
+      view = { ...view, detail: "Cannot tell from the history. Storage is marked ended, and there is no storage-ended event." };
+    }
+    if (repairsComplete && returned && hireOk && storageOk) {
       view = { ...view, state: "done", statusText: doneText(returned.occurred_at), buttonLabel: null, buttonHref: null };
-    } else if (repairsComplete) {
+    } else if (repairsComplete && !returned) {
       view = { ...view, state: "waiting", statusText: "Waiting on the car being returned" };
+    } else if (returned && !hireOk) {
+      view = { ...view, state: "waiting", statusText: "Waiting on hire ending" };
+    } else if (returned && !storageOk) {
+      view = { ...view, state: "waiting", statusText: "Waiting on storage ending" };
     } else if (repairsStarted) {
       view = { ...view, state: "in_progress", statusText: "In progress" };
     }
@@ -686,52 +925,202 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
 
   function paymentsStep(): ClaimStepView {
     const lines = input.payments.map((row) => ({ label: row.label, date: paymentText(row) }));
-    const href = path(input.claimId, "messages");
-    return applyNotNeeded("payments", {
+    const moving = lines.some((row) => row.date.startsWith("Payment request") || row.date.startsWith("Part paid"));
+    const anyPaid = lines.some((row) => row.date === "Paid in full");
+    const allSettled = lines.length > 0 && lines.every((row) => row.date === "Paid in full" || row.date === "Not started");
+    return applyNotNeeded("payments", shell({
       key: "payments",
       title: "Payments",
-      state: lines.every((row) => row.date === "Paid in full" || row.date === "Not started") && lines.some((row) => row.date === "Paid in full")
-        ? "done"
-        : lines.some((row) => row.date.startsWith("Payment request") || row.date.startsWith("Part paid") || row.date.startsWith("Not ready"))
-          ? "in_progress"
-          : "not_started",
-      statusText: "See each charge",
-      detail: null,
+      state: allSettled && anyPaid ? "done" : moving ? "in_progress" : "not_started",
+      statusText: allSettled && anyPaid ? "Done" : moving ? "In progress" : "Not started",
       lines,
-      historyLines: [],
       buttonLabel: "Send payment request",
-      buttonHref: href,
-      buttonForm: null,
+      buttonHref: path(input.claimId, "messages"),
       detailsHref: path(input.claimId, "money"),
-      progressDone: null,
-      progressTotal: null,
-      missingCount: 0,
-      missingHref: null,
+    }));
+  }
+
+  function ownInsurerStep(): ClaimStepView {
+    const href = path(input.claimId, "messages");
+    let view = shell({
+      key: "own_insurer",
+      title: "Notify the client's own insurer",
+      state: "to_do",
+      statusText: "To do",
+      buttonLabel: "Open messages",
+      buttonHref: href,
+      detailsHref: href,
+      forms: ["own_insurer"],
     });
+    if (ownLetter && ownClaimNumber) {
+      view = {
+        ...view,
+        state: "done",
+        statusText: doneText(ownLetter.occurred_at, letterWords(ownLetter)),
+        detail: `Claim number ${ownClaimNumber}`,
+        buttonLabel: null,
+        buttonHref: null,
+        forms: [],
+      };
+    } else if (ownLetter || ownClaimNumber) {
+      view = {
+        ...view,
+        state: "in_progress",
+        statusText: "In progress",
+        detail: ownClaimNumber ? `Claim number ${ownClaimNumber}` : "The insurer has been notified. The claim number is not on the history yet.",
+      };
+    }
+    return applyNotNeeded("own_insurer", view);
+  }
+
+  function audatexSendStep(): ClaimStepView {
+    const view = shell({
+      key: "audatex_send",
+      title: "Send the Audatex estimate to the client's own insurer",
+      state: audatexSent ? "done" : "to_do",
+      statusText: audatexSent ? doneText(audatexSent.occurred_at) : "To do",
+      detail: "There is no engineer on a fault claim.",
+      detailsHref: path(input.claimId, "documents"),
+      forms: audatexSent ? [] : ["audatex_sent"],
+      lines: audatexLines(audatexSent ? input.audatex : null, false),
+    });
+    return applyNotNeeded("audatex_send", view);
+  }
+
+  function audatexAuthStep(): ClaimStepView {
+    let view = shell({
+      key: "audatex_auth",
+      title: "Authorisation received via Audatex",
+      state: audatexSent ? "waiting" : "not_started",
+      statusText: audatexSent ? "Waiting on the insurer" : "Not started",
+      detailsHref: path(input.claimId, "documents"),
+      forms: audatexSent && !audatexAuthorised ? ["audatex_auth"] : [],
+      lines: audatexLines(audatexAuthorised ? input.audatex : null, true),
+    });
+    if (audatexAuthorised) {
+      view = { ...view, state: "done", statusText: doneText(audatexAuthorised.occurred_at), forms: [] };
+    }
+    return applyNotNeeded("audatex_auth", view);
+  }
+
+  function repairsOnlyStep(): ClaimStepView {
+    const href = path(input.claimId, "repair");
+    let view = shell({
+      key: "repairs",
+      title: "Repairs done",
+      state: "not_started",
+      statusText: "Not started",
+      lines: [line("Repairs started", repairsStarted?.occurred_at), line("Repairs complete", repairsComplete?.occurred_at)].filter(
+        (item): item is ClaimStepLine => Boolean(item),
+      ),
+      buttonLabel: audatexAuthorised ? "Record repairs" : null,
+      buttonHref: audatexAuthorised ? href : null,
+      detailsHref: href,
+    });
+    if (repairsComplete) {
+      view = { ...view, state: "done", statusText: doneText(repairsComplete.occurred_at), buttonLabel: null, buttonHref: null };
+    } else if (repairsStarted) {
+      view = { ...view, state: "in_progress", statusText: "In progress", buttonLabel: "Record repairs", buttonHref: href };
+    } else if (audatexAuthorised) {
+      view = { ...view, state: "to_do", statusText: "To do" };
+    }
+    return applyNotNeeded("repairs", view);
+  }
+
+  function excessStep(): ClaimStepView {
+    let view = shell({
+      key: "excess",
+      title: "Excess paid by the client",
+      state: repairsComplete ? "to_do" : "not_started",
+      statusText: repairsComplete ? "To do" : "Not started",
+      detailsHref: path(input.claimId, "money"),
+      forms: repairsComplete ? ["excess"] : [],
+    });
+    if (excess) {
+      view = {
+        ...view,
+        state: "done",
+        statusText: doneText(excess.at),
+        detail: `${formatGbp(excess.pence)}${excess.method ? ` · ${excess.method}` : ""}`,
+        forms: [],
+      };
+    }
+    return applyNotNeeded("excess", view);
+  }
+
+  function returnStep(): ClaimStepView {
+    let view = shell({
+      key: "return_car",
+      title: "Car returned to the client",
+      state: excess ? "to_do" : "not_started",
+      statusText: excess ? "To do" : "Not started",
+      detail: excess ? null : "The excess has to be recorded as paid before the car can be returned.",
+      buttonLabel: null,
+      buttonHref: null,
+      detailsHref: path(input.claimId, "repair"),
+      forms: ["return"],
+    });
+    if (returned) {
+      view = { ...view, state: "done", statusText: doneText(returned.occurred_at), detail: null, forms: [] };
+    }
+    return applyNotNeeded("return_car", view);
+  }
+
+  function invoiceStep(): ClaimStepView {
+    const authorisedPence = audatexAuthorised ? input.audatex?.authorisedPence ?? null : null;
+    const invoice = faultInvoicePence(authorisedPence, excess?.pence ?? null);
+    const ready = invoice != null && Boolean(excess) && Boolean(audatexAuthorised);
+    const lines = [
+      moneyLine("Authorised", authorisedPence),
+      excess ? moneyLine("Excess", excess.pence) : null,
+      invoice != null ? { label: "Invoice", date: formatGbp(invoice) } : null,
+    ].filter((item): item is ClaimStepLine => Boolean(item));
+    let view = shell({
+      key: "fault_invoice",
+      title: "Invoice the client's own insurer",
+      state: ready ? "to_do" : "not_started",
+      statusText: ready ? "To do" : "Not started",
+      detail: "The invoice is the authorised amount minus the client's excess.",
+      lines,
+      detailsHref: path(input.claimId, "money"),
+      forms: ready && !invoiceSent ? ["invoice"] : [],
+    });
+    if (invoicePaid) {
+      view = { ...view, state: "done", statusText: doneText(invoicePaid.occurred_at), forms: [] };
+    } else if (invoiceSent) {
+      view = {
+        ...view,
+        state: "waiting",
+        statusText: "Waiting on the client's own insurer",
+        forms: ["invoice_paid"],
+      };
+    }
+    return applyNotNeeded("fault_invoice", view);
   }
 }
 
-export function currentClaimStep(steps: ClaimStepView[]): ClaimStepView {
-  return (
-    steps.find((step) => step.state === "waiting" || step.state === "in_progress") ||
-    steps.find((step) => step.state === "not_started") ||
-    steps[steps.length - 1]
-  );
+export function currentClaimStep(steps: ClaimStepView[]): ClaimStepView | null {
+  return steps.find((step) => step.state !== "done" && step.state !== "not_needed") || null;
 }
 
-/** Staff text on the file is kept. The step supplies the next action only when that text is empty. */
+/** The open step supplies the next action. A typed note is kept beside it and does not replace it. */
 export function resolveDisplayedNextAction(input: {
   storedAction: string | null | undefined;
   storedDue: string | null | undefined;
   steps: ClaimStepView[];
 }): DisplayedNextAction {
-  const stored = String(input.storedAction || "").trim();
-  if (stored) {
-    return { action: stored, dueAt: input.storedDue ? String(input.storedDue) : null, fromStaff: true };
-  }
+  void input.storedDue;
   const step = currentClaimStep(input.steps);
-  const action = step.buttonLabel || step.title;
-  return { action, dueAt: null, fromStaff: false };
+  const note = String(input.storedAction || "").trim();
+  if (!step) {
+    return { action: "No open step", dueAt: null, fromStaff: false, note: note || null };
+  }
+  return {
+    action: step.buttonLabel || step.title,
+    dueAt: step.dueAt,
+    fromStaff: false,
+    note: note || null,
+  };
 }
 
 export function isClaimStepKey(value: string): value is ClaimStepKey {

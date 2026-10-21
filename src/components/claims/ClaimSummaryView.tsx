@@ -49,6 +49,12 @@ export function ClaimSummaryView({ model }: { model: ClaimSummaryModel }) {
           Next action: {model.nextAction}
           <span className={model.dueClass}> · {model.dueText}</span>
         </p>
+        {model.staffNote ? (
+          <p className="mt-1 text-sm" data-staff-note>
+            Note: {model.staffNote}
+            {model.staffNoteBy && model.staffNoteOn ? ` – added by ${model.staffNoteBy}, ${model.staffNoteOn}` : ""}
+          </p>
+        ) : null}
         {model.conflict ? (
           <p id="fleet-conflict" className="mt-2 text-sm font-semibold text-overdue">
             {model.conflict}

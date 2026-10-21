@@ -1,6 +1,6 @@
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
 import { DEMO_STAFF, demoPasswordFor } from "../auth/demo-staff";
-import { ACCEPT_PAYMENT_SETTLEMENT, EXTENDED_WAIT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS } from "../auth/roles";
+import { ACCEPT_PAYMENT_SETTLEMENT, EXTENDED_WAIT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS, RELEASE_WITHOUT_EXCESS } from "../auth/roles";
 import { hashPasswordSync } from "../auth/passwords";
 import {
   FILE_REFERENCE_PREFIX_DEFAULT,
@@ -17,6 +17,7 @@ import {
 import { isoDateFromNow, isoDaysFromNow, nowUtcIso } from "../dates";
 import { ensureTest0008HireDemonstration } from "./test-0008-hire";
 import { ensureRepairProgressDemonstration } from "./repair-progress-demo";
+import { ensureStepHistoryDemonstration } from "./step-history-demo";
 import { pence, vatOnNet } from "../money";
 
 function run(db: DatabaseSync, sql: string, params: unknown[] = []) {
@@ -78,6 +79,10 @@ export function seed(db: DatabaseSync) {
   run(db, `INSERT OR IGNORE INTO staff_permissions(staff_id, permission) VALUES (?, ?)`, [
     "staff-justin",
     EXTENDED_WAIT,
+  ]);
+  run(db, `INSERT OR IGNORE INTO staff_permissions(staff_id, permission) VALUES (?, ?)`, [
+    "staff-justin",
+    RELEASE_WITHOUT_EXCESS,
   ]);
 
   const people: Array<Record<string, string | null>> = [
@@ -722,5 +727,6 @@ function insertPrototypeChronology(db: DatabaseSync) {
 
   ensureTest0008HireDemonstration(db);
   ensureRepairProgressDemonstration(db);
+  ensureStepHistoryDemonstration(db);
 }
 
