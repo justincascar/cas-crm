@@ -2,13 +2,12 @@
  * The three claim journeys. Later stages add steps after "create".
  * A stage is not finished until the journey check for that stage passes.
  *
- * This stage only creates the file: the new-claim form, Skip other number,
- * a telephone warning then Save anyway, Create claim, and step 1 done.
+ * This stage creates the file and then runs the hire journey on that same file.
  */
 
 export type JourneyId = "repairable" | "total-loss" | "fault-courtesy";
 
-export type JourneyStage = "create";
+export type JourneyStage = "hire";
 
 export type ClaimJourney = {
   id: JourneyId;
@@ -24,7 +23,7 @@ export type ClaimJourney = {
   continues: string;
 };
 
-export const JOURNEY_STAGE: JourneyStage = "create";
+export const JOURNEY_STAGE: JourneyStage = "hire";
 
 /** A number that is not a UK telephone, so the form must show Save anyway. */
 export const JOURNEY_PHONE_WARNING = "+1 202 555 0143";
@@ -61,6 +60,6 @@ export const CLAIM_JOURNEYS: ClaimJourney[] = [
     roadworthiness: "roadworthy",
     needsRecovery: false,
     needsReplacement: true,
-    continues: "Courtesy car, own insurer, excess, then the invoice. Courtesy is not credit hire.",
+    continues: "Courtesy car, own insurer, excess, then the invoice. A courtesy car has no hire agreement.",
   },
 ];

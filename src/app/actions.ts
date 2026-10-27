@@ -722,8 +722,12 @@ export async function actionSaveHirePack(formData: FormData) {
     home_tel: String(formData.get("home_tel") || ""),
     work_tel: String(formData.get("work_tel") || ""),
     mobile_tel: String(formData.get("mobile_tel") || ""),
-    licence_issued_on: String(formData.get("licence_issued_on") || ""),
-    licence_expires_on: String(formData.get("licence_expires_on") || ""),
+    licence_issued_on: formData.has("licence_issued_on")
+      ? String(formData.get("licence_issued_on") || "")
+      : String(prior.stored.licence_issued_on || ""),
+    licence_expires_on: formData.has("licence_expires_on")
+      ? String(formData.get("licence_expires_on") || "")
+      : String(prior.stored.licence_expires_on || ""),
     additional_name: String(formData.get("additional_name") || ""),
     additional_address: String(formData.get("additional_address") || ""),
     additional_dob: String(formData.get("additional_dob") || ""),

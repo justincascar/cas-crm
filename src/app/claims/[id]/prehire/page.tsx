@@ -256,9 +256,9 @@ export default async function Page({
   const { id } = await params;
   const query = await searchParams;
   const target = new URL(`http://local/claims/${id}/hire`);
-  target.searchParams.set("section", "checks");
+  target.hash = "checks";
   for (const [key, value] of Object.entries(query)) {
     if (value) target.searchParams.set(key, value);
   }
-  redirect(`${target.pathname}${target.search}`);
+  redirect(`${target.pathname}${target.search}${target.hash}`);
 }

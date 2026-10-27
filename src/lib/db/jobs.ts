@@ -61,6 +61,10 @@ export type DayJob = {
   overdue: boolean;
   actualDriverId: string | null;
   actualOccurredAt: string | null;
+  clientName: string;
+  clientPhone: string;
+  plannedAt: string | null;
+  place: string;
 };
 
 type JobRow = {
@@ -77,13 +81,19 @@ type JobRow = {
   completed_at: string | null;
   actual_driver_id: string | null;
   actual_occurred_at: string | null;
+  planned_at: string | null;
+  place_text: string | null;
+  client_name: string | null;
+  client_phone: string | null;
 };
 
 const JOB_SELECT = `SELECT a.id, a.assignee_id, a.job_kind, a.claim_id, c.file_reference, a.hire_episode_id, a.work_date,
-            a.completed_at, a.actual_driver_id, a.actual_occurred_at,
-            v.registration, v.make, v.model
+            a.completed_at, a.actual_driver_id, a.actual_occurred_at, a.planned_at, a.place_text,
+            v.registration, v.make, v.model,
+            client.full_name AS client_name, client.telephone AS client_phone
      FROM day_assignments a
      JOIN claims c ON c.id = a.claim_id
+     LEFT JOIN people client ON client.id = c.client_person_id
      LEFT JOIN hire_episodes he ON he.id = a.hire_episode_id
      LEFT JOIN fleet_vehicles fv ON fv.id = he.fleet_vehicle_id
      LEFT JOIN vehicles v ON v.id = COALESCE(fv.vehicle_id, c.client_vehicle_id)`;
@@ -106,6 +116,10 @@ function mapJob(row: JobRow): DayJob {
     overdue: false,
     actualDriverId: row.actual_driver_id,
     actualOccurredAt: row.actual_occurred_at,
+    clientName: row.client_name || "",
+    clientPhone: row.client_phone || "",
+    plannedAt: row.planned_at,
+    place: row.place_text || "",
   };
 }
 
@@ -123,6 +137,7 @@ export function listMyJobs(assigneeId: string, workDate = londonTodayIso()): Day
   const rows = all<JobRow>(
     `${JOB_SELECT}
      WHERE a.assignee_id = ?
+       AND a.cancelled_at IS NULL
        AND (
          a.work_date = ?
          OR (
@@ -152,6 +167,7 @@ export function listMyUpcomingJobs(assigneeId: string): UpcomingDay[] {
   const rows = all<JobRow>(
     `${JOB_SELECT}
      WHERE a.assignee_id = ?
+       AND a.cancelled_at IS NULL
        AND a.completed_at IS NULL
        AND a.job_kind IN (${carry})
        AND a.work_date >= ?

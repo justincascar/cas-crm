@@ -57,9 +57,13 @@ export const SETTING_STORAGE_DAILY_RATE_PENCE = "storage_daily_rate_pence";
 export const DEFAULT_VEHICLE_LOCATION =
   "Complete Accident Solutions Ltd, 171 Cwmgarw Road, Brynamman, Ammanford SA18 1DG";
 
+/** Confirmed 27 October 2026. The agreement is 89 days. Alerts start on day 80 and are overdue on day 88. */
+export const AGREEMENT_LENGTH_DAYS = 89;
+export const AGREEMENT_OVERDUE_DAY = 88;
+export const AGREEMENT_ALERT_FROM_DAY = 80;
 export const AGREEMENT_MAX_DAYS_DEFAULT = 88;
 export const AGREEMENT_RENEWAL_ALERT_DAY_DEFAULT = 80;
-export const AGREEMENT_RENEWAL_APPROACHING_DAY_DEFAULT = 70;
+export const AGREEMENT_RENEWAL_APPROACHING_DAY_DEFAULT = 80;
 export const SETTING_AGREEMENT_MAX_DAYS = "agreement_max_days";
 export const SETTING_AGREEMENT_RENEWAL_ALERT_DAY = "agreement_renewal_alert_day";
 export const SETTING_AGREEMENT_RENEWAL_APPROACHING_DAY = "agreement_renewal_approaching_day";

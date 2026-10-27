@@ -915,3 +915,26 @@ Create claim was staying on New claim. The “Skip other number” tick was bein
 Finish on 27 October 2026: 529 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: the database was unchanged on open and no claim page scrolled sideways. The three journey checks passed on their own database.
 
 The walk files on this PC are TEST-0015 Audit Repair, TEST-0016 Audit Totalloss, and TEST-0017 Audit Fault. TEST-0013’s two flags were left as they were. TEST-0005’s storage end was not confirmed. TEST-0009’s vehicle-damage offers, TEST-0006’s money, and TEST-0007’s £800 were not changed. No live email was sent. `EMAIL_SEND_MODE` stays `simulate`.
+
+## One hire (27 October 2026)
+
+Hire is one tab, in order: whether a car is needed, the existing pre-hire checks, choose a car, the hire pack, handover, then the car on hire. Opening any page does not start hire and does not write a charge.
+
+A reservation is not hire. Hire starts on the handover date, when the handover is completed. The car is marked on hire then, step 3 is done, and the dashboard on-hire count uses those saved records.
+
+Only a free, suitable car is offered. A booking on the same London calendar day is an overlap. The server refuses a clash even if the screen is bypassed: “This car has just been booked on [CAS ref]. Please choose another.” Changing or cancelling the car releases the reservation. A repeat submit does not create a second reservation, job, or history line.
+
+A delivery creates one job for the driver login, with the file, the client, the telephone, the address, the car, and the date and time. The client collecting the car does not create a job. Changing the car, date, or address updates that job. Cancelling cancels it. A collection job can be arranged when hire is to end. It does not set the chargeable end. Repairable hire still ends on confirmed collection. Total-loss hire still ends seven days after the qualifying payment, with handler confirmation.
+
+The rate is taken from Settings when the car is chosen and is stored on that hire. Changing Settings later does not change it. A swap or a renewal keeps one hire. The day count does not restart.
+
+The agreement is 89 days. Alerts start on day 80 and are overdue on day 88. That margin is deliberate. It replaces the earlier amber warning from day 70. Hire charges are not changed by the alert. Earlier notes in this log that leave 89 against 88 as undecided, or that start an amber warning on day 70, are superseded by this decision.
+
+A fault file uses the same choose-a-car and handover steps for a courtesy car. It does not file a hire agreement or a hire pack. There is no daily charge to an insurer.
+
+The pack uses the existing CAS wording. E-signature is not set up. Staff print, sign, and upload. The full licence number is stored once on the client or driver record and reused. Missing details are listed with a link. A draft is still saved.
+
+Known issue 26 (hire split across screens) and known issue 27 (no driver job) are closed. Known issues 24 and 25, the typed licence check and bank statements not sitting on the check, stay open for Stage 3.
+
+Recovery mileage charging remains undecided. That is the open decision from 19 October 2026.
+

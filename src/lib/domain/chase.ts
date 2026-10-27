@@ -1,9 +1,10 @@
 import { addCalendarDaysIso, daysBetweenLondon } from "../dates";
 import { agreementDayNumber } from "./rules";
 import {
-  AGREEMENT_MAX_DAYS_DEFAULT,
+  AGREEMENT_ALERT_FROM_DAY,
+  AGREEMENT_LENGTH_DAYS,
+  AGREEMENT_OVERDUE_DAY,
   AGREEMENT_RENEWAL_ALERT_DAY_DEFAULT,
-  AGREEMENT_RENEWAL_APPROACHING_DAY_DEFAULT,
   ENGINEER_CHASER_INTERVAL_DAYS_DEFAULT,
   ENGINEER_INSTRUCTION_CHASE_RULE,
   ENGINEER_REPORT_CHASE_DUE_LABEL,
@@ -539,24 +540,26 @@ function agreementDayAt(clockAt: string, day: number): string {
   return addCalendarDaysIso(clockAt, Math.max(day - 1, 0));
 }
 
-/** Amber day 70, red day 80, overdue day 88 of the current signed agreement. Sending a reminder does not restart the count. */
+/** Alerts from day 80, overdue on day 88. The agreement itself is 89 days. Sending a reminder does not restart the count. */
 export function hireAgreementRenewalDecision(opts: HireAgreementRenewalDecisionInput): ChaseClockDecision {
-  const approachingDay = parseChaseIntervalDays(opts.approachingDay, AGREEMENT_RENEWAL_APPROACHING_DAY_DEFAULT);
-  const alertDay = parseChaseIntervalDays(opts.alertDay, AGREEMENT_RENEWAL_ALERT_DAY_DEFAULT);
-  const maxDays = parseChaseIntervalDays(opts.maxDays, AGREEMENT_MAX_DAYS_DEFAULT);
+  const alertFrom = AGREEMENT_ALERT_FROM_DAY;
+  const overdueFrom = AGREEMENT_OVERDUE_DAY;
+  const length = AGREEMENT_LENGTH_DAYS;
+  void opts.approachingDay;
+  void opts.alertDay;
+  void opts.maxDays;
   const handlerState = opts.handlerState;
   const clockAt = opts.startOn && String(opts.startOn).trim() ? String(opts.startOn) : null;
   const agreementDay = clockAt ? agreementDayNumber(clockAt, opts.asAt) : null;
-  const approachingAt = clockAt ? agreementDayAt(clockAt, approachingDay) : null;
-  const alertAt = clockAt ? agreementDayAt(clockAt, alertDay) : null;
-  const overdueAt = clockAt ? agreementDayAt(clockAt, maxDays) : null;
+  const alertAt = clockAt ? agreementDayAt(clockAt, alertFrom) : null;
+  const overdueAt = clockAt ? agreementDayAt(clockAt, overdueFrom) : null;
   const base = {
     active: Boolean(opts.applies && !opts.hireEnded),
     outcomeOnFile: false,
     handlerState,
     daysOutstanding: agreementDay,
     clockAt,
-    dueAt: approachingAt,
+    dueAt: alertAt,
     label: null as string | null,
     severity: null as ChaseSeverity | null,
   };
@@ -576,40 +579,30 @@ export function hireAgreementRenewalDecision(opts: HireAgreementRenewalDecisionI
   if (handlerState === "paused") {
     return { ...base, due: false, reason: "Chase paused by staff." };
   }
-  if (agreementDay >= maxDays) {
+  if (agreementDay >= overdueFrom) {
     return {
       ...base,
       due: true,
       dueAt: overdueAt,
       label: opts.overdueLabel,
       severity: "red_overdue",
-      reason: `${opts.overdueLabel}. Day ${agreementDay} of the current signed agreement (limit ${maxDays} days). Clears only when a renewal is logged.`,
+      reason: `${opts.overdueLabel}. Day ${agreementDay}. Overdue from day ${overdueFrom}. The agreement is ${length} days. Clears only when a renewal is logged.`,
     };
   }
-  if (agreementDay >= alertDay) {
+  if (agreementDay >= alertFrom) {
     return {
       ...base,
       due: true,
       dueAt: alertAt,
       label: opts.dueLabel,
       severity: "red",
-      reason: `${opts.dueLabel}. Day ${agreementDay} of the current signed agreement (alert day ${alertDay}, limit ${maxDays} days). Clears only when a renewal is logged.`,
-    };
-  }
-  if (agreementDay >= approachingDay) {
-    return {
-      ...base,
-      due: true,
-      dueAt: approachingAt,
-      label: opts.approachingLabel,
-      severity: "amber",
-      reason: `${opts.approachingLabel}. Day ${agreementDay} of the current signed agreement (approaching from day ${approachingDay}, alert day ${alertDay}, limit ${maxDays} days). Clears only when a renewal is logged.`,
+      reason: `${opts.dueLabel}. Day ${agreementDay}. Alerts start on day ${alertFrom} and are overdue on day ${overdueFrom}. The agreement is ${length} days. Clears only when a renewal is logged.`,
     };
   }
   return {
     ...base,
     due: false,
-    reason: `Day ${agreementDay} of the current signed agreement. Approaching from day ${approachingDay}, alert from day ${alertDay} (limit ${maxDays} days).`,
+    reason: `Day ${agreementDay} of the current signed agreement. Alerts start on day ${alertFrom} and are overdue on day ${overdueFrom}. The agreement is ${length} days.`,
   };
 }
 

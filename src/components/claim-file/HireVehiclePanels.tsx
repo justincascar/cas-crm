@@ -86,7 +86,7 @@ export function HireVehiclePanel({
             Kind
             <select name="kind" className={field} defaultValue="hire">
               <option value="hire">Hire (charges not started)</option>
-              <option value="courtesy">Courtesy — not credit hire</option>
+              <option value="courtesy">Courtesy car</option>
             </select>
           </label>
           <label className="text-sm">

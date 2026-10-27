@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound, redirect } from "next/navigation";
+import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/ClaimTable";
 import { isAdministrator } from "@/lib/auth/roles";
 import { requireStaff } from "@/lib/auth/session";
@@ -406,10 +406,5 @@ export default async function Page({
 }) {
   const { id } = await params;
   const query = await searchParams;
-  const target = new URL(`http://local/claims/${id}/hire`);
-  target.searchParams.set("section", "financial");
-  for (const [key, value] of Object.entries(query)) {
-    if (value) target.searchParams.set(key, value);
-  }
-  redirect(`${target.pathname}${target.search}`);
+  return FinancialCircumstancesScreen({ params: Promise.resolve({ id }), searchParams: Promise.resolve(query) });
 }

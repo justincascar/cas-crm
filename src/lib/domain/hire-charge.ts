@@ -7,7 +7,7 @@ export { HIRE_INCLUSIVE_DAY_NOTE } from "./storage-charge";
 
 export { STORED_FIGURE_DIFFERS as STORED_HIRE_DIFFERS } from "./figure-resolution";
 export const HIRE_NOT_STARTED = "Hire not started";
-export const FAULT_COURTESY_NOT_CREDIT_HIRE = "Fault courtesy is not credit hire.";
+export const FAULT_COURTESY_NOT_CREDIT_HIRE = "This is a courtesy car. There is no daily charge to an insurer.";
 
 export type HireCountBasis = StorageCountBasis;
 

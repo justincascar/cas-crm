@@ -18,20 +18,18 @@ TEST-0014 (Ceri Walsh, created 19/10/2026) was already on the database. It was n
 
 New claim is one screen, `/claims/new` (`IntakeForm`). After create, the file opens on `/claims/{id}` with the ten steps.
 
-Hire is not one route. From the file:
+Hire is one route, `/claims/{id}/hire`.
 
-| Screen | Route | What it asks again |
+| Screen | Route | What it does |
 | --- | --- | --- |
-| Hire menu | `/claims/{id}/hire` | Which of the five sections |
-| Pre-hire checks | `.../hire?section=checks` | Licence check code, categories, points, expiry. Bank is a link away |
-| Hire pack | `.../hire?section=pack` (also `/hire-pack`, which lands here) | Licence number, telephones, delivery address, GTA group, rates, need statement |
-| Handover | `.../hire?section=handover` | Hire car or customer’s vehicle, what is happening, driver, time |
-| Financial circumstances | `.../hire?section=financial` | Means, account list, upload, checklist status, mitigation statement |
-| Reserve | `/claims/{id}/details/reserve` | A vehicle already reserved or on hire, plus hold dates |
-| Delivery notes | `.../details/delivery-collection` | Start, end, driver, town. Notes only |
-| Messages | `/claims/{id}/messages` | Recipient, template, letter, and a separate tick to record the step |
-| Assessed damage | `.../details/assessed-damage` | Total-loss tick and valuation notes |
-| Jobs | `/jobs` | Job type, driver, date, and an existing hire booking. “Nothing here is assigned automatically.” |
+| Hire | `/claims/{id}/hire` | Needed, checks, choose a car, pack, handover, on hire |
+| Pre-hire checks | `.../hire#checks` (also `/prehire`) | The existing licence check and bank position |
+| Choose a car | `.../hire#car` (also `/details/reserve`) | Free cars only. A reservation does not start charges |
+| Hire pack | `.../hire#pack` (also `/hire-pack`) | Filled from the file. The licence number is not typed again |
+| Handover | `.../hire#handover` | The car already chosen. Photographs stay on `/handover` |
+| Hire money | `/claims/{id}/money/hire` | The hire head of loss |
+| Financial circumstances | `/claims/{id}/financial` | Means, account list, upload, checklist, mitigation |
+| Jobs | `/jobs` | The driver’s own jobs. A hire delivery is created when a car is chosen for delivery |
 | Repair evidence | `/claims/{id}/repair` | Workshop steps and uploads |
 | Storage money | `/claims/{id}/money/storage` | Chargeable end, including the confirm button |
 | Missing id | `/claims/does-not-exist` | Next.js 404: “This page could not be found.” |
@@ -50,10 +48,10 @@ Total loss is one more screen (Assessed damage) and one tick. The steps list the
 
 ## Confirmed issues
 
-- Hire is split across the menu, reserve, the pack, handover, and delivery notes. The pack does not copy the file. Handover asks Hire car or Customer’s vehicle even when the car is already named (TEST-0003 shows “Hire car: Volkswagen Golf CAS 2” under that question).
-- Licence check is a typed form plus a text link, `gov.uk/check-driving-licence`. No result upload. The full licence number is on Client details and again on the hire pack, not on the check.
-- Bank: `hire?section=checks` is satisfied by a listed account or a no-bank explanation on Financial circumstances. The checklist status is separate. An upload there does not mark the checklist Complete, and the check screen has no upload of its own.
-- Assigning a job is manual (`AssignJobForm` on `/jobs`). Creating or reserving does not insert a driver job.
+- Hire is one tab. A reservation does not start charges. The pack copies the file. The licence number is not typed again. Handover uses the car already chosen. Delivery creates one driver job. Known issues 26 and 27 are closed.
+- Licence check is still a typed form plus a text link, `gov.uk/check-driving-licence`. No result upload. Known issue 24, left for Stage 3. The full licence number is on the client record and is reused.
+- Bank: the check is still satisfied by a listed account or a no-bank explanation on Financial circumstances. An upload does not, by itself, satisfy it. Known issue 25, left for Stage 3.
+- A hire delivery is created when a car is chosen for delivery. Other jobs are still assigned by hand on `/jobs`.
 - `/claims/does-not-exist` is the framework 404. `notFound()` in `src/app/claims/[id]/layout.tsx`. Not changed. A 404 page is not a form.
 - TEST-0013 (`claim_e6ee0ed9-2614-4586-87fd-390c1cab4219`) still shows both open flags: inherited £195 in a note, and recovery 09:00 before the accident at 14:30. Not rewritten.
 - TEST-0004 still lists “Instruct the engineer” and “Request repair authorisation”, and credit-hire chases, while step 5 says there is no engineer on a fault claim.
@@ -103,4 +101,4 @@ A stage is not finished until `npm run test:journeys` passes together with `npm 
 - TEST-0009 offers were not edited. TEST-0006 and TEST-0007 were not opened for money changes.
 - No Send was pressed. The messages page states that nothing is sent from claims@cascar.co.uk.
 - Driver and mechanic menus do not include the office or the money. Workshop steps are on the mechanic’s repair page only.
-- Hire renewal copy on the pack still shows day 88 against the pack’s 89. It was not changed.
+- The agreement is 89 days. Alerts start on day 80 and are overdue on day 88. Confirmed 27 October 2026. Hire charges are not changed by the alert.

@@ -1,5 +1,6 @@
 import { TOTAL_LOSS_HIRE_DAYS_AFTER_QUALIFYING_PAYMENT } from "../constants";
 import { addCalendarDaysIso, daysBetweenLondon, formatUkDate, londonDateIso } from "../dates";
+import { hireDaysOverlap } from "./hire-availability";
 import { londonCalendarDayGap } from "./storage-authorisation-end";
 
 export type ReservationInput = {
@@ -26,7 +27,7 @@ export function canReserveVehicle(input: ReservationInput): { ok: true } | { ok:
     (row) =>
       row.vehicleId === input.vehicleId &&
       ["reserved", "active"].includes(row.status) &&
-      reservationsOverlap(input.startAt, input.endAt, row.startAt, row.endAt),
+      hireDaysOverlap(input.startAt, input.endAt, row.startAt, row.endAt),
   );
   if (clash) {
     return {

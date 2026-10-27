@@ -119,9 +119,9 @@ export async function HirePackScreen({
         <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm">Mandatory hire pack fields are present.</p>
       ) : null}
 
-      <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">
-        <strong>Decision needed:</strong> {RENTAL_PERIOD_DECISION.note} CRM alerts: {RENTAL_PERIOD_DECISION.alertDays}{" "}
-        days. Supplied pack: {RENTAL_PERIOD_DECISION.packDays} days. Neither number has been changed.
+      <p className="rounded-md border border-line bg-card px-4 py-3 text-sm">
+        The agreement is {RENTAL_PERIOD_DECISION.packDays} days. Renewal alerts start on day 80 and are overdue on day{" "}
+        {RENTAL_PERIOD_DECISION.alertDays}. E-signature is not set up. Print the pack, sign it, and upload the signed copy.
       </p>
 
       {pack.srMissing.length > 0 ? (
@@ -172,7 +172,12 @@ export async function HirePackScreen({
             </label>
             <label className="text-sm">
               Driving licence number
-              <input name="licence_number" className={field} defaultValue={pack.ctx.licenceNumber || ""} />
+              <p className="mt-1 text-base" data-pack-licence>
+                {pack.ctx.licenceNumber || "Not on the file"}
+              </p>
+              <Link href={`/claims/${id}/details/client`} className="text-sm text-teal-dark underline">
+                Change it on the client record
+              </Link>
             </label>
             <label className="text-sm">
               Licence date of issue
@@ -449,9 +454,9 @@ export default async function Page({
   const { id } = await params;
   const query = await searchParams;
   const target = new URL(`http://local/claims/${id}/hire`);
-  target.searchParams.set("section", "pack");
+  target.hash = "pack";
   for (const [key, value] of Object.entries(query)) {
     if (value) target.searchParams.set(key, value);
   }
-  redirect(`${target.pathname}${target.search}`);
+  redirect(`${target.pathname}${target.search}${target.hash}`);
 }

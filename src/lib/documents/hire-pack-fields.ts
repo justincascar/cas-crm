@@ -100,6 +100,6 @@ export const STORAGE_RECOVERY_STANDALONE_BANNER =
 export const RENTAL_PERIOD_DECISION = {
   packDays: 89,
   alertDays: 88,
-  status: "awaiting_justin",
-  note: "The supplied Hire Pack caps the Rental Period at 89 days. CRM renewal alerts use 88 days. Do not silently pick one — Justin (or the solicitor) must confirm which is correct.",
+  status: "confirmed",
+  note: "Confirmed 27 October 2026. The agreement is 89 days. Renewal alerts start on day 80 and are overdue on day 88. That margin is deliberate. Hire charges are not changed by this alert.",
 } as const;

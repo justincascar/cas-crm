@@ -79,14 +79,12 @@ export default async function SettingsPage({
       {mailboxCheckError ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{mailboxCheckError}</p>
       ) : null}
-      <section className="rounded-xl border border-warn/40 bg-[#fff6e8] p-5">
-        <h2 className="font-serif text-xl text-navy-deep">Hire agreement length — decision needed</h2>
+      <section className="rounded-xl border border-line bg-card p-5">
+        <h2 className="font-serif text-xl text-navy-deep">Hire agreement length</h2>
         <p className="mt-2 text-sm">
-          The supplied Hire Pack caps the Rental Period at <strong>89 days</strong> from the date of the agreement. CRM
-          renewal alerts use a separate CAS operational limit of <strong>{agreementMaxDays} days</strong>, with an amber
-          warning from day <strong>{agreementRenewalApproachingDay}</strong> and a red reminder from day{" "}
-          <strong>{agreementRenewalAlertDay}</strong>. Neither the pack wording nor this operational limit has been
-          silently aligned. Confirm with the solicitor which figure is correct before live enforcement.
+          Confirmed 27 October 2026. The agreement is <strong>89 days</strong>. Renewal alerts start on day{" "}
+          <strong>80</strong> and are overdue on day <strong>88</strong>. That margin is deliberate. Hire charges are
+          not changed by the alert. A renewal does not restart the day count.
         </p>
         <ValidatedForm action={actionSaveAgreementLimits} className="mt-4 grid gap-3 sm:grid-cols-3 sm:items-end">
           <RecordVersionField version={versionFor("settings-agreement")} />

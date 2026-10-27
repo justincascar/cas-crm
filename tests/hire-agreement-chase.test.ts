@@ -52,21 +52,20 @@ const dueBase = {
 };
 
 describe("hire agreement renewal clock", () => {
-  it("is not due just under day 70, and is amber at and over day 70 until day 80", () => {
+  it("is not due on day 79, and the alert starts on day 80", () => {
     const startOn = "2026-06-27";
-    const justUnder = hireAgreementRenewalDecision({ ...dueBase, startOn, asAt: "2026-09-03T12:00:00.000Z" });
-    const atThreshold = hireAgreementRenewalDecision({ ...dueBase, startOn, asAt: "2026-09-04T12:00:00.000Z" });
-    const lateAmber = hireAgreementRenewalDecision({ ...dueBase, startOn, asAt: "2026-09-13T12:00:00.000Z" });
-    assert.equal(justUnder.due, false);
-    assert.equal(justUnder.severity, null);
-    assert.equal(justUnder.daysOutstanding, 69);
-    assert.equal(atThreshold.due, true);
-    assert.equal(atThreshold.severity, "amber");
-    assert.equal(atThreshold.label, HIRE_AGREEMENT_RENEWAL_APPROACHING_LABEL);
-    assert.equal(atThreshold.daysOutstanding, 70);
-    assert.equal(lateAmber.due, true);
-    assert.equal(lateAmber.severity, "amber");
-    assert.equal(lateAmber.daysOutstanding, 79);
+    const day79 = hireAgreementRenewalDecision({ ...dueBase, startOn, asAt: "2026-09-13T12:00:00.000Z" });
+    const day80 = hireAgreementRenewalDecision({ ...dueBase, startOn, asAt: "2026-09-14T12:00:00.000Z" });
+    const day70 = hireAgreementRenewalDecision({ ...dueBase, startOn, asAt: "2026-09-04T12:00:00.000Z" });
+    assert.equal(day70.due, false);
+    assert.equal(day70.daysOutstanding, 70);
+    assert.equal(day79.due, false);
+    assert.equal(day79.severity, null);
+    assert.equal(day79.daysOutstanding, 79);
+    assert.equal(day80.due, true);
+    assert.equal(day80.severity, "red");
+    assert.equal(day80.label, HIRE_AGREEMENT_RENEWAL_DUE_LABEL);
+    assert.equal(day80.daysOutstanding, 80);
   });
 
   it("is not red just under day 80, and is red at and over day 80 until day 88", () => {
@@ -74,8 +73,8 @@ describe("hire agreement renewal clock", () => {
     const justUnder = hireAgreementRenewalDecision({ ...dueBase, startOn, asAt: "2026-09-13T12:00:00.000Z" });
     const atThreshold = hireAgreementRenewalDecision({ ...dueBase, startOn, asAt: "2026-09-14T12:00:00.000Z" });
     const over = hireAgreementRenewalDecision({ ...dueBase, startOn, asAt: "2026-09-15T12:00:00.000Z" });
-    assert.equal(justUnder.due, true);
-    assert.equal(justUnder.severity, "amber");
+    assert.equal(justUnder.due, false);
+    assert.equal(justUnder.severity, null);
     assert.equal(justUnder.daysOutstanding, 79);
     assert.equal(atThreshold.due, true);
     assert.equal(atThreshold.severity, "red");
@@ -131,25 +130,21 @@ describe("hire agreement renewal clock", () => {
 });
 
 describe("hire agreement renewal on TEST files", () => {
-  it("shows amber on a TEST hire at day 70 and still amber at day 79", () => {
+  it("does not alert a TEST hire on day 79, and alerts on day 80", () => {
     const db = seeded();
     withDatabase(db, () => {
-      db.prepare(`UPDATE agreements SET start_on = ? WHERE id = 'ag-c3'`).run(isoDateFromNow(-68));
-      const justUnder = chaseForClaim("hire_agreement_renewal", "c3");
-      assert.equal(justUnder?.due, false);
-      assert.equal(justUnder?.severity, null);
-      db.prepare(`UPDATE agreements SET start_on = ? WHERE id = 'ag-c3'`).run(isoDateFromNow(-69));
-      const atApproaching = chaseForClaim("hire_agreement_renewal", "c3");
-      assert.equal(atApproaching?.due, true);
-      assert.equal(atApproaching?.severity, "amber");
-      assert.equal(atApproaching?.label, HIRE_AGREEMENT_RENEWAL_APPROACHING_LABEL);
       db.prepare(`UPDATE agreements SET start_on = ? WHERE id = 'ag-c3'`).run(isoDateFromNow(-78));
-      const lateAmber = chaseForClaim("hire_agreement_renewal", "c3");
-      assert.equal(lateAmber?.due, true);
-      assert.equal(lateAmber?.severity, "amber");
+      const day79 = chaseForClaim("hire_agreement_renewal", "c3");
+      assert.equal(day79?.due, false);
+      assert.equal(day79?.severity, null);
+      db.prepare(`UPDATE agreements SET start_on = ? WHERE id = 'ag-c3'`).run(isoDateFromNow(-79));
+      const day80 = chaseForClaim("hire_agreement_renewal", "c3");
+      assert.equal(day80?.due, true);
+      assert.equal(day80?.severity, "red");
+      assert.equal(day80?.label, HIRE_AGREEMENT_RENEWAL_DUE_LABEL);
       const due = listDueChases().filter((row) => row.kind === "hire_agreement_renewal" && row.claimId === "c3");
       assert.equal(due.length, 1);
-      assert.equal(due[0].severity, "amber");
+      assert.equal(due[0].severity, "red");
     });
     db.close();
   });
@@ -209,8 +204,7 @@ describe("hire agreement renewal on TEST files", () => {
   it("logs a renewal at each stage without overwriting earlier agreements, including two renewals in sequence", () => {
     const db = seeded();
     withDatabase(db, () => {
-      const stages: Array<{ daysAgo: number; severity: "amber" | "red" | "red_overdue" }> = [
-        { daysAgo: 69, severity: "amber" },
+      const stages: Array<{ daysAgo: number; severity: "red" | "red_overdue" }> = [
         { daysAgo: 79, severity: "red" },
         { daysAgo: 87, severity: "red_overdue" },
       ];

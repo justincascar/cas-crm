@@ -235,6 +235,8 @@ describe("hire agreement rating and the four-page document", () => {
       recordPassingPrehireChecks("c1");
       recordPassingPrehireChecks("c2");
       db.prepare(`UPDATE people SET licence_number = 'DAF000000AB9CD' WHERE id = 'p-daf'`).run();
+      assert.throws(() => generateHireAgreementDocument("c4", "staff-megan", 0), /courtesy car/);
+      db.prepare(`UPDATE claims SET claim_type = 'non_fault' WHERE id = 'c4'`).run();
       const hireOnly = generateHireAgreementDocument("c4", "staff-megan", 0);
       const hireHtml = String((db.prepare(`SELECT body_html FROM documents WHERE id = ?`).get(hireOnly.documentId) as { body_html: string }).body_html);
       assert.match(hireHtml, /Hire Agreement — 1 of 3/);
@@ -287,7 +289,8 @@ describe("hire agreement rating and the four-page document", () => {
     const db = prepared();
     withDatabase(db, () => {
       recordPassingPrehireChecks("c4");
-      db.prepare(`UPDATE claims SET recovery_status = 'required', storage_status = 'none', storage_started_on = NULL WHERE id = 'c4'`).run();
+      assert.throws(() => generateHireAgreementDocument("c4", "staff-megan", 0), /courtesy car/);
+      db.prepare(`UPDATE claims SET claim_type = 'non_fault', recovery_status = 'required', storage_status = 'none', storage_started_on = NULL WHERE id = 'c4'`).run();
       const result = generateHireAgreementDocument("c4", "staff-megan", 0);
       const html = String((db.prepare(`SELECT body_html FROM documents WHERE id = ?`).get(result.documentId) as { body_html: string }).body_html);
       assert.match(html, /The Storage &amp; Recovery page is not included/);

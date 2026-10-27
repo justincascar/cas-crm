@@ -298,7 +298,8 @@ describe("claim steps from history", () => {
     assert.match(read("src/app/claims/[id]/heads/storage/page.tsx"), /\/money\/storage/);
     assert.match(read("src/app/claims/[id]/heads/hire/page.tsx"), /\/money\/hire/);
     assert.match(read("src/app/claims/[id]/vehicles/page.tsx"), /\/details\/vehicles/);
-    assert.match(read("src/app/claims/[id]/handover/page.tsx"), /section=handover|section", "handover"/);
+    assert.match(read("src/app/claims/[id]/hire/page.tsx"), /section === "handover"/);
+    assert.match(read("src/app/claims/[id]/handover/page.tsx"), /return HandoverScreen/);
   });
 
   it("still blocks a driver and a mechanic from office and money on the server", () => {

@@ -91,7 +91,7 @@ const EMPTY_PACK: HirePackData = {
 export function getHirePack(claimId: string) {
   const claim = get<Record<string, string | number | null>>(
     `SELECT c.*, s.name AS handler_name, p.full_name AS client_name, p.date_of_birth, p.address_line1, p.town, p.postcode,
-            p.telephone, p.email, p.licence_number, v.registration AS client_reg, v.make AS client_make, v.model AS client_model,
+            p.telephone, p.email, p.licence_number, p.licence_issued_on AS person_licence_issued_on, p.licence_expires_on AS person_licence_expires_on, v.registration AS client_reg, v.make AS client_make, v.model AS client_model,
             v.gta_group AS client_gta_group, c.hire_agreement_number
      FROM claims c
      LEFT JOIN staff s ON s.id = c.handler_id
@@ -108,7 +108,9 @@ export function getHirePack(claimId: string) {
      LEFT JOIN fleet_vehicles fv ON fv.id = he.fleet_vehicle_id
      LEFT JOIN vehicles v ON v.id = fv.vehicle_id
      WHERE he.claim_id = ?
-     ORDER BY he.started_at DESC`,
+     ORDER BY CASE WHEN he.collection_at IS NULL AND he.billing_end_at IS NULL THEN 0 ELSE 1 END,
+              CASE WHEN he.started_at IS NULL THEN 0 ELSE 1 END,
+              he.started_at DESC`,
     [claimId],
   );
   const savedRow = get<HirePackData>(`SELECT * FROM hire_pack_data WHERE claim_id = ?`, [claimId]);
@@ -147,6 +149,12 @@ export function getHirePack(claimId: string) {
     ...stored,
     claim_id: claimId,
   };
+  if (!merged.licence_issued_on && claim.person_licence_issued_on) {
+    merged.licence_issued_on = String(claim.person_licence_issued_on);
+  }
+  if (!merged.licence_expires_on && claim.person_licence_expires_on) {
+    merged.licence_expires_on = String(claim.person_licence_expires_on);
+  }
   const ctx = {
     agreementNumber: String(claim.file_reference),
     hirerName: String(claim.client_name || ""),
@@ -251,6 +259,9 @@ export function saveHirePack(claimId: string, input: HirePackData) {
 export function generateHirePackDocument(claimId: string, actorId: string) {
   const pack = getHirePack(claimId);
   if (!pack) throw new Error("File not found.");
+  if (String(pack.claim.claim_type) === "fault") {
+    throw new Error("A hire pack is not created for a courtesy car.");
+  }
   const html = renderHirePack(pack);
   const versionRow = get<{ v: number }>(
     `SELECT COALESCE(MAX(version), 0) AS v FROM documents WHERE claim_id = ? AND template_key = 'hire_pack'`,
@@ -462,7 +473,7 @@ Date out: ${escape(dateOut)} &nbsp; Date in: ${escape(chargeableHireEnd)}</p>
 <table>
 <tr><td>Daily rate</td><td>${money(s.daily_rate_pence)}</td><td>Sat navigation</td><td>${money(s.sat_nav_pence)}</td></tr>
 <tr><td>Additional driver</td><td>${money(s.additional_driver_pence)}</td><td>Hands free</td><td>${money(s.hands_free_pence)}</td></tr>
-<tr><td>Collision damage waiver</td><td>${money(s.cdw_pence)}</td><td>Child seat</td><td>${money(s.child_seat_pence)}</td></tr>
+<tr><td>Collision damage waiver</td><td>${Number(s.cdw_pence) ? money(s.cdw_pence) : "Not on the file"}</td><td>Child seat</td><td>${money(s.child_seat_pence)}</td></tr>
 <tr><td>Automatic charge</td><td>${money(s.automatic_pence)}</td><td>Insurance (daily)</td><td>${money(s.insurance_daily_pence)}</td></tr>
 <tr><td>Estate charge</td><td>${money(s.estate_pence)}</td><td>Insurance</td><td>${money(s.insurance_pence)}</td></tr>
 <tr><td>Tow bar</td><td>${money(s.tow_bar_pence)}</td><td>Admin fee</td><td>${money(s.admin_pence)}</td></tr>

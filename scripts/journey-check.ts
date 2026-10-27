@@ -15,7 +15,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import { CLAIM_JOURNEYS, JOURNEY_PHONE_WARNING, JOURNEY_STAGE, type ClaimJourney } from "../tests/journeys/claim-journeys.ts";
+import { CLAIM_JOURNEYS, JOURNEY_PHONE_WARNING, type ClaimJourney, type JourneyId } from "../tests/journeys/claim-journeys.ts";
 
 const ACCIDENT_DATE = "2026-10-20";
 
@@ -371,13 +371,14 @@ function storedJourney(dbPath: string, reference: string) {
     db.exec("PRAGMA query_only = ON;");
     return db
       .prepare(
-        `SELECT c.file_reference, c.claim_type, c.roadworthiness, c.needs_replacement, c.needs_recovery,
+        `SELECT c.id, c.file_reference, c.claim_type, c.roadworthiness, c.needs_replacement, c.needs_recovery,
                 c.other_contact_skipped, p.home_tel, p.mobile_tel
          FROM claims c JOIN people p ON p.id = c.client_person_id
          WHERE c.file_reference = ?`,
       )
       .get(reference) as
       | {
+          id: string;
           file_reference: string;
           claim_type: string;
           roadworthiness: string;
@@ -393,12 +394,337 @@ function storedJourney(dbPath: string, reference: string) {
   }
 }
 
-async function main() {
-  if (JOURNEY_STAGE !== "create") {
-    console.error("This script only runs the create stage. Extend it with the journey file.");
-    process.exitCode = 1;
-    return;
+type MadeClaim = { id: JourneyId; reference: string; claimId: string };
+
+const HIRE_DAY = "2026-11-02";
+
+async function gotoPath(session: BrowserSession, origin: string, path: string) {
+  await session.send("Page.navigate", { url: `${origin}${path}` });
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline) {
+    const current = await session.evaluate<string>(`location.pathname`);
+    if (current === path.split("?")[0]) {
+      const ready = await session.evaluate<boolean>(`document.readyState === "complete" && document.body.innerText.length > 20`);
+      if (ready) return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 200));
   }
+  throw new Error(`The page did not open: ${path}`);
+}
+
+async function postFields(session: BrowserSession, path: string, fields: Record<string, string>) {
+  const spec = JSON.stringify({ path, fields });
+  return session.evaluate<{ status: number; location: string }>(`(() => {
+    const spec = ${spec};
+    const body = new URLSearchParams(spec.fields);
+    if (!body.get("submitKey")) body.set("submitKey", crypto.randomUUID());
+    return fetch(spec.path, { method: "POST", body, credentials: "same-origin", redirect: "follow" }).then((response) => ({
+      status: response.status,
+      location: response.url || "",
+    }));
+  })()`);
+}
+
+function storedLicence(dbPath: string, claimId: string) {
+  const db = new DatabaseSync(dbPath);
+  try {
+    const row = db
+      .prepare(
+        `SELECT p.licence_number AS licence
+         FROM claims c JOIN people p ON p.id = c.client_person_id
+         WHERE c.id = ?`,
+      )
+      .get(claimId) as { licence: string | null } | undefined;
+    return row?.licence || "";
+  } finally {
+    db.close();
+  }
+}
+
+async function saveClientLicence(session: BrowserSession, origin: string, dbPath: string, claimId: string) {
+  await gotoPath(session, origin, `/claims/${claimId}/details/client`);
+  const filled = await session.evaluate<string>(`(() => {
+    ${FILL}
+    for (const box of document.querySelectorAll('input[type="checkbox"]')) {
+      if (box instanceof HTMLInputElement && box.name.startsWith("saveAnyway_") && !box.checked) box.click();
+    }
+    return setControl("licenceNumber", "TEST-LIC-0001");
+  })()`);
+  if (filled !== "TEST-LIC-0001") return `licence field ${filled}`;
+  await session.evaluate<void>(`(() => {
+    const button = [...document.querySelectorAll("button")].find((item) => item.textContent?.trim() === "Save this screen");
+    if (!button) throw new Error("Save this screen was not on the client page.");
+    button.click();
+  })()`);
+  const deadline = Date.now() + 20_000;
+  let retried = false;
+  while (Date.now() < deadline) {
+    if (storedLicence(dbPath, claimId) === "TEST-LIC-0001") return null;
+    const page = await session.evaluate<{ href: string; error: string; saved: boolean }>(`({
+      href: location.href,
+      error: document.querySelector("[data-form-error]")?.innerText || "",
+      saved: document.body.innerText.includes("Saved."),
+    })`);
+    if (page.saved && storedLicence(dbPath, claimId) === "TEST-LIC-0001") return null;
+    if (page.error && /Save anyway/.test(page.error) && !retried) {
+      retried = true;
+      await session.evaluate<void>(`(() => {
+        for (const box of document.querySelectorAll('input[type="checkbox"]')) {
+          if (box instanceof HTMLInputElement && box.name.startsWith("saveAnyway_") && !box.checked) box.click();
+        }
+        const button = [...document.querySelectorAll("button")].find((item) => item.textContent?.trim() === "Save this screen");
+        button?.click();
+      })()`);
+      continue;
+    }
+    if (page.error && !/Save anyway/.test(page.error)) return page.error;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  const stuck = await session.evaluate<{ href: string; text: string }>(`({
+    href: location.href,
+    text: document.body.innerText.replace(/\\s+/g, " ").slice(0, 400),
+  })`);
+  return `The client licence was not saved. ${stuck.href} ${stuck.text}`;
+}
+
+async function clearHireGate(session: BrowserSession, origin: string, claimId: string) {
+  const bank = await postFields(session, `/claims/${claimId}/financial/save`, {
+    intent: "circumstances",
+    employmentStatus: "not_stated",
+    abilityToPay: "not_answered",
+    noBankExplanation: "The client said they have no bank account. Journey test only.",
+  });
+  if (bank.status >= 400 || bank.status === 0 || decodeURIComponent(bank.location).includes("error=")) {
+    return `bank ${bank.status} ${decodeURIComponent(bank.location)}`;
+  }
+  await gotoPath(session, origin, `/claims/${claimId}/hire`);
+  const driverKey = await session.evaluate<string>(`document.querySelector('[name="driverKey"]')?.value || ""`);
+  if (!driverKey) return "No driver was listed for the licence check.";
+  const licence = await postFields(session, `/claims/${claimId}/prehire/save`, {
+    driverKey,
+    checkCode: "TEST-CHECK",
+    checkedOn: "2026-10-27",
+    category: "B",
+    pointsEndorsements: "None shown",
+    licenceExpiresOn: "2030-01-01",
+  });
+  if (licence.status >= 400 || licence.status === 0 || decodeURIComponent(licence.location).includes("error=")) {
+    return `licence check ${licence.status} ${decodeURIComponent(licence.location)}`;
+  }
+  return null;
+}
+
+function countOnHire(dbPath: string) {
+  const db = new DatabaseSync(dbPath);
+  try {
+    const row = db.prepare(`SELECT COUNT(*) AS n FROM fleet_vehicles WHERE status = 'on_hire'`).get() as { n: number };
+    return Number(row.n);
+  } finally {
+    db.close();
+  }
+}
+
+function hireFacts(dbPath: string, claimId: string) {
+  const db = new DatabaseSync(dbPath);
+  try {
+    const episode = db
+      .prepare(
+        `SELECT he.started_at, he.fleet_vehicle_id, v.registration
+         FROM hire_episodes he
+         LEFT JOIN fleet_vehicles fv ON fv.id = he.fleet_vehicle_id
+         LEFT JOIN vehicles v ON v.id = fv.vehicle_id
+         WHERE he.claim_id = ? AND he.fleet_vehicle_id IS NOT NULL
+         ORDER BY CASE WHEN he.collection_at IS NULL AND he.billing_end_at IS NULL THEN 0 ELSE 1 END
+         LIMIT 1`,
+      )
+      .get(claimId) as { started_at: string | null; fleet_vehicle_id: string; registration: string | null } | undefined;
+    const job = db
+      .prepare(
+        `SELECT id, assignee_id, planned_at, place_text FROM day_assignments
+         WHERE claim_id = ? AND job_kind = 'hire_delivery' AND cancelled_at IS NULL LIMIT 1`,
+      )
+      .get(claimId) as { id: string; assignee_id: string; planned_at: string | null; place_text: string | null } | undefined;
+    const docs = db
+      .prepare(`SELECT COUNT(*) AS n FROM documents WHERE claim_id = ? AND template_key IN ('hire_agreement', 'hire_pack')`)
+      .get(claimId) as { n: number };
+    return { episode, job, documents: Number(docs.n) };
+  } finally {
+    db.close();
+  }
+}
+
+async function chooseFirstCar(session: BrowserSession, origin: string, claimId: string) {
+  await gotoPath(session, origin, `/claims/${claimId}/hire?date=${HIRE_DAY}`);
+  const picked = await session.evaluate<{ id: string; options: string }>(`(() => {
+    const select = document.querySelector('[name="fleetVehicleId"]');
+    if (!(select instanceof HTMLSelectElement)) return { id: "", options: "missing" };
+    const option = [...select.options].find((item) => item.value);
+    if (!option) return { id: "", options: select.innerText };
+    select.value = option.value;
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    const date = document.querySelector('form[action$="/hire/choose"] [name="date"]');
+    const time = document.querySelector('form[action$="/hire/choose"] [name="time"]');
+    if (date instanceof HTMLInputElement) date.value = ${JSON.stringify(HIRE_DAY)};
+    if (time instanceof HTMLInputElement) time.value = "09:30";
+    const button = [...document.querySelectorAll('form[action$="/hire/choose"] button')].find((item) => /Reserve|Change car/.test(item.textContent || ""));
+    button?.click();
+    return { id: option.value, options: String(select.options.length) };
+  })()`);
+  if (!picked.id) return { problem: `No free car was offered. ${picked.options}` };
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    const chosen = await session.evaluate<string>(`document.querySelector("[data-chosen-car]")?.getAttribute("data-chosen-car") || ""`);
+    const error = await session.evaluate<string>(`document.querySelector(".text-overdue")?.innerText || ""`);
+    if (chosen) return { fleetId: picked.id, registration: chosen };
+    if (error) return { problem: error };
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return { problem: "The car was not kept after Choose a car." };
+}
+
+async function completeHandover(session: BrowserSession, origin: string, claimId: string) {
+  await gotoPath(session, origin, `/claims/${claimId}/hire`);
+  const ready = await session.evaluate<string>(`(() => {
+    const form = document.querySelector('form[action$="/hire/handover"]');
+    if (!form) return "missing";
+    const mileage = form.querySelector('[name="mileage"]');
+    const date = form.querySelector('[name="date"]');
+    const time = form.querySelector('[name="time"]');
+    if (mileage instanceof HTMLInputElement) mileage.value = "1500";
+    if (date instanceof HTMLInputElement) date.value = ${JSON.stringify(HIRE_DAY)};
+    if (time instanceof HTMLInputElement) time.value = "09:30";
+    const button = [...form.querySelectorAll("button")].find((item) => item.textContent?.includes("Complete handover"));
+    button?.click();
+    return "sent";
+  })()`);
+  if (ready !== "sent") return ready;
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    const onHire = await session.evaluate<boolean>(`document.getElementById("on-hire") !== null`);
+    const error = await session.evaluate<string>(`document.querySelector(".text-overdue")?.innerText || ""`);
+    if (onHire) return null;
+    if (error) return error;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  return "Handover did not start the hire.";
+}
+
+async function runHireJourneys(session: BrowserSession, origin: string, dbPath: string, made: MadeClaim[]) {
+  const repairable = made.find((item) => item.id === "repairable");
+  const totalLoss = made.find((item) => item.id === "total-loss");
+  const fault = made.find((item) => item.id === "fault-courtesy");
+  if (!repairable || !totalLoss || !fault) return "The three files were not all created.";
+
+  const licence = await saveClientLicence(session, origin, dbPath, repairable.claimId);
+  if (licence) return `Repairable licence: ${licence}`;
+  const gate = await clearHireGate(session, origin, repairable.claimId);
+  if (gate) return `Repairable checks: ${gate}`;
+
+  const before = countOnHire(dbPath);
+  const chosen = await chooseFirstCar(session, origin, repairable.claimId);
+  if ("problem" in chosen) return `Repairable car: ${chosen.problem}`;
+  const facts = hireFacts(dbPath, repairable.claimId);
+  if (!facts.job) return "Repairable: no driver delivery job was saved.";
+  if (facts.job.assignee_id !== "staff-driver") return "Repairable: the delivery job was not on the driver login.";
+  if (!facts.job.planned_at || !facts.job.place_text) return "Repairable: the delivery job has no date or address.";
+
+  await gotoPath(session, origin, `/claims/${repairable.claimId}/hire`);
+  const pack = await session.evaluate<{ licence: string; retype: boolean; car: string; agreement: boolean }>(`({
+    licence: document.querySelector("[data-pack-licence]")?.textContent || "",
+    retype: Boolean(document.querySelector('[name="licence_number"]')),
+    car: document.querySelector("[data-chosen-car]")?.getAttribute("data-chosen-car") || "",
+    agreement: document.body.innerText.includes("Generate Hire Agreement"),
+  })`);
+  if (!pack.licence.includes("TEST-LIC-0001")) return "Repairable pack did not show the licence from the client record.";
+  if (pack.retype) return "Repairable pack asked for the licence number again.";
+  if (!pack.car) return "Repairable pack did not show the chosen car.";
+  if (!pack.agreement) return "Repairable pack did not keep the existing hire agreement button.";
+
+  const handed = await completeHandover(session, origin, repairable.claimId);
+  if (handed) return `Repairable handover: ${handed}`;
+  const started = hireFacts(dbPath, repairable.claimId);
+  const startedAt = started.episode?.started_at || "";
+  const london = startedAt
+    ? new Date(startedAt).toLocaleDateString("en-GB", { timeZone: "Europe/London" })
+    : "";
+  if (london !== "02/11/2026") return `Repairable hire started on ${london || "nothing"}, not the handover date.`;
+  await gotoPath(session, origin, `/claims/${repairable.claimId}`);
+  const step = await session.evaluate<{ state: string; text: string }>(`({
+    state: document.querySelector('[data-step="hire"]')?.getAttribute("data-state") || "",
+    text: document.querySelector('[data-step="hire"]')?.innerText || "",
+  })`);
+  if (step.state !== "done") return `Repairable step 3 was ${step.state || "missing"}. ${step.text}`;
+  const after = countOnHire(dbPath);
+  if (after !== before + 1) return `On-hire count did not rise by one (was ${before}, now ${after}).`;
+
+  const laterLicence = await saveClientLicence(session, origin, dbPath, totalLoss.claimId);
+  if (laterLicence) return `Total loss licence: ${laterLicence}`;
+  const laterGate = await clearHireGate(session, origin, totalLoss.claimId);
+  if (laterGate) return `Total loss checks: ${laterGate}`;
+  await gotoPath(session, origin, `/claims/${totalLoss.claimId}/hire?date=${HIRE_DAY}`);
+  const clashOffered = await session.evaluate<boolean>(`(() => {
+    const select = document.querySelector('[name="fleetVehicleId"]');
+    if (!(select instanceof HTMLSelectElement)) return true;
+    return [...select.options].some((item) => item.value === ${JSON.stringify(chosen.fleetId)});
+  })()`);
+  if (clashOffered) return "The booked car was still offered on the second file for the same dates.";
+  const forced = await postFields(session, `/claims/${totalLoss.claimId}/hire/choose`, {
+    fleetVehicleId: chosen.fleetId,
+    method: "deliver",
+    date: HIRE_DAY,
+    time: "10:00",
+    address: "2 Test Street, Cardiff",
+    returnHash: "#car",
+  });
+  const forcedText = decodeURIComponent(forced.location.replaceAll("+", " "));
+  if (!forcedText.includes("This car has just been booked")) {
+    return `Forced booking was not rejected. ${forcedText}`;
+  }
+
+  const notYet = await postFields(session, `/claims/${totalLoss.claimId}/hire/need`, {
+    choice: "not_yet",
+    reason: "",
+    returnHash: "#need",
+  });
+  if (notYet.status >= 400 || notYet.status === 0 || decodeURIComponent(notYet.location).includes("error=")) {
+    return `Not yet was not saved. ${decodeURIComponent(notYet.location)}`;
+  }
+  await gotoPath(session, origin, `/claims/${totalLoss.claimId}`);
+  const waiting = await session.evaluate<{ state: string; text: string }>(`({
+    state: document.querySelector('[data-step="hire"]')?.getAttribute("data-state") || "",
+    text: document.querySelector('[data-step="hire"]')?.innerText || "",
+  })`);
+  if (waiting.state === "done" || waiting.state === "not_needed") return `Not yet closed step 3 (${waiting.state}).`;
+  if (!waiting.text.includes("Not yet – client keeps own car")) return `Step 3 did not stay open for not yet. ${waiting.text}`;
+
+  const yes = await postFields(session, `/claims/${totalLoss.claimId}/hire/need`, { choice: "yes", reason: "", returnHash: "#need" });
+  if (yes.status >= 400 || yes.status === 0 || decodeURIComponent(yes.location).includes("error=")) {
+    return `Hire needed was not saved later. ${decodeURIComponent(yes.location)}`;
+  }
+  const laterCar = await chooseFirstCar(session, origin, totalLoss.claimId);
+  if ("problem" in laterCar) return `Total loss car: ${laterCar.problem}`;
+  if (laterCar.fleetId === chosen.fleetId) return "Total loss was given the car already booked on the other file.";
+  const laterHand = await completeHandover(session, origin, totalLoss.claimId);
+  if (laterHand) return `Total loss handover: ${laterHand}`;
+
+  const faultCar = await chooseFirstCar(session, origin, fault.claimId);
+  if ("problem" in faultCar) return `Courtesy car: ${faultCar.problem}`;
+  await gotoPath(session, origin, `/claims/${fault.claimId}/hire`);
+  const wording = await session.evaluate<string>(`document.body.innerText`);
+  if (/credit hire/i.test(wording)) return "The courtesy file showed credit-hire wording.";
+  if (wording.includes("Generate Hire Agreement") || wording.includes("Generate Hire Pack")) {
+    return "The courtesy file offered a hire agreement.";
+  }
+  const faultHand = await completeHandover(session, origin, fault.claimId);
+  if (faultHand) return `Courtesy handover: ${faultHand}`;
+  if (hireFacts(dbPath, fault.claimId).documents !== 0) return "The courtesy file stored a hire agreement.";
+  await gotoPath(session, origin, `/claims/${fault.claimId}`);
+  const faultStep = await session.evaluate<string>(`document.querySelector('[data-step="hire"]')?.getAttribute("data-state") || ""`);
+  if (faultStep !== "done") return `Courtesy step 3 was ${faultStep || "missing"}.`;
+  return null;
+}
+
+async function main() {
   if (!fs.existsSync(path.join(process.cwd(), ".next", "BUILD_ID"))) {
     console.error("There is no production build. Run npm run build, then npm run test:journeys.");
     process.exitCode = 1;
@@ -440,6 +766,7 @@ async function main() {
     stopBrowser = browser.stop;
     const [cookieName, ...cookieRest] = cookie.split("=");
     await browser.session.send("Network.setCookie", { name: cookieName, value: cookieRest.join("="), url: origin });
+    const made: MadeClaim[] = [];
 
     for (const journey of CLAIM_JOURNEYS) {
       const created = await createJourney(browser.session, origin, journey);
@@ -467,7 +794,17 @@ async function main() {
         console.log(`FAIL  ${journey.title}  ${created.reference}  ${problems.join("; ")}`);
       } else {
         results.push({ id: journey.id, reference: created.reference });
+        made.push({ id: journey.id, reference: created.reference, claimId: String(row.id) });
         console.log(`PASS  ${journey.title}  ${created.reference}  step 1 done`);
+      }
+    }
+    if (results.every((item) => !item.problem) && made.length === CLAIM_JOURNEYS.length) {
+      const hireProblem = await runHireJourneys(browser.session, origin, databasePath, made);
+      if (hireProblem) {
+        results.push({ id: "repairable", problem: hireProblem });
+        console.log(`FAIL  Hire  ${hireProblem}`);
+      } else {
+        console.log("PASS  Hire  free cars, driver job, pack, handover, clash, not yet, courtesy");
       }
     }
   } catch (error) {
@@ -480,7 +817,7 @@ async function main() {
   }
 
   const failed = results.filter((item) => item.problem);
-  if (failed.length || results.length !== CLAIM_JOURNEYS.length) {
+  if (failed.length || results.filter((item) => !item.problem).length < CLAIM_JOURNEYS.length) {
     process.exitCode = 1;
     console.error(`${failed.length || CLAIM_JOURNEYS.length} journey check${failed.length === 1 ? "" : "s"} failed.`);
     return;

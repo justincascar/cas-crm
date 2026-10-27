@@ -1,6 +1,8 @@
 import { canDoFieldJob, isOfficeRole } from "../auth/roles";
 import { formatUkDateTime, nowUtcIso, requireLondonDateTime } from "../dates";
+import { activeReservationFor, startHireFromHandover } from "./hire-start";
 import { assertCanRecordHandover } from "./jobs";
+import { CHOOSE_CAR_BEFORE_HANDOVER } from "../domain/hire-availability";
 import { storeFileCopy } from "../storage/files";
 import { all, get, getDb, newId, run } from "./connection";
 import { recordClaimEvent } from "./chronology";
@@ -116,6 +118,8 @@ export type HandoverInput = {
   actualOccurredAt?: string;
   /** Omit for older callers. When present, a drawing or a skip reason is required. */
   signature?: HandoverSignatureInput;
+  /** Set when the caller already holds the database transaction. */
+  deferCommit?: boolean;
 };
 
 export type HandoverReading = {
@@ -442,6 +446,13 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
       [episodeId, input.claimId],
     );
     if (!episode) throw new Error("That hire booking is not on this file.");
+    const startedAlready = get<{ started_at: string | null }>(
+      `SELECT started_at FROM hire_episodes WHERE id = ?`,
+      [episode.id],
+    );
+    if (event.kind === "hire_delivered" && !startedAlready?.started_at && !activeReservationFor(input.claimId)) {
+      throw new Error(CHOOSE_CAR_BEFORE_HANDOVER);
+    }
     hireEpisodeId = episode.id;
     bookingLabel = [episode.make, episode.model, episode.registration].filter(Boolean).join(" ") || "Hire car";
   }
@@ -462,7 +473,7 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
   const signature = storedSignature(input.signature);
   const id = newId("vh");
   const db = getDb();
-  db.exec("BEGIN");
+  if (!input.deferCommit) db.exec("BEGIN");
   try {
     run(
       `INSERT INTO vehicle_handovers(
@@ -517,9 +528,9 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
     if (event.kind === "client_returned" && input.actualOccurredAt !== undefined) {
       applyClientReturnActualDate({ claimId: input.claimId, actualOccurredAt: occurredAt, actorId: staff.id });
     }
-    db.exec("COMMIT");
+    if (!input.deferCommit) db.exec("COMMIT");
   } catch (error) {
-    db.exec("ROLLBACK");
+    if (!input.deferCommit) db.exec("ROLLBACK");
     throw error;
   }
   return { id, incomplete: handoverIncomplete(input.photos.map((photo) => photo.slot), shotSet) };
@@ -622,6 +633,14 @@ export function finishVehicleHandover(input: { claimId: string; handoverId: stri
     throw new Error(`Take ${missing.map((shot) => shot.label).join(", ")} before finishing. Damage photographs are optional.`);
   }
   if (row.finished_at) return { finishedAt: row.finished_at };
+  if (row.event_kind === "hire_delivered") {
+    const episode = row.hire_episode_id
+      ? get<{ started_at: string | null }>(`SELECT started_at FROM hire_episodes WHERE id = ?`, [row.hire_episode_id])
+      : undefined;
+    if (!episode?.started_at && !activeReservationFor(input.claimId)) {
+      throw new Error(CHOOSE_CAR_BEFORE_HANDOVER);
+    }
+  }
   const finishedAt = nowUtcIso();
   const event = handoverEvent(row.event_kind);
   const photoCount = shotsForSet(row.shot_set).length === STANDARD_SHOTS.length ? "seven" : "five";
@@ -634,6 +653,15 @@ export function finishVehicleHandover(input: { claimId: string; handoverId: stri
     details: `${event?.label || "Handover"} finished by ${staff.name}. The ${photoCount} standard photographs are saved.`,
     source: "staff",
   });
+  if (row.event_kind === "hire_delivered") {
+    const when = get<{ occurred_at: string }>(`SELECT occurred_at FROM vehicle_handovers WHERE id = ?`, [row.id]);
+    startHireFromHandover({
+      claimId: input.claimId,
+      occurredAt: when?.occurred_at || finishedAt,
+      actorId: staff.id,
+      hireEpisodeId: row.hire_episode_id,
+    });
+  }
   return { finishedAt };
 }
 

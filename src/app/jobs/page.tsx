@@ -57,7 +57,11 @@ export default async function MyJobsPage({
               }
             >
               <p className="font-mono text-sm text-teal-dark">{job.fileReference}</p>
+              {job.clientName ? <p className="text-base">{job.clientName}</p> : null}
+              {job.clientPhone ? <p className="text-sm">{job.clientPhone}</p> : null}
               <p className="mt-1 text-base">{job.vehicleLabel}</p>
+              {job.place ? <p className="text-sm">{job.place}</p> : null}
+              {job.plannedAt ? <p className="text-sm">{formatUkDateTime(job.plannedAt)}</p> : null}
               <p className={job.overdue ? "text-sm font-semibold text-overdue" : "text-sm text-slate"}>
                 {job.jobLabel} · {job.overdue ? "Overdue" : job.completed ? "Done" : "Not done"}
               </p>
@@ -88,7 +92,11 @@ export default async function MyJobsPage({
                 {day.jobs.map((job) => (
                   <li key={job.id} className="rounded-xl border border-line bg-card p-4">
                     <p className="font-mono text-sm text-teal-dark">{job.fileReference}</p>
+                    {job.clientName ? <p className="text-base">{job.clientName}</p> : null}
+                    {job.clientPhone ? <p className="text-sm">{job.clientPhone}</p> : null}
                     <p className="mt-1 text-base">{job.vehicleLabel}</p>
+                    {job.place ? <p className="text-sm">{job.place}</p> : null}
+                    {job.plannedAt ? <p className="text-sm">{formatUkDateTime(job.plannedAt)}</p> : null}
                     <p className="text-sm text-slate">
                       {job.jobLabel} · Not done
                     </p>

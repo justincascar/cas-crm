@@ -1,5 +1,6 @@
 import { formatUkDate } from "../dates";
 import { formatGbp } from "../money";
+import { hireNeedReason, NOT_YET_OWN_CAR, parseHireNeed } from "./hire-availability";
 import { dispatchFromHistoryNote } from "./justification-chronology";
 
 /**
@@ -271,12 +272,8 @@ function moneyLine(label: string, pence: number | null | undefined): ClaimStepLi
   return { label, date: formatGbp(pence) };
 }
 
-function hireAnswer(events: ClaimStepEvent[]): "yes" | "no" | null {
-  const event = latest(events, "hire_decision");
-  const details = event?.details || "";
-  if (/replacement vehicle: no/i.test(details)) return "no";
-  if (/replacement vehicle: yes/i.test(details)) return "yes";
-  return null;
+function hireAnswer(events: ClaimStepEvent[]): "yes" | "no" | "not_yet" | null {
+  return parseHireNeed(latest(events, "hire_decision")?.details);
 }
 
 function inspectionRoute(events: ClaimStepEvent[], instructed: boolean): "engineer" | "audatex" | "both" | null {
@@ -521,7 +518,7 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
       title: courtesy ? "Courtesy car" : "Hire",
       state: "to_do",
       statusText: "To do",
-      detail: courtesy ? "This is a courtesy car, not credit hire. There is no daily charge to an insurer." : null,
+      detail: courtesy ? "This is a courtesy car. There is no daily charge to an insurer." : null,
       buttonLabel: courtesy ? "Arrange courtesy car" : "Arrange hire",
       buttonHref: href,
       detailsHref: href,
@@ -534,7 +531,7 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
         state: "done",
         statusText: doneText(hireStarted.occurred_at),
         detail: courtesy
-          ? "Courtesy car on the file. This is not credit hire, so there is no daily charge to an insurer."
+          ? "Courtesy car on the file. There is no daily charge to an insurer."
           : since
             ? `On hire since ${since}${rate ? `, ${rate}` : ""}`
             : rate,
@@ -542,22 +539,34 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
         buttonHref: null,
       };
     } else if (hireChoice === "no") {
+      const reason = hireNeedReason(latest(events, "hire_decision")?.details);
       view = {
         ...view,
         state: "not_needed",
-        statusText: courtesy
-          ? "Not needed. The client does not need a courtesy car."
-          : "Not needed. The client does not need a replacement vehicle.",
+        statusText: reason
+          ? `Not needed. ${reason}`
+          : courtesy
+            ? "Not needed. The client does not need a courtesy car."
+            : "Not needed. The client does not need a replacement vehicle.",
         detail: null,
         buttonLabel: null,
         buttonHref: null,
+      };
+    } else if (hireChoice === "not_yet") {
+      view = {
+        ...view,
+        state: "to_do",
+        statusText: "To do",
+        detail: NOT_YET_OWN_CAR,
+        buttonLabel: courtesy ? "Arrange courtesy car" : "Arrange hire",
+        buttonHref: href,
       };
     } else if (!input.needsReplacement && !input.hasHireEvidence && hireChoice !== "yes") {
       view = {
         ...view,
         state: "not_decided",
         statusText: "Not decided yet",
-        detail: courtesy ? "This is a courtesy car, not credit hire. There is no daily charge to an insurer." : null,
+        detail: courtesy ? "This is a courtesy car. There is no daily charge to an insurer." : null,
       };
     } else if (begun > 0) {
       view = {

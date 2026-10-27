@@ -4,7 +4,7 @@ import { londonDateIso, nowUtcIso } from "../dates";
 /**
  * TEST-0008 keeps its stored hire money. This adds a handover, a signed agreement with that
  * booking's rate, one signed renewal at a different rate, and one later handover as a vehicle swap.
- * Renewal alerts stay on day 70, day 80 and day 88.
+ * Renewal alerts start on day 80 and are overdue on day 88. The agreement is 89 days.
  */
 export function ensureTest0008HireDemonstration(db: DatabaseSync) {
   const episode = db

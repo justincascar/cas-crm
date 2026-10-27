@@ -138,7 +138,8 @@ describe("hire charge from inclusive days", () => {
   it("does not price fault courtesy as credit hire", () => {
     const charge = hireCharge({ ...base, creditHire: false });
     assert.equal(charge.status, "courtesy");
-    assert.match(FAULT_COURTESY_NOT_CREDIT_HIRE, /not credit hire/);
+    assert.match(FAULT_COURTESY_NOT_CREDIT_HIRE, /courtesy car/);
+    assert.doesNotMatch(FAULT_COURTESY_NOT_CREDIT_HIRE, /credit hire/);
   });
 
   it("includes extras only when a signed agreement records a rate", () => {

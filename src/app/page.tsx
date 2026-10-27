@@ -645,7 +645,7 @@ function DeskSections({
     <ChaseDueTable
       key="renewals"
       title="Hire agreement renewals"
-      hint="Counted from the current signed hire agreement start date, not the fleet booking dates. Amber from day 70 (approaching), red from day 80 (due), red overdue from day 88 if still not renewed. Courtesy cars are excluded unless a hire agreement is on the file. Clears only when a renewal is logged — it does not disappear just because time passes. Reminder only — no email is sent automatically."
+      hint="Counted from the handover date on the current signed hire agreement. Alerts start on day 80 and are overdue on day 88. The agreement is 89 days. Courtesy cars are excluded unless a hire agreement is on the file. Clears only when a renewal is logged. Reminder only — no email is sent automatically."
       rows={data.chasesDueByKind.hire_agreement_renewal}
     />,
   );

@@ -43,6 +43,8 @@ export async function ClaimWorkScreen({
 }) {
   const { id, screen } = await params;
   if (screen === "storage" || screen === "recovery") redirect(headScreenPath(id, screen));
+  if (screen === "reserve" || screen === "hire-vehicle") redirect(`/claims/${id}/hire#car`);
+  if (screen === "delivery-collection") redirect(`/claims/${id}/hire#handover`);
   await requireStaff();
   const { saved, error, field, whatsapp, clash, tlError, tlMail, mailboxError, mailboxSent, mailboxSimulated, mailboxReport, stepError, stepSaved } = await searchParams;
   const def = getClaimScreen(screen);

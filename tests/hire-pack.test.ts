@@ -80,7 +80,9 @@ describe("CAS hire pack fields", () => {
   it("does not silently pick 88 or 89 days", () => {
     assert.equal(RENTAL_PERIOD_DECISION.packDays, 89);
     assert.equal(RENTAL_PERIOD_DECISION.alertDays, 88);
-    assert.equal(RENTAL_PERIOD_DECISION.status, "awaiting_justin");
+    assert.equal(RENTAL_PERIOD_DECISION.status, "confirmed");
+    assert.equal(RENTAL_PERIOD_DECISION.packDays, 89);
+    assert.equal(RENTAL_PERIOD_DECISION.alertDays, 88);
   });
 
   it("keeps the supplied CAS pack notices", () => {

@@ -80,7 +80,7 @@ export function AssignJobForm({
     <form method="post" action={action} className="space-y-3 rounded-xl border border-line bg-card p-5" onSubmit={onSubmit}>
       <h2 className="font-serif text-xl text-navy-deep">Assign a job</h2>
       <p className="text-sm text-slate">
-        Choose the driver and the date yourself. Nothing here is assigned automatically. A job for today appears on My jobs today. One left not done stays on that list, marked overdue, until it is marked Done.
+        Choose the driver and the date yourself for other work. A hire delivery is created when a car is chosen for delivery on the claim. A job for today appears on My jobs today. One left not done stays on that list, marked overdue, until it is marked Done.
       </p>
       <label className="block text-sm">
         Job

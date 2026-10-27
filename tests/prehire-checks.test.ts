@@ -134,6 +134,7 @@ describe("pre-hire checks before a hire agreement", () => {
       assert.equal(checklistStatus("c4"), "not_started");
       assert.equal(impecuniosityApproved("c4"), false);
       assert.equal(hireAgreementPrehireBlock("c4"), null);
+      db.prepare(`UPDATE claims SET claim_type = 'non_fault' WHERE id = 'c4'`).run();
       const result = generateHireAgreementDocument("c4", "staff-sian", 0);
       const row = db.prepare(`SELECT signed FROM documents WHERE id = ?`).get(result.documentId) as { signed: number };
       assert.equal(row.signed, 0);
@@ -155,6 +156,7 @@ describe("pre-hire checks before a hire agreement", () => {
       assert.ok(extra);
       licenceFor("c4", extra.key);
       assert.equal(hireAgreementPrehireBlock("c4"), null);
+      db.prepare(`UPDATE claims SET claim_type = 'non_fault' WHERE id = 'c4'`).run();
       const result = generateHireAgreementDocument("c4", "staff-sian", 0);
       const row = db.prepare(`SELECT signed FROM documents WHERE id = ?`).get(result.documentId) as { signed: number };
       assert.equal(row.signed, 0);
@@ -173,6 +175,7 @@ describe("pre-hire checks before a hire agreement", () => {
       licenceFor("c4", driver.key, staleOn);
       addImpecuniosityAccount({ claimId: "c4", actorId: "staff-sian", label: "Barclays current", kind: "bank_account" });
       assert.equal(hireAgreementPrehireBlock("c4"), null);
+      db.prepare(`UPDATE claims SET claim_type = 'non_fault' WHERE id = 'c4'`).run();
       const result = generateHireAgreementDocument("c4", "staff-sian", 0);
       assert.ok(result.documentId);
       const lines = handoverStaleLines({
@@ -318,6 +321,7 @@ describe("pre-hire check overrides", () => {
       assert.equal(rows[0].recorded_by_name, "Justin Roberts");
       assert.equal(rows[0].reason, "Proceeding without a check code.");
       assert.equal(hireAgreementPrehireBlock("c4"), null);
+      db.prepare(`UPDATE claims SET claim_type = 'non_fault' WHERE id = 'c4'`).run();
       const result = generateHireAgreementDocument("c4", "staff-sian", 0);
       const signed = db.prepare(`SELECT signed FROM documents WHERE id = ?`).get(result.documentId) as { signed: number };
       assert.equal(signed.signed, 0);

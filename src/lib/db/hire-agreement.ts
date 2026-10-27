@@ -445,11 +445,11 @@ export function buildHireAgreementView(
 export function generateHireAgreementDocument(claimId: string, actorId: string, dailyRatePence: number | null) {
   const pack = getHirePack(claimId);
   if (!pack) throw new Error("File not found.");
-  // The only step that files a hire agreement. There is no separate preview-for-signing
-  // or mark-ready-to-sign function. Refuse before an agreement number is taken and before insert.
-  // Actor role is not consulted. A missing check clears only when this claim has a stored override for that check.
   const blocked = hireAgreementPrehireBlock(claimId);
   if (blocked) throw new Error(blocked);
+  if (String(pack.claim.claim_type) === "fault") {
+    throw new Error("A hire agreement is not created for a courtesy car.");
+  }
   const agreementNumber = allocateHireAgreementNumber(claimId);
   const view = buildHireAgreementView(pack, agreementNumber, dailyRatePence);
   const html = renderHireAgreement(view);

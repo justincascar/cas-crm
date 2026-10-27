@@ -21,6 +21,7 @@ export function HandoverStartForm({
   drivers,
   defaultDriverId,
   defaultWhen,
+  lockHire = false,
 }: {
   action: string;
   claimId: string;
@@ -33,9 +34,11 @@ export function HandoverStartForm({
   drivers: Booking[];
   defaultDriverId: string;
   defaultWhen: string;
+  lockHire?: boolean;
 }) {
   const startVehicle = initialVehicle === "customer" || (initialVehicle === "hire" && bookings.length > 0) ? initialVehicle : bookings.length ? "hire" : "customer";
-  const [vehicle, setVehicle] = useState<"hire" | "customer">(startVehicle);
+  const locked = lockHire && bookings.length === 1 && startVehicle === "hire";
+  const [vehicle, setVehicle] = useState<"hire" | "customer">(locked ? "hire" : startVehicle);
   const shown = occasions.filter((event) => event.needsBooking === (vehicle === "hire"));
   const eventDefault = shown.some((event) => event.kind === initialEventKind) ? initialEventKind : shown[0]?.kind || "";
   const onlyBooking = bookings.length === 1 ? bookings[0] : null;
@@ -44,19 +47,27 @@ export function HandoverStartForm({
     <form method="post" action={action} encType="multipart/form-data" className="space-y-4 rounded-xl border border-line bg-card p-5">
       <h2 className="font-serif text-xl text-navy-deep">Record a handover</h2>
       <input type="hidden" name="claimId" value={claimId} />
-      <label className="block text-sm">
-        Vehicle
-        <select
-          name="vehicle"
-          className={field}
-          required
-          value={vehicle}
-          onChange={(event) => setVehicle(event.target.value === "customer" ? "customer" : "hire")}
-        >
-          <option value="hire">Hire car</option>
-          <option value="customer">Customer&apos;s vehicle</option>
-        </select>
-      </label>
+      {locked && onlyBooking ? (
+        <>
+          <input type="hidden" name="vehicle" value="hire" />
+          <input type="hidden" name="hireEpisodeId" value={onlyBooking.id} />
+          <p className="text-sm">Hire car: {onlyBooking.label}. Change it from Choose a car on the Hire tab.</p>
+        </>
+      ) : (
+        <label className="block text-sm">
+          Vehicle
+          <select
+            name="vehicle"
+            className={field}
+            required
+            value={vehicle}
+            onChange={(event) => setVehicle(event.target.value === "customer" ? "customer" : "hire")}
+          >
+            <option value="hire">Hire car</option>
+            <option value="customer">Customer&apos;s vehicle</option>
+          </select>
+        </label>
+      )}
       <label className="block text-sm">
         What is happening
         <select name="eventKind" key={vehicle} className={field} required defaultValue={eventDefault}>
@@ -67,7 +78,7 @@ export function HandoverStartForm({
           ))}
         </select>
       </label>
-      {vehicle === "hire" ? (
+      {locked ? null : vehicle === "hire" ? (
         office ? (
           <label className="block text-sm">
             Which hire car

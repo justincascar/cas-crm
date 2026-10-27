@@ -9,7 +9,7 @@ import { mailboxSentDetails } from "../email/sent-wording";
 import { phoneGateway } from "../phone/gateway";
 import { whatsappGateway } from "../whatsapp/gateway";
 import { scenePhotosWhatsAppBody, scenePhotosWhatsAppSubject } from "../whatsapp/scene-photos";
-import { CAS_CLAIMS_MAILBOX, ENGINEER_CHASER_INTERVAL_DAYS_DEFAULT } from "../constants";
+import { CAS_CLAIMS_MAILBOX, AGREEMENT_LENGTH_DAYS, ENGINEER_CHASER_INTERVAL_DAYS_DEFAULT } from "../constants";
 import { eventLabel, latestDates, type ClaimEventType } from "../domain/events";
 import { hireChargesAccrualEnd, inclusiveHireDays } from "../domain/rules";
 import { repairAuthorisationState } from "../domain/storage-authorisation-end";
@@ -62,7 +62,7 @@ import {
 import { classifyPaymentReply, paymentRequestCopy } from "../domain/payment-chase";
 import { BANK_DETAILS_MISSING_SETTINGS, paymentDetailsComplete } from "../domain/payment-details";
 import { getInsurerPaymentDetails } from "./payment-details";
-import { findPreparedChase, getAgreementMaxDays, getChaseIntervalDays, pauseChase, restartChaseClock, startChase, chaseForClaim, chaseRow } from "./chase";
+import { findPreparedChase, getChaseIntervalDays, pauseChase, restartChaseClock, startChase, chaseForClaim, chaseRow } from "./chase";
 import { paymentTermForClaim } from "./insurers";
 import { ENGINEER_REPORT_CHASE_TEMPLATE } from "../constants";
 import { findKnownInsurerOn } from "./insurers";
@@ -1651,10 +1651,10 @@ export function logHireAgreementRenewal(input: { claimId: string; actorId: strin
   }
   const maxSeq = get<{ m: number | null }>(`SELECT MAX(sequence) AS m FROM agreements WHERE hire_episode_id = ?`, [episode.id]);
   const sequence = Number(maxSeq?.m || 0) + 1;
-  const maxDays = getAgreementMaxDays();
+  const length = AGREEMENT_LENGTH_DAYS;
   const alertDay = getChaseIntervalDays("hire_agreement_renewal");
   const startOn = londonDateIso(new Date(when));
-  const plannedEndOn = londonDateIso(new Date(addCalendarDaysIso(when, maxDays)));
+  const plannedEndOn = londonDateIso(new Date(addCalendarDaysIso(when, length - 1)));
   const id = newId("ag");
   run(
     `INSERT INTO agreements(id, hire_episode_id, sequence, start_on, planned_end_on, max_days, renewal_alert_day, signed, signed_at, signature_status, template_note)
@@ -1665,7 +1665,7 @@ export function logHireAgreementRenewal(input: { claimId: string; actorId: strin
       sequence,
       startOn,
       plannedEndOn,
-      maxDays,
+      length,
       alertDay,
       when,
       "Renewal logged by staff. Earlier agreements on this hire episode were kept.",

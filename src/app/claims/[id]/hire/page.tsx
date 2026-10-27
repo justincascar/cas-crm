@@ -1,19 +1,10 @@
-import Link from "next/link";
-import { FinancialCircumstancesScreen } from "../financial/page";
-import { HandoverScreen } from "../handover/page";
-import { HirePackScreen } from "../hire-pack/page";
-import { HireHeadScreen } from "../heads/hire/page";
-import { PrehireChecksScreen } from "../prehire/page";
-
-const SECTIONS = [
-  { key: "checks", label: "Pre-hire checks" },
-  { key: "pack", label: "Hire pack" },
-  { key: "handover", label: "Handover" },
-  { key: "money", label: "Hire money" },
-  { key: "financial", label: "Financial circumstances" },
-] as const;
-
-type HireSection = (typeof SECTIONS)[number]["key"];
+import { notFound, redirect } from "next/navigation";
+import { HireJourney } from "@/components/claims/HireJourney";
+import { canDoFieldJob, isOfficeRole } from "@/lib/auth/roles";
+import { requireStaff } from "@/lib/auth/session";
+import { loadHireArea } from "@/lib/db/hire-choice";
+import { listStaff } from "@/lib/db/queries";
+import { londonTodayIso } from "@/lib/dates";
 
 export default async function ClaimHirePage({
   params,
@@ -24,41 +15,23 @@ export default async function ClaimHirePage({
 }) {
   const { id } = await params;
   const query = await searchParams;
-  const section = (query.section || "") as HireSection | "";
-  const known = SECTIONS.some((item) => item.key === section);
-
-  return (
-    <div className="space-y-4">
-      <nav aria-label="Hire sections" className="flex flex-wrap gap-2 print:hidden">
-        {SECTIONS.map((item) => (
-          <Link
-            key={item.key}
-            href={`/claims/${id}/hire?section=${item.key}`}
-            className={`rounded-md px-3 py-2 text-sm font-semibold ${
-              section === item.key ? "bg-navy text-white" : "border border-line bg-white text-navy"
-            }`}
-            aria-current={section === item.key ? "page" : undefined}
-          >
-            {item.label}
-          </Link>
-        ))}
-      </nav>
-      {section === "checks" ? (
-        <PrehireChecksScreen params={Promise.resolve({ id })} searchParams={Promise.resolve(query) as Parameters<typeof PrehireChecksScreen>[0]["searchParams"]} />
-      ) : null}
-      {section === "pack" ? (
-        <HirePackScreen params={Promise.resolve({ id })} searchParams={Promise.resolve(query) as Parameters<typeof HirePackScreen>[0]["searchParams"]} />
-      ) : null}
-      {section === "handover" ? (
-        <HandoverScreen params={Promise.resolve({ id })} searchParams={Promise.resolve(query) as Parameters<typeof HandoverScreen>[0]["searchParams"]} />
-      ) : null}
-      {section === "money" ? (
-        <HireHeadScreen params={Promise.resolve({ id })} searchParams={Promise.resolve(query) as Parameters<typeof HireHeadScreen>[0]["searchParams"]} />
-      ) : null}
-      {section === "financial" ? (
-        <FinancialCircumstancesScreen params={Promise.resolve({ id })} searchParams={Promise.resolve(query) as Parameters<typeof FinancialCircumstancesScreen>[0]["searchParams"]} />
-      ) : null}
-      {!known ? <p className="text-sm text-slate">Choose pre-hire checks, the hire pack, handover, or hire money.</p> : null}
-    </div>
-  );
+  if (query.section === "money") redirect(`/claims/${id}/money/hire`);
+  if (query.section === "financial") redirect(`/claims/${id}/financial`);
+  if (query.section === "checks" || query.section === "pack" || query.section === "handover") {
+    redirect(`/claims/${id}/hire#${query.section}`);
+  }
+  const staff = await requireStaff();
+  if (!isOfficeRole(staff.role)) redirect("/jobs");
+  const filters = {
+    date: query.date && /^\d{4}-\d{2}-\d{2}$/.test(query.date) ? query.date : londonTodayIso(),
+    transmission: query.transmission || "",
+    vehicleClass: query.class || "",
+    seats: query.seats || "",
+  };
+  const area = loadHireArea(id, filters);
+  if (!area) notFound();
+  const handlers = listStaff()
+    .filter((person) => canDoFieldJob(person.role))
+    .map((person) => ({ id: String(person.id), name: String(person.name) }));
+  return <HireJourney area={area} error={query.error} saved={query.saved} handlers={handlers} filters={filters} />;
 }

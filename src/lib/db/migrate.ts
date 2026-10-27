@@ -304,7 +304,7 @@ export function migrate(db: DatabaseSync) {
     CREATE INDEX IF NOT EXISTS idx_day_assignments_person ON day_assignments(assignee_id, work_date);
   `);
   const assignmentColumns = db.prepare(`PRAGMA table_info(day_assignments)`).all() as Array<{ name: string }>;
-  for (const column of ["completed_at", "actual_driver_id", "actual_occurred_at"]) {
+  for (const column of ["completed_at", "actual_driver_id", "actual_occurred_at", "cancelled_at", "planned_at", "place_text"]) {
     if (assignmentColumns.length > 0 && !assignmentColumns.some((existing) => existing.name === column)) {
       db.exec(`ALTER TABLE day_assignments ADD COLUMN ${column} TEXT`);
     }
