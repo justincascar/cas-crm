@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { InsurerNameField } from "@/components/InsurerNameField";
+import { MobileField } from "@/components/MobileField";
 import { PostcodeAddressLookup } from "@/components/PostcodeAddressLookup";
 import { mergeInsurerDetails, type KnownInsurer } from "@/lib/insurers";
 import { displayValue } from "@/lib/screen-display";
@@ -69,7 +70,7 @@ export function TpInsuranceFields({
       </div>
       <label className="block text-sm">
         Tel main
-        <input name="insurerTel" value={telephone} onChange={(e) => setTelephone(e.currentTarget.value)} className={control} />
+        <MobileField name="insurerTel" value={telephone} onChange={setTelephone} className={control} />
       </label>
       <label className="block text-sm">
         Email

@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/ClaimTable";
+import { MobileField } from "@/components/MobileField";
+import { ValidatedForm } from "@/components/ValidatedForm";
 import { ChargeDecisionPanel } from "@/components/claims/ChargeDecisionPanel";
 import { ChargeOffers } from "@/components/claims/ChargeOffers";
 import { FigureResolution } from "@/components/claims/FigureResolution";
@@ -58,7 +60,7 @@ export async function StorageHeadScreen({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string; clash?: string; figureError?: string; offerError?: string; offerWarn?: string; offerAmount?: string; offerOn?: string; offerNote?: string; offerHead?: string; offerDays?: string; offerRate?: string; decisionError?: string }>;
+  searchParams: Promise<{ error?: string; field?: string; saved?: string; clash?: string; figureError?: string; offerError?: string; offerWarn?: string; offerAmount?: string; offerOn?: string; offerNote?: string; offerHead?: string; offerDays?: string; offerRate?: string; decisionError?: string }>;
 }) {
   const staff = await requireStaff();
   const { id } = await params;
@@ -168,7 +170,13 @@ export async function StorageHeadScreen({
           The car can still be here after charging stops. The dashboard can still show it on site. It is not counted as chargeable storage once
           the confirmed end has passed.
         </p>
-        <form method="post" action={`/claims/${id}/storage-details`} className="grid gap-3 sm:grid-cols-2">
+        <ValidatedForm
+          method="post"
+          action={`/claims/${id}/storage-details`}
+          className="grid gap-3 sm:grid-cols-2"
+          initialError={query.error}
+          initialErrorField={query.field}
+        >
           <RecordVersionField version={storageVersion} />
           <input type="hidden" name="storageStartVersion" value={sharedStorage.storageStartVersion || ""} />
           <input type="hidden" name="storageEndVersion" value={sharedStorage.storageEndVersion || ""} />
@@ -201,7 +209,7 @@ export async function StorageHeadScreen({
           </label>
           <label className="text-sm">
             Tel
-            <input name="telMain" defaultValue={entered("telMain", location.telMain)} className={field} />
+            <MobileField name="telMain" defaultValue={entered("telMain", location.telMain)} className={field} />
           </label>
           <label className="text-sm">
             Email
@@ -234,7 +242,7 @@ export async function StorageHeadScreen({
           <button className="w-fit rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white" type="submit">
             Save storage details
           </button>
-        </form>
+        </ValidatedForm>
       </section>
 
       <section className="space-y-3 rounded-xl border border-line bg-card p-5" aria-label="Storage charge">

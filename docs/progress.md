@@ -905,3 +905,13 @@ Tests: `tests/claim-steps.test.ts`. Full suite: 527 passing, 0 failing. Type che
 - Financial summary and the Assessed damage notes fields remain non-authoritative working notes, pending a later decision on whether to keep them.
 - Loss-of-use is earmarked for redesign into an automated chronology. Its current fields stay in place until that stage. They are typed notes on the hidden screen. The hire and repair chronology does not read them.
 - Finer permissions beyond the named staff permissions, live integrations, payment packs from CAS templates, litigation issue, and backups/restore/deploy. The working dashboard is not production readiness. `extendedWait` is only on Justin’s staff row.
+
+## Create claim and the journey test (27 October 2026)
+
+Create claim was staying on New claim. The “Skip other number” tick was being checked as a telephone, and the Save anyway tick was too. A skipped number is no longer checked and is not stored. A refused save now says what is wrong, at the top of the form, and the box is highlighted. The telephone rule is unchanged.
+
+`npm run test:journeys` drives the three new-claim screens in a browser after `npm run build`. It uses its own database. It does not use the demonstration database, does not confirm a storage end, and does not send email. A stage is not finished until that check passes with `npm test`, `npm run typecheck` (zero errors), `npm run build`, and `npm run check:pages` (database unchanged on open). The plain note is `docs/CLAIM-JOURNEY-AUDIT.md`.
+
+Finish on 27 October 2026: 529 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: the database was unchanged on open and no claim page scrolled sideways. The three journey checks passed on their own database.
+
+The walk files on this PC are TEST-0015 Audit Repair, TEST-0016 Audit Totalloss, and TEST-0017 Audit Fault. TEST-0013’s two flags were left as they were. TEST-0005’s storage end was not confirmed. TEST-0009’s vehicle-damage offers, TEST-0006’s money, and TEST-0007’s £800 were not changed. No live email was sent. `EMAIL_SEND_MODE` stays `simulate`.

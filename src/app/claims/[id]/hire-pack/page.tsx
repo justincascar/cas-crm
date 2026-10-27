@@ -188,11 +188,11 @@ export async function HirePackScreen({
             </label>
             <label className="text-sm">
               Home tel
-              <input name="home_tel" className={field} defaultValue={String(s.home_tel || "")} />
+              <MobileField name="home_tel" defaultValue={String(s.home_tel || "")} className={field} />
             </label>
             <label className="text-sm">
               Work tel
-              <input name="work_tel" className={field} defaultValue={String(s.work_tel || "")} />
+              <MobileField name="work_tel" defaultValue={String(s.work_tel || "")} className={field} />
             </label>
             <label className="text-sm">
               Mobile

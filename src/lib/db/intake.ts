@@ -216,7 +216,10 @@ export function intakeFieldErrors(input: IntakeInput): { field: string; message:
   }
   const accident = accidentDateError(input.accidentDate);
   if (accident) errors.push({ field: "accidentDate", message: accident });
-  pushPhone(errors, input, "client_otherTel", input.client.otherTel);
+  if (!input.client.skipOtherTel) pushPhone(errors, input, "client_otherTel", input.client.otherTel);
+  if (input.counterpart && !input.counterpart.skipOtherTel) {
+    pushPhone(errors, input, "counterpart_otherTel", input.counterpart.otherTel);
+  }
   pushPhone(errors, input, "witness_telephone", input.witness?.telephone);
   for (const [index, witness] of (input.witnessList || []).entries()) {
     pushPhone(errors, input, `witness_${index}_telephone`, witness.telephone);
@@ -994,7 +997,7 @@ export function personFromForm(formData: FormData, prefix: string): IntakePerson
     addressLine1: readFormText(formData, `${prefix}address`),
     town: readFormText(formData, `${prefix}town`),
     mobile: readFormText(formData, `${prefix}mobile`),
-    otherTel: readFormText(formData, `${prefix}otherTel`),
+    otherTel: formFlag(formData, `${prefix}skipOtherTel`) ? undefined : readFormText(formData, `${prefix}otherTel`),
     skipOtherTel: formFlag(formData, `${prefix}skipOtherTel`),
     email: readFormText(formData, `${prefix}email`),
     dob: String(formData.get(`${prefix}dob`) || ""),

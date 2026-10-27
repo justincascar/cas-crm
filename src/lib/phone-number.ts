@@ -28,10 +28,22 @@ export function mobileNumberError(value: string | null | undefined): string | nu
 
 const SAVE_ANYWAY = " Use Save anyway for an overseas number.";
 
-/** A telephone box: mobile, or a general number that may be a landline or a mobile. Not a template name. */
+/**
+ * A telephone box: mobile, or a general number that may be a landline or a mobile.
+ * A skip tick box and a Save anyway tick box are not telephone numbers.
+ * A template name is not a telephone number.
+ */
 export function isPhoneBoxName(name: string): boolean {
-  if (/template/i.test(name)) return false;
+  if (!name || /template/i.test(name)) return false;
+  if (name.startsWith("saveAnyway_")) return false;
+  if (/skip/i.test(name)) return false;
   return /mobile|telephone|phone|tel/i.test(name);
+}
+
+/** The other-number box paired with a "there is no number" tick. */
+export function skippedOtherNumberName(fieldName: string): string | null {
+  if (!fieldName.endsWith("otherTel")) return null;
+  return `${fieldName.slice(0, -"otherTel".length)}skipOtherTel`;
 }
 
 /** National form starting with 0, or null when it does not start with 0 or +44. */

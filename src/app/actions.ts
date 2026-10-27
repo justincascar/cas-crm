@@ -51,6 +51,7 @@ import { postcodeLookup } from "@/lib/lookups/postcode";
 import { VEHICLE_MANUAL_HINT, vehicleLookup } from "@/lib/lookups/vehicle";
 import { isDocumentTemplateKey } from "@/lib/documents/catalog";
 import { errorQuery, FieldValidationError } from "@/lib/form-validation";
+import { phoneFieldError } from "@/lib/phone-number";
 import { redirectClash } from "@/lib/http/version-clash";
 import { setClaimEngineer } from "@/lib/db/engineers";
 
@@ -649,6 +650,11 @@ export async function actionSaveHirePack(formData: FormData) {
   const prior = getHirePack(claimId);
   if (!prior) throw new Error("File not found.");
   try {
+    for (const name of ["home_tel", "work_tel", "mobile_tel"]) {
+      if (formData.get(`saveAnyway_${name}`) === "yes") continue;
+      const phoneMessage = phoneFieldError(name, String(formData.get(name) || ""));
+      if (phoneMessage) throw new FieldValidationError(name, phoneMessage);
+    }
     withSectionSave({
       scope: "hire-pack",
       recordKey: claimId,

@@ -375,6 +375,39 @@ describe("new claim drafts, hire and recovery fees", () => {
     }
   });
 
+  it("does not store Skip other number as a telephone", async () => {
+    const db = seeded();
+    try {
+      await withDatabaseAsync(db, async () => {
+        const form = baseForm();
+        form.set("client_skipOtherTel", "yes");
+        form.set("client_otherTel", "Skip other number");
+        form.set("client_mobile", "+1 202 555 0143");
+        form.set("saveAnyway_client_mobile", "yes");
+        form.set("counterpart_skipOtherTel", "yes");
+        form.set("counterpart_otherTel", "Skip other number");
+        form.set("clientRole", "owner");
+        const intake = intakeFromFormData(form);
+        assert.equal(intake.client.skipOtherTel, true);
+        assert.equal(intake.client.otherTel, undefined);
+        assert.equal(intake.counterpart?.skipOtherTel, true);
+        assert.equal(intake.counterpart?.otherTel, undefined);
+        assert.equal(intakeFieldErrors(intake).some((error) => /otherTel|skipOther/i.test(error.field)), false);
+        const created = await createClaimFromIntake(intake);
+        const row = db.prepare(
+          `SELECT c.other_contact_skipped, p.home_tel, p.mobile_tel
+           FROM claims c JOIN people p ON p.id = c.client_person_id WHERE c.id = ?`,
+        ).get(created.id) as { other_contact_skipped: number; home_tel: string | null; mobile_tel: string | null };
+        assert.equal(row.other_contact_skipped, 1);
+        assert.equal(row.home_tel, null);
+        assert.equal(row.mobile_tel, "+1 202 555 0143");
+        assert.notEqual(row.home_tel, "Skip other number");
+      });
+    } finally {
+      db.close();
+    }
+  });
+
   it("saves more than one witness", async () => {
     const db = seeded();
     try {

@@ -4,6 +4,7 @@ import { getRequestStaff } from "@/lib/auth/session";
 import { formLoaded, formVersion, pathWithClash, postedVersion, VersionConflictError } from "@/lib/db/record-version";
 import { saveScreenData } from "@/lib/db/screens";
 import { syncStorageClaimed } from "@/lib/db/storage-charge";
+import { FieldValidationError } from "@/lib/form-validation";
 import { browserOrigin } from "@/lib/http/browser-origin";
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -13,10 +14,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   if (!staff) return NextResponse.redirect(new URL("/login", origin), 303);
   if (!isOfficeRole(staff.role)) return NextResponse.redirect(new URL("/jobs", origin), 303);
   const form = await request.formData();
-  const back = (message?: string) => {
+  const back = (message?: string, fieldName?: string) => {
     const url = new URL(`/claims/${id}/heads/storage`, origin);
-    if (message) url.searchParams.set("error", message);
-    else url.searchParams.set("saved", "1");
+    if (message) {
+      url.searchParams.set("error", message);
+      if (fieldName) url.searchParams.set("field", fieldName);
+    } else url.searchParams.set("saved", "1");
     return NextResponse.redirect(url, 303);
   };
   const values: Record<string, string> = {
@@ -31,6 +34,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   };
   if (form.has("endDate")) values.endDate = String(form.get("endDate") || "");
   if (form.has("endDateReason")) values.endDateReason = String(form.get("endDateReason") || "");
+  for (const [key, value] of form.entries()) {
+    if (String(key).startsWith("saveAnyway_")) values[String(key)] = String(value);
+  }
   try {
     saveScreenData(id, "storage", values, staff.id, formVersion(form), formLoaded(form), {
       storageStartVersion: postedVersion(form, "storageStartVersion"),
@@ -42,7 +48,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       return NextResponse.redirect(new URL(pathWithClash(`/claims/${id}/heads/storage`, error), origin), 303);
     }
     const message = error instanceof Error ? error.message : "Could not save storage.";
-    return back(message);
+    return back(message, error instanceof FieldValidationError ? error.field : undefined);
   }
   return back();
 }

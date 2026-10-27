@@ -1,6 +1,6 @@
 import { accidentDateError } from "./dates";
 import { dobKindForField, dobSaveError, isDobFieldName, type DobKind } from "./age";
-import { isPhoneBoxName, phoneFieldError, saveAnywayFieldName } from "./phone-number";
+import { isPhoneBoxName, phoneFieldError, saveAnywayFieldName, skippedOtherNumberName } from "./phone-number";
 import { somethingElseGap } from "./domain/recovery-charges";
 
 export const FIELD_INVALID_CLASS = "field-invalid";
@@ -130,8 +130,31 @@ function saveAnywayChecked(form: HTMLFormElement, fieldName: string): boolean {
   return el instanceof HTMLInputElement && el.checked;
 }
 
+function otherNumberSkipped(form: HTMLFormElement, fieldName: string): boolean {
+  const skipName = skippedOtherNumberName(fieldName);
+  if (!skipName) return false;
+  const el = form.elements.namedItem(skipName);
+  return el instanceof HTMLInputElement && el.type === "checkbox" && el.checked;
+}
+
+export function fieldPlaceLabel(control: FormControl): string {
+  const aria = control.getAttribute("aria-label");
+  if (aria?.trim()) return aria.trim();
+  const label = control.closest("label");
+  if (label) {
+    const copy = label.cloneNode(true) as HTMLElement;
+    copy.querySelectorAll("input, select, textarea, p, span, button").forEach((node) => node.remove());
+    const text = copy.textContent?.replace(/\s+/g, " ").trim();
+    if (text) return text;
+  }
+  return control.name || "A box on this form";
+}
+
 export function customErrorForControl(el: FormControl, form: HTMLFormElement): string | null {
-  if (isPhoneBoxName(el.name) && saveAnywayChecked(form, el.name)) return null;
+  if (el instanceof HTMLInputElement && (el.type === "checkbox" || el.type === "radio" || el.type === "file" || el.type === "hidden")) {
+    return null;
+  }
+  if (isPhoneBoxName(el.name) && (saveAnywayChecked(form, el.name) || otherNumberSkipped(form, el.name))) return null;
   const named = namedFieldError(el.name, el.value, {
     dobKind: dobKindFromControl(el),
     dobConfirmed: confirmChecked(form, el.name),
@@ -216,7 +239,7 @@ export function applyInvalidFields(items: { control: FormControl; message: strin
       control.insertAdjacentElement("afterend", node);
     }
     node.hidden = false;
-    node.textContent = message;
+    if (!node.querySelector('input[type="checkbox"]')) node.textContent = message;
     if (node.id) control.setAttribute("aria-describedby", node.id);
   }
 }
@@ -227,7 +250,7 @@ export function clearFieldInvalid(control: FormControl) {
   control.removeAttribute("aria-describedby");
   if ("setCustomValidity" in control) control.setCustomValidity("");
   const node = findFieldErrorNode(control);
-  if (node) {
+  if (node && !node.querySelector('input[type="checkbox"]')) {
     node.textContent = "";
     node.hidden = true;
   }

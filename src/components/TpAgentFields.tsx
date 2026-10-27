@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { InsurerNameField } from "@/components/InsurerNameField";
+import { MobileField } from "@/components/MobileField";
 import { PostcodeAddressLookup } from "@/components/PostcodeAddressLookup";
 import { mergeInsurerDetails, type KnownInsurer } from "@/lib/insurers";
 import { displayValue } from "@/lib/screen-display";
@@ -84,7 +85,7 @@ export function TpAgentFields({
       </div>
       <label className="block text-sm">
         Tel main
-        <input name="agentTel" value={telephone} onChange={(e) => setTelephone(e.currentTarget.value)} className={control} />
+        <MobileField name="agentTel" value={telephone} onChange={setTelephone} className={control} />
       </label>
       <label className="block text-sm">
         Email
@@ -112,7 +113,7 @@ export function TpAgentFields({
       </label>
       <label className="block text-sm">
         Handler telephone
-        <input name="agentHandlerTel" value={handlerTel} onChange={(e) => setHandlerTel(e.currentTarget.value)} className={control} />
+        <MobileField name="agentHandlerTel" value={handlerTel} onChange={setHandlerTel} className={control} />
       </label>
       <label className="block text-sm">
         Reference

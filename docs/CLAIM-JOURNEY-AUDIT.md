@@ -1,98 +1,122 @@
-# Claim journey audit
+# Claim journey — plain note
 
-27 October 2026. Walked in the browser on this PC, signed in as Sian Evans for the office screens, Demo Driver for handover, and Demo Mechanic for the workshop. Nothing was sent. Email stayed on simulate. No storage end was confirmed. No existing money figure was changed.
+27 October 2026. Walked in the browser as Sian Evans, then as the demonstration driver and the demonstration mechanic. No live email was sent. Email stays on simulate.
 
-The individual screens do work. A brand-new file cannot be saved, and the steps that already exist do not carry the file from one screen to the next. That is why a start-to-finish test feels as if nothing is working.
+The three files opened by hand for this walk are **TEST-0015 Audit Repair**, **TEST-0016 Audit Totalloss**, and **TEST-0017 Audit Fault**. The surname on TEST-0016 is stored as Totalloss because the form capitalises the name. They are demonstration files so the walk can be seen again. The automatic tests use a separate database and do not depend on these three.
 
 ## What works
 
-- Staff sign-in, and a steps page that reads the file. Opening a claim does not start hire, storage, or a charge.
-- The banner on every signed-in page says simulated email will not be sent. The messages button is “Record outgoing email”. It was not pressed.
-- On an existing file the ten steps are listed in the right order for a repairable non-fault claim, a total loss, and a fault claim. A step is Done only when the history has the event. A simulated or generated letter is not treated as sent.
-- TEST-0013 still shows the two flags for you to correct. They were not rewritten. Recovery time: 09:00 is before the accident at 14:30. Inherited recovery charge: £195 was typed in a note. The £195 is not in the money table. The table still shows claimed £1,572.00, offered £0.00, received £0.00, outstanding £1,572.00.
-- A driver sees only “My jobs today”. A mechanic sees only “My jobs today”. The workshop page on an existing job lists vehicle received, parts ordered, parts delayed, repairs started, and repairs complete. Those steps were not saved during this audit.
-- A missing claim address shows the ordinary “404 / This page could not be found” page. Confirmed at `/claims/does-not-exist`. The navigation and the simulate banner still show.
+Create claim now saves. On each of the three files the other-number box was ticked as “Skip other number”, an overseas mobile was typed, the warning appeared, Save anyway was ticked, and Create claim issued a number and opened the steps page with step 1 marked Done · 27/10/2026. Nothing was stored as the words “Skip other number”. The other number is blank. The overseas mobile is kept, because Save anyway was ticked.
+
+Opening a page still changes nothing. A version clash still shows the existing clash message. A missing permission is still refused on the server. Outstanding does not go below £0. An offer is still not a receipt. Hire renewal warnings stay at day 70 and day 80, with a maximum of 88 days. Unsigned papers stay unsigned. Bank details missing still blocks a payment send. Wording that has not been approved still cannot be sent. `approveSettlement`, `manageBankDetails`, `extendedWait` and `releaseWithoutExcess` stay on Justin’s staff row only. The driver and the mechanic still cannot open the office or the money.
+
+The driver sees only My jobs today. On TEST-0003 the job is “Vehicle handover”. The handover page asks for mileage, fuel, who did it, the time, and photographs. It was opened and not saved.
+
+The mechanic sees only My jobs today. On TEST-0003 the job is “Repair evidence”. The workshop page lists vehicle received, parts ordered, parts delayed, repairs started, and repairs complete, plus a place for photographs and scans. It was opened and not saved.
+
+The banner on every page still says no real email will be sent.
 
 ## What does not join up
 
-**A new claim cannot be created.** On New claim, Create claim stays on the same screen. The message is: “That does not look like a UK number. It should start with 0 or +44 and be the right length. Use Save anyway for an overseas number.” It is attached to “Skip other number”, whose value is the word “yes”, not a telephone number. Unticking the box did not clear it. The page kept a draft. No claim number was issued. The next demonstration reference was still TEST-0015.
+**Hire is still four jobs, not one.** From the steps page, Arrange hire opens a menu: Pre-hire checks, Hire pack, Handover, Hire money, and Financial circumstances. Choosing the car is somewhere else again, under Details, as “Reserve hire vehicle”. That screen offers cars that are already reserved or on hire, and it asks for hold dates. It does not start charges, and it does not create a driver’s job. Delivery / collection is a further screen of typed dates. Those dates are notes. They do not create a job, and they do not set the chargeable hire end.
 
-**Hire is four jobs, and the steps button opens none of them.** Arrange hire opens a page that only says to choose pre-hire checks, the hire pack, handover, or hire money. Choosing the car is on Hire / Fleet, a different part of the menu. The hire pack does not fill the licence number, the daily rate, the dates, or the fuel from the file. The client’s car on TEST-0013 is shown as “Unknown Unknown CU63VLX”. Handover then asks hire car or customer’s vehicle, and which hire car. On TEST-0013 that list was empty because no car is allocated. The driver is chosen again, and is not taken from the person signed in.
+The hire pack does not fill itself. On TEST-0015 the client’s name comes through, then the delivery address is “Unknown, Unknown”, the home telephone has to be dealt with again, the driving licence number is empty, the daily rate is empty, and the recovery amount already on the file (£395 plus VAT, £474) is not copied into the pack. Generating the agreement is refused until a licence check and a bank account, or a no-bank explanation, are on the file. The pack also still shows the undecided point: the supplied pack talks about 89 days, and the CRM warnings use 88. That choice is still Justin’s.
 
-**The licence check is a typed note.** There is a text link to the GOV.UK check page. The form asks for a check code, a date, categories, points and endorsements together, and an expiry date. It does not ask whether the licence is valid, does not ask for disqualifications on their own, and has no upload. The full licence number is not on this form. The notice on the page says the licence number already on the file is not this check. Who checked is stored as the person signed in. Sian has no override. The 21-day window is labelled a demonstration setting, not a DVLA ruling.
+The handover then asks which car again: Hire car or Customer’s vehicle, and what is happening. On a file with no hire car it can only offer the customer’s own car. On TEST-0003, where a hire car is already on the file, the driver’s form still starts by asking Hire car or Customer’s vehicle.
 
-**Bank statements are counted on a different page.** The hire check is satisfied only by a bank account listed under Financial circumstances, or by a saved explanation that there is no bank account. The page says a file stored there is not labelled as a bank statement, so a file on its own does not count. There is no upload on the check itself. The explanation is long, and it sits next to the impecuniosity checklist, which is a different gate. Sian can record evidence and cannot set that approval.
+**No delivery job is created when a car is chosen.** My jobs today says, in plain words, that nothing is assigned automatically. TEST-0015, TEST-0016 and TEST-0017 do not appear on the driver’s list.
 
-**Choosing a car does not create a driver’s job.** My jobs today, signed in as Sian, says: “Choose the driver and the date yourself. Nothing here is assigned automatically.” TEST-0013 is not in the hire-booking list.
+**The licence check is a typed note.** Pre-hire checks has a text link to gov.uk/check-driving-licence, then boxes for a check code, the date, categories, points, and expiry. There is no button that opens the check, no short result form, and no upload on that check. The full licence number is not asked there. It is asked again on Client details and again on the hire pack. The CRM does not call DVLA. That is correct for now. The integration is not built.
 
-**A letter does not tick the step.** Send letter opens Messages. Generating or recording an email does not mark the step done unless a separate box, “Also record this as a dated step”, is ticked. Instruct engineer prepares a letter and stays disabled until an engineer is chosen. It is not sent by opening the page.
+**Bank statements do not sit on the check.** The pre-hire check says the check is satisfied by a bank account listed on Financial circumstances, or by a saved explanation that the client has no bank account. The evidence checklist is a separate status. Uploading a file on Financial circumstances does not change that checklist, and there is no upload on the check itself. The page says so, but it takes two screens to see why a file on the disk has not satisfied the check.
 
-**The same fact is asked again.** Address, make, model, colour and gearbox had to be typed on the new-claim form because the lookups did not fill them. Licence number would be asked on client details and again, empty, on the hire pack. The car is chosen on the fleet screen and asked for again at handover.
+**Letters do not move the step on their own.** Preview of the non-fault initial letter on TEST-0015 worked, and missing facts are marked “[not yet on file]”. Generating a letter files it. It does not send it. The step is only recorded if a separate tick, “Also record this as a dated step”, is used. There is no email template for the third-party insurer on that screen. The payment chases are prepared elsewhere, and nothing is sent until Send is pressed. Send was not pressed.
 
-**Fault files still show engineer warnings.** TEST-0004 is the fault demonstration file. Its steps correctly say there is no engineer and that a courtesy car is not credit hire. The warnings on the same page still include “Instruct the engineer” and “Request repair authorisation”.
+**The same facts are typed again.** Address, telephone, licence number, insurer, registration, and the recovery figure are asked on the new claim and then again on the later screens. A blank address is stored as “Unknown” and postcode “UNKNOWN”, and step 1 then says “1 detail missing”.
 
-**Total loss is not on the new-claim form.** It is a tick on Assessed damage. That screen was not reached on a new file, because the new file could not be saved.
+**A fault file still talks about an engineer.** TEST-0004’s steps correctly say there is no engineer on a fault claim, and step 5 is the Audatex estimate to the client’s own insurer. The problems list on the same page still says “Instruct the engineer” and “Request repair authorisation”. It also still chases a driving licence, a logbook, and bank statements, which belong to credit hire, not a courtesy car.
 
-## Simplified design
+**Total loss is not on the new-claim form.** It is a tick on Assessed damage: “Ticking this marks the file as a total loss. It does not set claimed, offered, agreed or received.” Ticking it on TEST-0016 switched the steps to the total-loss list. The valuation boxes are notes. They do not change the money.
 
-One rule for every step: it starts from the steps page, the screen is already filled from the file, the handler types only what is new, and saving ticks that step. Anything already known is not typed again.
+**A wrong claim address is a bare 404.** Opening `/claims/does-not-exist` shows “404” and “This page could not be found.” It does not say “Claim not found”. That is recorded for a later stage. It was not changed in this job. A 404 page is not a form.
 
-Hidden behind a “?” or a details link: the long notices, the 21-day demonstration window, the 89-day pack note against the 88-day alerts, and the impecuniosity research wording. The step itself stays short.
+**TEST-0013 is still flagged, and was not rewritten.** The two flags are still open: “Inherited recovery charge needs review: £195 was typed in a note” and “Recovery time needs review: 09:00 is before the accident at 14:30”.
 
-These stay as they are. Opening a page changes nothing. A later save by someone else is refused and names who saved, and when. Email stays simulated unless you later switch it, and even then a person still records the send. Permissions are checked on the server. `approveSettlement`, `manageBankDetails`, `extendedWait` and `releaseWithoutExcess` stay on your staff row only. Nothing is invented: no signature, no insurer result, no licence result, no bank details.
+**Recovery money appears before the recovery step is done.** Ticking “Client needs recovery” on the new claim turns on the standard £395 fee. Saving the claim puts £474 (that fee plus VAT) on the file at once. Step 2 still says To do, because the recovery date has not been recorded. The outstanding figure is already £474. TEST-0017, with no recovery, shows £0.00, which is right for a courtesy car.
 
-**1. Basic details.** One screen: client, car, accident, fault or non-fault, driveable or not. Address and vehicle stay typed until a live lookup exists. The licence number is asked here, once. Save opens the steps page with step 1 ticked, and creates step 2.
+**Storage end on TEST-0005 was not confirmed.** The page still offers “Use this as the storage end date” and says nothing has been written yet. That button was not pressed. The stored end date is still empty. The charge panel also says “Confirmed 14/10/2026” while describing 10 days from 22/09/2026 to 01/10/2026. That word “Confirmed” is easy to misread. The summary on the file still says no storage charge is running.
 
-**2. Recovery, if needed.** If the car is driveable, the step is “Not needed” with that reason already offered. If it is not, the screen shows the accident date and place already filled. The handler adds the recovery time, which cannot be before the accident, and the place if it differs. Saving ticks the step and, when a recovery is booked, puts a recovery job on the driver’s list for the date entered.
+**A few labels are in the wrong place.** On the recovery money screen and the storage money screen, the agreed box is labelled “Agreed repair invoice”. That is the agreed figure for that charge, not the repair invoice.
 
-**3. Hire.** One screen from Arrange hire. It shows the licence check, the bank check, the cars that are free, the rate already on the file, and the client already on the file. The handler records the licence result, attaches the statement or records that there is no bank account, and picks the car once. Saving ticks the parts that are done, fills the hire pack, and creates the delivery job. Handover opens with that car, that driver, and the client’s name. It asks for mileage, fuel, photos, and a signature or a reason there is none. A courtesy car uses the same screen and is labelled “not credit hire”. No daily charge is raised to an insurer.
+**The mechanic who opens the money address is sent back to My jobs today with no sentence explaining why.** The server does refuse it. The page does not say so.
 
-**4. Initial letter.** The letter is filled from the file: client, accident, vehicle, third-party insurer. The handler checks it and records it. That tick is the step. On simulate, the file says recorded, not sent. A fault claim does not show this letter. It shows “Notify the client’s own insurer” and a box for their claim number.
+## The ten steps
 
-**5. Engineer and/or Audatex.** The handler picks engineer, Audatex, or both. Audatex figures are typed. There is no Audatex link. A fault claim offers Audatex only, to the client’s own insurer, and does not offer an engineer. Saving ticks the step and starts the chase for the report.
+The steps already change with the kind of file. The design below is what they should feel like once they are one process. This job did not rebuild the screens. It records the design for the later stages.
 
-**6. Report or estimate received.** The steps page already has this form. Saving the date and who it came from ticks the step. A file that is only marked “report received”, with no date, stays “Cannot tell from the history”, as TEST-0009 does today.
+### Non-fault, the car can be repaired
 
-**7. Send the report or estimate.** The document already on the file is the attachment. Recording the send ticks the step. A simulated or generated copy does not count as sent, which is already the rule.
+1. **Basic details.** One form. Name, address, one mobile, accident, car, and whether a replacement is needed. Skip means there is no other number. A bad number warns and offers Save anyway. Create claim issues the number and this step is Done.
+2. **Recovery, only if the car cannot be driven.** The fee, the date, and where it went, once. The standard fee is offered, not silently added before the step is done.
+3. **Hire, as one job.** Checks, choose a free car, pack filled from the file, handover of that car, and the driver’s delivery job created when the car is chosen. Courtesy is not this step.
+4. **Initial letter to the third-party insurer.** Built from the file. Filing it marks the step. It is not sent until someone presses Send, and unapproved wording cannot be sent.
+5. **Engineer, Audatex, or both.** A choice on the step. Figures typed on the file. No link to Audatex until one exists.
+6. **Report or estimate received.** Done only when each chosen item is on the file.
+7. **Send that report to the third-party insurer.** The send, or the recorded send, marks the step.
+8. **Repair authorisation, or payment agreed.** The insurer’s answer, dated.
+9. **Repairs done and the client’s car returned.** The workshop steps feed this. Hire does not end until the repaired car is back.
+10. **Payments.** Each head on its own. Outstanding never below £0. Overpayments listed separately. Nothing is requested while bank details are missing.
 
-**8. Repair authorisation or payment agreed.** The handler records the authorised figure and the date. A figure below the claimed figure needs `approveSettlement` (your staff row). Saving ticks the step. It does not add claimed and agreed together, and it does not treat an offer as a receipt.
+### Non-fault, total loss
 
-**9. Repairs, return, hire and storage end.** The mechanic’s list is the same five workshop steps, opened from the job. When repairs are complete and the client’s car is back, the handler confirms the hire end and the storage end on that same step. Hire on a repairable file ends only after both of those. Storage ends on the date entered. There is no grace period. A total-loss file uses the valuation steps below instead of this repair ending.
+Steps 1 to 4 stay the same. From step 5 the file follows the valuation, not the repair:
 
-**10. Chase until paid.** Each head (repairs, recovery, storage, hire) shows claimed, offered, agreed, received, and outstanding, already calculated. The handler records a request or a receipt. The chase starts from the step. Hire and storage stay “Not ready” until the end date from step 9 is confirmed.
+5. Instruct the engineer.
+6. Engineer’s report received.
+7. Agree the valuation with the client. The figures are the valuation, not a repair invoice.
+8. Send the valuation to the insurer.
+9. Payment received and salvage collected. The 7-day real-day gap still starts only after a handler-confirmed qualifying payment.
+10. Payments, including vehicle damage, recovery, storage, and hire. Storage still ends only when someone confirms the end date. Hire still ends only when that end is confirmed.
 
-**Total loss, in place of steps 8 to 10.** Agree the valuation with the client on Assessed damage (the figure is typed, not invented). Send that figure to the insurer. Record payment received, then salvage collected. The off-hire countdown starts only after a handler-confirmed qualifying payment, then seven days. That rule stays.
+Total loss stays a deliberate tick after the assessment. It is not guessed on the new-claim form.
 
-**Fault, courtesy car.** Same steps 1 to 3, with courtesy labelled as not credit hire. Then: own-insurer claim number; Audatex estimate to that insurer; authorisation; repairs; excess paid; car returned; invoice for the authorised amount minus the excess. The car is not recorded as returned before the excess is on the file unless the save is by your staff row, using `releaseWithoutExcess` and a reason.
+### Fault, with a courtesy car
 
-**Licence check, on the hire step.** A button opens the GOV.UK check page. A short form: valid, category, points, disqualifications, date, who checked. An upload sits on the same form. The licence number typed at step 1 is shown and is not asked again. The CRM does not call DVLA.
+1. Basic details, with Fault and Roadworthy when that is actually known.
+2. Recovery only if the car cannot be driven. A roadworthy car skips this.
+3. **Courtesy car.** Not credit hire. No daily charge to an insurer. No licence-and-bank chase that belongs to credit hire.
+4. Notify the client’s own insurer, and record their claim number.
+5. Send the Audatex estimate to that insurer. There is no engineer on a fault claim, and the problems list must not ask for one.
+6. Authorisation received via Audatex.
+7. Repairs done.
+8. Excess paid by the client.
+9. Car returned to the client. Not before the excess is recorded as paid, unless Justin’s staff row uses `releaseWithoutExcess` and gives a reason.
+10. Invoice the client’s own insurer for the authorised amount minus the excess.
 
-**Bank statements, on the hire step.** Upload the statement here, or record that there is no account. That is what satisfies the check. The long financial-circumstances page stays behind “?”, and an upload there counts as the same statement. Impecuniosity approval stays a separate gate, and stays off Sian’s account.
+## The stage plan
 
-## Stage plan
+Five stages. Each later stage extends the same three journeys one step further: non-fault repairable, non-fault total loss, and fault with a courtesy car. A stage is not finished until that journey test passes and the full finish routine passes: `npm test`, `npm run typecheck` with zero errors, `npm run build`, `npm run check:pages` with the database unchanged on open, and `npm run test:journeys`.
 
-Each stage is one job. It is finished only when a new journey test passes, together with `npm test`, `npm run typecheck` with zero errors, `npm run build`, and `npm run check:pages` with the database unchanged on open. There is no browser test harness in this project. The journey test calls the real route handlers, the same way the current tests do.
+**Stage 1 — this job.** Create claim works. Skip other number is not a telephone. A refused save says what is wrong and where. The journey test fills the form, ticks Skip other number, accepts the telephone warning with Save anyway, presses Create claim, and checks that a number is issued and step 1 is Done. It stops there.
 
-1. **A new claim can be saved.** “Skip other number” is no longer treated as a telephone number. Saving opens the steps page with step 1 done. You will be able to create Audit Repair, Audit Total Loss, and Audit Fault and see the right step list. The journey test creates a claim and reads those steps.
+**Stage 2 — one hire.** Checks, the car, the pack and the handover become one path. The pack fills from the file. The handover uses the car already chosen. Choosing the car creates the driver’s delivery job. The journey test continues until a car is chosen and that job exists.
 
-2. **Hire is one screen from the steps page.** The pack is filled from the file. Handover does not ask which car again. You will be able to leave the steps page, pick a car, and see that same car on the pack and the handover. The journey test does that on a new claim and does not send email or end storage.
+**Stage 3 — licence and bank.** A GOV.UK button, a short result, an upload, and the full licence number asked once and reused. A bank-statement upload counts toward the check, with one clear sentence. The journey test continues through those checks. No live DVLA or bank connection is built.
 
-3. **Licence and bank sit on that screen and count.** GOV.UK link, short result, upload, licence number reused. A statement uploaded on the check satisfies the check. You will be able to finish both checks without opening Financial circumstances. The journey test records both and sees the hire step move on.
+**Stage 4 — letters and the engineer.** The letter marks its step from the file. A fault file stops warning about an engineer. A total loss, once ticked, keeps the valuation steps. The journey test continues through that next step on each of the three files.
 
-4. **The driver’s job is created when the car is chosen.** You will see the delivery on My jobs today for the driver, without using Assign a job. The journey test checks that job exists and that opening the claim did not create it early.
+**Stage 5 — money and the loose ends.** Payment requests stay blocked when bank details are missing and when the wording is not approved. Storage end stays a button someone has to press. A wrong claim address says “Claim not found”. TEST-0013’s two flags stay until a person clears them. The journey test continues until a safeguard stops it, and the test records that stop. It does not break the safeguard.
 
-5. **Letters, the report, and authorisation tick the step they belong to.** Simulate stays simulate, and a simulated copy still does not count as sent. You will be able to record the insurer letter and the report from the step, with one save. The journey test does that without a live send.
+## How to run the journey test
 
-6. **The three endings, and a proper missing-claim page.** Repairable: repairs, return, hire end, storage end, then the chasers. Total loss: valuation, payment, salvage. Fault: excess before release, invoice minus excess, courtesy not credit hire. A bad address says “Claim not found”. You will be able to follow each ending to the last step. Three journey tests cover the three endings. Every safeguard above stays in force.
+From this folder, after `npm run build`:
 
-## The three walks
+```
+npm run test:journeys
+```
 
-All three stopped before a claim number existed. Driver and mechanic were then opened on TEST-0003, an existing job, because there was no new file to hand over. Nothing was saved on that file.
+That opens the real screens in a browser, signed in as the office user. It uses its own database. It does not use the demonstration database, it does not confirm a storage end, and it does not send email. Later stages extend `tests/journeys/claim-journeys.ts` and `scripts/journey-check.ts`. `npm test` stays the existing checks. The finish routine runs both.
 
-| Walk | What was done | Where it stopped |
-| --- | --- | --- |
-| Audit Repair. Non-fault, undriveable, hire, repaired. | One New claim screen. Client, Cardiff address, car, accident 20/10/2026 14:30, recovery and hire ticked. Insurer name typed by hand. Create claim pressed once. | Stayed on New claim. “Skip other number” was rejected as a telephone number. Draft kept at 11:59 and 12:00 on 27/10/2026. No claim number. Hire, letters, engineer, workshop, and payments were not reached. |
-| Audit Total Loss. Non-fault. | Not started as its own form. | Same Create claim block. Total loss is a tick on Assessed damage, which was never opened for a new file. |
-| Audit Fault. Courtesy car. | Not started as its own form. | Same Create claim block. The courtesy-car step was never opened for a new file. |
+## Left alone
 
-TEST-0013, TEST-0004, and TEST-0009 were opened only to check the product. Their money, offers, and storage ends were left as they were. The next build should start with stage 1.
+TEST-0005’s storage end was not confirmed. TEST-0009’s vehicle-damage offers were not changed. TEST-0006’s money was not changed. TEST-0007’s £800 was not written off. TEST-0013’s two flags were not rewritten. No application change was made beyond the Create claim fix, the save messages, the journey test, and these notes.

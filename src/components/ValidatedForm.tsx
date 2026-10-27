@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useRef, type FormEvent, type FormHTMLAttributes } from "react";
+import { useEffect, useRef, useState, type FormEvent, type FormHTMLAttributes } from "react";
 import {
   applyInvalidFields,
   applyServerFieldError,
   clearFieldInvalid,
   collectInvalidControls,
   customErrorForControl,
+  fieldPlaceLabel,
   isFormControl,
   nativeValidityMessage,
   relatedControl,
   scrollAndFocusFirstInvalid,
+  type FormControl,
 } from "@/lib/form-validation";
 
 type ServerFormAction = (formData: FormData) => void | Promise<unknown>;
@@ -38,6 +40,7 @@ export function ValidatedForm({
   ...rest
 }: ValidatedFormProps) {
   const formRef = useRef<HTMLFormElement>(null);
+  const [refusals, setRefusals] = useState<string[]>([]);
 
   useEffect(() => {
     const form = formRef.current;
@@ -45,6 +48,10 @@ export function ValidatedForm({
     const control = applyServerFieldError(form, initialErrorField, initialError || "Check this field.");
     if (control) scrollAndFocusFirstInvalid(control);
   }, [initialError, initialErrorField]);
+
+  function refusalLines(items: { control: FormControl; message: string }[]) {
+    return items.map(({ control, message }) => `${fieldPlaceLabel(control)}: ${message}`);
+  }
 
   function revalidate(event: FormEvent<HTMLFormElement>) {
     const target = event.target;
@@ -54,10 +61,12 @@ export function ValidatedForm({
     control.setCustomValidity(custom || "");
     if (control.validity.valid) {
       clearFieldInvalid(control);
-      return;
-    }
-    if (control.classList.contains("field-invalid") || control.getAttribute("aria-invalid") === "true") {
+    } else if (control.classList.contains("field-invalid") || control.getAttribute("aria-invalid") === "true") {
       applyInvalidFields([{ control, message: custom || nativeValidityMessage(control) }]);
+    }
+    if (refusals.length) {
+      const invalid = collectInvalidControls(target.form);
+      setRefusals(invalid.length ? refusalLines(invalid) : []);
     }
   }
 
@@ -66,9 +75,11 @@ export function ValidatedForm({
     if (invalid.length) {
       event.preventDefault();
       applyInvalidFields(invalid);
+      setRefusals(refusalLines(invalid));
       scrollAndFocusFirstInvalid(invalid[0].control);
       return;
     }
+    setRefusals([]);
     onSubmit?.(event);
   }
 
@@ -94,6 +105,20 @@ export function ValidatedForm({
         onChange?.(event);
       }}
     >
+      {refusals.length ? (
+        <div
+          role="alert"
+          data-form-error
+          className="sticky top-20 z-20 rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue sm:col-span-2"
+        >
+          <p className="font-semibold">This was not saved.</p>
+          <ul className="mt-1 list-disc pl-5">
+            {refusals.map((line, index) => (
+              <li key={`${index}-${line}`}>{line}</li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       {children}
     </form>
   );

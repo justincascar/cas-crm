@@ -8,6 +8,7 @@ import {
   firstFieldError,
   namedFieldError,
 } from "../src/lib/form-validation.ts";
+import { isPhoneBoxName } from "../src/lib/phone-number.ts";
 
 describe("inline field validation messages", () => {
   it("uses the same required message for an empty field as for a format error", () => {
@@ -39,6 +40,17 @@ describe("inline field validation messages", () => {
     assert.match(errors[0].message, /too short/);
     assert.equal(errors[1].field, "accidentDate");
     assert.equal(firstFieldError(errors)?.field, "client_mobile");
+  });
+
+  it("does not treat a skip tick or Save anyway as a telephone number", () => {
+    assert.equal(isPhoneBoxName("client_skipOtherTel"), false);
+    assert.equal(isPhoneBoxName("saveAnyway_client_mobile"), false);
+    assert.equal(isPhoneBoxName("client_otherTel"), true);
+    assert.equal(isPhoneBoxName("agentHandlerTel"), true);
+    assert.equal(namedFieldError("client_skipOtherTel", "yes"), null);
+    assert.equal(namedFieldError("client_skipOtherTel", "Skip other number"), null);
+    assert.equal(namedFieldError("saveAnyway_client_mobile", "yes"), null);
+    assert.match(namedFieldError("client_otherTel", "Skip other number") || "", /Save anyway/);
   });
 
   it("carries the field name on a server validation error for the redirect", () => {
