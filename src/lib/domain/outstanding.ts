@@ -107,6 +107,8 @@ export function buildOutstanding(input: {
   engineeringStatus: string | null;
   repairStatus: string | null;
   totalLoss: boolean;
+  /** A fault file has its own steps: the client's own insurer and Audatex. The third-party letters are not listed. */
+  fault?: boolean;
   asAt?: Date;
 }): OutstandingItem[] {
   const asAt = input.asAt ?? new Date();
@@ -146,7 +148,7 @@ export function buildOutstanding(input: {
     });
   }
 
-  for (const step of NOT_YET_SENT) {
+  for (const step of input.fault ? [] : NOT_YET_SENT) {
     if (stepMarkedSent(step.kind, events, input.chases)) continue;
     if (step.kind === "liability_response" && !awaitedLiabilityResponse(input.insurerLiabilityPosition)) continue;
     if (step.kind === "engineer_report" && input.engineeringStatus !== "not_instructed") continue;

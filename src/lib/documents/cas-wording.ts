@@ -355,7 +355,20 @@ Thanks,
   },
 ];
 
+function supplied(key: string): CorrespondenceSpec {
+  const spec = CAS_LETTER_SPECS.find((item) => item.key === key);
+  if (!spec) throw new Error(`Supplied wording missing: ${key}`);
+  return spec;
+}
+
 export const CAS_EMAIL_SPECS: CorrespondenceSpec[] = [
+  // The same supplied wording as the initial letter, sent by email. Nothing is added to it.
+  {
+    ...supplied("initial_tp_insurer"),
+    key: "initial_tp_insurer_email",
+    title: "Initial email to the third-party insurer",
+    channel: "email",
+  },
   {
     key: "client_welcome",
     title: "Client welcome (intake)",

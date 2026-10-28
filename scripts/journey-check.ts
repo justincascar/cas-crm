@@ -1018,6 +1018,104 @@ async function runHireJourneys(session: BrowserSession, origin: string, dbPath: 
   return null;
 }
 
+async function stepState(session: BrowserSession, key: string) {
+  return session.evaluate<string>(`document.querySelector('[data-step="${key}"]')?.getAttribute("data-state") || ""`);
+}
+
+/** Submits the step form for one intent with the date already filled in, as one click would. */
+async function oneClick(session: BrowserSession, intent: string, extra: Record<string, string> = {}) {
+  const spec = JSON.stringify({ intent, extra });
+  const result = await session.evaluate<Submitted>(`(() => {
+    const spec = ${spec};
+    const form = document.querySelector('input[name="intent"][value="' + spec.intent + '"]')?.closest("form");
+    if (!(form instanceof HTMLFormElement)) return { status: 0, location: "", problem: "No form for " + spec.intent };
+    const body = new FormData(form);
+    for (const [name, value] of Object.entries(spec.extra)) body.set(name, value);
+    if (!body.get("occurredOn")) return { status: 0, location: "", problem: spec.intent + " had no date filled in" };
+    body.set("submitKey", crypto.randomUUID());
+    return fetch(form.action, { method: "POST", body, credentials: "same-origin", redirect: "follow" }).then((response) => ({
+      status: response.status,
+      location: response.url || "",
+    }));
+  })()`);
+  if (result.problem) return result.problem;
+  const location = decodeURIComponent(result.location.replaceAll("+", " "));
+  if (result.status >= 400 || location.includes("stepError=")) return `${intent}: ${location}`;
+  return null;
+}
+
+/**
+ * Steps 4 to 7. Generating the initial letter marks step 4 as sent. Engineer instructed, report received and
+ * sent to the insurer are one click each with today's date. The fault file offers no third-party letter or engineer.
+ */
+async function runLettersJourney(session: BrowserSession, origin: string, dbPath: string, made: MadeClaim[]) {
+  const repairable = made.find((item) => item.id === "repairable");
+  const fault = made.find((item) => item.id === "fault-courtesy");
+  if (!repairable || !fault) return "The files were not all created.";
+
+  await gotoPath(session, origin, `/claims/${repairable.claimId}/messages`);
+  const offered = await session.evaluate<string[]>(`[...document.querySelectorAll('select[name="templateKey"] option')].map((item) => item.textContent || "")`);
+  if (!offered.some((text) => text.includes("Email: Initial email to the third-party insurer"))) return "The insurer email was not offered on a non-fault file.";
+  const picked = await session.evaluate<string>(`(() => {
+    const select = document.querySelector('select[name="templateKey"]');
+    if (!(select instanceof HTMLSelectElement)) return "no select";
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value").set;
+    setter.call(select, "initial_tp_insurer");
+    select.dispatchEvent(new Event("change", { bubbles: true }));
+    return "";
+  })()`);
+  if (picked) return `Letter choice: ${picked}`;
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  const holdBack = await session.evaluate<boolean>(`Boolean(document.querySelector('input[name="holdBack"]'))`);
+  if (!holdBack) return "The hold-back tick was not offered with the initial letter.";
+  await session.evaluate(`[...document.querySelectorAll("button")].find((item) => (item.textContent || "").includes("Generate and open"))?.click()`);
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline && !(await session.evaluate<string>(`location.pathname`)).startsWith("/documents/")) {
+    await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  await gotoPath(session, origin, `/claims/${repairable.claimId}`);
+  if ((await stepState(session, "initial_letter")) !== "done") return "Step 4 was not done after the letter was generated.";
+
+  const chose = await oneClick(session, "route", { route: "engineer", occurredOn: HIRE_DAY });
+  if (chose) return `Route: ${chose}`;
+  await gotoPath(session, origin, `/claims/${repairable.claimId}`);
+  const instructed = await oneClick(session, "engineer_instructed");
+  if (instructed) return instructed;
+  await gotoPath(session, origin, `/claims/${repairable.claimId}`);
+  if ((await stepState(session, "engineer")) !== "done") return "Step 5 was not done after one click.";
+  const report = followed(await submitForm(session, 'form[action$="/steps/report"]', {}), "Report received");
+  if (report) return report;
+  await gotoPath(session, origin, `/claims/${repairable.claimId}`);
+  if ((await stepState(session, "engineer_report")) !== "done") return "Step 6 was not done after the report was recorded.";
+  const forwarded = await oneClick(session, "report_sent");
+  if (forwarded) return forwarded;
+  await gotoPath(session, origin, `/claims/${repairable.claimId}`);
+  if ((await stepState(session, "send_report")) !== "done") return "Step 7 was not done after one click.";
+  const dated = readDb(dbPath, (db) =>
+    db
+      .prepare(
+        `SELECT event_type FROM claim_events WHERE claim_id = ? AND event_type IN ('engineer_instructed', 'engineer_report_received', 'engineer_report_sent_to_insurer')`,
+      )
+      .all(repairable.claimId),
+  );
+  if (dated.length !== 3) return `Expected three dated steps, found ${dated.length}.`;
+
+  await gotoPath(session, origin, `/claims/${fault.claimId}`);
+  const faultPage = await session.evaluate<{ steps: string[]; text: string }>(`({
+    steps: [...document.querySelectorAll("[data-step]")].map((item) => item.getAttribute("data-step") || ""),
+    text: document.querySelector("[data-claim-problems]")?.textContent || "",
+  })`);
+  if (faultPage.steps.includes("engineer") || faultPage.steps.includes("initial_letter")) return "The fault file showed an engineer or third-party letter step.";
+  if (!faultPage.steps.includes("audatex_send") || !faultPage.steps.includes("own_insurer")) return "The fault file did not show Audatex and the client's own insurer.";
+  if (/Instruct the engineer|repair authorisation|licence chase|V5C|Bank statements|liability notification/i.test(faultPage.text)) {
+    return `The fault file's problems list mentioned a credit-hire or third-party item: ${faultPage.text}`;
+  }
+  await gotoPath(session, origin, `/claims/${fault.claimId}/messages`);
+  const faultOffered = await session.evaluate<string[]>(`[...document.querySelectorAll('select[name="templateKey"] option')].map((item) => item.textContent || "")`);
+  if (faultOffered.some((text) => /third-party insurer|hire pack|rebuttal|liability chaser/i.test(text))) return "The fault file offered a third-party insurer letter or email.";
+  return null;
+}
+
 async function main() {
   if (!fs.existsSync(path.join(process.cwd(), ".next", "BUILD_ID"))) {
     console.error("There is no production build. Run npm run build, then npm run test:journeys.");
@@ -1099,6 +1197,13 @@ async function main() {
         console.log(`FAIL  Hire  ${hireProblem}`);
       } else {
         console.log("PASS  Recovery and hire  recovery recorded with the confirmed fee, only free cars, driver jobs, licence number, rate, agreement gates, signed copy, status wording, clash, not yet, courtesy");
+        const lettersProblem = await runLettersJourney(browser.session, origin, databasePath, made);
+        if (lettersProblem) {
+          results.push({ id: "repairable", problem: lettersProblem });
+          console.log(`FAIL  Letters and engineer  ${lettersProblem}`);
+        } else {
+          console.log("PASS  Letters and engineer  letter marks step 4, insurer email offered, steps 5 to 7 one click each with a date, fault file on Audatex with no credit-hire items");
+        }
       }
     }
   } catch (error) {

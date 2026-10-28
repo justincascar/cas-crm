@@ -49,7 +49,7 @@ import { syncRecoveryClaimed, syncStorageClaimed } from "@/lib/db/storage-charge
 import { isoDaysFromNow } from "@/lib/dates";
 import { postcodeLookup } from "@/lib/lookups/postcode";
 import { VEHICLE_MANUAL_HINT, vehicleLookup } from "@/lib/lookups/vehicle";
-import { isDocumentTemplateKey } from "@/lib/documents/catalog";
+import { generationMarksStep, isDocumentTemplateKey } from "@/lib/documents/catalog";
 import { errorQuery, FieldValidationError } from "@/lib/form-validation";
 import { phoneFieldError } from "@/lib/phone-number";
 import { redirectClash } from "@/lib/http/version-clash";
@@ -409,7 +409,7 @@ export async function actionRecordEvent(formData: FormData) {
 }
 
 export async function actionGenerateDocument(formData: FormData) {
-  await requireStaff();
+  const staff = await requireStaff();
   const claimId = String(formData.get("claimId"));
   const templateKey = String(formData.get("templateKey") || "");
   if (!isDocumentTemplateKey(templateKey)) {
@@ -424,9 +424,10 @@ export async function actionGenerateDocument(formData: FormData) {
     const result = generateClaimDocument({
       claimId,
       templateKey,
-      actorId: String(formData.get("actorId") || "staff-sian"),
+      actorId: staff.id,
       letterDate: String(formData.get("letterDate") || "") || undefined,
-      recordOnFile: formData.get("recordOnFile") === "yes",
+      recordOnFile: generationMarksStep(templateKey) && formData.get("holdBack") !== "yes",
+      markSent: true,
     });
     documentId = result.documentId;
   } catch (error) {

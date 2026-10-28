@@ -132,6 +132,9 @@ Five stages. Each later stage extends the same three journeys one step further: 
 41. **Open.** The driver's doorstep signing was checked by tests and on a phone-sized screen, but not end to end as the driver in the browser pane, because the pane cannot take the handover photographs.
 37. **Open.** Courtesy-car agreement. Justin will supply an approved template. Fault files have no agreement until then.
 38. **Open.** The Settings "Environment" panel still lists agreement maximum 88, amber 70 and red 80. Those are old figures. The confirmed rule is 89 days with alerts from day 80 and overdue on day 88. Not changed in this job.
+45. **Open.** After step 7 (report sent to the third-party insurer), step 8 waits on the insurer but no repair-authorisation chase starts. That chase starts only when a repair authorisation request is recorded. J5 or J6 should decide whether sending the report starts it.
+46. **Open.** On a fault file, Messages still offers the engineer instruction and the impecuniosity disclosure response. The impecuniosity response has its own approval and cannot be produced without it. Left for J8.
+47. **Open.** The initial insurer email shows Unknown for a missing field in the email text, where the letter shows [not yet on file]. The missing fields are listed above the email. Left for J8.
 
 ## How to try hire on a demonstration file
 

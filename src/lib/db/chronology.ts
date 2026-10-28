@@ -24,7 +24,7 @@ import {
   summariseLossesClaimed,
   type CorrespondenceContext,
 } from "../documents/correspondence";
-import { generateEmail, isEmailTemplateKey } from "../documents/email-templates";
+import { THIRD_PARTY_ONLY_TEMPLATES, generateEmail, isEmailTemplateKey } from "../documents/email-templates";
 import { generateLetter, isLetterTemplateKey, type LetterTemplateKey } from "../documents/templates";
 import { addCalendarDaysIso, formatUkDate, londonDateIso, londonTodayIso, nowUtcIso, occurredFromForm } from "../dates";
 import { blankInsurerField } from "../insurers";
@@ -396,22 +396,28 @@ function impecuniosityRefusal(claimId: string, templateKey: string | undefined, 
   return impecuniosityGate(claimId).generationBlock;
 }
 
+/** Third-party insurer wording does not apply on a fault file. Returns the reason, or null. */
+export function thirdPartyTemplateOnFault(claimId: string, templateKey: string | undefined): string | null {
+  if (!templateKey || !THIRD_PARTY_ONLY_TEMPLATES.includes(templateKey)) return null;
+  const liability = get<{ claim_type: string | null }>(`SELECT claim_type FROM claims WHERE id = ?`, [claimId]);
+  if (liability?.claim_type !== "fault") return null;
+  return "Letters to the third-party insurer do not apply on a fault claim.";
+}
+
 export function generateClaimDocument(input: {
   claimId: string;
   templateKey: DocumentTemplateKey | LetterTemplateKey;
   actorId: string;
   letterDate?: string;
   recordOnFile?: boolean;
+  /** The handler says the letter has gone out. The step is then shown as sent, not only generated. */
+  markSent?: boolean;
 }) {
   if (!isDocumentTemplateKey(input.templateKey)) {
     throw new Error("Unknown document template.");
   }
-  if (input.templateKey === "initial_tp_insurer") {
-    const liability = get<{ claim_type: string | null }>(`SELECT claim_type FROM claims WHERE id = ?`, [input.claimId]);
-    if (liability?.claim_type === "fault") {
-      throw new Error("The third-party insurer letter does not apply on a fault claim. It was not created.");
-    }
-  }
+  const notOnFault = thirdPartyTemplateOnFault(input.claimId, input.templateKey);
+  if (notOnFault) throw new Error(`${notOnFault} It was not created.`);
   const blocked = impecuniosityRefusal(input.claimId, input.templateKey, "");
   if (blocked) throw new Error(blocked);
   const letterDate = occurredFromForm(input.letterDate);
@@ -451,12 +457,16 @@ export function generateClaimDocument(input: {
     documentId,
     source: "system",
   });
-  if (input.recordOnFile !== false) {
+  const stepEvent = eventTypeForTemplate(input.templateKey);
+  if (input.recordOnFile !== false && !(input.markSent && stepEvent === "document_generated")) {
+    const handler = get<{ name: string }>(`SELECT name FROM staff WHERE id = ?`, [input.actorId]);
     recordClaimEvent({
       claimId: input.claimId,
-      eventType: eventTypeForTemplate(input.templateKey),
+      eventType: stepEvent,
       occurredAt: letterDate,
-      details: `Recorded from generated ${generated.title}.`,
+      details: input.markSent
+        ? `Marked as sent by ${String(handler?.name || "").trim() || "staff"} when ${generated.title} was generated. Not sent from the CRM.`
+        : `Recorded from generated ${generated.title}.`,
       actorId: input.actorId,
       channel: kind,
       documentId,
@@ -517,6 +527,8 @@ async function deliverClaimEmail(input: {
 }) {
   const blocked = impecuniosityRefusal(input.claimId, input.templateKey, `${input.subject}\n${input.body}`);
   if (blocked) return { ok: false as const, status: "failed" as const, error: blocked };
+  const notOnFault = thirdPartyTemplateOnFault(input.claimId, input.templateKey);
+  if (notOnFault) return { ok: false as const, status: "failed" as const, error: `${notOnFault} It was not sent.` };
   const when = occurredFromForm(input.occurredAt);
   const loaded = loadClaimEmailAttachments(input.claimId, input.attachmentIds || []);
   if (!loaded.ok) return { ok: false as const, status: "failed" as const, error: loaded.error };

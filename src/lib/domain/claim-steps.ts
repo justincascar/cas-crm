@@ -54,7 +54,9 @@ export type ClaimStepForm =
   | "return"
   | "invoice"
   | "invoice_paid"
-  | "own_insurer";
+  | "own_insurer"
+  | "engineer_instructed"
+  | "report_sent";
 
 export type ClaimStepEvent = {
   event_type: string;
@@ -631,9 +633,12 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
     }
     view = {
       ...view,
-      forms: wantsAudatex && !audatexSent ? ["audatex_sent"] : [],
-      buttonLabel: wantsEngineer && !instructed ? "Instruct engineer" : null,
-      buttonHref: wantsEngineer && !instructed ? href : null,
+      forms: [
+        ...(wantsEngineer && !instructed ? (["engineer_instructed"] as const) : []),
+        ...(wantsAudatex && !audatexSent ? (["audatex_sent"] as const) : []),
+      ],
+      buttonLabel: null,
+      buttonHref: null,
       detail: `Chosen: ${route === "both" ? "engineer and Audatex" : route === "audatex" ? "Audatex estimate" : "engineer"}.`,
     };
     if (engineerDone && audatexDone) {
@@ -709,9 +714,8 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
       title: "Send the report and estimate to the third-party insurer",
       state: received ? "to_do" : "not_started",
       statusText: received ? "To do" : "Not started",
-      buttonLabel: "Send report",
-      buttonHref: href,
       detailsHref: href,
+      forms: received ? ["report_sent"] : [],
     });
     if (reportSent && counts) {
       view = {
@@ -720,6 +724,7 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
         statusText: doneText(reportSent.occurred_at, reportSendWords(reportSent)),
         buttonLabel: null,
         buttonHref: null,
+        forms: [],
       };
     } else if (reportSent && !counts) {
       view = { ...view, detail: "A simulated or generated item is on the file. It is not treated as sent." };

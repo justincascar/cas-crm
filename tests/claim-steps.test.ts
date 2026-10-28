@@ -577,7 +577,7 @@ describe("claim steps from history", () => {
       assert.match(String(invoice?.details || ""), /Excess pence: 35000/);
       assert.throws(
         () => generateClaimDocument({ claimId: "c4", templateKey: "initial_tp_insurer", actorId: "staff-justin", recordOnFile: false }),
-        /does not apply on a fault claim/,
+        /do not apply on a fault claim/,
       );
       const offersAfter = offerLines(db, "c9");
       assert.equal(offersAfter.length, offersBefore.length);

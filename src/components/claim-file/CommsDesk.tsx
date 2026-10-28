@@ -149,10 +149,10 @@ export function CommsDesk({
     setEmailTo(decision.address);
     setFilledAddress(decision.filledAddress);
     setSendToNote(decision.missingMessage);
-    applyTemplate(templateKeyForRole(role, emailTemplate));
+    applyTemplate(templateKeyForRole(role, emailTemplate, liabilityStatus === "fault"));
   }
 
-  const visibleTemplates = emailTemplatesForRole(sendTo);
+  const visibleTemplates = emailTemplatesForRole(sendTo, liabilityStatus === "fault");
   const attachable = attachmentChoices([...companyDocuments, ...documents]);
   const packPreview = paymentRequestPack({
     templateKey: PAYMENT_REQUEST_EMAIL_TEMPLATE_KEY,

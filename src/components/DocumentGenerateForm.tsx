@@ -2,7 +2,8 @@
 
 import { useMemo, useState } from "react";
 import { actionGenerateDocument, actionPreviewCorrespondence } from "@/app/actions";
-import { DOCUMENT_TEMPLATES } from "@/lib/documents/catalog";
+import { DOCUMENT_TEMPLATES, generationMarksStep } from "@/lib/documents/catalog";
+import { THIRD_PARTY_ONLY_TEMPLATES } from "@/lib/documents/email-templates";
 import { letterSuggestionNote, suggestedLetterTemplateKey } from "@/lib/documents/notification-letters";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import Link from "next/link";
@@ -35,11 +36,12 @@ export function DocumentGenerateForm({
   const [busy, setBusy] = useState(false);
 
   const options = useMemo(() => {
-    return DOCUMENT_TEMPLATES.map((item) => ({
+    const fault = liabilityStatus === "fault";
+    return DOCUMENT_TEMPLATES.filter((item) => !(fault && THIRD_PARTY_ONLY_TEMPLATES.includes(item.key))).map((item) => ({
       ...item,
       suggested: item.key === suggested,
     }));
-  }, [suggested]);
+  }, [suggested, liabilityStatus]);
 
   async function previewLetter() {
     if (!templateKey) {
@@ -83,8 +85,8 @@ export function DocumentGenerateForm({
         {variant === "comms" ? "Generate a document" : "Create a document from the dates"}
       </h2>
       <p className={`text-sm text-slate ${variant === "comms" ? "md:col-span-2" : "text-xs"}`}>
-        Letters are built from facts already on this file. Missing items are marked as [not yet on file], not invented.
-        Preview first. Generating files the letter on this claim — it does not send it. Hire Pack is a separate pack.
+        Built from facts on this file. Missing items show as [not yet on file]. The CRM does not post or email it.
+        Generating a letter marks its step done as sent. Hold the step back if the letter is not going out.
       </p>
       <p className={`text-sm text-navy-deep ${variant === "comms" ? "md:col-span-2" : ""}`}>{letterSuggestionNote(liabilityStatus)}</p>
       <input type="hidden" name="claimId" value={claimId} />
@@ -114,10 +116,12 @@ export function DocumentGenerateForm({
         Letter date
         <input name="letterDate" type="date" className={field} />
       </label>
-      <label className={`flex items-center gap-2 text-sm ${variant === "comms" ? "md:col-span-2" : ""}`}>
-        <input name="recordOnFile" type="checkbox" value="yes" />
-        Also record this as a dated step on the file (still not sent)
-      </label>
+      {generationMarksStep(templateKey) ? (
+        <label className={`flex items-center gap-2 text-sm ${variant === "comms" ? "md:col-span-2" : ""}`}>
+          <input name="holdBack" type="checkbox" value="yes" />
+          Hold back the step. This letter has not been sent.
+        </label>
+      ) : null}
       <div className={`flex flex-wrap gap-2 ${variant === "comms" ? "md:col-span-2" : ""}`}>
         <button
           className="rounded-md border border-line bg-white px-4 py-2 text-sm"

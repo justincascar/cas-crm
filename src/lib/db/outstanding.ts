@@ -25,6 +25,7 @@ export function outstandingForClaim(claimId: string, asAt?: Date): OutstandingIt
     engineeringStatus: data.claim.engineering_status ? String(data.claim.engineering_status) : null,
     repairStatus: data.claim.repair_status ? String(data.claim.repair_status) : null,
     totalLoss: Number(data.claim.total_loss) === 1,
+    fault: String(data.claim.claim_type || "") === "fault",
     asAt,
   });
 }

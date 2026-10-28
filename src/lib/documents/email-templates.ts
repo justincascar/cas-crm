@@ -12,6 +12,13 @@ import {
 /** Who the general composer may offer this template to. "Other" is not listed: that choice shows every template. */
 export const EMAIL_TEMPLATES = [
   {
+    key: "initial_tp_insurer_email",
+    title: "Initial email to the third-party insurer",
+    eventType: "initial_letter_tp_insurer" as const,
+    channel: "email" as const,
+    forRoles: ["third_party"] as const,
+  },
+  {
     key: "client_welcome",
     title: "Client welcome (intake)",
     eventType: "client_welcome_sent" as const,
@@ -48,14 +55,30 @@ export const EMAIL_TEMPLATES = [
   },
 ] as const;
 
-export function emailTemplatesForRole(role: string) {
-  if (role === "other") return [...EMAIL_TEMPLATES];
-  return EMAIL_TEMPLATES.filter((template) => (template.forRoles as readonly string[]).includes(role));
+/**
+ * Letters and emails to the third-party insurer about a non-fault claim. They are never offered or produced on a
+ * fault file. The impecuniosity response is left out: it has its own approval.
+ */
+export const THIRD_PARTY_ONLY_TEMPLATES: readonly string[] = [
+  "initial_tp_insurer",
+  "initial_tp_insurer_email",
+  "liability_chaser",
+  "hire_pack_cover",
+  "rebuttal_rate",
+  "rebuttal_need",
+  "rebuttal_duration",
+  "total_loss_cessation",
+];
+
+export function emailTemplatesForRole(role: string, fault = false) {
+  const fits = fault ? EMAIL_TEMPLATES.filter((template) => !THIRD_PARTY_ONLY_TEMPLATES.includes(template.key)) : [...EMAIL_TEMPLATES];
+  if (role === "other") return fits;
+  return fits.filter((template) => (template.forRoles as readonly string[]).includes(role));
 }
 
 /** Keep the current template when it still fits the role. Otherwise take the first that does. */
-export function templateKeyForRole(role: string, currentKey: string): string {
-  const allowed = emailTemplatesForRole(role);
+export function templateKeyForRole(role: string, currentKey: string, fault = false): string {
+  const allowed = emailTemplatesForRole(role, fault);
   if (allowed.some((template) => template.key === currentKey)) return currentKey;
   return allowed[0]?.key ?? "";
 }

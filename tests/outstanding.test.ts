@@ -97,8 +97,10 @@ describe("outstanding on a claim", () => {
       assert.equal(roadworthy.includes(INSTRUCT_ENGINEER_LABEL), false);
       assert.ok(roadworthy.includes(REQUEST_REPAIR_AUTHORISATION_LABEL));
       assert.equal(fault.includes(SEND_LIABILITY_LABEL), false);
-      assert.ok(fault.includes(INSTRUCT_ENGINEER_LABEL));
-      assert.ok(fault.includes(REQUEST_REPAIR_AUTHORISATION_LABEL));
+      // A fault file uses Audatex and the client's own insurer, so the engineer and repair-authorisation items are not listed.
+      assert.equal(fault.includes(INSTRUCT_ENGINEER_LABEL), false);
+      assert.equal(fault.includes(REQUEST_REPAIR_AUTHORISATION_LABEL), false);
+      assert.equal(fault.some((label) => /licence|insurance certificate|V5C|bank statements/i.test(label)), false);
       assert.equal(totalLoss.includes(REQUEST_REPAIR_AUTHORISATION_LABEL), false);
       assert.equal(totalLoss.includes(INSTRUCT_ENGINEER_LABEL), false);
       assert.equal(totalLoss.includes(SEND_LIABILITY_LABEL), false);
@@ -140,7 +142,7 @@ describe("outstanding on a claim", () => {
       const steps = fs.readFileSync(path.join(process.cwd(), "src/app/claims/[id]/page.tsx"), "utf8");
       assert.doesNotMatch(steps, /<OutstandingSummary/);
       const summary = fs.readFileSync(path.join(process.cwd(), "src/components/claims/ClaimProblems.tsx"), "utf8");
-      assert.match(summary, /open flags/);
+      assert.ok(summary.includes(`open {flags.length === 1 ? "flag" : "flags"}`));
       const plain = buildOutstanding({
         tasks: [],
         chases: [],

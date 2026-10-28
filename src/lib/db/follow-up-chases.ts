@@ -33,6 +33,7 @@ type ClaimMeta = {
   client_name: string | null;
   client_email: string | null;
   handler_name: string | null;
+  claim_type: string | null;
 };
 
 function claimFilter(column: string, claimId?: string): { sql: string; params: string[] } {
@@ -107,7 +108,7 @@ export function listFollowUpChases(asAt: string = nowUtcIso(), claimId?: string)
   const eventClaim = claimFilter("claim_id", claimId);
   const docClaim = claimFilter("claim_id", claimId);
   const metas = all<ClaimMeta>(
-    `SELECT c.id, c.file_reference, p.full_name AS client_name, p.email AS client_email, s.name AS handler_name
+    `SELECT c.id, c.file_reference, p.full_name AS client_name, p.email AS client_email, s.name AS handler_name, c.claim_type
      FROM claims c
      LEFT JOIN people p ON p.id = c.client_person_id
      LEFT JOIN staff s ON s.id = c.handler_id
@@ -163,6 +164,8 @@ export function listFollowUpChases(asAt: string = nowUtcIso(), claimId?: string)
     const clocks = paper.trigger === "hire_agreement" ? hireAgreements : welcomes;
     for (const [id, requestedAt] of clocks) {
       const meta = metaById.get(id);
+      // These are credit-hire documents. A fault file is not chased for them.
+      if (meta?.claim_type === "fault") continue;
       const received = onFile.has(`${id}:${paper.documentType}`) || (paper.documentType === "bank_statements" && bankTick.has(id));
       const decision = documentChaseDecision({
         requestedAt,

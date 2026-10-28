@@ -77,7 +77,10 @@ describe("client paper and total-loss payment chases", () => {
 
     const db = prepared();
     withDatabase(db, () => {
+      // c4 is seeded as a fault file. Credit-hire papers are only chased on a non-fault file.
       event(db, "welcome-c4", "c4", "client_welcome_sent", requested);
+      assert.equal(labelsAt("c4", over).some((label) => DOCUMENT_CHASES.some((paper) => paper.label === label)), false);
+      db.prepare(`UPDATE claims SET claim_type = 'non_fault' WHERE id = 'c4'`).run();
       assert.equal(labelsAt("c4", under).includes("Driving licence chase due"), false);
       assert.equal(labelsAt("c4", under).includes("Logbook (V5C) chase due"), false);
       const due = labelsAt("c4", over);

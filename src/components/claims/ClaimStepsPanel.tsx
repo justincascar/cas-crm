@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SubmitKeyInput } from "@/components/SubmitKeyInput";
+import { londonTodayIso } from "@/lib/dates";
 import type { ClaimStepForm, ClaimStepView } from "@/lib/domain/claim-steps";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
@@ -23,6 +24,7 @@ export function ClaimStepsPanel({
   error?: string;
   saved?: string;
 }) {
+  const today = londonTodayIso();
   return (
     <section aria-label="Claim steps" className="space-y-3" data-claim-steps>
       <h2 className="font-serif text-xl text-navy-deep">Steps</h2>
@@ -82,7 +84,7 @@ export function ClaimStepsPanel({
               </Link>
             </div>
             {step.forms.map((form) => (
-              <StepForm key={form} claimId={claimId} form={form} />
+              <StepForm key={form} claimId={claimId} form={form} today={today} />
             ))}
             {step.state !== "done" && step.state !== "not_needed" ? (
               <details className="mt-3">
@@ -97,11 +99,13 @@ export function ClaimStepsPanel({
   );
 }
 
-function StepForm({ claimId, form }: { claimId: string; form: ClaimStepForm }) {
-  if (form === "report") return <ReportForm claimId={claimId} />;
-  if (form === "route") return <RouteForm claimId={claimId} />;
-  if (form === "audatex_sent") return <AudatexForm claimId={claimId} intent="audatex_sent" />;
-  if (form === "audatex_received") return <ReceivedForm claimId={claimId} />;
+function StepForm({ claimId, form, today }: { claimId: string; form: ClaimStepForm; today: string }) {
+  if (form === "report") return <ReportForm claimId={claimId} today={today} />;
+  if (form === "route") return <RouteForm claimId={claimId} today={today} />;
+  if (form === "engineer_instructed") return <DatedClick claimId={claimId} intent="engineer_instructed" label="Engineer instructed" today={today} />;
+  if (form === "report_sent") return <DatedClick claimId={claimId} intent="report_sent" label="Sent to the insurer" today={today} />;
+  if (form === "audatex_sent") return <AudatexForm claimId={claimId} intent="audatex_sent" today={today} />;
+  if (form === "audatex_received") return <ReceivedForm claimId={claimId} today={today} />;
   if (form === "audatex_auth") return <AudatexForm claimId={claimId} intent="audatex_auth" />;
   if (form === "own_insurer") return <OwnInsurerForm claimId={claimId} />;
   if (form === "excess") return <ExcessForm claimId={claimId} />;
@@ -110,17 +114,35 @@ function StepForm({ claimId, form }: { claimId: string; form: ClaimStepForm }) {
   return <InvoiceForm claimId={claimId} intent="invoice_paid" label="Record invoice paid" />;
 }
 
-function ReportForm({ claimId }: { claimId: string }) {
+/** One click with a date. The date starts as today and can be changed. */
+function DatedClick({ claimId, intent, label, today }: { claimId: string; intent: string; label: string; today: string }) {
+  return (
+    <form action={`/claims/${claimId}/steps/save`} method="post" className="mt-3 flex flex-wrap items-end gap-2">
+      <input type="hidden" name="returnTo" value={`/claims/${claimId}`} />
+      <input type="hidden" name="intent" value={intent} />
+      <SubmitKeyInput />
+      <label className="text-sm">
+        Date
+        <input name="occurredOn" type="date" required max={today} defaultValue={today} className={field} />
+      </label>
+      <button type="submit" className="rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white">
+        {label}
+      </button>
+    </form>
+  );
+}
+
+function ReportForm({ claimId, today }: { claimId: string; today: string }) {
   return (
     <form action={`/claims/${claimId}/steps/report`} method="post" encType="multipart/form-data" className="mt-3 grid gap-2">
       <input type="hidden" name="returnTo" value={`/claims/${claimId}`} />
       <SubmitKeyInput />
       <label className="text-sm">
         Date report received
-        <input name="occurredOn" type="date" required className={field} />
+        <input name="occurredOn" type="date" required max={today} defaultValue={today} className={field} />
       </label>
       <label className="text-sm">
-        Upload the report
+        Upload the report (optional)
         <input name="document" type="file" className={field} />
       </label>
       <button type="submit" className="w-fit rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white">
@@ -130,7 +152,7 @@ function ReportForm({ claimId }: { claimId: string }) {
   );
 }
 
-function RouteForm({ claimId }: { claimId: string }) {
+function RouteForm({ claimId, today }: { claimId: string; today: string }) {
   return (
     <form action={`/claims/${claimId}/steps/save`} method="post" className="mt-3 grid gap-2">
       <input type="hidden" name="returnTo" value={`/claims/${claimId}`} />
@@ -149,7 +171,7 @@ function RouteForm({ claimId }: { claimId: string }) {
       </label>
       <label className="text-sm">
         Date
-        <input name="occurredOn" type="date" required className={field} />
+        <input name="occurredOn" type="date" required max={today} defaultValue={today} className={field} />
       </label>
       <p className="text-sm text-slate">There is no link to Audatex. The figures are typed on this file.</p>
       <button type="submit" className="w-fit rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white">
@@ -159,15 +181,58 @@ function RouteForm({ claimId }: { claimId: string }) {
   );
 }
 
-function AudatexForm({ claimId, intent }: { claimId: string; intent: "audatex_sent" | "audatex_auth" }) {
+function AudatexForm({ claimId, intent, today }: { claimId: string; intent: "audatex_sent" | "audatex_auth"; today?: string }) {
   const authorising = intent === "audatex_auth";
+  if (!authorising) {
+    return (
+      <form action={`/claims/${claimId}/steps/save`} method="post" className="mt-3 grid gap-2">
+        <input type="hidden" name="returnTo" value={`/claims/${claimId}`} />
+        <input type="hidden" name="intent" value={intent} />
+        <SubmitKeyInput />
+        <div className="flex flex-wrap items-end gap-2">
+          <label className="text-sm">
+            Date
+            <input name="occurredOn" type="date" required max={today} defaultValue={today} className={field} />
+          </label>
+          <button type="submit" className="rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white">
+            Audatex estimate sent
+          </button>
+        </div>
+        <details>
+          <summary className="cursor-pointer text-sm text-slate">Add the reference and figures (optional)</summary>
+          <div className="mt-2 grid gap-2">
+            <label className="text-sm">
+              Audatex reference
+              <input name="reference" className={field} />
+            </label>
+            <label className="text-sm">
+              Estimate total (£)
+              <input name="estimate" inputMode="decimal" className={field} />
+            </label>
+            <label className="text-sm">
+              Labour (£), if given
+              <input name="labour" inputMode="decimal" className={field} />
+            </label>
+            <label className="text-sm">
+              Parts (£), if given
+              <input name="parts" inputMode="decimal" className={field} />
+            </label>
+            <label className="text-sm">
+              Paint (£), if given
+              <input name="paint" inputMode="decimal" className={field} />
+            </label>
+          </div>
+        </details>
+      </form>
+    );
+  }
   return (
     <form action={`/claims/${claimId}/steps/save`} method="post" encType="multipart/form-data" className="mt-3 grid gap-2">
       <input type="hidden" name="returnTo" value={`/claims/${claimId}`} />
       <input type="hidden" name="intent" value={intent} />
       <SubmitKeyInput />
       <label className="text-sm">
-        {authorising ? "Date authorised" : "Date sent"}
+        Date authorised
         <input name="occurredOn" type="date" required className={field} />
       </label>
       <label className="text-sm">
@@ -190,9 +255,7 @@ function AudatexForm({ claimId, intent }: { claimId: string; intent: "audatex_se
         Paint (£), if given
         <input name="paint" inputMode="decimal" className={field} />
       </label>
-      {authorising ? (
-        <>
-          <label className="text-sm">
+      <label className="text-sm">
             Authorised total (£)
             <input name="authorised" inputMode="decimal" required className={field} />
           </label>
@@ -205,10 +268,8 @@ function AudatexForm({ claimId, intent }: { claimId: string; intent: "audatex_se
             <input name="document" type="file" className={field} />
           </label>
           <p className="text-sm text-slate">Saving these figures does not change claimed, agreed or received. Use the existing agreed-figure screen if this amount should be the agreed figure.</p>
-        </>
-      ) : null}
       <button type="submit" className="w-fit rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white">
-        {authorising ? "Record authorisation" : "Record Audatex estimate sent"}
+        Record authorisation
       </button>
     </form>
   );
@@ -229,7 +290,7 @@ function Reduction({ label, amount, note }: { label: string; amount: string; not
   );
 }
 
-function ReceivedForm({ claimId }: { claimId: string }) {
+function ReceivedForm({ claimId, today }: { claimId: string; today: string }) {
   return (
     <form action={`/claims/${claimId}/steps/save`} method="post" className="mt-3 grid gap-2">
       <input type="hidden" name="returnTo" value={`/claims/${claimId}`} />
@@ -237,7 +298,7 @@ function ReceivedForm({ claimId }: { claimId: string }) {
       <SubmitKeyInput />
       <label className="text-sm">
         Date estimate received
-        <input name="occurredOn" type="date" required className={field} />
+        <input name="occurredOn" type="date" required max={today} defaultValue={today} className={field} />
       </label>
       <button type="submit" className="w-fit rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white">
         Record estimate received

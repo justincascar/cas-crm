@@ -1,7 +1,7 @@
 import { isOfficeRole } from "../auth/roles";
 import { faultInvoicePence, isClaimStepKey, type ClaimStepKey } from "../domain/claim-steps";
 import { utcFromLondonDateTime } from "../dates";
-import { nowUtcIso } from "../dates";
+import { londonTodayIso, nowUtcIso } from "../dates";
 import { poundsToPence } from "./intake";
 import { get, newId, run } from "./connection";
 import { recordClaimEvent } from "./chronology";
@@ -289,6 +289,18 @@ export function recordAudatexEstimate(input: {
       source: "staff",
     });
   }
+  const anyFigure = [input.reference, input.estimate, input.labour, input.parts, input.paint].some((value) => value.trim());
+  if (input.kind === "sent" && !anyFigure) {
+    // One click with a date. The reference and figures can follow with the authorisation.
+    return recordClaimEvent({
+      claimId: input.claimId,
+      eventType: "audatex_estimate_sent",
+      occurredAt,
+      actorId: input.actorId,
+      details: "Audatex estimate sent. Recorded by hand. There is no link to Audatex. Claimed, agreed and received were not changed.",
+      source: "staff",
+    });
+  }
   const money = moneyFromForm({ ...input, documentId: input.documentId || null, requireAuthorised: input.kind === "authorised" });
   insertAudatex(input.claimId, input.actorId, input.kind === "sent" ? occurredAt : null, money);
   if (input.kind === "sent") {
@@ -440,6 +452,62 @@ export function recordFaultInvoice(input: {
       input.kind === "sent"
         ? `Invoice sent to the client's own insurer. Amount pence: ${invoice}. Authorised pence: ${authorised.authorised_total_pence}. Excess pence: ${excess.amount_pence}. Claimed, agreed and received were not changed.`
         : `Invoice paid by the client's own insurer. Amount pence: ${invoice}. Claimed, agreed and received were not changed.`,
+    source: "staff",
+  });
+}
+
+function pastOrToday(value: string, label: string): string {
+  const occurredAt = requireDay(value, label);
+  if (value.trim() > londonTodayIso()) throw new Error("The date cannot be in the future.");
+  return occurredAt;
+}
+
+function staffName(actorId: string): string {
+  const row = get<{ name: string }>(`SELECT name FROM staff WHERE id = ?`, [actorId]);
+  return String(row?.name || "").trim() || "staff";
+}
+
+function hasEvent(claimId: string, eventType: string): boolean {
+  return Boolean(get<{ id: string }>(`SELECT id FROM claim_events WHERE claim_id = ? AND event_type = ? LIMIT 1`, [claimId, eventType])?.id);
+}
+
+/** Step 5, engineer instructed, in one click with a date. Starts the engineer chase like any instruction. */
+export function recordEngineerInstructedByHand(input: { claimId: string; actorId: string; role: string; occurredOn: string }) {
+  assertOffice(input.role);
+  const occurredAt = pastOrToday(input.occurredOn, "the date the engineer was instructed");
+  if (hasEvent(input.claimId, "engineer_instructed")) throw new Error("The engineer instruction is already on the file.");
+  return recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "engineer_instructed",
+    occurredAt,
+    actorId: input.actorId,
+    details: `Engineer instructed. Marked as sent by ${staffName(input.actorId)} on the claim steps.`,
+    channel: "file",
+    source: "staff",
+  });
+}
+
+/** Step 7, the report or estimate forwarded to the third-party insurer, in one click with a date. */
+export function recordReportSentByHand(input: { claimId: string; actorId: string; role: string; occurredOn: string }) {
+  assertOffice(input.role);
+  const occurredAt = pastOrToday(input.occurredOn, "the date it was sent");
+  if (!hasEvent(input.claimId, "engineer_report_received") && !hasEvent(input.claimId, "audatex_estimate_received")) {
+    throw new Error("Record the report or estimate as received first.");
+  }
+  if (hasEvent(input.claimId, "engineer_report_sent_to_insurer")) throw new Error("The report is already recorded as sent to the insurer.");
+  const insurer = get<{ insurer_name: string | null }>(
+    `SELECT insurer_name FROM claim_third_parties WHERE claim_id = ? ORDER BY sequence ASC LIMIT 1`,
+    [input.claimId],
+  );
+  const name = String(insurer?.insurer_name || "").trim();
+  const recipient = name && name !== "Unknown" ? name : "the third-party insurer";
+  return recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "engineer_report_sent_to_insurer",
+    occurredAt,
+    actorId: input.actorId,
+    details: `Sent to ${recipient}. Marked as sent by ${staffName(input.actorId)} on the claim steps.`,
+    channel: "file",
     source: "staff",
   });
 }

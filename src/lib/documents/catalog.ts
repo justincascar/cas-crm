@@ -24,3 +24,12 @@ export function channelForTemplate(key: string): "letter" | "email" {
   if (isEmailTemplateKey(key)) return "email";
   return "letter";
 }
+
+/**
+ * Generating one of these letters marks its step done as sent, unless the handler holds the step back.
+ * The repair commencement letter does not: repairs starting is recorded on its own date.
+ */
+export function generationMarksStep(key: string): boolean {
+  if (channelForTemplate(key) !== "letter" || key === "repair_commencement") return false;
+  return eventTypeForTemplate(key) !== "document_generated";
+}

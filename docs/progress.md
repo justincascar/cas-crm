@@ -1032,3 +1032,15 @@ Finish on 28 October 2026: 574 tests passed, 0 failed. Type check: 0 errors. Pro
 **Still open.** Recovery mileage. The 4.5% card fee is not on the new form (question 6).
 
 Finish on 28 October 2026: 580 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 69 passed, 0 failed, no sideways scroll at 1280px or 1024px, database unchanged. Journey checks passed, including step 2 on the new repairable file. `EMAIL_SEND_MODE` stays `simulate`.
+
+## Letters and engineer, steps 4 to 7 (J4, 28 October 2026)
+
+**A letter marks its step.** Generating a letter on Messages marks its step done as sent, dated with the letter date, and the history says who marked it sent. The CRM still does not post or email the letter. Tick "Hold back the step. This letter has not been sent." to file the letter without marking the step. Emails are not marked by generating them; they are marked when the email is recorded as sent. The repair commencement letter does not mark repairs started, because that is a fact with its own date. The person who is signed in is recorded as the author, not the file's handler.
+
+**Insurer email.** The Send email box offers "Initial email to the third-party insurer" when the recipient is the third-party insurer. It uses CAS's supplied initial-letter wording unchanged. Recording it as sent marks step 4.
+
+**Steps 5 to 7 in one click.** After choosing engineer, Audatex or both, each of these is a button with a date that starts as today: Engineer instructed, Audatex estimate sent, Record report received (upload optional), Record estimate received, and Sent to the insurer. A future date is refused. Sent to the insurer needs the report or estimate received first and is recorded once. The Audatex reference and figures are optional when the estimate is sent; if any figure is typed, the reference and total are still required. Engineer instructed starts the engineer chase as before.
+
+**Fault files.** A fault file already showed the client's own insurer and Audatex instead of the third-party letter and the engineer. Now Messages also hides the third-party insurer letters and email on a fault file (initial letter and email, liability chaser, hire pack cover, the three rebuttals, total-loss cessation), and the CRM refuses to produce or send them there. The problems list on a fault file no longer lists Send liability notification letter, Instruct the engineer or Request repair authorisation, and the driving licence, insurance certificate, V5C and bank statement chases are not started on a fault file. "1 open flags" now reads "1 open flag".
+
+Finish on 28 October 2026: 586 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 69 passed, 0 failed, no sideways scroll at 1280px or 1024px, database unchanged. Journey checks passed, including steps 4 to 7 on the new repairable file and the fault file's letters and problems list. `EMAIL_SEND_MODE` stays `simulate`.

@@ -5,10 +5,12 @@ import { storeClaimDocument } from "@/lib/db/claim-documents";
 import {
   recordAudatexEstimate,
   recordClientExcessPaid,
+  recordEngineerInstructedByHand,
   recordFaultCarReturn,
   recordFaultInvoice,
   recordInspectionRoute,
   recordOwnInsurerNotified,
+  recordReportSentByHand,
 } from "@/lib/db/claim-step-record";
 import { formSubmitKey, replaySubmit, storeSubmit } from "@/lib/db/submit-key";
 import { browserOrigin } from "@/lib/http/browser-origin";
@@ -77,6 +79,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         otherNote: text("otherNote"),
         documentId,
       });
+    } else if (intent === "engineer_instructed") {
+      recordEngineerInstructedByHand({ claimId: id, actorId: staff.id, role: staff.role, occurredOn: text("occurredOn") });
+    } else if (intent === "report_sent") {
+      recordReportSentByHand({ claimId: id, actorId: staff.id, role: staff.role, occurredOn: text("occurredOn") });
     } else if (intent === "own_insurer") {
       recordOwnInsurerNotified({
         claimId: id,

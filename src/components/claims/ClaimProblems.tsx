@@ -10,7 +10,9 @@ export function ClaimProblems({ flags }: { flags: ClaimSummaryFlag[] }) {
   return (
     <section aria-label="Problems needing attention" className="rounded-xl border border-line bg-card px-4 py-3" data-claim-problems>
       <h2 className="font-serif text-xl text-navy-deep">Problems needing attention</h2>
-      <p className="text-sm text-slate">{flags.length} open flags</p>
+      <p className="text-sm text-slate">
+        {flags.length} open {flags.length === 1 ? "flag" : "flags"}
+      </p>
       <ul className="mt-2 space-y-2">
         {flags.map((flag) => (
           <li key={flag.id} id={`flag-${flag.id}`} className="flex flex-wrap items-center justify-between gap-2 text-sm">
