@@ -692,7 +692,9 @@ export async function createClaimFromIntake(input: IntakeInput) {
     const totals = input.recovery.lines?.length ? sumRecoveryLines(input.recovery.lines) : null;
     const total = totals ? totals.netPence : recoveryChargeTotalPence(parts);
     const recId = newId("rec");
-    if (totals && totals.grossPence > 0) {
+    // Charges go on the file only when the recovery has happened (a date and time). Until then they are kept on the job
+    // so the Record the recovery form can offer them again.
+    if (recoveryAt && totals && totals.grossPence > 0) {
       run(
         `INSERT INTO financial_lines(
           id, claim_id, head_of_loss, description, quantity, unit, rate_pence, net_pence, vat_pence, gross_pence,
@@ -709,7 +711,7 @@ export async function createClaimFromIntake(input: IntakeInput) {
           totals.grossPence,
         ],
       );
-    } else if (total) addClaimedLine(id, "recovery", "Recovery charges as entered on intake", total);
+    } else if (recoveryAt && total) addClaimedLine(id, "recovery", "Recovery charges as entered on intake", total);
     if (input.recovery.inherited) {
       run(
         `INSERT INTO notes(id, claim_id, author_id, body, created_at) VALUES (?, ?, ?, ?, ?)`,

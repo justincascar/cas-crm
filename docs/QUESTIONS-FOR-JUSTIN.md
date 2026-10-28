@@ -9,6 +9,7 @@ Each open question has a reversible default already in the CRM. Nothing here is 
 3. **Courtesy-car agreement.** You will supply an approved template later. Until then a fault courtesy car has no agreement.
 4. **21-day licence window.** A licence check older than 21 days blocks the agreement and the handover. Still to be confirmed.
 5. **Recovery mileage.** Still undecided how mileage is charged. The mileage box stays off the new-claim form.
+6. **Card fee on recovery.** The new Record the recovery form (step 2) has the standard fee, the four extras, the typed extras and a manual charge, as J3 asked. The 4.5% card fee was only on the older recovery screen, which is now hidden on step 2 (its saved figures are kept). Default: no card fee on the new form. Should it be added there?
 
 ## Answered (28 October 2026)
 

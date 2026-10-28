@@ -19,7 +19,7 @@ import { clientDobKind, counterpartDobKind } from "@/lib/age";
 import { ASK_MID_URL, GOV_MOT_URL, GOV_TAX_URL } from "@/lib/lookups/compliance";
 import { googleMapsSearchUrl } from "@/lib/lookups/maps";
 import { JOURNEY_OPTIONS, LIGHTING_OPTIONS, ROAD_SURFACE_OPTIONS, WEATHER_OPTIONS } from "@/lib/domain/intake-choices";
-import { filledPounds, RECOVERY_FEE_DEFS, RECOVERY_TYPED_EXTRAS } from "@/lib/domain/recovery-fees";
+import { RecoveryFeeFields } from "@/components/claims/RecoveryFeeFields";
 import { LOOKUP_NOT_CONNECTED } from "@/lib/lookups/not-connected";
 import { VEHICLE_MANUAL_HINT } from "@/lib/lookups/vehicle";
 import {
@@ -1037,63 +1037,8 @@ export function IntakeForm({
               <input name="recoveryTime" type="time" defaultValue={defaults.recoveryTime || ""} className={field} />
             </label>
           </div>
-          <div className="space-y-3">
-            {RECOVERY_FEE_DEFS.map((fee) => {
-              const pounds = filledPounds(fees[fee.key] ?? fee.defaultPence);
-              const ticked = defaults[`recoveryTick_${fee.key}`] ? defaults[`recoveryTick_${fee.key}`] === "yes" : fee.key === "standard";
-              return (
-                <div key={fee.key} className="grid gap-2 sm:grid-cols-[1fr_8rem_1fr] sm:items-end">
-                  <label className="flex items-center gap-2 text-sm">
-                    <input name={`recoveryTick_${fee.key}`} type="checkbox" value="yes" defaultChecked={ticked} />
-                    {fee.label}
-                  </label>
-                  <label className="block text-sm">
-                    Amount (£)
-                    <input name={`recoveryAmount_${fee.key}`} defaultValue={defaults[`recoveryAmount_${fee.key}`] || pounds} className={field} />
-                  </label>
-                  <label className="block text-sm">
-                    Reason if this is not the standard fee
-                    <input name={`recoveryReason_${fee.key}`} defaultValue={defaults[`recoveryReason_${fee.key}`] || ""} className={field} />
-                  </label>
-                </div>
-              );
-            })}
-            {RECOVERY_TYPED_EXTRAS.map((extra) => (
-              <div key={extra.key} className="grid gap-2 sm:grid-cols-[1fr_8rem_1fr] sm:items-end">
-                <label className="flex items-center gap-2 text-sm">
-                  <input name={`recoveryTick_${extra.key}`} type="checkbox" value="yes" defaultChecked={defaults[`recoveryTick_${extra.key}`] === "yes"} />
-                  {extra.label}
-                </label>
-                <label className="block text-sm">
-                  Amount (£)
-                  <input name={`recoveryAmount_${extra.key}`} defaultValue={defaults[`recoveryAmount_${extra.key}`] || ""} className={field} />
-                </label>
-                <label className="block text-sm">
-                  Reason
-                  <input name={`recoveryReason_${extra.key}`} defaultValue={defaults[`recoveryReason_${extra.key}`] || ""} className={field} />
-                </label>
-              </div>
-            ))}
-            <div className="grid gap-2 sm:grid-cols-2">
-              <label className="flex items-center gap-2 text-sm sm:col-span-2">
-                <input name="recoveryTick_manual" type="checkbox" value="yes" defaultChecked={defaults.recoveryTick_manual === "yes"} />
-                Manual charge
-              </label>
-              <label className="block text-sm">
-                Description
-                <input name="recoveryManualDescription" defaultValue={defaults.recoveryManualDescription || ""} className={field} />
-              </label>
-              <label className="block text-sm">
-                Amount (£)
-                <input name="recoveryAmount_manual" defaultValue={defaults.recoveryAmount_manual || ""} className={field} />
-              </label>
-              <label className="block text-sm sm:col-span-2">
-                Reason
-                <input name="recoveryReason_manual" defaultValue={defaults.recoveryReason_manual || ""} className={field} />
-              </label>
-            </div>
-          </div>
-          <p className="text-xs text-slate">Each ticked fee is plus VAT. Unticked fees are not charged. Mileage is not on this form.</p>
+          <p className="text-xs text-slate">Leave the date blank if the car has not been recovered yet. Charges go on the file only when the recovery date and time are recorded.</p>
+          <RecoveryFeeFields fees={fees} defaults={defaults} />
           <label className="flex items-center gap-2 text-sm">
             <input name="inheritedRecovery" type="checkbox" value="yes" defaultChecked={defaults.inheritedRecovery === "yes"} />
             There is an inherited recovery charge

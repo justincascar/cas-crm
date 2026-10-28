@@ -4,13 +4,11 @@ import { normaliseRecoveryScreen } from "./recovery-charges";
 import { londonCalendarDayGap } from "./storage-authorisation-end";
 import { formatGbp, grossFromNet } from "../money";
 
-/** Confirmed 14/10/2026. Both the first day and the last day are counted. */
-export const STORAGE_INCLUSIVE_DAY_NOTE =
-  "Days count both the first day and the last day. Confirmed 14/10/2026. Storage from 22/09/2026 to 01/10/2026 is 10 days.";
+/** Agreed by Justin on 14/10/2026: both the first day and the last day are counted. The note is an example, not this file's dates. */
+export const STORAGE_INCLUSIVE_DAY_NOTE = "Both the first and the last day are counted. For example, 22 September to 1 October is 10 days.";
 
 /** The hire charge uses this same inclusive count. Renewal alerts do not. */
-export const HIRE_INCLUSIVE_DAY_NOTE =
-  "Days count both the first day and the last day. Confirmed 14/10/2026. Hire from 22/09/2026 to 01/10/2026 is 10 days.";
+export const HIRE_INCLUSIVE_DAY_NOTE = "Both the first and the last day are counted. For example, 22 September to 1 October is 10 days.";
 
 export type StorageCountBasis = "confirmed" | "proposed" | "today";
 

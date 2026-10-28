@@ -745,6 +745,37 @@ async function signThroughLink(session: BrowserSession, origin: string, dbPath: 
   return null;
 }
 
+async function recordRecoveryJourney(session: BrowserSession, origin: string, dbPath: string, claimId: string) {
+  const before = readDb(dbPath, (db) =>
+    db.prepare(`SELECT COUNT(*) AS n FROM financial_lines WHERE claim_id = ? AND head_of_loss = 'recovery' AND claimed_pence > 0`).get(claimId) as { n: number },
+  );
+  if (Number(before.n) !== 0) return "Recovery money was on the file before the recovery was recorded.";
+  await gotoPath(session, origin, `/claims/${claimId}/money/recovery`);
+  const offered = await session.evaluate<{ standard: boolean; amount: string; open: string }>(`({
+    standard: Boolean(document.querySelector('[name="recoveryTick_standard"]')?.checked),
+    amount: document.querySelector('[name="recoveryAmount_standard"]')?.value || "",
+    open: document.querySelector("[data-recovery-step]")?.getAttribute("data-recovery-step") || "",
+  })`);
+  if (offered.open !== "open" || !offered.standard || offered.amount !== "395") {
+    return `The recovery form did not offer the standard £395 to confirm (${JSON.stringify(offered)}).`;
+  }
+  const sent = followed(
+    await submitForm(session, 'form[action$="/recovery/record"]', { arrivedDate: HIRE_DAY, arrivedTime: "00:05" }),
+    "Record recovery",
+  );
+  if (sent) return sent;
+  const after = readDb(dbPath, (db) => ({
+    line: db.prepare(`SELECT claimed_pence FROM financial_lines WHERE claim_id = ? AND head_of_loss = 'recovery'`).get(claimId) as { claimed_pence: number } | undefined,
+    claim: db.prepare(`SELECT storage_started_on FROM claims WHERE id = ?`).get(claimId) as { storage_started_on: string | null },
+  }));
+  if (after.line?.claimed_pence !== 47400) return `Recovery claimed ${after.line?.claimed_pence ?? "nothing"}, not £474.00.`;
+  if (after.claim.storage_started_on !== HIRE_DAY) return `Storage did not start on the day the car arrived at the yard (${after.claim.storage_started_on}).`;
+  await gotoPath(session, origin, `/claims/${claimId}`);
+  const step = await session.evaluate<string>(`document.querySelector('[data-step="recovery"]')?.getAttribute("data-state") || ""`);
+  if (step !== "done") return `Step 2 was ${step || "missing"} after recording the recovery.`;
+  return null;
+}
+
 async function hireOutline(session: BrowserSession) {
   return session.evaluate<{
     count: number;
@@ -782,6 +813,10 @@ async function runHireJourneys(session: BrowserSession, origin: string, dbPath: 
   const fault = made.find((item) => item.id === "fault-courtesy");
   if (!repairable || !totalLoss || !fault) return "The three files were not all created.";
   prepareFleet(dbPath);
+
+  // 0. Step 2: no recovery money until the recovery is recorded. Then the standard fee is confirmed and storage starts.
+  const recovery = await recordRecoveryJourney(session, origin, dbPath, repairable.claimId);
+  if (recovery) return `Repairable recovery: ${recovery}`;
 
   // 1. A new blank non-fault file. Address and date of birth are typed on the client's details.
   const details = await saveClientDetails(session, origin, dbPath, repairable.claimId);
@@ -1063,7 +1098,7 @@ async function main() {
         results.push({ id: "repairable", problem: hireProblem });
         console.log(`FAIL  Hire  ${hireProblem}`);
       } else {
-        console.log("PASS  Hire  only free cars, driver jobs, licence number, rate, agreement gates, signed copy, status wording, clash, not yet, courtesy");
+        console.log("PASS  Recovery and hire  recovery recorded with the confirmed fee, only free cars, driver jobs, licence number, rate, agreement gates, signed copy, status wording, clash, not yet, courtesy");
       }
     }
   } catch (error) {

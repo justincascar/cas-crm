@@ -11,7 +11,11 @@ import { PaymentReviewPanel } from "@/components/claims/PaymentReviewPanel";
 import { SeparateRecordConfirm } from "@/components/SeparateRecordConfirm";
 import { requireStaff } from "@/lib/auth/session";
 import { getClaimScreen } from "@/lib/claim-screens";
-import { formatUkDate, formatUkTime } from "@/lib/dates";
+import { formatUkDate, formatUkTime, toLondonDateTimeLocal } from "@/lib/dates";
+import { RecoveryFeeFields, feeDefaultsFromLines } from "@/components/claims/RecoveryFeeFields";
+import { SubmitKeyInput } from "@/components/SubmitKeyInput";
+import { ValidatedForm } from "@/components/ValidatedForm";
+import { recoveryFeeSchedule } from "@/lib/db/recovery-fee-settings";
 import { recoveryDisplayLines, recoveryReviewFlags } from "@/lib/db/recovery-display";
 import { headScreenPath } from "@/lib/domain/head-screen";
 import { formatGbp } from "@/lib/money";
@@ -79,6 +83,36 @@ export async function RecoveryHeadScreen({
   const recordVersion = clashForScreen && clashForScreen.scope === "screen" ? clashForScreen.expectedVersion : screenVersion(id, "recovery");
   const extraHidden = sharedVersionFields(id, "recovery");
   if (clashForScreen?.scope === SHARED_RECOVERY_AT) extraHidden.recoveryAtVersion = clashForScreen.expectedVersion;
+  const recoveryDone = data.events.some((event) => String(event.event_type) === "recovery_completed");
+  const arrivedText = date ? `${shownDay(date)}${String(date).includes("T") ? ` ${formatUkTime(String(date))}` : ""}` : "a date not recorded";
+  const savedLines = recoveryDisplayLines(id);
+  const decisionNet = savedLines.reduce((sum, line) => sum + line.netPence, 0);
+  const decisionVat = savedLines.reduce((sum, line) => sum + line.vatPence, 0);
+  const decisionGross = savedLines.reduce((sum, line) => sum + line.grossPence, 0);
+  const arrivedLocal = job?.recovered_at && String(job.recovered_at).includes("T") ? toLondonDateTimeLocal(String(job.recovered_at)) : "";
+  const recordForm = (
+    <ValidatedForm action={`/claims/${id}/recovery/record`} method="post" className="space-y-4" initialError={query.error} initialErrorField={query.field}>
+      <SubmitKeyInput />
+      <label className="block text-sm">
+        Recovered from
+        <input name="recoveryLocation" defaultValue={from} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" />
+      </label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block text-sm">
+          Arrived at the yard (date)
+          <input name="arrivedDate" type="date" required defaultValue={arrivedLocal.slice(0, 10)} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" />
+        </label>
+        <label className="block text-sm">
+          Time
+          <input name="arrivedTime" type="time" required defaultValue={arrivedLocal.slice(11, 16)} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" />
+        </label>
+      </div>
+      <RecoveryFeeFields fees={recoveryFeeSchedule()} defaults={feeDefaultsFromLines(savedLines)} />
+      <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
+        {recoveryDone ? "Save recovery" : "Record recovery"}
+      </button>
+    </ValidatedForm>
+  );
   const chargeNote =
     decision.source === "screen"
       ? "This claimed figure is the total already calculated on the recovery screen: the standard charge, any extras and the card fee, plus VAT. It is not a second £395 on top."
@@ -106,6 +140,30 @@ export async function RecoveryHeadScreen({
       {query.error ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{query.error}</p>
       ) : null}
+
+      {query.saved === "recovery" && !query.error ? (
+        <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm text-ok">Recovery recorded.</p>
+      ) : null}
+
+      <section id="record" className="scroll-mt-16 space-y-3 rounded-xl border border-line bg-card p-5" aria-label="Record the recovery" data-recovery-step={recoveryDone ? "done" : "open"}>
+        <h2 className="font-serif text-xl text-navy-deep">Record the recovery</h2>
+        {recoveryDone ? (
+          <details>
+            <summary className="flex cursor-pointer flex-wrap items-baseline justify-between gap-2 text-sm">
+              <span data-done-line>
+                At the yard from {arrivedText} · {formatGbp(decisionNet)} + VAT {formatGbp(decisionVat)} = {formatGbp(decisionGross)}
+              </span>
+              <span className="text-teal-dark underline">Change</span>
+            </summary>
+            <div className="mt-4">{recordForm}</div>
+          </details>
+        ) : (
+          <>
+            <p className="text-sm">When the car has arrived at the yard, record it here. Storage starts that day.</p>
+            {recordForm}
+          </>
+        )}
+      </section>
 
       <section className="space-y-3 rounded-xl border border-line bg-card p-5" aria-label="Recovery details">
         <h2 className="font-serif text-xl text-navy-deep">Recovery details</h2>
@@ -162,17 +220,6 @@ export async function RecoveryHeadScreen({
         ) : (
           <p className="text-sm font-semibold">No recovery recorded yet</p>
         )}
-        {!recorded && decision.write && decision.totalPence > 0 ? (
-          <form method="post" action={`/claims/${id}/record-charge`}>
-            <input type="hidden" name="head" value="recovery" />
-            <p className="mb-3 text-sm text-slate">
-              The calculated charge is shown below. It is recorded only when you press Record recovery.
-            </p>
-            <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
-              Record recovery
-            </button>
-          </form>
-        ) : null}
         <p className="text-sm font-semibold tabular">
           Net {formatGbp(decision.netPence)} · VAT {formatGbp(decision.vatPence)} · Total {formatGbp(decision.totalPence)}
         </p>
@@ -227,6 +274,7 @@ export async function RecoveryHeadScreen({
           errorField={query.field}
           recordVersion={recordVersion}
           extraHidden={extraHidden}
+          hideSections={["Charges"]}
         />
       </section>
 

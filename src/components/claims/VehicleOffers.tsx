@@ -251,7 +251,15 @@ export function VehicleOffers({
         )}
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
           <label className="block text-sm">
-            {totalLoss ? "Agreed amount (£)" : "Agreed repair invoice (£)"}
+            {offerHead === "recovery"
+              ? "Agreed recovery figure (£)"
+              : offerHead === "storage"
+                ? "Agreed storage figure (£)"
+                : offerHead === "hire"
+                  ? "Agreed hire figure (£)"
+                  : totalLoss
+                    ? "Agreed amount (£)"
+                    : "Agreed repair invoice (£)"}
             <input
               ref={agreedAmount}
               name="agreed"
@@ -262,9 +270,11 @@ export function VehicleOffers({
               onChange={(event) => setAmount(event.target.value)}
             />
             <span className="mt-1 block text-slate">
-              {totalLoss
-                ? "This is the agreed vehicle-damage figure. It does not change the amount received."
-                : "This is the agreed repair figure only. It does not include storage, and it does not change the amount received."}
+              {offerHead === "recovery" || offerHead === "storage" || offerHead === "hire"
+                ? `This is the agreed ${offerHead} figure only. It does not change the amount received.`
+                : totalLoss
+                  ? "This is the agreed vehicle-damage figure. It does not change the amount received."
+                  : "This is the agreed repair figure only. It does not include storage, and it does not change the amount received."}
             </span>
           </label>
           <label className="block text-sm">

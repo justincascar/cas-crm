@@ -1018,3 +1018,17 @@ Credit-hire agreements can now be signed electronically. Either route satisfies 
 **Safeguards.** An agreement produced with details missing cannot be signed; a new version must be produced. The CRM's note about which pages are included is left off what the client sees and the PDF. Courtesy cars have no agreement to sign until Justin's template is approved.
 
 Finish on 28 October 2026: 574 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 69 passed, 0 failed, no sideways scroll at 1280px or 1024px, database unchanged. Journey checks passed, including the client signing through the link. `EMAIL_SEND_MODE` stays `simulate`.
+
+## Recovery, step 2 (J3, 28 October 2026)
+
+**Record the recovery.** Step 2's Record recovery opens one form at the top of the recovery screen: where the car was recovered from, and the date and time it arrived at the yard. The standard recovery fee (£395 from Settings) is shown ticked for the handler to confirm. Environmental (£150), Winching (£95), Forklift (£85) and Out of hours (£100) are tick boxes at their Settings fees; a changed fee needs a reason. Specialist winching, skates/dollies, waiting time and second operator are typed amounts with a reason, and there is a manual charge with a description. Every amount is plus VAT. Nothing is charged until Record recovery is pressed. The history line lists each charge and the total. Once recorded, the step folds to one line with Change. Charges cannot be changed there once the recovery head has an agreed figure or a payment.
+
+**No silent charge at intake.** The new-claim form uses the same fee boxes. If the recovery date and time are left blank, nothing goes on the file; the choices are kept and offered again on step 2. If the date and time are entered, the recovery is recorded then, as before.
+
+**Storage starts from arrival at the yard.** Recording the recovery sets the storage start to the arrival day. A different storage start already on the file is not overwritten; it is flagged for a person to choose on the storage screen, as before.
+
+**Wording.** The agreed box on the recovery and storage money screens now says "Agreed recovery figure" or "Agreed storage figure", with a matching hint (it said "Agreed repair invoice"). The day-count note no longer says "Confirmed 14/10/2026"; it is a plain example. TEST-0005 shows the proposed storage end as provisional. Its storage end was not confirmed. The older recovery screen's Charges section is hidden on step 2 so fees are entered once; its saved figures are kept.
+
+**Still open.** Recovery mileage. The 4.5% card fee is not on the new form (question 6).
+
+Finish on 28 October 2026: 580 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 69 passed, 0 failed, no sideways scroll at 1280px or 1024px, database unchanged. Journey checks passed, including step 2 on the new repairable file. `EMAIL_SEND_MODE` stays `simulate`.

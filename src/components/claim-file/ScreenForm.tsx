@@ -175,6 +175,7 @@ export function ScreenForm({
   errorField,
   recordVersion = "",
   extraHidden,
+  hideSections = [],
 }: {
   claimId: string;
   actorId: string;
@@ -188,6 +189,8 @@ export function ScreenForm({
   errorField?: string;
   recordVersion?: string;
   extraHidden?: Record<string, string>;
+  /** Section titles this page shows elsewhere, so they are not asked twice. */
+  hideSections?: string[];
 }) {
   return (
     <ValidatedForm
@@ -259,7 +262,23 @@ export function ScreenForm({
         </div>
       ) : null}
 
-      {def.sections.map((section, index) => (
+      {/* Sections shown elsewhere on the page keep their saved values, so saving this form does not clear them. */}
+      {def.sections
+        .filter((section) => hideSections.includes(section.title || ""))
+        .flatMap((section) => section.fields)
+        .map((hidden) =>
+          hidden.type === "checkbox" ? (
+            values[hidden.name] === "yes" ? <input key={hidden.name} type="hidden" name={hidden.name} value="yes" /> : null
+          ) : (
+            <input
+              key={hidden.name}
+              type="hidden"
+              name={hidden.name}
+              value={hidden.type === "gbp" && values[hidden.name] ? (Number(values[hidden.name]) / 100).toFixed(2) : String(values[hidden.name] || "")}
+            />
+          ),
+        )}
+      {def.sections.filter((section) => !hideSections.includes(section.title || "")).map((section, index) => (
         <fieldset key={section.title || index} className="space-y-3 rounded-xl border border-line bg-card p-5">
           {section.title ? <legend className="font-serif text-xl text-navy-deep">{section.title}</legend> : null}
           {def.key === "recovery" && section.title === "Charges" ? (
