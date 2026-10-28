@@ -59,6 +59,8 @@ const TABLES: Record<string, Array<[string, string]>> = {
   hire_episodes: [
     ["hire_end_review_on", "TEXT"],
     ["hire_end_proposed_on", "TEXT"],
+    ["rate_taken_on", "TEXT"],
+    ["rate_group", "TEXT"],
   ],
   agreements: [["rate_pence_per_day", "INTEGER"]],
   total_loss_reports: [
@@ -228,6 +230,38 @@ function rebuildDocumentsTable(db: DatabaseSync) {
   db.exec("PRAGMA foreign_keys = ON");
 }
 
+/** A delivery job can be left unassigned until the office chooses a driver. */
+function allowUnassignedJobs(db: DatabaseSync) {
+  const cols = tableColumns(db, "day_assignments");
+  const assignee = cols.find((c) => c.name === "assignee_id");
+  if (!assignee || assignee.notnull === 0) return;
+  const copy = cols.map((c) => c.name);
+  db.exec("PRAGMA foreign_keys = OFF");
+  db.exec(`
+    CREATE TABLE day_assignments_migrated (
+      id TEXT PRIMARY KEY,
+      assignee_id TEXT REFERENCES staff(id),
+      job_kind TEXT NOT NULL,
+      claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
+      hire_episode_id TEXT REFERENCES hire_episodes(id) ON DELETE CASCADE,
+      work_date TEXT NOT NULL,
+      created_by TEXT REFERENCES staff(id),
+      created_at TEXT NOT NULL,
+      completed_at TEXT,
+      actual_driver_id TEXT,
+      actual_occurred_at TEXT,
+      cancelled_at TEXT,
+      planned_at TEXT,
+      place_text TEXT
+    );
+  `);
+  db.exec(`INSERT INTO day_assignments_migrated (${copy.join(", ")}) SELECT ${copy.join(", ")} FROM day_assignments`);
+  db.exec("DROP TABLE day_assignments");
+  db.exec("ALTER TABLE day_assignments_migrated RENAME TO day_assignments");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_day_assignments_person ON day_assignments(assignee_id, work_date)");
+  db.exec("PRAGMA foreign_keys = ON");
+}
+
 export function migrate(db: DatabaseSync) {
   rebuildDocumentsTable(db);
   db.exec(`
@@ -310,6 +344,18 @@ export function migrate(db: DatabaseSync) {
       db.exec(`ALTER TABLE day_assignments ADD COLUMN ${column} TEXT`);
     }
   }
+  allowUnassignedJobs(db);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS fleet_record_checks (
+      id TEXT PRIMARY KEY,
+      fleet_vehicle_id TEXT NOT NULL REFERENCES fleet_vehicles(id),
+      check_key TEXT NOT NULL,
+      note TEXT NOT NULL DEFAULT '',
+      recorded_by TEXT NOT NULL REFERENCES staff(id),
+      recorded_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_fleet_record_checks ON fleet_record_checks(fleet_vehicle_id, check_key);
+  `);
   db.exec(`
     CREATE TABLE IF NOT EXISTS repair_evidence (
       id TEXT PRIMARY KEY,

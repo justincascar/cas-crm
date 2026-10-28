@@ -32,9 +32,9 @@ import {
 } from "@/lib/db/chronology";
 import { guardGenericHistoryRepairStep } from "@/lib/db/repair-progress";
 import { generateHirePackDocument, generateStorageRecoveryDocument, getHirePack, saveHirePack } from "@/lib/db/hire-pack";
-import { generateHireAgreementDocument, getGtaMarkupPercent, prepareHireRating } from "@/lib/db/hire-agreement";
-import { hireAgreementPrehireBlock } from "@/lib/db/prehire-checks";
-import { normaliseGtaGroup, standardDailyRatePence } from "@/lib/documents/gta";
+import { generateHireAgreementDocument, prepareHireRating } from "@/lib/db/hire-agreement";
+import { currentHireEpisode } from "@/lib/db/hire-readiness";
+import { normaliseGtaGroup } from "@/lib/documents/gta";
 import { formLoaded, formVersion, pathWithClash, postedVersion, VersionConflictError, claimSectionForSave, withImmediateTransaction, withSectionSave, writeScreenIfCurrent } from "@/lib/db/record-version";
 import { saveScreenData, valuesFromForm } from "@/lib/db/screens";
 import { saveClaimOverview } from "@/lib/db/claim-facts";
@@ -740,8 +740,9 @@ export async function actionSaveHirePack(formData: FormData) {
     group_charged: rating.groupCharged,
     date_out: String(formData.get("date_out") || ""),
     date_in: String(formData.get("date_in") || ""),
-    daily_rate_pence: rating.dailyRatePence,
-    daily_rate_manual: rating.dailyRateManual,
+    // The daily rate is the one stored on the hire at reservation. The pack does not set its own.
+    daily_rate_pence: Number(currentHireEpisode(claimId)?.rate_pence_per_day) || Number(prior.stored.daily_rate_pence) || 0,
+    daily_rate_manual: 0,
     group_override_reason: String(formData.get("group_override_reason") || ""),
     sat_nav_pence: poundsToPence(formData, "sat_nav"),
     additional_driver_pence: poundsToPence(formData, "additional_driver"),
@@ -802,20 +803,12 @@ export async function actionSaveHirePack(formData: FormData) {
 }
 
 export async function actionGenerateHireAgreement(formData: FormData) {
-  await requireStaff();
+  const staff = await requireStaff();
   const claimId = String(formData.get("claimId"));
-  const blocked = hireAgreementPrehireBlock(claimId);
-  if (blocked) redirect(`/claims/${claimId}/hire-pack${errorQuery(blocked)}`);
   await actionSaveHirePack(formData);
-  const pack = getHirePack(claimId);
-  if (!pack) throw new Error("File not found.");
-  const markup = getGtaMarkupPercent();
-  const group = normaliseGtaGroup(String(pack.stored.group_charged || "")) || normaliseGtaGroup(String(pack.claim.client_gta_group || ""));
-  const manual = Number(pack.stored.daily_rate_manual) === 1;
-  const daily = manual ? Number(pack.stored.daily_rate_pence) : standardDailyRatePence(group, markup);
   const result = (() => {
     try {
-      return generateHireAgreementDocument(claimId, String(formData.get("actorId") || ""), daily);
+      return generateHireAgreementDocument(claimId, staff.id);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Could not generate the agreement.";
       redirect(`/claims/${claimId}/hire-pack${errorQuery(message)}`);

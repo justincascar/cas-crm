@@ -44,7 +44,7 @@ export function ensureDemoDayJobs(db: DatabaseSync) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS day_assignments (
       id TEXT PRIMARY KEY,
-      assignee_id TEXT NOT NULL REFERENCES staff(id),
+      assignee_id TEXT REFERENCES staff(id),
       job_kind TEXT NOT NULL,
       claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
       hire_episode_id TEXT REFERENCES hire_episodes(id) ON DELETE CASCADE,

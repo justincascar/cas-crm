@@ -6,6 +6,7 @@ import { requireStaff } from "@/lib/auth/session";
 import { listClaims, listFleet, listReservations } from "@/lib/db/queries";
 import { sectionVersion } from "@/lib/db/record-version";
 import { fleetSearchMatches } from "@/lib/db/fleet";
+import { fleetStatesToday, listFleetRecordsToCheck } from "@/lib/db/fleet-availability";
 import { vehicleClassLabel } from "@/lib/fleet/classes";
 import { formatVehicleRegistration } from "@/lib/text";
 
@@ -21,12 +22,22 @@ function specLine(v: Record<string, string | number | null>) {
   return bits.join(" · ");
 }
 
+const STATE_LABEL: Record<string, string> = {
+  available: "available",
+  reserved: "reserved",
+  on_hire: "on hire",
+  off_road: "off road / maintenance",
+  removed: "removed",
+};
+
 function FleetTable({
   rows,
   empty,
+  states,
 }: {
   rows: Array<Record<string, string | number | null>>;
   empty: string;
+  states: ReturnType<typeof fleetStatesToday>;
 }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-line bg-card">
@@ -52,7 +63,10 @@ function FleetTable({
               <tr key={String(v.id)}>
                 <td className="ref">{v.registration ? formatVehicleRegistration(String(v.registration)) : "Not on V5C"}</td>
                 <td>{specLine(v)}</td>
-                <td>{String(v.status).replaceAll("_", " ")}</td>
+                <td>
+                  {STATE_LABEL[states.get(String(v.id))?.state || ""] || String(v.status).replaceAll("_", " ")}
+                  {states.get(String(v.id))?.checks ? <span className="text-overdue"> · record to check</span> : null}
+                </td>
                 <td>{String(v.location || "")}</td>
                 <td>
                   <Link href={`/hire/${v.id}`} className="text-sm text-teal-dark underline">
@@ -76,8 +90,11 @@ export default async function HirePage({
   await requireStaff();
   const { q, error, saved, show, status } = await searchParams;
   const includeRemoved = show === "removed";
+  const states = fleetStatesToday();
+  const toCheck = listFleetRecordsToCheck();
+  const wanted = status === "maintenance" ? "off_road" : status;
   const fleet = listFleet({ includeRemoved }).filter((v) => {
-    if (status && String(v.status) !== status) return false;
+    if (wanted && states.get(String(v.id))?.state !== wanted) return false;
     return fleetSearchMatches(v.registration ? String(v.registration) : "", q || "");
   });
   const real = fleet.filter((v) => Number(v.is_real) === 1 && !v.removed_at);
@@ -134,6 +151,51 @@ export default async function HirePage({
         </p>
       ) : null}
 
+      {toCheck.length > 0 ? (
+        <section id="records-to-check" className="scroll-mt-4 rounded-xl border border-overdue/40 bg-[#f8ecec] p-5" data-records-to-check>
+          <h2 className="font-serif text-xl text-navy-deep">Fleet records to check</h2>
+          <p className="mt-1 text-sm">The status and the bookings disagree. These cars are not offered until a person checks them.</p>
+          <ul className="mt-3 space-y-3 text-sm">
+            {toCheck.map((row) => (
+              <li key={row.key} className="rounded-md border border-line bg-white p-3" data-record-check={row.registration}>
+                <p>
+                  <strong>{row.registration}</strong> · {row.text}
+                </p>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <Link href={`/hire/${row.fleetVehicleId}`} className="text-teal-dark underline">
+                    Open the car
+                  </Link>
+                  {row.claimId ? (
+                    <Link href={`/claims/${row.claimId}/hire`} className="text-teal-dark underline">
+                      Open the file
+                    </Link>
+                  ) : null}
+                  {row.confirmable ? (
+                    <form method="post" action="/hire/records">
+                      <input type="hidden" name="action" value="confirm" />
+                      <input type="hidden" name="fleetVehicleId" value={row.fleetVehicleId} />
+                      <input type="hidden" name="checkKey" value={row.key} />
+                      <button type="submit" className="rounded-md border border-line bg-white px-3 py-1.5 font-semibold text-navy">
+                        Still with the customer
+                      </button>
+                    </form>
+                  ) : null}
+                  {row.closeBookingId ? (
+                    <form method="post" action="/hire/records">
+                      <input type="hidden" name="action" value="close" />
+                      <input type="hidden" name="reservationId" value={row.closeBookingId} />
+                      <button type="submit" className="rounded-md border border-line bg-white px-3 py-1.5 font-semibold text-navy">
+                        Close this booking
+                      </button>
+                    </form>
+                  ) : null}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <section className="rounded-xl border-2 border-teal bg-[#e8f4f2] p-5">
         <h2 className="font-serif text-xl text-navy-deep">Hire Packs</h2>
         <p className="mt-1 text-sm text-slate">
@@ -172,20 +234,20 @@ export default async function HirePage({
         <p className="text-sm text-slate">
           Production vehicles from V5Cs. A later reset of TEST data must not wipe these records.
         </p>
-        <FleetTable rows={real} empty="No real fleet vehicles match that search." />
+        <FleetTable rows={real} states={states} empty="No real fleet vehicles match that search." />
       </section>
 
       <section className="space-y-3">
         <h2 className="font-serif text-xl text-navy-deep">TEST fleet (fictional)</h2>
         <p className="text-sm text-slate">Demonstration vehicles CAS 1–10. Not production stock.</p>
-        <FleetTable rows={test} empty="No TEST fleet vehicles match that search." />
+        <FleetTable rows={test} states={states} empty="No TEST fleet vehicles match that search." />
       </section>
 
       {includeRemoved ? (
         <section className="space-y-3">
           <h2 className="font-serif text-xl text-navy-deep">Removed vehicles</h2>
           <p className="text-sm text-slate">Soft-removed only. Booking history stays on the record.</p>
-          <FleetTable rows={removed} empty="No removed vehicles." />
+          <FleetTable rows={removed} states={states} empty="No removed vehicles." />
         </section>
       ) : (
         <p className="text-sm text-slate">
@@ -224,7 +286,7 @@ export default async function HirePage({
       <ReserveForm
         vehicles={bookable.map((v) => ({
           id: String(v.id),
-          label: `${v.registration || "No registration"} — ${v.make || ""} ${v.model || ""} (${v.status})`,
+          label: `${v.registration || "No registration"} — ${v.make || ""} ${v.model || ""} (${STATE_LABEL[states.get(String(v.id))?.state || ""] || v.status})`,
         }))}
         claims={claims.map((c) => ({ id: c.id, label: `${c.file_reference} ${c.client_name || ""}` }))}
         versions={Object.fromEntries(bookable.map((v) => [String(v.id), sectionVersion("fleet", String(v.id))]))}

@@ -26,6 +26,7 @@ import { createStaffAccount } from "../src/lib/db/staff-admin.ts";
 import { seed } from "../src/lib/db/seed.ts";
 import { isoDateFromNow, londonTodayIso } from "../src/lib/dates.ts";
 import { canApproveImpecuniosity } from "../src/lib/domain/impecuniosity.ts";
+import { prepareAgreementItems, TEST_LICENCE_NUMBER } from "./prehire-setup.ts";
 import { handoverStaleLines, hireAgreementRefusal, licenceCheckIsStale } from "../src/lib/domain/prehire-checks.ts";
 
 const schema = fs.readFileSync(path.join(process.cwd(), "src/lib/db/schema.sql"), "utf8");
@@ -49,6 +50,7 @@ function licenceFor(claimId: string, driverKey: string, checkedOn = londonTodayI
     pointsEndorsements: "None shown",
     licenceExpiresOn: "2032-01-01",
     checkedOn,
+    licenceNumber: TEST_LICENCE_NUMBER,
   });
 }
 
@@ -97,7 +99,7 @@ describe("pre-hire checks before a hire agreement", () => {
       const beforeDocs = hireAgreementCount(db, "c4");
       const beforeNumber = db.prepare(`SELECT hire_agreement_number AS n FROM claims WHERE id = 'c4'`).get() as { n: string | null };
       const beforeSequence = db.prepare(`SELECT value FROM settings WHERE key = 'next_hire_agreement_number'`).get() as { value: string };
-      assert.throws(() => generateHireAgreementDocument("c4", "staff-justin", 0), /No licence check is recorded for Dafydd Jones/);
+      assert.throws(() => generateHireAgreementDocument("c4", "staff-justin"), /No licence check is recorded for Dafydd Jones/);
       assert.match(String(hireAgreementPrehireBlock("c4")), /no override/i);
       assert.equal(hireAgreementCount(db, "c4"), beforeDocs);
       assert.equal((db.prepare(`SELECT hire_agreement_number AS n FROM claims WHERE id = 'c4'`).get() as { n: string | null }).n, beforeNumber.n);
@@ -115,7 +117,7 @@ describe("pre-hire checks before a hire agreement", () => {
       db.prepare(`UPDATE claims SET claim_type = 'non_fault' WHERE id = 'c4'`).run();
       for (const driver of listHireDrivers("c4")) licenceFor("c4", driver.key);
       addImpecuniosityAccount({ claimId: "c4", actorId: "staff-sian", label: "March wages", kind: "wage_slips" });
-      assert.throws(() => generateHireAgreementDocument("c4", "staff-sian", 0), /no bank account listed/);
+      assert.throws(() => generateHireAgreementDocument("c4", "staff-sian"), /no bank account listed/);
       assert.equal(hireAgreementCount(db, "c4"), 0);
     });
     db.close();
@@ -136,7 +138,8 @@ describe("pre-hire checks before a hire agreement", () => {
       assert.equal(impecuniosityApproved("c4"), false);
       assert.equal(hireAgreementPrehireBlock("c4"), null);
       db.prepare(`UPDATE claims SET claim_type = 'non_fault' WHERE id = 'c4'`).run();
-      const result = generateHireAgreementDocument("c4", "staff-sian", 0);
+      prepareAgreementItems("c4");
+      const result = generateHireAgreementDocument("c4", "staff-sian");
       const row = db.prepare(`SELECT signed FROM documents WHERE id = ?`).get(result.documentId) as { signed: number };
       assert.equal(row.signed, 0);
     });
@@ -151,14 +154,15 @@ describe("pre-hire checks before a hire agreement", () => {
       assert.equal(hireAgreementPrehireBlock("c4"), null);
       saveHirePack("c4", { additional_name: "Nia Evans" });
       assert.match(String(hireAgreementPrehireBlock("c4")), /Nia Evans/);
-      assert.throws(() => generateHireAgreementDocument("c4", "staff-justin", 0), /Nia Evans/);
+      assert.throws(() => generateHireAgreementDocument("c4", "staff-justin"), /Nia Evans/);
       assert.equal(hireAgreementCount(db, "c4"), 0);
       const extra = listHireDrivers("c4").find((driver) => driver.name === "Nia Evans");
       assert.ok(extra);
       licenceFor("c4", extra.key);
       assert.equal(hireAgreementPrehireBlock("c4"), null);
       db.prepare(`UPDATE claims SET claim_type = 'non_fault' WHERE id = 'c4'`).run();
-      const result = generateHireAgreementDocument("c4", "staff-sian", 0);
+      prepareAgreementItems("c4");
+      const result = generateHireAgreementDocument("c4", "staff-sian");
       const row = db.prepare(`SELECT signed FROM documents WHERE id = ?`).get(result.documentId) as { signed: number };
       assert.equal(row.signed, 0);
     });
@@ -178,7 +182,7 @@ describe("pre-hire checks before a hire agreement", () => {
       db.prepare(`UPDATE claims SET claim_type = 'non_fault' WHERE id = 'c4'`).run();
       const block = hireAgreementPrehireBlock("c4");
       assert.match(String(block), /older than 21 days/);
-      assert.throws(() => generateHireAgreementDocument("c4", "staff-sian", 0), /older than 21 days/);
+      assert.throws(() => generateHireAgreementDocument("c4", "staff-sian"), /older than 21 days/);
       assert.equal(hireAgreementCount(db, "c4"), 0);
       const lines = handoverStaleLines({
         drivers: listHireDrivers("c4"),
@@ -268,8 +272,8 @@ describe("pre-hire check overrides", () => {
         /permission/,
       );
       assert.equal(listPrehireOverrides("c4").length, 0);
-      assert.throws(() => generateHireAgreementDocument("c4", created.id, 0), /No licence check is recorded for Dafydd Jones/);
-      assert.throws(() => generateHireAgreementDocument("c4", "staff-sian", 0), /no override/i);
+      assert.throws(() => generateHireAgreementDocument("c4", created.id), /No licence check is recorded for Dafydd Jones/);
+      assert.throws(() => generateHireAgreementDocument("c4", "staff-sian"), /no override/i);
 
       db.prepare(`DELETE FROM staff_permissions WHERE staff_id = 'staff-justin'`).run();
       assert.equal(canOverridePreHireChecks({ role: "administrator", permissions: listStaffPermissions("staff-justin") }), false);
@@ -305,7 +309,7 @@ describe("pre-hire check overrides", () => {
       });
       assert.equal(listPrehireOverrides("c4").map((row) => row.check_kind).join(","), "licence");
       db.prepare(`UPDATE claims SET claim_type = 'non_fault' WHERE id = 'c4'`).run();
-      assert.throws(() => generateHireAgreementDocument("c4", "staff-sian", 0), /no bank account listed/);
+      assert.throws(() => generateHireAgreementDocument("c4", "staff-sian"), /no bank account listed/);
       assert.equal(hireAgreementCount(db, "c4"), 0);
       assert.match(String(hireAgreementPrehireBlock("c5")), /Elin Powell/);
       assert.match(String(hireAgreementPrehireBlock("c5")), /no override/i);
@@ -325,7 +329,8 @@ describe("pre-hire check overrides", () => {
       assert.equal(rows[0].reason, "Proceeding without a check code.");
       assert.equal(hireAgreementPrehireBlock("c4"), null);
       db.prepare(`UPDATE claims SET claim_type = 'non_fault' WHERE id = 'c4'`).run();
-      const result = generateHireAgreementDocument("c4", "staff-sian", 0);
+      prepareAgreementItems("c4");
+      const result = generateHireAgreementDocument("c4", "staff-sian");
       const signed = db.prepare(`SELECT signed FROM documents WHERE id = ?`).get(result.documentId) as { signed: number };
       assert.equal(signed.signed, 0);
       assert.match(String(hireAgreementPrehireBlock("c5")), /Elin Powell/);
@@ -342,7 +347,7 @@ describe("pre-hire check overrides", () => {
         checkKind: "bank",
         reason: "No statements yet.",
       });
-      assert.throws(() => generateHireAgreementDocument("c4", "staff-justin", 0), /No licence check is recorded for Dafydd Jones/);
+      assert.throws(() => generateHireAgreementDocument("c4", "staff-justin"), /No licence check is recorded for Dafydd Jones/);
       assert.equal(
         listPrehireOverrides("c4").some((row) => row.check_kind === "licence"),
         false,

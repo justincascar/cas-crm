@@ -131,7 +131,8 @@ describe("new claim drafts, hire and recovery fees", () => {
           hire_gta_group: string;
           needs_replacement: number;
         };
-        assert.equal(claim.next_action, "Pre-hire checks and choose a vehicle");
+        // The next action is read from the steps. The form no longer stores guidance as a note.
+        assert.equal(claim.next_action, null);
         assert.equal(claim.hire_status, "none");
         assert.equal(claim.hire_vehicle_type, "Medium Car");
         assert.equal(claim.hire_gta_group, "S1");

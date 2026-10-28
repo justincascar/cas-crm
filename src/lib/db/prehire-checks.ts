@@ -222,6 +222,46 @@ function licencePlacement(claimId: string, driver: NamedHireDriver, clientPerson
   return { licenceNumber: "", licenceHref: `${base}/details/additional-drivers` };
 }
 
+/** Licence numbers are kept without spaces, in capitals. The format is not guessed beyond that. */
+export function cleanLicenceNumber(value: string): string {
+  const text = value.replace(/\s+/g, "").toUpperCase();
+  if (!text) return "";
+  if (!/^[A-Z0-9]{5,20}$/.test(text)) throw new Error("Enter the licence number as it is printed on the licence, letters and numbers only.");
+  return text;
+}
+
+/**
+ * Saves a licence number to the person's own record, so it is entered once and used everywhere:
+ * the client or driver record, Additional drivers, or the hire pack's additional driver.
+ */
+export function saveDriverLicenceNumber(claimId: string, driver: HireDriver, licenceNumber: string): void {
+  const number = cleanLicenceNumber(licenceNumber);
+  if (!number) return;
+  if (driver.key.startsWith("person:")) {
+    run(`UPDATE people SET licence_number = ? WHERE id = ?`, [number, driver.key.slice("person:".length)]);
+    return;
+  }
+  const norm = normName(driver.name);
+  const extras = get<{ data_json: string }>(
+    `SELECT data_json FROM claim_screen_data WHERE claim_id = ? AND screen_key = 'additional-drivers'`,
+    [claimId],
+  );
+  if (extras?.data_json) {
+    const values = JSON.parse(extras.data_json) as Record<string, unknown>;
+    const slot = normName(String(values.d1Name || "")) === norm ? "d1" : normName(String(values.d2Name || "")) === norm ? "d2" : null;
+    if (slot) {
+      values[`${slot}LicenceNumber`] = number;
+      run(`UPDATE claim_screen_data SET data_json = ?, updated_at = ? WHERE claim_id = ? AND screen_key = 'additional-drivers'`, [
+        JSON.stringify(values),
+        nowUtcIso(),
+        claimId,
+      ]);
+      return;
+    }
+  }
+  run(`UPDATE hire_pack_data SET additional_licence = ? WHERE claim_id = ? AND lower(trim(additional_name)) = ?`, [number, claimId, norm]);
+}
+
 export function listLicenceChecks(claimId: string): LicenceCheckRow[] {
   ensureLicenceTable();
   return all<LicenceCheckRow>(
@@ -250,6 +290,8 @@ export function recordLicenceCheck(input: {
   result?: string;
   notes?: string;
   documentId?: string | null;
+  /** Typed on the check card when the person's record has none. Saved to that record. */
+  licenceNumber?: string;
 }): { id: string; driverName: string; result: "ok" | "problem" } {
   ensureLicenceTable();
   const claim = get<{ id: string }>(`SELECT id FROM claims WHERE id = ?`, [input.claimId]);
@@ -259,6 +301,18 @@ export function recordLicenceCheck(input: {
   const checkedOn = requireYmd(input.checkedOn, "the date the check was done");
   if (checkedOn > londonTodayIso()) throw new Error("The date of the check cannot be after today.");
   const result = input.result === "problem" ? "problem" : "ok";
+  const typedNumber = cleanLicenceNumber(String(input.licenceNumber || ""));
+  if (result === "ok" && !driver.licenceNumber && !typedNumber) {
+    throw new Error(`Enter ${driver.name}'s licence number. The check cannot be saved as OK to drive without it.`);
+  }
+  if (typedNumber && typedNumber !== driver.licenceNumber) saveDriverLicenceNumber(input.claimId, driver, typedNumber);
+  const expiry = requireYmd(input.licenceExpiresOn, "the licence expiry the check showed");
+  if (driver.key.startsWith("person:")) {
+    run(`UPDATE people SET licence_expires_on = ? WHERE id = ? AND (licence_expires_on IS NULL OR trim(licence_expires_on) = '')`, [
+      expiry,
+      driver.key.slice("person:".length),
+    ]);
+  }
   const points =
     input.pointsEndorsements != null && input.pointsEndorsements.trim()
       ? requireText(input.pointsEndorsements, "Enter the penalty points.")
@@ -281,7 +335,7 @@ export function recordLicenceCheck(input: {
       code,
       requireText(input.category, "Enter the categories the check showed."),
       points,
-      requireYmd(input.licenceExpiresOn, "the licence expiry the check showed"),
+      expiry,
       checkedOn,
       input.actorId,
       nowUtcIso(),

@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { actionGenerateHireAgreement, actionGenerateHirePack, actionGenerateStorageRecovery, actionSaveHirePack } from "@/app/actions";
-import { getGtaMarkupPercent } from "@/lib/db/hire-agreement";
-import { GTA_GROUPS, GTA_NOT_CLASSIFIED, GTA_RATE_PERIOD_LABEL, gtaGroupLabel, groupChargedAboveClient, normaliseGtaGroup, standardDailyRatePence } from "@/lib/documents/gta";
+import { GTA_GROUPS, GTA_NOT_CLASSIFIED, gtaGroupLabel, groupChargedAboveClient, normaliseGtaGroup } from "@/lib/documents/gta";
 import { AgeField } from "@/components/AgeField";
 import { MobileField } from "@/components/MobileField";
 import { PageHeader } from "@/components/ClaimTable";
@@ -12,7 +11,7 @@ import { requireStaff } from "@/lib/auth/session";
 import { getHirePack } from "@/lib/db/hire-pack";
 import { loadClash, sectionVersion } from "@/lib/db/record-version";
 import { SHARED_CLIENT_GTA, SHARED_CLIENT_PERSON } from "@/lib/db/shared-fields";
-import { RENTAL_PERIOD_DECISION } from "@/lib/documents/hire-pack-fields";
+import { RENTAL_PERIOD_DECISION, plainPackFields } from "@/lib/documents/hire-pack-fields";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
@@ -38,13 +37,10 @@ export async function HirePackScreen({
   if (!pack) notFound();
   const s = pack.stored;
   const actorId = staffUser.id;
-  const markup = getGtaMarkupPercent();
   const clientGroup = normaliseGtaGroup(String(pack.claim.client_gta_group || ""));
   const suppliedGroup = normaliseGtaGroup(String(pack.hire?.supplied_gta_group || ""));
   const charged = normaliseGtaGroup(String(s.group_charged || "")) || clientGroup;
-  const calculated = standardDailyRatePence(charged, markup);
-  const manual = Number(s.daily_rate_manual) === 1 && Number(s.daily_rate_pence || 0) > 0;
-  const dailyValue = manual ? (Number(s.daily_rate_pence) / 100).toFixed(2) : calculated != null ? (calculated / 100).toFixed(2) : "";
+  const storedRate = Number(pack.hire?.rate_pence_per_day || 0) || null;
   const suppliedHigher = !groupChargedAboveClient(charged, clientGroup) && groupChargedAboveClient(suppliedGroup, clientGroup);
   const chargedHigher = groupChargedAboveClient(charged, clientGroup);
   const parts = pack.parts;
@@ -67,6 +63,7 @@ export async function HirePackScreen({
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
       ) : null}
 
+      {embedded ? null : (<>
       <section className="rounded-xl border border-line bg-card p-5 text-sm">
         <h2 className="font-serif text-xl text-navy-deep">What this agreement will include</h2>
         <ul className="mt-3 space-y-2">
@@ -81,7 +78,7 @@ export async function HirePackScreen({
 
       {parts.hire.included && pack.missing.length > 0 ? (
         <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">
-          Still needed before this matches a complete hire pack: {pack.missing.join(", ")}.
+          Still needed before this matches a complete hire pack: {plainPackFields(pack.missing)}.
         </p>
       ) : parts.hire.included ? (
         <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm">Mandatory hire pack fields are present.</p>
@@ -103,6 +100,7 @@ export async function HirePackScreen({
           includes that page only when storage or recovery has been arranged through CAS.
         </p>
       )}
+      </>)}
 
       <ValidatedForm
         className="space-y-6"
@@ -271,12 +269,9 @@ export async function HirePackScreen({
         <fieldset className="space-y-3 rounded-xl border border-line bg-card p-5">
           <legend className="font-serif text-xl text-navy-deep">Charges (pounds, plus VAT on the pack)</legend>
           <p className="text-sm text-slate">
-            Daily rate is the GTA ceiling for Group Charged, plus {markup}% markup
-            {calculated != null ? ` (${(calculated / 100).toFixed(2)} pounds before you edit it)` : ""}. Reference rates are the supplied table for{" "}
-            {GTA_RATE_PERIOD_LABEL}, which replaces the July 2025 – June 2026 workbook. Other charges stay as entered on this file. They are not filled from a default.
+            Daily rate: {storedRate ? `${(storedRate / 100).toFixed(2)} pounds a day, kept on the hire from when the car was reserved` : "not stored yet. Set it on the Hire tab."}
           </p>
           <div className="grid gap-3 sm:grid-cols-3">
-            <Money name="daily_rate" label="Daily rate" value={dailyValue} />
             <Money name="cdw" label="Collision damage waiver" value={pounds(s.cdw_pence)} />
             <Money name="delivery_collection" label="Delivery & collection" value={pounds(s.delivery_collection_pence)} />
             <Money name="additional_driver" label="Additional driver" value={pounds(s.additional_driver_pence)} />
@@ -388,9 +383,11 @@ export async function HirePackScreen({
           <button className="rounded-md bg-navy px-4 py-2 text-sm text-white" type="submit">
             Save pack information
           </button>
-          <button className="rounded-md bg-teal px-4 py-2 text-sm text-white" type="submit" formAction={actionGenerateHireAgreement}>
-            Produce agreement for signature
-          </button>
+          {embedded ? null : (
+            <button className="rounded-md bg-teal px-4 py-2 text-sm text-white" type="submit" formAction={actionGenerateHireAgreement}>
+              Produce agreement for signature
+            </button>
+          )}
           <button className="rounded-md bg-navy px-4 py-2 text-sm text-white" type="submit" formAction={actionGenerateHirePack}>
             Generate Hire Pack
           </button>

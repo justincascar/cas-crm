@@ -50,6 +50,8 @@ export type ClaimRunningDaily = {
   storageProposedPast: string | null;
   /** A charge would still be accruing, but the page's daily rate is missing. */
   rateMissing: boolean;
+  /** Hire is running with a rate stored, but the signed agreement is not on the file. */
+  hireUnsigned?: boolean;
 };
 
 function countedThroughToday(countedTo: string, today: string): boolean {
@@ -63,6 +65,7 @@ function countedThroughToday(countedTo: string, today: string): boolean {
 export function claimRunningDaily(claimId: string, today = londonTodayIso()): ClaimRunningDaily {
   let daily = 0;
   let rateMissing = false;
+  let hireUnsigned = false;
   let storageProposedPast: string | null = null;
 
   const hire = hireChargeForClaim(claimId, today);
@@ -71,7 +74,15 @@ export function claimRunningDaily(claimId: string, today = londonTodayIso()): Cl
     else rateMissing = true;
   } else if (hire.charge.status === "no_rate" && hire.handoverDay && hire.creditHire) {
     const end = hire.confirmedEndDay || hire.proposedEndDay;
-    if (!end || end >= today) rateMissing = true;
+    if (!end || end >= today) {
+      const stored = get<{ rate: number | null }>(
+        `SELECT rate_pence_per_day AS rate FROM hire_episodes
+         WHERE claim_id = ? AND started_at IS NOT NULL AND collection_at IS NULL AND billing_end_at IS NULL AND rate_pence_per_day > 0 LIMIT 1`,
+        [claimId],
+      );
+      if (stored) hireUnsigned = true;
+      else rateMissing = true;
+    }
   }
 
   const storage = storageChargeForClaim(claimId, today);
@@ -84,7 +95,7 @@ export function claimRunningDaily(claimId: string, today = londonTodayIso()): Cl
     }
   }
 
-  return { open: daily > 0, dailyPence: daily, storageProposedPast, rateMissing };
+  return { open: daily > 0, dailyPence: daily, storageProposedPast, rateMissing, hireUnsigned };
 }
 
 /** Past proposed storage ends, and charges that are still open without a daily rate. Not Money running. */

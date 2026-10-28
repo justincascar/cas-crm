@@ -52,6 +52,8 @@ export type ClaimSummaryModel = {
   statusLine: string;
   stageLine: string;
   runningText: string;
+  /** Where to fix a missing daily rate or a missing signed agreement. */
+  runningHref: string | null;
   runningDaily: string;
   charges: ClaimSummaryCharge[];
   outstandingTotal: string;
@@ -184,8 +186,11 @@ export function buildClaimSummaryModel(claimId: string): ClaimSummaryModel | nul
       running.dailyPence > 0
         ? `${formatGbp(running.dailyPence)}/day running`
         : running.rateMissing
-          ? "Charges still running — no daily rate on the file"
-          : "No hire or storage charge running",
+          ? "Daily rate missing"
+          : running.hireUnsigned
+            ? "Hire running · signed agreement not on file"
+            : "No hire or storage charge running",
+    runningHref: running.rateMissing ? `/claims/${id}/hire#rate` : running.hireUnsigned ? `/claims/${id}/hire#on-hire` : null,
     runningDaily: runningDailyLabel(running),
     charges,
     outstandingTotal: formatGbp(confirmedOutstandingPence(money.confirmed.outstandingPence)),

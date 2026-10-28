@@ -17,6 +17,7 @@ import { recordClaimEvent } from "./chronology";
 import { formatHandoverMileage } from "./handover";
 import { getHirePack, type HirePackData } from "./hire-pack";
 import { hireAgreementPrehireBlock } from "./prehire-checks";
+import { agreementMandatoryRefusal, currentHireEpisode } from "./hire-readiness";
 
 export const HIRE_AGREEMENT_TEMPLATE_KEY = "hire_agreement";
 export const HIRE_AGREEMENT_DOCUMENT_TYPE = "hire_agreement";
@@ -122,16 +123,11 @@ export function hireAgreementMissing(view: HireAgreementView): string[] {
   const missing: string[] = [];
   if (view.includeHire) {
     if (!blank(view.licenceNumber)) missing.push("licence number");
-    if (!normaliseGtaGroup(view.clientGroup)) missing.push("GTA group on the client's own vehicle");
-    if (!blank(view.hireRegistration)) missing.push("hire vehicle registration");
-    if (!normaliseGtaGroup(view.suppliedGroup)) missing.push("GTA group on the vehicle supplied");
-    if (!normaliseGtaGroup(view.groupCharged)) missing.push("Group Charged");
+    if (!blank(view.hireRegistration)) missing.push("hire car registration");
+    if (!normaliseGtaGroup(view.groupCharged)) missing.push("group charged");
     if (view.dailyRatePence == null) missing.push("daily rate");
   }
-  if (view.includeStorageRecovery && !view.clientVehiclePresent) missing.push("client's own vehicle on the Storage & Recovery page");
-  if (view.includeStorageRecovery && !view.includeHire && !normaliseGtaGroup(view.clientGroup)) {
-    missing.push("GTA group on the client's own vehicle");
-  }
+  if (view.includeStorageRecovery && !view.clientVehiclePresent) missing.push("client's own car on the storage and recovery page");
   return missing;
 }
 
@@ -442,7 +438,11 @@ export function buildHireAgreementView(
   };
 }
 
-export function generateHireAgreementDocument(claimId: string, actorId: string, dailyRatePence: number | null) {
+/**
+ * The final agreement for signature. Refused while a pre-hire check or a mandatory item is missing.
+ * The daily rate is the one stored on the hire when the car was reserved. Settings is not read again here.
+ */
+export function generateHireAgreementDocument(claimId: string, actorId: string) {
   const pack = getHirePack(claimId);
   if (!pack) throw new Error("File not found.");
   const blocked = hireAgreementPrehireBlock(claimId);
@@ -450,6 +450,10 @@ export function generateHireAgreementDocument(claimId: string, actorId: string, 
   if (String(pack.claim.claim_type) === "fault") {
     throw new Error("A hire agreement is not created for a courtesy car.");
   }
+  const missingItems = agreementMandatoryRefusal(claimId);
+  if (missingItems) throw new Error(missingItems);
+  const stored = Number(currentHireEpisode(claimId)?.rate_pence_per_day);
+  const dailyRatePence = stored > 0 ? stored : null;
   const agreementNumber = allocateHireAgreementNumber(claimId);
   const view = buildHireAgreementView(pack, agreementNumber, dailyRatePence);
   const html = renderHireAgreement(view);
@@ -481,7 +485,7 @@ export function generateHireAgreementDocument(claimId: string, actorId: string, 
     claimId,
     eventType: "document_generated",
     occurredAt: nowUtcIso(),
-    details: `${title} version ${version} filed. ${view.hireReason} ${view.storageReason}${missing.length ? ` Missing: ${missing.join(", ")}.` : ""}`,
+    details: `${title} version ${version} filed for signature. Daily rate ${dailyRatePence ? formatGbp(dailyRatePence) : "not stored"}. It is unsigned until the signed copy is uploaded.${missing.length ? ` Not filled: ${missing.join(", ")}.` : ""}`,
     actorId,
     channel: "letter",
     documentId,

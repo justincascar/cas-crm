@@ -46,6 +46,12 @@ export async function PrehireChecksScreen({
     result: row.result,
   }));
 
+  const fileAccept = "application/pdf,image/jpeg,image/png,image/webp,image/gif,.pdf,.jpg,.jpeg,.png,.webp,.gif";
+  const licenceOpen = drivers.some((driver) => {
+    const latest = latestLicenceCheck(snapshots, driver.key);
+    return !latest || latest.result === "problem" || licenceCheckIsStale(latest.checkedOn, today, windowDays);
+  });
+
   return (
     <div className="space-y-4">
       {drivers.length === 0 ? <p className="text-sm">Nobody is recorded as the person who will drive.</p> : null}
@@ -53,84 +59,97 @@ export async function PrehireChecksScreen({
         const latest = latestLicenceCheck(snapshots, driver.key);
         const stale = latest && latest.result !== "problem" ? licenceCheckIsStale(latest.checkedOn, today, windowDays) : false;
         const done = Boolean(latest && latest.result !== "problem" && !stale);
+        const form = (
+          <form method="post" action={`/claims/${id}/prehire/save`} encType="multipart/form-data" className="grid gap-3 sm:grid-cols-2">
+            <SubmitKeyInput />
+            <RecordVersionField version={sectionVersion("licence-check", `${id}:${driver.key}`)} />
+            <input type="hidden" name="driverKey" value={driver.key} />
+            {driver.licenceNumber ? null : (
+              <label className="text-sm sm:col-span-2" data-licence-number-box>
+                Licence number
+                <input name="licenceNumber" required autoComplete="off" className={field} />
+              </label>
+            )}
+            <label className="text-sm">
+              Date checked
+              <input name="checkedOn" type="date" required max={today} defaultValue={today} className={field} />
+            </label>
+            <fieldset className="text-sm">
+              <legend>Result</legend>
+              <label className="mt-1 flex items-center gap-2">
+                <input type="radio" name="result" value="ok" required defaultChecked />
+                OK to drive
+              </label>
+              <label className="mt-1 flex items-center gap-2">
+                <input type="radio" name="result" value="problem" />
+                Problem found
+              </label>
+            </fieldset>
+            <label className="text-sm">
+              Categories
+              <input name="category" required className={field} />
+            </label>
+            <label className="text-sm">
+              Penalty points
+              <input name="penaltyPoints" type="number" min={0} max={99} step={1} defaultValue={0} required className={field} />
+            </label>
+            <label className="text-sm">
+              Licence expiry date
+              <input name="licenceExpiresOn" type="date" required className={field} />
+            </label>
+            <label className="text-sm">
+              Check code (office only)
+              <input name="checkCode" autoComplete="off" className={field} />
+            </label>
+            <label className="text-sm sm:col-span-2">
+              Notes
+              <textarea name="notes" rows={2} className={field} />
+            </label>
+            <label className="text-sm sm:col-span-2">
+              Screenshot or PDF of the check
+              <input name="document" type="file" accept={fileAccept} className={field} />
+            </label>
+            <button className={button} type="submit">
+              Save licence check
+            </button>
+          </form>
+        );
         return (
-          <div key={driver.key} id={hireCheckAnchor(driver.key)} className="space-y-3 rounded-lg border border-line p-4">
-            <h3 className="font-serif text-lg text-navy-deep">{driver.name}</h3>
-            {driver.licenceNumber ? (
-              <p className="text-sm">Licence number: {driver.licenceNumber}</p>
-            ) : (
-              <p className="text-sm">
-                <Link href={driver.licenceHref} className="text-teal-dark underline">
-                  Add licence number
-                </Link>
-              </p>
-            )}
-            <p className="text-sm">
-              <a className="text-teal-dark underline" href={GOV_LICENCE_CHECK_URL} target="_blank" rel="noreferrer">
-                Open GOV.UK licence check
-              </a>
-            </p>
+          <div
+            key={driver.key}
+            id={hireCheckAnchor(driver.key)}
+            className="space-y-3 rounded-lg border border-line p-4"
+            data-licence-card={done ? "done" : "open"}
+          >
             {done && latest ? (
-              <p className="text-sm text-ok">Done. Checked {formatLicenceDate(latest.checkedOn)}.</p>
-            ) : latest?.result === "problem" ? (
-              <p className="text-sm">Problem found. This check is not done. Recheck, choose another driver, or use an override.</p>
-            ) : stale && latest ? (
-              <p className="text-sm">Licence check is older than {windowDays} days — please recheck.</p>
+              <details>
+                <summary className="flex cursor-pointer flex-wrap items-baseline justify-between gap-2 text-sm">
+                  <span>
+                    <strong>{driver.name}</strong> · licence {driver.licenceNumber || "not on the file"} · checked{" "}
+                    {formatLicenceDate(latest.checkedOn)} · OK to drive
+                  </span>
+                  <span className="text-teal-dark underline">Change</span>
+                </summary>
+                <div className="mt-3">{form}</div>
+              </details>
             ) : (
-              <p className="text-sm">Still needed.</p>
+              <>
+                <h3 className="font-serif text-lg text-navy-deep">{driver.name}</h3>
+                <p className="text-sm">
+                  {latest?.result === "problem"
+                    ? "Problem found. Recheck, choose another driver, or use an override. "
+                    : stale
+                      ? `The last check is older than ${windowDays} days. Check again. `
+                      : driver.licenceNumber
+                        ? `Licence ${driver.licenceNumber}. `
+                        : "No licence number on the file yet. Enter it below. "}
+                  <a className="text-teal-dark underline" href={GOV_LICENCE_CHECK_URL} target="_blank" rel="noreferrer">
+                    Open the GOV.UK licence check
+                  </a>
+                </p>
+                {form}
+              </>
             )}
-            <form method="post" action={`/claims/${id}/prehire/save`} encType="multipart/form-data" className="grid gap-3 sm:grid-cols-2">
-              <SubmitKeyInput />
-              <RecordVersionField version={sectionVersion("licence-check", `${id}:${driver.key}`)} />
-              <input type="hidden" name="driverKey" value={driver.key} />
-              <label className="text-sm">
-                Date checked
-                <input name="checkedOn" type="date" required max={today} defaultValue={today} className={field} />
-              </label>
-              <fieldset className="text-sm">
-                <legend>Result</legend>
-                <label className="mt-1 flex items-center gap-2">
-                  <input type="radio" name="result" value="ok" required defaultChecked />
-                  OK to drive
-                </label>
-                <label className="mt-1 flex items-center gap-2">
-                  <input type="radio" name="result" value="problem" />
-                  Problem found
-                </label>
-              </fieldset>
-              <label className="text-sm">
-                Categories
-                <input name="category" required className={field} />
-              </label>
-              <label className="text-sm">
-                Penalty points
-                <input name="penaltyPoints" type="number" min={0} max={99} step={1} defaultValue={0} required className={field} />
-              </label>
-              <label className="text-sm">
-                Expiry date
-                <input name="licenceExpiresOn" type="date" required className={field} />
-              </label>
-              <label className="text-sm">
-                Check code (office only)
-                <input name="checkCode" autoComplete="off" className={field} />
-              </label>
-              <label className="text-sm sm:col-span-2">
-                Notes
-                <textarea name="notes" rows={2} className={field} />
-              </label>
-              <label className="text-sm sm:col-span-2">
-                Screenshot or PDF
-                <input
-                  name="document"
-                  type="file"
-                  accept="application/pdf,image/jpeg,image/png,image/webp,image/gif,.pdf,.jpg,.jpeg,.png,.webp,.gif"
-                  className={field}
-                />
-              </label>
-              <button className={button} type="submit">
-                Save licence check
-              </button>
-            </form>
           </div>
         );
       })}
@@ -140,7 +159,7 @@ export async function PrehireChecksScreen({
           {licenceOverride.reason}
         </p>
       ) : null}
-      {mayOverride && !licenceOverride ? (
+      {mayOverride && !licenceOverride && licenceOpen ? (
         <details className="text-sm">
           <summary className="cursor-pointer text-teal-dark underline">Override (authorised users only)</summary>
           <OverrideForm claimId={id} checkKind="licence" />
@@ -148,9 +167,36 @@ export async function PrehireChecksScreen({
       ) : null}
 
       {creditHire ? (
-        <div id="bank" data-bank-step="yes" className="space-y-3 rounded-lg border border-line p-4">
-          <h3 className="font-serif text-lg text-navy-deep">Bank statements</h3>
-          <p className="text-sm">Upload the client&apos;s recent bank statements, or record that they have no bank account.</p>
+        <div
+          id="bank"
+          data-bank-step="yes"
+          data-bank-card={bank.satisfied ? "done" : "open"}
+          className="space-y-3 rounded-lg border border-line p-4"
+        >
+          {bank.satisfied ? (
+            <details>
+              <summary className="flex cursor-pointer flex-wrap items-baseline justify-between gap-2 text-sm">
+                <span>
+                  <strong>Bank statements</strong> ·{" "}
+                  {bank.statements.length > 0
+                    ? `${bank.statements.length} on file`
+                    : bank.bankAccounts.length > 0
+                      ? `account listed (${bank.bankAccounts.map((row) => row.label).join(", ")})`
+                      : "client has no bank account"}
+                </span>
+                <span className="text-teal-dark underline">Change</span>
+              </summary>
+              <div className="mt-3 space-y-3">
+                <BankForms id={id} noBankExplanation={bank.noBankExplanation} accept={fileAccept} />
+              </div>
+            </details>
+          ) : (
+            <>
+              <h3 className="font-serif text-lg text-navy-deep">Bank statements</h3>
+              <p className="text-sm">Upload recent statements, or record that the client has no bank account.</p>
+              <BankForms id={id} noBankExplanation={bank.noBankExplanation} accept={fileAccept} />
+            </>
+          )}
           {bank.statements.length > 0 ? (
             <ul className="space-y-1 text-sm">
               {bank.statements.map((row) => (
@@ -163,49 +209,6 @@ export async function PrehireChecksScreen({
               ))}
             </ul>
           ) : null}
-          {bank.bankAccounts.length > 0 ? (
-            <p className="text-sm">Bank account listed: {bank.bankAccounts.map((row) => row.label).join(", ")}.</p>
-          ) : null}
-          {bank.noBankExplanation ? <p className="text-sm">Client has no bank account: {bank.noBankExplanation}</p> : null}
-          {bank.satisfied ? <p className="text-sm text-ok">Done.</p> : <p className="text-sm">Still needed.</p>}
-          <form method="post" action={`/claims/${id}/hire/bank`} encType="multipart/form-data" className="grid gap-3 sm:grid-cols-2">
-            <SubmitKeyInput />
-            <RecordVersionField version={sectionVersion("bank-check", id)} />
-            <input type="hidden" name="returnHash" value="#bank" />
-            <label className="text-sm">
-              Statement
-              <input
-                name="document"
-                type="file"
-                required
-                accept="application/pdf,image/jpeg,image/png,image/webp,image/gif,.pdf,.jpg,.jpeg,.png,.webp,.gif"
-                className={field}
-              />
-            </label>
-            <label className="text-sm">
-              Statement period (optional)
-              <input name="statementPeriod" className={field} />
-            </label>
-            <button className={button} type="submit">
-              Upload
-            </button>
-          </form>
-          <form method="post" action={`/claims/${id}/hire/no-bank`} className="space-y-3">
-            <SubmitKeyInput />
-            <RecordVersionField version={sectionVersion("bank-check", id)} />
-            <input type="hidden" name="returnHash" value="#bank" />
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" name="noBank" value="yes" required />
-              Client has no bank account
-            </label>
-            <label className="block text-sm">
-              Explanation
-              <textarea name="explanation" required rows={2} className={field} defaultValue={bank.noBankExplanation} />
-            </label>
-            <button className={button} type="submit">
-              Save
-            </button>
-          </form>
           {bankOverride ? (
             <p className="text-sm">
               Bank-statement check overridden by {bankOverride.recorded_by_name || "Unknown"} on {formatUkDate(bankOverride.recorded_at)}:{" "}
@@ -218,14 +221,51 @@ export async function PrehireChecksScreen({
               <OverrideForm claimId={id} checkKind="bank" />
             </details>
           ) : null}
-          <p className="text-sm">
-            <Link href={`/claims/${id}/financial#bank-accounts`} className="text-teal-dark underline">
-              Financial circumstances
-            </Link>
-          </p>
         </div>
       ) : null}
     </div>
+  );
+}
+
+function BankForms({ id, noBankExplanation, accept }: { id: string; noBankExplanation: string; accept: string }) {
+  return (
+    <>
+      <form method="post" action={`/claims/${id}/hire/bank`} encType="multipart/form-data" className="grid gap-3 sm:grid-cols-2">
+        <SubmitKeyInput />
+        <RecordVersionField version={sectionVersion("bank-check", id)} />
+        <input type="hidden" name="returnHash" value="#bank" />
+        <label className="text-sm">
+          Statement
+          <input name="document" type="file" required accept={accept} className={field} />
+        </label>
+        <label className="text-sm">
+          Statement period (optional)
+          <input name="statementPeriod" className={field} />
+        </label>
+        <button className={button} type="submit">
+          Upload
+        </button>
+      </form>
+      <details className="text-sm">
+        <summary className="cursor-pointer text-teal-dark underline">Client has no bank account</summary>
+        <form method="post" action={`/claims/${id}/hire/no-bank`} className="mt-3 space-y-3">
+          <SubmitKeyInput />
+          <RecordVersionField version={sectionVersion("bank-check", id)} />
+          <input type="hidden" name="returnHash" value="#bank" />
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="noBank" value="yes" required />
+            Client has no bank account
+          </label>
+          <label className="block text-sm">
+            Explanation
+            <textarea name="explanation" required rows={2} className={field} defaultValue={noBankExplanation} />
+          </label>
+          <button className={button} type="submit">
+            Save
+          </button>
+        </form>
+      </details>
+    </>
   );
 }
 

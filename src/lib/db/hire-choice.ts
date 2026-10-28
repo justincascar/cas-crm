@@ -1,32 +1,53 @@
 import { AGREEMENT_ALERT_FROM_DAY, AGREEMENT_LENGTH_DAYS, AGREEMENT_OVERDUE_DAY } from "../constants";
 import { formatGbp } from "../money";
-import { formatUkDate, londonDateIso, londonTodayIso, nowUtcIso, requireLondonDateTime, toLondonDateTimeLocal } from "../dates";
-import { standardDailyRatePence } from "../documents/gta";
-import {
-  agreementHoldEndDay,
-  hireClashMessage,
-  hireDaysOverlap,
-  parseHireNeed,
-  suitableHireCars,
-  type HireCar,
-  type HireNeed,
-  type HireOccupation,
-} from "../domain/hire-availability";
+import { formatUkDate, formatUkDateTime, londonDateIso, londonTodayIso, nowUtcIso, requireLondonDateTime, toLondonDateTimeLocal } from "../dates";
+import { normaliseGtaGroup, standardDailyRatePence } from "../documents/gta";
+import { agreementHoldEndDay, parseHireNeed, type HireNeed } from "../domain/hire-availability";
+import { carNotFreeMessage } from "../domain/fleet-availability";
 import { agreementDayNumber } from "../domain/rules";
 import { canDoFieldJob } from "../auth/roles";
-import { getHirePack } from "./hire-pack";
 import { getGtaMarkupPercent } from "./hire-agreement";
-import { hireAgreementPrehireBlock, listHireGaps } from "./prehire-checks";
+import { listHireGaps } from "./prehire-checks";
 import { licenceCheckWindowDays } from "./licence-window";
 import { recordVehicleHandover } from "./handover";
 import { activeReservationFor, startHireFromHandover } from "./hire-start";
 import { recordClaimEvent } from "./chronology";
 import { touchFleetVersion } from "./fleet";
+import { fleetAvailability } from "./fleet-availability";
+import {
+  agreementMandatoryGaps,
+  currentHireEpisode,
+  groupChargedFor,
+  hireHandoverBlock,
+  hireRateLine,
+  needReasonFor,
+  readSignedUpload,
+  recordSignedAgreementOverride,
+  signedAgreementOverride,
+  signedHireAgreementOnFile,
+  storeSignedHireAgreement,
+  type HireGapLink,
+  type HireRateView,
+  type SignedAgreementFile,
+  type SignedAgreementOverride,
+} from "./hire-readiness";
 import { all, get, newId, run } from "./connection";
 import { withImmediateTransaction, sectionVersion } from "./record-version";
 import { replaySubmit, storeSubmit } from "./submit-key";
 
-export type HireCarChoice = HireCar & { label: string; version: string };
+export type HireCarChoice = {
+  id: string;
+  registration: string;
+  make: string;
+  model: string;
+  transmission: string;
+  seats: number | null;
+  vehicleClass: string;
+  label: string;
+  version: string;
+};
+
+export type HireCarFilters = { date: string; transmission: string; vehicleClass: string; seats: string };
 
 export type HireArea = {
   claimId: string;
@@ -40,9 +61,14 @@ export type HireArea = {
   licenceNumber: string;
   need: HireNeed;
   needReason: string;
+  hireReason: string;
   checksDone: boolean;
   gaps: Array<{ key: string; kind: string; label: string; href: string }>;
+  agreementGaps: HireGapLink[];
   agreementCount: number;
+  agreement: { id: string; title: string; createdAt: string } | null;
+  signed: SignedAgreementFile | null;
+  signedOverride: SignedAgreementOverride | null;
   windowDays: number;
   chosen: {
     fleetVehicleId: string;
@@ -55,11 +81,25 @@ export type HireArea = {
   dayCount: number | null;
   renewal: string | null;
   ratePence: number | null;
+  rate: HireRateView;
+  rateMissing: boolean;
+  canChangeRate: boolean;
+  groupCharged: string | null;
+  clientGroup: string | null;
   cars: HireCarChoice[];
-  delivery: { method: "deliver" | "collect"; date: string; time: string; address: string; jobId: string | null } | null;
+  carsMissingDetails: HireCarChoice[];
+  filters: HireCarFilters;
+  delivery: {
+    method: "deliver" | "collect";
+    date: string;
+    time: string;
+    address: string;
+    jobId: string | null;
+    assigneeId: string | null;
+    assigneeName: string | null;
+  } | null;
   collectionJobId: string | null;
   handoverId: string | null;
-  packMissing: string[];
   next: { label: string; href: string };
   heldElsewhere: string | null;
 };
@@ -105,65 +145,9 @@ function claimRow(claimId: string) {
   );
 }
 
-function occupations(): HireOccupation[] {
-  const reservations = all<{
-    fleet_vehicle_id: string;
-    claim_id: string | null;
-    file_reference: string | null;
-    start_at: string;
-    end_at: string;
-    status: string;
-  }>(
-    `SELECT r.fleet_vehicle_id, r.claim_id, c.file_reference, r.start_at, r.end_at, r.status
-     FROM reservations r
-     LEFT JOIN claims c ON c.id = r.claim_id
-     WHERE r.status IN ('reserved', 'active')`,
-  );
-  const episodes = all<{
-    fleet_vehicle_id: string;
-    claim_id: string;
-    file_reference: string | null;
-    started_at: string;
-  }>(
-    `SELECT he.fleet_vehicle_id, he.claim_id, c.file_reference, he.started_at
-     FROM hire_episodes he
-     JOIN claims c ON c.id = he.claim_id
-     WHERE he.fleet_vehicle_id IS NOT NULL
-       AND he.started_at IS NOT NULL
-       AND he.billing_end_at IS NULL
-       AND he.collection_at IS NULL
-       AND NOT EXISTS (
-         SELECT 1 FROM reservations r
-         WHERE r.fleet_vehicle_id = he.fleet_vehicle_id
-           AND r.claim_id = he.claim_id
-           AND r.status IN ('reserved', 'active')
-       )`,
-  );
-  return [
-    ...reservations.map((row) => ({
-      fleetVehicleId: String(row.fleet_vehicle_id),
-      claimId: row.claim_id ? String(row.claim_id) : null,
-      fileReference: row.file_reference ? String(row.file_reference) : null,
-      startAt: String(row.start_at),
-      endAt: String(row.end_at),
-      status: String(row.status) === "active" ? "active" : "reserved",
-    })),
-    ...episodes.map((row) => ({
-      fleetVehicleId: String(row.fleet_vehicle_id),
-      claimId: String(row.claim_id),
-      fileReference: row.file_reference ? String(row.file_reference) : null,
-      startAt: String(row.started_at),
-      endAt: "9999-12-31",
-      status: "on_hire",
-    })),
-  ];
-}
-
-function fleetCars(): HireCar[] {
-  return all<{
+function fleetCarDetails(): Map<string, Omit<HireCarChoice, "label" | "version">> {
+  const rows = all<{
     id: string;
-    status: string;
-    removed_at: string | null;
     registration: string | null;
     make: string | null;
     model: string | null;
@@ -171,33 +155,29 @@ function fleetCars(): HireCar[] {
     seats: number | null;
     vehicle_class: string | null;
   }>(
-    `SELECT fv.id, fv.status, fv.removed_at, v.registration, v.make, v.model, v.transmission, v.seats, v.vehicle_class
-     FROM fleet_vehicles fv
-     JOIN vehicles v ON v.id = fv.vehicle_id
+    `SELECT fv.id, v.registration, v.make, v.model, v.transmission, v.seats, v.vehicle_class
+     FROM fleet_vehicles fv JOIN vehicles v ON v.id = fv.vehicle_id
      WHERE fv.removed_at IS NULL`,
-  ).map((row) => ({
-    id: String(row.id),
-    registration: String(row.registration || ""),
-    make: String(row.make || ""),
-    model: String(row.model || ""),
-    transmission: String(row.transmission || ""),
-    seats: row.seats == null ? null : Number(row.seats),
-    vehicleClass: String(row.vehicle_class || ""),
-    status: String(row.status || ""),
-    removed: Boolean(row.removed_at),
-  }));
+  );
+  return new Map(
+    rows.map((row) => [
+      String(row.id),
+      {
+        id: String(row.id),
+        registration: String(row.registration || ""),
+        make: String(row.make || ""),
+        model: String(row.model || ""),
+        transmission: String(row.transmission || ""),
+        seats: row.seats == null ? null : Number(row.seats),
+        vehicleClass: String(row.vehicle_class || ""),
+      },
+    ]),
+  );
 }
 
-function clashReference(fleetVehicleId: string, claimId: string, startAt: string, endAt: string): string | null {
-  const hit = occupations().find(
-    (span) =>
-      span.fleetVehicleId === fleetVehicleId &&
-      span.claimId !== claimId &&
-      ["reserved", "active", "on_hire"].includes(span.status) &&
-      hireDaysOverlap(startAt, endAt, span.startAt, span.endAt),
-  );
-  if (!hit) return null;
-  return hit.fileReference || "a staff booking";
+function knownTransmission(value: string | null | undefined): string {
+  const text = String(value || "").trim().toLowerCase();
+  return text === "manual" || text === "automatic" ? text : "";
 }
 
 function deliveryClock(date: string, time: string): { at: string; day: string; endDay: string } {
@@ -207,13 +187,21 @@ function deliveryClock(date: string, time: string): { at: string; day: string; e
   return { at, day: date, endDay: agreementHoldEndDay(date) };
 }
 
-function driverStaffId(): string {
+function defaultDriverId(): string | null {
   const row = get<{ id: string }>(
     `SELECT id FROM staff WHERE active = 1 AND role = 'driver'
      ORDER BY CASE WHEN id = 'staff-driver' THEN 0 ELSE 1 END, name LIMIT 1`,
   );
-  if (!row) throw new Error("There is no driver login to assign this delivery to.");
-  return String(row.id);
+  return row ? String(row.id) : null;
+}
+
+/** Blank means unassigned. Anyone else must be able to do a field job. */
+function chosenDriver(driverId: string | null | undefined): string | null {
+  const id = String(driverId || "").trim();
+  if (!id) return null;
+  const person = get<{ id: string; role: string }>(`SELECT id, role FROM staff WHERE id = ? AND active = 1`, [id]);
+  if (!person || !canDoFieldJob(person.role)) throw new Error("Choose a driver, or leave the job unassigned.");
+  return String(person.id);
 }
 
 function freeFleetIfIdle(fleetVehicleId: string) {
@@ -253,48 +241,28 @@ function releaseReservations(claimId: string, keepFleetId: string | null) {
   }
 }
 
-function snapshotRate(claimId: string): number | null {
-  const claim = claimRow(claimId);
-  if (!claim) return null;
-  return standardDailyRatePence(claim.gta_group, getGtaMarkupPercent());
+/** The Settings rate for the group charged on this file, or null when there is no group or no rate. */
+function settingsRate(claimId: string): { ratePence: number | null; group: string | null } {
+  const group = groupChargedFor(claimId);
+  return { ratePence: standardDailyRatePence(group, getGtaMarkupPercent()), group };
 }
 
-function ensurePackDraft(claimId: string, address: string, ratePence: number | null, actorId: string) {
-  const existing = get<{ daily_rate_pence: number | null }>(
-    `SELECT daily_rate_pence FROM hire_pack_data WHERE claim_id = ?`,
-    [claimId],
+function ensurePackRow(claimId: string) {
+  const existing = get<{ claim_id: string }>(`SELECT claim_id FROM hire_pack_data WHERE claim_id = ?`, [claimId]);
+  if (!existing) run(`INSERT INTO hire_pack_data(claim_id, updated_at) VALUES (?, ?)`, [claimId, nowUtcIso()]);
+}
+
+function syncPackDraft(claimId: string, address: string, ratePence: number | null) {
+  ensurePackRow(claimId);
+  run(
+    `UPDATE hire_pack_data
+     SET delivery_address = CASE WHEN ? != '' THEN ? ELSE delivery_address END,
+         daily_rate_pence = COALESCE(?, daily_rate_pence),
+         daily_rate_manual = CASE WHEN ? IS NOT NULL THEN 0 ELSE daily_rate_manual END,
+         updated_at = ?
+     WHERE claim_id = ?`,
+    [address, address, ratePence, ratePence, nowUtcIso(), claimId],
   );
-  const now = nowUtcIso();
-  if (!existing) {
-    run(
-      `INSERT INTO hire_pack_data(claim_id, delivery_address, daily_rate_pence, updated_at) VALUES (?, ?, ?, ?)`,
-      [claimId, address, ratePence, now],
-    );
-  } else {
-    const keepRate = Number(existing.daily_rate_pence || 0) > 0;
-    run(
-      `UPDATE hire_pack_data
-       SET delivery_address = CASE WHEN ? != '' THEN ? ELSE delivery_address END,
-           daily_rate_pence = CASE WHEN ? = 1 THEN daily_rate_pence ELSE COALESCE(?, daily_rate_pence) END,
-           updated_at = ?
-       WHERE claim_id = ?`,
-      [address, address, keepRate ? 1 : 0, ratePence, now, claimId],
-    );
-  }
-  const pack = getHirePack(claimId);
-  const missing = pack?.missing || [];
-  recordClaimEvent({
-    claimId,
-    eventType: "hire_pack_draft",
-    occurredAt: now,
-    actorId,
-    details:
-      missing.length > 0
-        ? `Hire pack draft saved. Still missing: ${missing.join(", ")}.`
-        : "Hire pack draft saved. The details on the file are filled in.",
-    source: "staff",
-  });
-  return missing;
 }
 
 function upsertJob(input: {
@@ -305,6 +273,7 @@ function upsertJob(input: {
   plannedAt: string;
   place: string;
   actorId: string;
+  assigneeId: string | null;
 }): string {
   const existing = get<{ id: string }>(
     `SELECT id FROM day_assignments
@@ -317,7 +286,7 @@ function upsertJob(input: {
       `UPDATE day_assignments
        SET hire_episode_id = ?, work_date = ?, planned_at = ?, place_text = ?, assignee_id = ?
        WHERE id = ?`,
-      [input.episodeId, input.workDate, input.plannedAt, input.place, driverStaffId(), existing.id],
+      [input.episodeId, input.workDate, input.plannedAt, input.place, input.assigneeId, existing.id],
     );
     return String(existing.id);
   }
@@ -328,7 +297,7 @@ function upsertJob(input: {
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
-      driverStaffId(),
+      input.assigneeId,
       input.kind,
       input.claimId,
       input.episodeId,
@@ -359,12 +328,17 @@ export function saveHireNeed(input: {
     if (started && input.choice !== "yes") throw new Error("Hire has already started.");
     const reason = input.reason.trim();
     if (input.choice === "not_needed" && !reason) throw new Error("A reason is required when hire is not needed.");
+    if (reason.length > 1000) throw new Error("Keep the reason short.");
     const details =
       input.choice === "yes"
-        ? "Replacement vehicle: yes."
+        ? `Replacement vehicle: yes.${reason ? ` Why: ${reason}` : ""}`
         : input.choice === "not_yet"
           ? "Replacement vehicle: not yet. Client keeps own car for now."
           : `Replacement vehicle: no. Reason: ${reason}`;
+    if (input.choice === "yes" && reason) {
+      ensurePackRow(input.claimId);
+      run(`UPDATE hire_pack_data SET need_reason = ?, updated_at = ? WHERE claim_id = ?`, [reason, nowUtcIso(), input.claimId]);
+    }
     if (input.choice !== "yes") {
       const held = all<{ fleet_vehicle_id: string }>(
         `SELECT fleet_vehicle_id FROM reservations WHERE claim_id = ? AND status IN ('reserved', 'active')
@@ -410,6 +384,7 @@ export function chooseHireCar(input: {
   actorId: string;
   submitKey: string;
   expectedVersion?: string;
+  driverId?: string | null;
 }) {
   return once(input.submitKey, () => {
     const claim = claimRow(input.claimId);
@@ -422,13 +397,14 @@ export function chooseHireCar(input: {
     if (parseHireNeed(decision?.details) !== "yes") throw new Error("Say that hire is needed before choosing a car.");
     const clock = deliveryClock(input.date, input.time);
     const endAt = requireLondonDateTime(`${clock.endDay}T23:59`);
-    const car = fleetCars().find((item) => item.id === input.fleetVehicleId);
+    const assigneeId = input.method === "deliver" ? chosenDriver(input.driverId) : null;
+    const availability = fleetAvailability({ startAt: clock.at, endAt, ignoreClaimId: input.claimId }).find(
+      (row) => row.carId === input.fleetVehicleId,
+    );
+    if (!availability || availability.state === "removed") throw new Error("That car is not on the fleet.");
+    if (!availability.free) throw new Error(carNotFreeMessage(availability));
+    const car = fleetCarDetails().get(input.fleetVehicleId);
     if (!car) throw new Error("That car is not on the fleet.");
-    if (car.status === "maintenance" || car.status === "off_road" || car.status === "sold" || car.removed) {
-      throw new Error("That car is not available.");
-    }
-    const clash = clashReference(input.fleetVehicleId, input.claimId, clock.at, endAt);
-    if (clash) throw new Error(hireClashMessage(clash));
     touchFleetVersion({
       fleetVehicleId: input.fleetVehicleId,
       actorId: input.actorId,
@@ -454,22 +430,29 @@ export function chooseHireCar(input: {
     const openEpisode = current && !current.collection_at && !current.billing_end_at ? current : null;
     const previousFleet = openEpisode?.fleet_vehicle_id ? String(openEpisode.fleet_vehicle_id) : null;
     const creditHire = claim.claim_type === "fault" ? 0 : 1;
-    const rate = openEpisode?.started_at ? Number(openEpisode.rate_pence_per_day || 0) || null : snapshotRate(input.claimId);
+    // A rate already stored on this hire is kept. Settings is read only when there is none yet.
+    const storedRate = Number(openEpisode?.rate_pence_per_day) > 0 ? Number(openEpisode?.rate_pence_per_day) : null;
+    const fresh = creditHire && !storedRate ? settingsRate(input.claimId) : { ratePence: null, group: null };
+    const takenOn = londonTodayIso();
     let episodeId = "";
     if (!openEpisode) {
       episodeId = newId("he");
       run(
         `INSERT INTO hire_episodes(
-          id, claim_id, fleet_vehicle_id, started_at, like_for_like, suitability_reason, credit_hire, rate_pence_per_day
-        ) VALUES (?, ?, ?, NULL, 0, '', ?, ?)`,
-        [episodeId, input.claimId, input.fleetVehicleId, creditHire, rate],
+          id, claim_id, fleet_vehicle_id, started_at, like_for_like, suitability_reason, credit_hire, rate_pence_per_day, rate_taken_on, rate_group
+        ) VALUES (?, ?, ?, NULL, 0, '', ?, ?, ?, ?)`,
+        [episodeId, input.claimId, input.fleetVehicleId, creditHire, fresh.ratePence, fresh.ratePence ? takenOn : null, fresh.ratePence ? fresh.group : null],
       );
     } else {
       episodeId = String(openEpisode.id);
-      run(
-        `UPDATE hire_episodes SET fleet_vehicle_id = ?, credit_hire = ?, rate_pence_per_day = COALESCE(?, rate_pence_per_day) WHERE id = ?`,
-        [input.fleetVehicleId, creditHire, openEpisode.started_at ? null : rate, episodeId],
-      );
+      run(`UPDATE hire_episodes SET fleet_vehicle_id = ?, credit_hire = ? WHERE id = ?`, [input.fleetVehicleId, creditHire, episodeId]);
+      if (fresh.ratePence) {
+        run(
+          `UPDATE hire_episodes SET rate_pence_per_day = ?, rate_taken_on = ?, rate_group = ?
+           WHERE id = ? AND (rate_pence_per_day IS NULL OR rate_pence_per_day <= 0)`,
+          [fresh.ratePence, takenOn, fresh.group, episodeId],
+        );
+      }
     }
     releaseReservations(input.claimId, input.fleetVehicleId);
     if (previousFleet && previousFleet !== input.fleetVehicleId) freeFleetIfIdle(previousFleet);
@@ -478,7 +461,7 @@ export function chooseHireCar(input: {
        WHERE claim_id = ? AND fleet_vehicle_id = ? AND status IN ('reserved', 'active') LIMIT 1`,
       [input.claimId, input.fleetVehicleId],
     );
-    let reservationId = same ? String(same.id) : newId("res");
+    const reservationId = same ? String(same.id) : newId("res");
     const kind = creditHire ? "hire" : "courtesy";
     if (same) {
       run(`UPDATE reservations SET start_at = ?, end_at = ?, kind = ?, charges_started = 0 WHERE id = ?`, [
@@ -491,8 +474,18 @@ export function chooseHireCar(input: {
       run(
         `INSERT INTO reservations(
           id, fleet_vehicle_id, claim_id, start_at, end_at, kind, status, charges_started, created_by, created_at
-        ) VALUES (?, ?, ?, ?, ?, ?, 'reserved', 0, ?, ?)`,
-        [reservationId, input.fleetVehicleId, input.claimId, clock.at, endAt, kind, input.actorId, nowUtcIso()],
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+        [
+          reservationId,
+          input.fleetVehicleId,
+          input.claimId,
+          clock.at,
+          endAt,
+          kind,
+          openEpisode?.started_at ? "active" : "reserved",
+          input.actorId,
+          nowUtcIso(),
+        ],
       );
     }
     const fleetStatus = openEpisode?.started_at ? "on_hire" : "reserved";
@@ -510,12 +503,26 @@ export function chooseHireCar(input: {
         plannedAt: clock.at,
         place,
         actorId: input.actorId,
+        assigneeId,
       });
     } else {
       cancelOpenJobs(input.claimId, "hire_delivery");
     }
-    const missing = claim.claim_type === "fault" ? [] : ensurePackDraft(input.claimId, place, rate, input.actorId);
+    const rate = storedRate || fresh.ratePence;
+    if (creditHire) syncPackDraft(input.claimId, place, rate);
     const label = [car.make, car.model, car.registration].filter(Boolean).join(" ");
+    const driverName = assigneeId ? String(get<{ name: string }>(`SELECT name FROM staff WHERE id = ?`, [assigneeId])?.name || "") : "";
+    const rateWords = !creditHire
+      ? ""
+      : storedRate
+        ? ""
+        : fresh.ratePence
+          ? ` Daily rate ${formatGbp(fresh.ratePence)} stored from Settings for group ${fresh.group}.`
+          : " Daily rate missing: set the group charged.";
+    const how =
+      input.method === "deliver"
+        ? `delivery${driverName ? ` by ${driverName}` : ", driver not yet chosen"}`
+        : "client collection";
     recordClaimEvent({
       claimId: input.claimId,
       eventType: openEpisode?.started_at ? "hire_vehicle_changed" : "hire_vehicle_reserved",
@@ -523,10 +530,60 @@ export function chooseHireCar(input: {
       actorId: input.actorId,
       details: openEpisode?.started_at
         ? `Hire car changed to ${label}. The hire start date was not changed. Charges follow the original handover.`
-        : `Reserved ${label} for ${input.method === "deliver" ? "delivery" : "client collection"} on ${formatUkDate(clock.day)}. A reservation does not start hire charges.${missing.length ? ` Pack draft still missing: ${missing.join(", ")}.` : ""}`,
+        : `Reserved ${label} for ${how} on ${formatUkDateTime(clock.at)}. A reservation does not start hire charges.${rateWords}`,
       source: "staff",
     });
-    return { reservationId, episodeId, jobId, missing };
+    return { reservationId, episodeId, jobId, missing: agreementMandatoryGaps(input.claimId).map((gap) => gap.label) };
+  });
+}
+
+/**
+ * Stores the daily rate for the group charged, from Settings, on this hire with today's date.
+ * A rate already stored is not changed once the agreement has been produced or the car handed over.
+ */
+export function setHireDailyRate(input: { claimId: string; group: string; actorId: string; submitKey: string }) {
+  return once(input.submitKey, () => {
+    const claim = claimRow(input.claimId);
+    if (!claim) throw new Error("File not found.");
+    if (claim.claim_type === "fault") throw new Error("A courtesy car has no daily rate.");
+    const episode = currentHireEpisode(input.claimId);
+    if (!episode?.fleet_vehicle_id) throw new Error("Choose a car first. The daily rate is stored on the hire.");
+    const agreements = Number(
+      get<{ n: number }>(`SELECT COUNT(*) AS n FROM documents WHERE claim_id = ? AND template_key = 'hire_agreement'`, [input.claimId])?.n || 0,
+    );
+    const hasRate = Number(episode.rate_pence_per_day) > 0;
+    if (hasRate && (episode.started_at || agreements > 0)) {
+      throw new Error("The daily rate is already stored on this hire. It is not changed after the agreement or the handover.");
+    }
+    const group = normaliseGtaGroup(input.group);
+    if (!group) throw new Error("Choose the group charged.");
+    const ratePence = standardDailyRatePence(group, getGtaMarkupPercent());
+    if (!ratePence) throw new Error("Settings has no daily rate for that group. Set the daily rate in Settings.");
+    const takenOn = londonTodayIso();
+    ensurePackRow(input.claimId);
+    run(
+      `UPDATE hire_pack_data SET group_charged = ?, daily_rate_pence = ?, daily_rate_manual = 0, updated_at = ? WHERE claim_id = ?`,
+      [group, ratePence, nowUtcIso(), input.claimId],
+    );
+    run(`UPDATE hire_episodes SET rate_pence_per_day = ?, rate_taken_on = ?, rate_group = ? WHERE id = ?`, [
+      ratePence,
+      takenOn,
+      group,
+      episode.id,
+    ]);
+    run(
+      `UPDATE agreements SET rate_pence_per_day = ? WHERE hire_episode_id = ? AND (rate_pence_per_day IS NULL OR rate_pence_per_day <= 0)`,
+      [ratePence, episode.id],
+    );
+    recordClaimEvent({
+      claimId: input.claimId,
+      eventType: "other",
+      occurredAt: nowUtcIso(),
+      actorId: input.actorId,
+      details: `Daily rate ${formatGbp(ratePence)} stored on this hire from Settings for group ${group}, on ${formatUkDate(takenOn)}. A later change to Settings does not change it.`,
+      source: "staff",
+    });
+    return { ratePence, group };
   });
 }
 
@@ -567,6 +624,8 @@ export function completeHireHandover(input: {
   actorId: string;
   submitKey: string;
   conditionNote?: string;
+  signedCopy?: { buffer: Buffer; filename: string; mimeType: string } | null;
+  overrideReason?: string;
 }) {
   return once(input.submitKey, () => {
     if (!activeReservationFor(input.claimId)) {
@@ -587,7 +646,12 @@ export function completeHireHandover(input: {
       [input.claimId],
     );
     if (!episode) throw new Error("Choose a car before the handover. Use Choose a car on the Hire tab.");
-    const blocked = hireAgreementPrehireBlock(input.claimId, { asAtYmd: clock.day, purpose: "handover" });
+    const signedCopy = input.signedCopy ? readSignedUpload(input.signedCopy) : null;
+    const overrideReason = String(input.overrideReason || "").trim();
+    if (!signedCopy && overrideReason && !signedHireAgreementOnFile(input.claimId)) {
+      recordSignedAgreementOverride({ claimId: input.claimId, actorId: input.actorId, reason: overrideReason });
+    }
+    const blocked = hireHandoverBlock(input.claimId, { asAtYmd: clock.day, signedCopyComing: Boolean(signedCopy) });
     if (blocked) throw new Error(blocked);
     const saved = recordVehicleHandover({
       claimId: input.claimId,
@@ -608,7 +672,27 @@ export function completeHireHandover(input: {
       actorId: input.actorId,
       hireEpisodeId: String(episode.id),
     });
+    if (signedCopy) storeSignedHireAgreement({ claimId: input.claimId, actorId: input.actorId, file: signedCopy, startDay: clock.day });
+    // The car has been handed over, so the delivery job is done, by the person who did it.
+    run(
+      `UPDATE day_assignments SET completed_at = ?, actual_driver_id = ?, actual_occurred_at = ?
+       WHERE claim_id = ? AND job_kind = 'hire_delivery' AND cancelled_at IS NULL AND completed_at IS NULL`,
+      [nowUtcIso(), input.driverId, clock.at, input.claimId],
+    );
     return { handoverId: saved.id, startedAt: started.startedAt, already: started.already };
+  });
+}
+
+/** Signed copy uploaded after the hire has started, for example on a file handed over before this rule. */
+export function uploadSignedHireAgreement(input: {
+  claimId: string;
+  actorId: string;
+  submitKey: string;
+  file: { buffer: Buffer; filename: string; mimeType: string };
+}) {
+  return once(input.submitKey, () => {
+    if (!currentHireEpisode(input.claimId)?.fleet_vehicle_id) throw new Error("Choose a car first.");
+    return storeSignedHireAgreement({ claimId: input.claimId, actorId: input.actorId, file: input.file });
   });
 }
 
@@ -641,6 +725,7 @@ export function arrangeHireCollection(input: {
       plannedAt: clock.at,
       place,
       actorId: input.actorId,
+      assigneeId: defaultDriverId(),
     });
     recordClaimEvent({
       claimId: input.claimId,
@@ -673,6 +758,10 @@ function renewalLine(startedAt: string | null, creditHire: boolean): { dayCount:
   return { dayCount, renewal };
 }
 
+/**
+ * The Hire tab. Filters left undefined use the client's own car (known transmission, at least its seats).
+ * A blank filter means no filter.
+ */
 export function loadHireArea(
   claimId: string,
   filters: { date?: string; transmission?: string; vehicleClass?: string; seats?: string } = {},
@@ -687,57 +776,56 @@ export function loadHireArea(
   const need = parseHireNeed(decision?.details);
   const creditHire = claim.claim_type !== "fault";
   const gaps = need === "yes" ? listHireGaps(claimId) : [];
-  const episode = get<{
-    id: string;
-    fleet_vehicle_id: string | null;
-    started_at: string | null;
-    rate_pence_per_day: number | null;
-    registration: string | null;
-    make: string | null;
-    model: string | null;
-  }>(
-    `SELECT he.id, he.fleet_vehicle_id, he.started_at, he.rate_pence_per_day,
-            v.registration, v.make, v.model
-     FROM hire_episodes he
-     LEFT JOIN fleet_vehicles fv ON fv.id = he.fleet_vehicle_id
-     LEFT JOIN vehicles v ON v.id = fv.vehicle_id
-     WHERE he.claim_id = ? AND he.fleet_vehicle_id IS NOT NULL
-     ORDER BY CASE WHEN he.collection_at IS NULL AND he.billing_end_at IS NULL THEN 0 ELSE 1 END,
-              CASE WHEN he.started_at IS NULL THEN 0 ELSE 1 END,
-              he.started_at DESC
-     LIMIT 1`,
-    [claimId],
-  );
+  const episode = currentHireEpisode(claimId);
   const reservation = activeReservationFor(claimId);
   const date = filters.date && /^\d{4}-\d{2}-\d{2}$/.test(filters.date) ? filters.date : londonTodayIso();
-  const endDay = agreementHoldEndDay(date);
-  const seats = filters.seats && /^\d+$/.test(filters.seats) ? Number(filters.seats) : null;
-  const cars = suitableHireCars({
-    cars: fleetCars(),
-    occupied: occupations(),
-    startAt: date,
-    endAt: endDay,
-    ignoreClaimId: claimId,
-    client: {
-      transmission: claim.transmission,
-      seats: claim.seats == null ? null : Number(claim.seats),
-      vehicleClass: claim.vehicle_class,
-    },
-    transmission: filters.transmission || "",
-    vehicleClass: filters.vehicleClass || "",
-    minSeats: seats,
-  }).map((car) => ({
-    ...car,
-    label: [car.make, car.model, car.registration].filter(Boolean).join(" "),
-    version: sectionVersion("fleet", car.id),
-  }));
+  const used: HireCarFilters = {
+    date,
+    transmission: filters.transmission ?? knownTransmission(claim.transmission),
+    vehicleClass: filters.vehicleClass ?? "",
+    seats: filters.seats ?? (claim.seats ? String(claim.seats) : ""),
+  };
+  const wantTransmission = knownTransmission(used.transmission);
+  const wantSeats = /^\d+$/.test(used.seats) ? Number(used.seats) : null;
+  const wantClass = used.vehicleClass.trim().toLowerCase();
+  const details = fleetCarDetails();
+  const free = fleetAvailability({ startAt: date, endAt: agreementHoldEndDay(date), ignoreClaimId: claimId })
+    .filter((row) => row.free)
+    .map((row) => details.get(row.carId))
+    .filter((car): car is NonNullable<typeof car> => Boolean(car))
+    .map((car) => ({
+      ...car,
+      label: [car.make, car.model, car.registration].filter(Boolean).join(" "),
+      version: sectionVersion("fleet", car.id),
+    }))
+    .sort((a, b) => a.registration.localeCompare(b.registration, "en-GB", { numeric: true }));
+  const missingDetails = (car: HireCarChoice) => !knownTransmission(car.transmission) || car.seats == null;
+  const cars = free.filter((car) => {
+    if (missingDetails(car)) return false;
+    if (wantTransmission && knownTransmission(car.transmission) !== wantTransmission) return false;
+    if (wantSeats != null && (car.seats ?? 0) < wantSeats) return false;
+    if (wantClass && car.vehicleClass.trim().toLowerCase() !== wantClass) return false;
+    return true;
+  });
+  const carsMissingDetails = free.filter((car) => missingDetails(car) && (!wantClass || !car.vehicleClass || car.vehicleClass.trim().toLowerCase() === wantClass));
   const address = [claim.address_line1, claim.town, claim.postcode].filter(Boolean).join(", ");
-  const deliveryJob = get<{ id: string; work_date: string; planned_at: string | null; place_text: string | null }>(
-    `SELECT id, work_date, planned_at, place_text FROM day_assignments
-     WHERE claim_id = ? AND job_kind = 'hire_delivery' AND cancelled_at IS NULL AND completed_at IS NULL
-     ORDER BY created_at DESC LIMIT 1`,
+  const deliveryJob = get<{
+    id: string;
+    work_date: string;
+    planned_at: string | null;
+    place_text: string | null;
+    assignee_id: string | null;
+    assignee_name: string | null;
+  }>(
+    `SELECT a.id, a.work_date, a.planned_at, a.place_text, a.assignee_id, s.name AS assignee_name
+     FROM day_assignments a LEFT JOIN staff s ON s.id = a.assignee_id
+     WHERE a.claim_id = ? AND a.job_kind = 'hire_delivery' AND a.cancelled_at IS NULL AND a.completed_at IS NULL
+     ORDER BY a.created_at DESC LIMIT 1`,
     [claimId],
   );
+  const reservationRow = reservation
+    ? get<{ start_at: string }>(`SELECT start_at FROM reservations WHERE id = ?`, [reservation.id])
+    : undefined;
   const collection = get<{ id: string }>(
     `SELECT id FROM day_assignments
      WHERE claim_id = ? AND job_kind = 'hire_collection' AND cancelled_at IS NULL AND completed_at IS NULL
@@ -748,8 +836,8 @@ export function loadHireArea(
     `SELECT id FROM vehicle_handovers WHERE claim_id = ? AND event_kind = 'hire_delivered' ORDER BY occurred_at DESC LIMIT 1`,
     [claimId],
   );
-  const pack = creditHire ? getHirePack(claimId) : null;
-  const count = renewalLine(episode?.started_at ? String(episode.started_at) : null, creditHire);
+  const startedAt = episode?.started_at ? String(episode.started_at) : null;
+  const count = renewalLine(startedAt, creditHire);
   const chosen = episode?.fleet_vehicle_id
     ? {
         fleetVehicleId: String(episode.fleet_vehicle_id),
@@ -759,22 +847,32 @@ export function loadHireArea(
         reservationId: reservation ? String(reservation.id) : null,
       }
     : null;
-  const agreementCount = Number(
-    get<{ n: number }>(
-      `SELECT COUNT(*) AS n FROM documents WHERE claim_id = ? AND template_key = 'hire_agreement'`,
-      [claimId],
-    )?.n || 0,
+  const agreementRow = get<{ id: string; title: string | null; created_at: string }>(
+    `SELECT id, title, created_at FROM documents WHERE claim_id = ? AND template_key = 'hire_agreement'
+     ORDER BY created_at DESC, rowid DESC LIMIT 1`,
+    [claimId],
   );
+  const agreementCount = Number(
+    get<{ n: number }>(`SELECT COUNT(*) AS n FROM documents WHERE claim_id = ? AND template_key = 'hire_agreement'`, [claimId])?.n || 0,
+  );
+  const rate = hireRateLine(episode);
+  const rateMissing = creditHire && Boolean(chosen) && rate.ratePence == null;
+  const agreementGaps = creditHire && need === "yes" ? agreementMandatoryGaps(claimId) : [];
+  const signed = creditHire ? signedHireAgreementOnFile(claimId) : null;
+  const signedOverride = creditHire ? signedAgreementOverride(claimId) : null;
   const base = `/claims/${claimId}/hire`;
   let next = { label: "Hire needed?", href: `${base}#need` };
   if (need === "no") next = { label: "Hire not needed", href: `${base}#need` };
   else if (!need || need === "not_yet") next = { label: "Hire needed?", href: `${base}#need` };
   else if (!chosen) next = { label: "Choose a car", href: `${base}#car` };
+  else if (rateMissing) next = { label: "Set the daily rate", href: `${base}#rate` };
   else if (gaps.length) next = { label: "Pre-hire checks", href: `${base}#checks` };
-  else if (creditHire && agreementCount === 0 && !episode?.started_at) next = { label: "Hire pack", href: `${base}#pack` };
-  else if (!episode?.started_at) next = { label: "Handover", href: `${base}#handover` };
+  else if (creditHire && agreementCount === 0 && !startedAt) next = { label: "Produce the agreement", href: `${base}#pack` };
+  else if (!startedAt) next = { label: "Handover", href: `${base}#handover` };
   else next = { label: "On hire", href: `${base}#on-hire` };
-  const planned = deliveryJob?.planned_at ? toLondonDateTimeLocal(String(deliveryJob.planned_at)) : "";
+  const plannedAt = deliveryJob?.planned_at ? String(deliveryJob.planned_at) : reservationRow?.start_at ? String(reservationRow.start_at) : null;
+  const planned = plannedAt ? toLondonDateTimeLocal(plannedAt) : "";
+  const clientGroup = normaliseGtaGroup(claim.gta_group);
   return {
     claimId,
     fileReference: String(claim.file_reference),
@@ -787,16 +885,30 @@ export function loadHireArea(
     licenceNumber: String(claim.licence_number || ""),
     need,
     needReason: decision?.details?.match(/Reason:\s*(.+)$/i)?.[1]?.trim() || "",
+    hireReason: needReasonFor(claimId),
     checksDone: gaps.length === 0,
     gaps,
+    agreementGaps,
     agreementCount,
+    agreement: agreementRow
+      ? { id: String(agreementRow.id), title: String(agreementRow.title || "Hire agreement"), createdAt: String(agreementRow.created_at) }
+      : null,
+    signed,
+    signedOverride,
     windowDays: licenceCheckWindowDays(),
     chosen,
-    startedAt: episode?.started_at ? String(episode.started_at) : null,
+    startedAt,
     dayCount: count.dayCount,
     renewal: count.renewal,
-    ratePence: episode?.rate_pence_per_day ? Number(episode.rate_pence_per_day) : null,
+    ratePence: rate.ratePence,
+    rate,
+    rateMissing,
+    canChangeRate: creditHire && Boolean(chosen) && !startedAt && agreementCount === 0,
+    groupCharged: groupChargedFor(claimId),
+    clientGroup,
     cars,
+    carsMissingDetails,
+    filters: used,
     delivery: deliveryJob
       ? {
           method: "deliver",
@@ -804,21 +916,25 @@ export function loadHireArea(
           time: planned.length >= 16 ? planned.slice(11, 16) : "",
           address: String(deliveryJob.place_text || address),
           jobId: String(deliveryJob.id),
+          assigneeId: deliveryJob.assignee_id ? String(deliveryJob.assignee_id) : null,
+          assigneeName: deliveryJob.assignee_name ? String(deliveryJob.assignee_name) : null,
         }
       : chosen
-        ? { method: "collect", date, time: "", address, jobId: null }
+        ? {
+            method: "collect",
+            date: planned ? planned.slice(0, 10) : date,
+            time: planned.length >= 16 ? planned.slice(11, 16) : "",
+            address,
+            jobId: null,
+            assigneeId: null,
+            assigneeName: null,
+          }
         : null,
     collectionJobId: collection ? String(collection.id) : null,
     handoverId: handover ? String(handover.id) : null,
-    packMissing: pack?.missing ? [...pack.missing] : [],
     next,
     heldElsewhere: null,
   };
-}
-
-export function ratePreview(claimId: string): string {
-  const rate = snapshotRate(claimId);
-  return rate ? `${formatGbp(rate)} a day from Settings for this client's group` : "No group rate on Settings for this client's vehicle yet";
 }
 
 export { AGREEMENT_LENGTH_DAYS };

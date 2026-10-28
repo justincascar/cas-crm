@@ -70,6 +70,7 @@ const sample: ClaimSummaryModel = {
   insurerLine: "AXA · AX-CL-1002",
   statusLine: "Non-fault · Unroadworthy · Insurer Admitted",
   stageLine: "Repairs done and car returned · Waiting",
+  runningHref: null,
   runningText: "£79.00/day running",
   runningDaily: "£79.00/day",
   charges: [
@@ -195,7 +196,9 @@ describe("claim summary bar", () => {
       assert.match(frame, new RegExp(label));
     }
     assert.match(frame, /aria-current=\{active \? "page" : undefined\}/);
-    assert.match(frame, /flex-nowrap/);
+    // The tab row wraps on a narrow screen instead of scrolling sideways.
+    assert.match(frame, /flex-wrap/);
+    assert.doesNotMatch(frame, /flex-nowrap/);
     assert.doesNotMatch(frame, /overflow-x-auto/);
     assert.match(layout, /← All claims/);
     assert.match(layout, /href="\/claims"/);

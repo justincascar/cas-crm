@@ -324,7 +324,7 @@ export default async function SettingsPage({
           </p>
         </form>
       </section>
-      <section className="rounded-xl border border-line bg-card p-5">
+      <section id="gta-rate" className="scroll-mt-4 rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">GTA daily rate</h2>
         <p className="mt-1 text-sm text-slate">
           The daily rate on a hire agreement is the GTA ceiling for the client&apos;s own vehicle group, plus this markup.

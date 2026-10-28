@@ -347,6 +347,14 @@ export default async function DashboardPage({
                 {data.fleetMap.maintenance || 0}
               </Link>
             </li>
+            {data.fleetMap.check ? (
+              <li>
+                Records to check:{" "}
+                <Link href="/hire#records-to-check" className="font-semibold tabular text-overdue underline">
+                  {data.fleetMap.check}
+                </Link>
+              </li>
+            ) : null}
           </ul>
           {data.activeHireNote ? <p className="mt-3 text-xs text-slate">{data.activeHireNote}</p> : null}
           <p className="mt-4 text-xs text-slate">Reservation does not start charges. See Hire / Fleet.</p>

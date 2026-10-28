@@ -5,6 +5,7 @@ import { DatabaseSync } from "node:sqlite";
 import { describe, it } from "node:test";
 import { get, withDatabase } from "../src/lib/db/connection.ts";
 import { chooseHireCar, saveHireNeed } from "../src/lib/db/hire-choice.ts";
+import { TEST_LICENCE_NUMBER } from "./prehire-setup.ts";
 import { saveHirePack } from "../src/lib/db/hire-pack.ts";
 import { canReadDocument } from "../src/lib/db/jobs.ts";
 import { setLicenceCheckWindowDays } from "../src/lib/db/licence-window.ts";
@@ -48,6 +49,7 @@ function licence(claimId: string, checkedOn = londonTodayIso(), result: "ok" | "
       licenceExpiresOn: "2032-01-01",
       checkedOn,
       result,
+      licenceNumber: driver.licenceNumber ? undefined : TEST_LICENCE_NUMBER,
     });
   }
 }

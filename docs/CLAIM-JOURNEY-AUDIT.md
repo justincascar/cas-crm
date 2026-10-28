@@ -103,6 +103,8 @@ Five stages. Each later stage extends the same three journeys one step further: 
 
 **Stage 3 — licence and bank, done on 28 October 2026.** The Hire tab has a GOV.UK link, a short result, and an upload. The licence number is asked once on the client or driver record and reused. A bank-statement upload counts toward the check, or the client is recorded as having no bank account. The checks block the agreement and the handover, not the car or the draft pack. No live DVLA or bank connection is built. The CRM does not call DVLA. Known issues 24 and 25 are closed.
 
+**Stage 3b — hire fixes, done on 28 October 2026.** Only free cars are offered. The daily rate is stored at reservation. The agreement needs every mandatory item. Handover needs the signed copy on credit hire. Status wording follows the steps. Office staff have a Driver jobs list. See `docs/progress.md`.
+
 **Stage 4 — letters and the engineer.** The letter marks its step from the file. A fault file stops warning about an engineer. A total loss, once ticked, keeps the valuation steps. The journey test continues through that next step on each of the three files.
 
 **Stage 5 — money and the loose ends.** Payment requests stay blocked when bank details are missing and when the wording is not approved. Storage end stays a button someone has to press. A wrong claim address says “Claim not found”. TEST-0013’s two flags stay until a person clears them. The journey test continues until a safeguard stops it, and the test records that stop. It does not break the safeguard.
@@ -113,6 +115,14 @@ Five stages. Each later stage extends the same three journeys one step further: 
 25. **Closed 28 October 2026.** Bank statements sit on the Hire tab and on Financial circumstances, as the same stored file. An upload counts. So does a ticked explanation that the client has no bank account. A listed bank account still counts. A fault courtesy file does not ask for them.
 26. **Closed 27 October 2026.** Hire was split across several screens. It is now one Hire tab.
 27. **Closed 27 October 2026.** Choosing a car did not create a driver job. A delivery now creates one job for the driver login. Client collection does not.
+28. **Closed 28 October 2026.** Cars already out were offered on Choose a car. One availability rule now covers every place, and disagreements go on Fleet records to check.
+29. **Closed 28 October 2026.** An agreement was produced with no licence number and no daily rate. The rate is stored at reservation and the agreement is refused until every mandatory item is on the file.
+30. **Closed 28 October 2026.** A licence check saved without a licence number. The card now asks for it and refuses OK to drive without it.
+31. **Closed 28 October 2026.** Handover did not need the signed agreement. It now does on credit hire, with an authorised override.
+32. **Closed 28 October 2026.** The header note and claims-list position kept intake wording. Both now follow the steps.
+33. **Closed 28 October 2026.** Office staff had no list of driver jobs. Driver jobs lists them, and the driver is chosen at reservation.
+34. **Open.** CAS's real V5C cars appear on Choose a car under "Details missing". Question 6 in `docs/QUESTIONS-FOR-JUSTIN.md`.
+35. **Open.** TEST-0015's earlier licence check was saved without a licence number. It is kept as history. A new agreement would ask for the number.
 
 ## How to try hire on a demonstration file
 

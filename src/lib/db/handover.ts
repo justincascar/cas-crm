@@ -1,7 +1,7 @@
 import { canDoFieldJob, isOfficeRole } from "../auth/roles";
 import { formatUkDateTime, londonDateIso, nowUtcIso, requireLondonDateTime } from "../dates";
 import { activeReservationFor, startHireFromHandover } from "./hire-start";
-import { hireAgreementPrehireBlock } from "./prehire-checks";
+import { hireHandoverBlock, readSignedUpload, storeSignedHireAgreement } from "./hire-readiness";
 import { assertCanRecordHandover } from "./jobs";
 import { CHOOSE_CAR_BEFORE_HANDOVER } from "../domain/hire-availability";
 import { storeFileCopy } from "../storage/files";
@@ -620,7 +620,12 @@ export function attachHandoverScan(input: {
   return { incomplete: handoverIncomplete(slotsFor(row.id), row.shot_set) };
 }
 
-export function finishVehicleHandover(input: { claimId: string; handoverId: string; actorId: string }): { finishedAt: string } {
+export function finishVehicleHandover(input: {
+  claimId: string;
+  handoverId: string;
+  actorId: string;
+  signedCopy?: { buffer: Buffer; filename: string; mimeType: string } | null;
+}): { finishedAt: string } {
   const row = get<{ id: string; hire_episode_id: string | null; event_kind: string; finished_at: string | null; shot_set: string | null }>(
     `SELECT id, hire_episode_id, event_kind, finished_at, shot_set FROM vehicle_handovers WHERE id = ? AND claim_id = ?`,
     [input.handoverId, input.claimId],
@@ -634,12 +639,12 @@ export function finishVehicleHandover(input: { claimId: string; handoverId: stri
     throw new Error(`Take ${missing.map((shot) => shot.label).join(", ")} before finishing. Damage photographs are optional.`);
   }
   if (row.finished_at) return { finishedAt: row.finished_at };
+  const signedCopy = input.signedCopy ? readSignedUpload(input.signedCopy) : null;
+  let handoverDay: string | undefined;
   if (row.event_kind === "hire_delivered") {
     const when = get<{ occurred_at: string }>(`SELECT occurred_at FROM vehicle_handovers WHERE id = ?`, [row.id]);
-    const blocked = hireAgreementPrehireBlock(input.claimId, {
-      asAtYmd: when?.occurred_at ? londonDateIso(new Date(when.occurred_at)) : undefined,
-      purpose: "handover",
-    });
+    handoverDay = when?.occurred_at ? londonDateIso(new Date(when.occurred_at)) : undefined;
+    const blocked = hireHandoverBlock(input.claimId, { asAtYmd: handoverDay, signedCopyComing: Boolean(signedCopy) });
     if (blocked) throw new Error(blocked);
   }
   if (row.event_kind === "hire_delivered") {
@@ -670,6 +675,7 @@ export function finishVehicleHandover(input: { claimId: string; handoverId: stri
       actorId: staff.id,
       hireEpisodeId: row.hire_episode_id,
     });
+    if (signedCopy) storeSignedHireAgreement({ claimId: input.claimId, actorId: staff.id, file: signedCopy, startDay: handoverDay });
   }
   return { finishedAt };
 }

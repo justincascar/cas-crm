@@ -1113,6 +1113,16 @@ export function currentClaimStep(steps: ClaimStepView[]): ClaimStepView | null {
 }
 
 /** The open step supplies the next action. A typed note is kept beside it and does not replace it. */
+/**
+ * Wording the new-claim form used to store as a next action. It was step guidance, not a staff note,
+ * so it is never shown as a note. The step itself says what to do next.
+ */
+export const INTAKE_STEP_GUIDANCE = [
+  "Pre-hire checks and choose a vehicle",
+  "Arrange or confirm recovery and replacement transport",
+  "Review new file",
+];
+
 export function resolveDisplayedNextAction(input: {
   storedAction: string | null | undefined;
   storedDue: string | null | undefined;
@@ -1120,7 +1130,8 @@ export function resolveDisplayedNextAction(input: {
 }): DisplayedNextAction {
   void input.storedDue;
   const step = currentClaimStep(input.steps);
-  const note = String(input.storedAction || "").trim();
+  const stored = String(input.storedAction || "").trim();
+  const note = INTAKE_STEP_GUIDANCE.includes(stored) ? "" : stored;
   if (!step) {
     return { action: "No open step", dueAt: null, fromStaff: false, note: note || null };
   }

@@ -439,12 +439,9 @@ export async function createClaimFromIntake(input: IntakeInput) {
       normalizeRoadworthiness(input.roadworthiness),
       "New enquiry — intake captured",
       input.handlerId || "staff-sian",
-      input.needsReplacement
-        ? "Pre-hire checks and choose a vehicle"
-        : input.needsRecovery
-          ? "Arrange or confirm recovery and replacement transport"
-          : "Review new file",
-      now,
+      // The next action is read from the steps. Nothing is stored here as guidance.
+      null,
+      null,
       clientPerson.id,
       vehicleId,
       recoveryStatus,

@@ -9,6 +9,7 @@ import {
   generateHireAgreementDocument,
   prepareHireRating,
   renderHireAgreement,
+  renderHireAgreement as renderHireAgreementPage,
   type HireAgreementView,
 } from "../src/lib/db/hire-agreement.ts";
 import { saveHirePack } from "../src/lib/db/hire-pack.ts";
@@ -16,7 +17,21 @@ import { migrate } from "../src/lib/db/migrate.ts";
 import { seed } from "../src/lib/db/seed.ts";
 import { CAS_HIRE_TERMS_HTML } from "../src/lib/documents/cas-hire-terms.ts";
 import { standardDailyRatePence } from "../src/lib/documents/gta.ts";
-import { recordPassingPrehireChecks } from "./prehire-setup.ts";
+import { prepareAgreementItems, recordPassingPrehireChecks } from "./prehire-setup.ts";
+import { buildHireAgreementView } from "../src/lib/db/hire-agreement.ts";
+import { getHirePack } from "../src/lib/db/hire-pack.ts";
+
+/** The rate is taken from Settings when the car is reserved. These seeded hires stand in for that. */
+function storeHireRate(db: DatabaseSync, claimId: string, ratePence: number) {
+  db.prepare(`UPDATE hire_episodes SET rate_pence_per_day = ?, rate_taken_on = '2026-10-28' WHERE claim_id = ?`).run(ratePence, claimId);
+  prepareAgreementItems(claimId);
+}
+
+function composed(claimId: string) {
+  const pack = getHirePack(claimId);
+  if (!pack) throw new Error("No pack");
+  return renderHireAgreementPage(buildHireAgreementView(pack, "TEST-HA-000099", null));
+}
 
 const schema = fs.readFileSync(path.join(process.cwd(), "src/lib/db/schema.sql"), "utf8");
 
@@ -114,7 +129,8 @@ describe("hire agreement rating and the four-page document", () => {
         licence_issued_on: "2012-03-02",
         licence_expires_on: "2032-03-02",
       });
-      const result = generateHireAgreementDocument("c3", "staff-tom", rating.dailyRatePence);
+      storeHireRate(db, "c3", rating.dailyRatePence);
+      const result = generateHireAgreementDocument("c3", "staff-tom");
       const html = db.prepare(`SELECT body_html, document_type, template_key FROM documents WHERE id = ?`).get(result.documentId) as {
         body_html: string;
         document_type: string;
@@ -159,7 +175,8 @@ describe("hire agreement rating and the four-page document", () => {
       assert.equal(rating.groupCharged, "S3");
       assert.equal(rating.dailyRatePence, 6653);
       saveHirePack("c3", { group_charged: "S3", daily_rate_pence: 6653, daily_rate_manual: 0 });
-      const result = generateHireAgreementDocument("c3", "staff-tom", 6653);
+      storeHireRate(db, "c3", 6653);
+      const result = generateHireAgreementDocument("c3", "staff-tom");
       const html = String((db.prepare(`SELECT body_html FROM documents WHERE id = ?`).get(result.documentId) as { body_html: string }).body_html);
       assert.match(html, /higher-group vehicle is being supplied \(S7\)/);
       assert.match(html, /client's own group \(S3\)/);
@@ -190,7 +207,8 @@ describe("hire agreement rating and the four-page document", () => {
         daily_rate_manual: 0,
         group_override_reason: "Insurer asked for the higher group on this file",
       });
-      const result = generateHireAgreementDocument("c3", "staff-justin", rating.dailyRatePence);
+      storeHireRate(db, "c3", rating.dailyRatePence);
+      const result = generateHireAgreementDocument("c3", "staff-justin");
       const html = String((db.prepare(`SELECT body_html FROM documents WHERE id = ?`).get(result.documentId) as { body_html: string }).body_html);
       assert.match(html, /above normal CAS policy/);
       assert.match(html, /Insurer asked for the higher group on this file/);
@@ -235,9 +253,10 @@ describe("hire agreement rating and the four-page document", () => {
       recordPassingPrehireChecks("c1");
       recordPassingPrehireChecks("c2");
       db.prepare(`UPDATE people SET licence_number = 'DAF000000AB9CD' WHERE id = 'p-daf'`).run();
-      assert.throws(() => generateHireAgreementDocument("c4", "staff-megan", 0), /courtesy car/);
+      assert.throws(() => generateHireAgreementDocument("c4", "staff-megan"), /courtesy car/);
       db.prepare(`UPDATE claims SET claim_type = 'non_fault' WHERE id = 'c4'`).run();
-      const hireOnly = generateHireAgreementDocument("c4", "staff-megan", 0);
+      storeHireRate(db, "c4", 6653);
+      const hireOnly = generateHireAgreementDocument("c4", "staff-megan");
       const hireHtml = String((db.prepare(`SELECT body_html FROM documents WHERE id = ?`).get(hireOnly.documentId) as { body_html: string }).body_html);
       assert.match(hireHtml, /Hire Agreement — 1 of 3/);
       assert.match(hireHtml, /Hire Agreement — 3 of 3/);
@@ -251,12 +270,9 @@ describe("hire agreement rating and the four-page document", () => {
       assert.equal(hireHtml.includes("<h2>Storage &amp; Recovery Agreement</h2>"), false);
 
       db.prepare(`DELETE FROM hire_episodes WHERE claim_id = 'c3'`).run();
-      const storageOnly = generateHireAgreementDocument("c3", "staff-tom", null);
-      const storageRow = db.prepare(`SELECT title, body_html FROM documents WHERE id = ?`).get(storageOnly.documentId) as {
-        title: string;
-        body_html: string;
-      };
-      assert.match(storageRow.title, /Hire Agreement/);
+      // With no car on the file the final agreement is refused. The page layout is still checked from the same view.
+      assert.throws(() => generateHireAgreementDocument("c3", "staff-tom"), /Still needed: .*hire car/);
+      const storageRow = { body_html: composed("c3") };
       assert.match(storageRow.body_html, /Hire Agreement — 1 of 3/);
       assert.match(storageRow.body_html, /Hire Agreement — 3 of 3/);
       assert.match(storageRow.body_html, /89 days from the date of this agreement/);
@@ -266,8 +282,8 @@ describe("hire agreement rating and the four-page document", () => {
       assert.equal(storageRow.body_html.includes("Driver details"), false);
       assert.equal(storageRow.body_html.includes("Hire Agreement — 4 of"), false);
 
-      const neither = generateHireAgreementDocument("c1", "staff-sian", null);
-      const neitherHtml = String((db.prepare(`SELECT body_html FROM documents WHERE id = ?`).get(neither.documentId) as { body_html: string }).body_html);
+      assert.throws(() => generateHireAgreementDocument("c1", "staff-sian"), /Still needed: .*hire car/);
+      const neitherHtml = composed("c1");
       assert.match(neitherHtml, /Hire Agreement — 1 of 2/);
       assert.match(neitherHtml, /Hire Agreement — 2 of 2/);
       assert.match(neitherHtml, /89 days from the date of this agreement/);
@@ -275,8 +291,8 @@ describe("hire agreement rating and the four-page document", () => {
       assert.equal(neitherHtml.includes("Driver details"), false);
       assert.equal(neitherHtml.includes("<h2>Storage &amp; Recovery Agreement</h2>"), false);
 
-      const reserved = generateHireAgreementDocument("c2", "staff-sian", null);
-      const reservedHtml = String((db.prepare(`SELECT body_html FROM documents WHERE id = ?`).get(reserved.documentId) as { body_html: string }).body_html);
+      assert.throws(() => generateHireAgreementDocument("c2", "staff-sian"), /Still needed/);
+      const reservedHtml = composed("c2");
       assert.match(reservedHtml, /reserving a vehicle does not allocate it/);
       assert.match(reservedHtml, /Notice of the Right to Cancel/);
       assert.match(reservedHtml, /89 days from the date of this agreement/);
@@ -289,9 +305,10 @@ describe("hire agreement rating and the four-page document", () => {
     const db = prepared();
     withDatabase(db, () => {
       recordPassingPrehireChecks("c4");
-      assert.throws(() => generateHireAgreementDocument("c4", "staff-megan", 0), /courtesy car/);
+      assert.throws(() => generateHireAgreementDocument("c4", "staff-megan"), /courtesy car/);
       db.prepare(`UPDATE claims SET claim_type = 'non_fault', recovery_status = 'required', storage_status = 'none', storage_started_on = NULL WHERE id = 'c4'`).run();
-      const result = generateHireAgreementDocument("c4", "staff-megan", 0);
+      storeHireRate(db, "c4", 6653);
+      const result = generateHireAgreementDocument("c4", "staff-megan");
       const html = String((db.prepare(`SELECT body_html FROM documents WHERE id = ?`).get(result.documentId) as { body_html: string }).body_html);
       assert.match(html, /The Storage &amp; Recovery page is not included/);
       assert.match(html, /marked as required, but it has not been arranged through CAS/);

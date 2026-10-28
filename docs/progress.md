@@ -960,3 +960,29 @@ Choosing a car still only reserves it. Hire and charges still start at the compl
 
 Finish on 28 October 2026: 539 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 68 passed, 0 failed, database unchanged on open. Journey checks passed on their own database, including the new hire checks. No live email was sent. `EMAIL_SEND_MODE` stays `simulate`. TEST-0001’s stored override was not rewritten. TEST-0005’s storage end was not confirmed. TEST-0009’s vehicle-damage offers, TEST-0006’s money, and TEST-0007’s £800 were not changed.
 
+
+## Hire fixes after the reviewer's walk-through (28 October 2026)
+
+Reviewer tested f5c0ffe as Sian on TEST-0015, TEST-0016 and TEST-0017. These decisions replace the earlier wording where they differ.
+
+**One availability rule.** A car is not free for a date if it has an open booking or hire on that date, if it has a booking or hire that has not been returned or closed (whatever its planned end), or if its fleet status is on hire, reserved, maintenance, off road or sold. Choose a car, the server reserve check, a swap, a staff booking on Hire / Fleet and the dashboard fleet counts all use `fleetAvailability` (`src/lib/db/fleet-availability.ts`). Where the status and the bookings disagree, the data is not changed. The car is held back and listed on **Fleet records to check** on Hire / Fleet. A person can confirm an overdue booking is still with the customer, close a booking that was never handed over, or open the car or the file. Confirmed collection now closes that file's booking and marks the car available if nothing else holds it.
+
+**Daily rate.** Reserving a car stores the Settings rate for the group charged (the pack's group, otherwise the client's own group) on the hire, with the date it was taken and the group. Later Settings changes do not change it. The agreement uses that stored rate. If there is no group, the Hire tab says "Daily rate missing" and asks for the group charged. No rate is invented. A stored rate can be taken again only before the agreement and the handover.
+
+**Final agreement.** Refused until the file has the hirer's name, address and date of birth, licence number and expiry, the car, a planned handover date, the daily rate, the group charged and why a hire car is needed. Each missing item is listed with a link. The pack fields can still be saved as a draft with gaps. There is one Produce button.
+
+**Licence check.** If the person has no licence number, the check card asks for it. It is saved to that person's record. The check cannot be saved as OK to drive without it. The expiry on the check fills the person's licence expiry if it was blank.
+
+**Handover (reversible, needs Justin's confirmation).** A credit-hire handover needs the daily rate and the signed hire agreement, uploaded on the handover form or the driver's handover page (a photograph is fine). It is filed as "Signed hire agreement", agreement 1 is recorded as signed at the stored rate, and the signed date is the upload. An account with `overridePreHireChecks` can hand over without it, with a reason kept on the file. A fault courtesy car needs neither. Completing the handover on the Hire tab also marks the delivery job done.
+
+**Status wording.** The new-claim form no longer stores step guidance as a next action. Old intake guidance is not shown as a note. The claims list position and next action come from the steps, the same as the claim page.
+
+**Driver jobs.** Office staff choose the driver when reserving a delivery (default: unassigned, shown clearly). Driver jobs (`/driver-jobs`) lists overdue deliveries, collections, recoveries and returns, then today to a month ahead, with the claim, type, address, time, driver and status. The office can change the driver there.
+
+**TEST-0015.** History left intact. The header and Hire tab say "Daily rate missing" with the fix form, and the signed-copy upload is offered. Nothing was deleted.
+
+**Screens.** Finished steps fold to one line with Change. The fault file shows no rate wording. History and messages use plain words. The claim tab row wraps. `check:pages` also checks 1024px.
+
+Questions are in `docs/QUESTIONS-FOR-JUSTIN.md`.
+
+Finish on 28 October 2026: 564 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 69 passed, 0 failed, no sideways scroll at 1280px or 1024px, database unchanged. Journey checks passed on their own database. `EMAIL_SEND_MODE` stays `simulate`.

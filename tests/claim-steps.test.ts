@@ -270,13 +270,17 @@ describe("claim steps from history", () => {
   it("keeps a staff next action and uses the step only when none is stored", () => {
     const steps = deriveClaimSteps(blank());
     const kept = resolveDisplayedNextAction({
-      storedAction: "Pre-hire checks and choose a vehicle",
+      storedAction: "Ring the garage about the courtesy car",
       storedDue: "2026-10-20T09:00:00.000Z",
       steps,
     });
     assert.equal(kept.action, "Record recovery");
     assert.equal(kept.fromStaff, false);
-    assert.equal(kept.note, "Pre-hire checks and choose a vehicle");
+    assert.equal(kept.note, "Ring the garage about the courtesy car");
+    // Guidance the old new-claim form stored is not a staff note, so it is not shown as one.
+    const guidance = resolveDisplayedNextAction({ storedAction: "Pre-hire checks and choose a vehicle", storedDue: null, steps });
+    assert.equal(guidance.note, null);
+    assert.equal(guidance.action, "Record recovery");
     const fallback = resolveDisplayedNextAction({ storedAction: "  ", storedDue: null, steps });
     assert.equal(fallback.fromStaff, false);
     assert.equal(fallback.note, null);

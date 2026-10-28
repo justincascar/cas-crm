@@ -75,6 +75,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
           checkedOn,
           result: String(form.get("result") || ""),
           notes: String(form.get("notes") || ""),
+          licenceNumber: String(form.get("licenceNumber") || ""),
         });
         if (file) {
           const doc = storeClaimDocument({
@@ -95,7 +96,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     recordClaimEvent({
       claimId: id,
       eventType: "other",
-      details: `Licence check recorded for ${saved.driverName}. Result: ${saved.result === "ok" ? "OK to drive" : "Problem found"}. No DVLA call was made.`,
+      details: `Licence check recorded for ${saved.driverName}. Result: ${saved.result === "ok" ? "OK to drive" : "Problem found"}.`,
       actorId: staff.id,
       occurredAt: nowUtcIso(),
       source: "staff",

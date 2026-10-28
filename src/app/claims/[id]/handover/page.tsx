@@ -28,6 +28,7 @@ import { handoverStaleLines } from "@/lib/domain/prehire-checks";
 import { licenceCheckWindowDays } from "@/lib/db/licence-window";
 import { listHireDrivers, listLicenceChecks } from "@/lib/db/prehire-checks";
 import { getClaim } from "@/lib/db/queries";
+import { signedAgreementOverride, signedHireAgreementOnFile } from "@/lib/db/hire-readiness";
 
 const field = "mt-1 w-full max-w-full rounded-md border border-line bg-white px-3 py-3 text-base";
 const scanAccept = "application/pdf,image/jpeg,image/png,image/webp,image/gif,text/plain,text/csv,text/html,text/xml,application/json,.pdf,.txt,.csv,.xml,.html,.json,.log";
@@ -67,7 +68,7 @@ function cameraOrFile(input: { cameraName: string; fileName: string; cameraLabel
   );
 }
 
-function guidedShots(claimId: string, handoverId: string, photos: HandoverPhoto[], shotSet: string) {
+function guidedShots(claimId: string, handoverId: string, photos: HandoverPhoto[], shotSet: string, needsSignedCopy = false) {
   const post = `/claims/${claimId}/handover/photo`;
   const damage = photos.filter((photo) => photo.slot === DAMAGE_SHOT);
   const progress = requiredShotProgress(photos.map((photo) => photo.slot), shotSet);
@@ -109,9 +110,24 @@ function guidedShots(claimId: string, handoverId: string, photos: HandoverPhoto[
       {progress.outstanding.length > 0 ? null : (
         <div id={`shot-${handoverId}-finish`} className="scroll-mt-4 rounded-md border border-ok/40 bg-[#eef6ee] p-3">
           <p className="text-sm">The {savedWord} photographs are saved. Damage photographs are optional.</p>
-          <form method="post" action={`/claims/${claimId}/handover/finish`} className="mt-3">
+          <form method="post" action={`/claims/${claimId}/handover/finish`} encType="multipart/form-data" className="mt-3 space-y-3">
             <input type="hidden" name="claimId" value={claimId} />
             <input type="hidden" name="handoverId" value={handoverId} />
+            {needsSignedCopy ? (
+              <div className="space-y-2" data-signed-agreement-needed>
+                <p className="text-sm font-medium">Signed hire agreement</p>
+                <p className="text-sm">Photograph the signed pages. Hire cannot start without them.</p>
+                <input
+                  name="signedAgreement"
+                  type="file"
+                  required
+                  accept="image/*,application/pdf"
+                  capture="environment"
+                  aria-label="Photograph the signed hire agreement"
+                  className={field}
+                />
+              </div>
+            ) : null}
             <button className="min-h-11 w-full rounded-md bg-navy px-4 py-3 text-base font-semibold text-white sm:w-auto" type="submit">
               Finish handover
             </button>
@@ -180,6 +196,8 @@ export async function HandoverScreen({
     recordedAt: row.recorded_at,
     result: row.result,
   }));
+  const needsSignedCopy =
+    String(claim.claim.claim_type || "") !== "fault" && !signedHireAgreementOnFile(id) && !signedAgreementOverride(id);
   const staleToday = handoverStaleLines({ drivers: hireUsers, checks: licenceSnapshots, asAtYmd: londonTodayIso(), windowDays });
 
   return (
@@ -305,7 +323,13 @@ export async function HandoverScreen({
             {record.conditionNote ? <p className="mt-2">{record.conditionNote}</p> : null}
             <div className="mt-4 space-y-3">
               <p className="text-sm font-medium">Photographs</p>
-              {guidedShots(id, record.id, record.photos, record.shotSet)}
+              {guidedShots(
+                id,
+                record.id,
+                record.photos,
+                record.shotSet,
+                record.eventKind === "hire_delivered" && needsSignedCopy,
+              )}
               <p className="text-xs text-slate">Taking a photograph stores it at once. It does not change the mileage or fuel already saved.</p>
             </div>
             {office ? <div className="mt-4 space-y-3 border-t border-line pt-4">

@@ -240,7 +240,9 @@ CREATE TABLE IF NOT EXISTS hire_episodes (
   credit_hire INTEGER NOT NULL DEFAULT 0,
   rate_pence_per_day INTEGER,
   exception_reason TEXT,
-  hire_end_proposed_on TEXT
+  hire_end_proposed_on TEXT,
+  rate_taken_on TEXT,
+  rate_group TEXT
 );
 
 CREATE TABLE IF NOT EXISTS agreements (
@@ -318,7 +320,7 @@ CREATE INDEX IF NOT EXISTS idx_vehicle_handover_scans ON vehicle_handover_scans(
 
 CREATE TABLE IF NOT EXISTS day_assignments (
   id TEXT PRIMARY KEY,
-  assignee_id TEXT NOT NULL REFERENCES staff(id),
+  assignee_id TEXT REFERENCES staff(id),
   job_kind TEXT NOT NULL,
   claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
   hire_episode_id TEXT REFERENCES hire_episodes(id) ON DELETE CASCADE,

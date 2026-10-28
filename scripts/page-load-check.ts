@@ -20,6 +20,8 @@ import { dbPath, get, withDatabase } from "../src/lib/db/connection.ts";
 import { databaseFingerprint, fingerprintChanges } from "../src/lib/db/database-fingerprint.ts";
 
 const CLAIM_ID = "c5";
+/** Every claim page must fit a 1280px laptop and a 1024px screen without sideways scroll. */
+const SCROLL_WIDTHS = [1280, 1024] as const;
 const HEAD_SCREENS = ["recovery", "storage", "hire", "vehicle"] as const;
 const CLAIM_TAB_PAGES: Array<{ name: string; path: string }> = [
   { name: "Claim overview (TEST-0008)", path: "/claims/c8" },
@@ -64,6 +66,7 @@ const PAGES: Array<{ name: string; path: string }> = [
   { name: "My jobs today", path: "/jobs" },
   { name: "Tasks", path: "/tasks" },
   { name: "Hire / Fleet", path: "/hire" },
+  { name: "Driver jobs", path: "/driver-jobs" },
   { name: "Documents", path: "/documents" },
   { name: "Communications", path: "/communications" },
   { name: "Financials", path: "/financials" },
@@ -283,12 +286,6 @@ async function measureClaimPages(origin: string, cookie: string): Promise<Array<
     const session = new BrowserSession(socket);
     await session.send("Page.enable");
     await session.send("Network.enable");
-    await session.send("Emulation.setDeviceMetricsOverride", {
-      width: 1280,
-      height: 800,
-      deviceScaleFactor: 1,
-      mobile: false,
-    });
     const cookieValue = cookie.slice(cookie.indexOf("=") + 1);
     await session.send("Network.setCookie", {
       name: SESSION_COOKIE,
@@ -297,6 +294,13 @@ async function measureClaimPages(origin: string, cookie: string): Promise<Array<
       path: "/",
     });
     const problems: Array<{ path: string; problem: string }> = [];
+    for (const width of SCROLL_WIDTHS) {
+    await session.send("Emulation.setDeviceMetricsOverride", {
+      width,
+      height: 800,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
     for (const page of CLAIM_TAB_PAGES) {
       const loaded = session.once("Page.loadEventFired");
       await session.send("Page.navigate", { url: `${origin}${page.path}` });
@@ -333,9 +337,10 @@ async function measureClaimPages(origin: string, cookie: string): Promise<Array<
       if (value.scrollWidth > value.clientWidth) {
         problems.push({
           path: page.path,
-          problem: `sideways scroll ${value.scrollWidth}px wider than ${value.clientWidth}px${value.overflow ? ` (${value.overflow})` : ""}`,
+          problem: `at ${width}px: sideways scroll ${value.scrollWidth}px wider than ${value.clientWidth}px${value.overflow ? ` (${value.overflow})` : ""}`,
         });
       }
+    }
     }
     socket.close();
     return problems;
@@ -450,16 +455,17 @@ async function main() {
       }
     }
     const sideways = await measureClaimPages(origin, cookie);
+    let scrollFailed = 0;
     for (const page of CLAIM_TAB_PAGES) {
-      const problem = sideways.find((item) => item.path === page.path);
-      if (problem) {
+      const found = sideways.filter((item) => item.path === page.path);
+      if (found.length) {
         failed += 1;
-        console.log(`FAIL  ${page.path}  ${page.name} sideways scroll  ${problem.problem}`);
+        scrollFailed += 1;
+        console.log(`FAIL  ${page.path}  ${page.name} sideways scroll  ${found.map((item) => item.problem).join("; ")}`);
       } else {
-        console.log(`PASS  ${page.path}  ${page.name} sideways scroll at 1280px`);
+        console.log(`PASS  ${page.path}  ${page.name} no sideways scroll at 1280px or 1024px`);
       }
     }
-    const scrollFailed = sideways.length;
     const databaseChanges = fingerprintChanges(beforePages, readFingerprint());
     if (databaseChanges.length > 0) {
       console.log(`FAIL  database changed while pages were opened: ${databaseChanges.join("; ")}`);
@@ -467,7 +473,7 @@ async function main() {
       console.log("PASS  database unchanged after opening every page");
     }
     console.log(
-      `${PAGES.length - (failed - scrollFailed)} passed, ${failed - scrollFailed} failed, ${CLAIM_TAB_PAGES.length - scrollFailed} claim pages fit 1280px, ${scrollFailed} scrolled sideways, database ${databaseChanges.length === 0 ? "unchanged" : "changed"}, port ${port}, email mode ${mode || "not set"}.`,
+      `${PAGES.length - (failed - scrollFailed)} passed, ${failed - scrollFailed} failed, ${CLAIM_TAB_PAGES.length - scrollFailed} claim pages fit 1280px and 1024px, ${scrollFailed} scrolled sideways, database ${databaseChanges.length === 0 ? "unchanged" : "changed"}, port ${port}, email mode ${mode || "not set"}.`,
     );
     if (failed > 0 || databaseChanges.length > 0) {
       console.error(serverLog.trim());

@@ -6,12 +6,13 @@ import { accidentDateError, isBeforeLondonDay, isSameLondonDay, londonDateIso, l
 import { dueWording } from "../domain/due-wording";
 import { claimedFigureIsConfirmed, summariseHeads } from "../domain/head-outstanding";
 import { blankDeskItem, todaysWorkRows, type DeskWorkItem, type TodaysWorkRow } from "../domain/todays-work";
-import { currentClaimStep, deriveClaimSteps } from "../domain/claim-steps";
+import { currentClaimStep, deriveClaimSteps, stepStageLabel } from "../domain/claim-steps";
 import { formatGbp, sumDistinctHeads } from "../money";
 import { all, dbPath, get, getDb, newId, resetSqlStatementCount, run, sqlStatementCount } from "./connection";
 import { touchFleetVersion } from "./fleet";
 import { withImmediateTransaction } from "./record-version";
-import { canReserveVehicle, chaseFileStateFromPosition, chaseStopReason, nextFileReference, parseFileReferenceNumber } from "../domain/rules";
+import { assertFleetCarFree, fleetCountsToday } from "./fleet-availability";
+import { chaseFileStateFromPosition, chaseStopReason, nextFileReference, parseFileReferenceNumber } from "../domain/rules";
 import { listClaimEvents, recordClaimEvent } from "./chronology";
 import { listFinishedRepairGapClaims, listRepairGapClaims, type RepairGapClaimRow } from "./repair-progress";
 import {
@@ -113,7 +114,27 @@ export function listClaims(opts: { q?: string; queue?: string; dueChases?: Chase
     }
   }
   const sql = CLAIM_LIST_SQL + (where.length ? ` WHERE ${where.join(" AND ")}` : "") + " ORDER BY c.file_reference";
-  return overlayDueChaseNextAction(all<ClaimListRow>(sql, params), opts.dueChases);
+  const chases = opts.dueChases ?? everyDueChase();
+  return overlayDueChaseNextAction(withCurrentStep(all<ClaimListRow>(sql, params), chases), chases);
+}
+
+/**
+ * Position and next action come from the history, the same as the claim page.
+ * A stored position or typed next action is not used for step guidance.
+ */
+function withCurrentStep(rows: ClaimListRow[], chases: ChaseView[]): ClaimListRow[] {
+  if (rows.length === 0) return rows;
+  const steps = new Map(currentStepRows(null, chases, rows.map((row) => row.id)).map(({ row, step }) => [String(row.id), step]));
+  return rows.map((row) => {
+    const step = steps.get(row.id);
+    if (!step) return { ...row, next_action: null, next_action_due: null };
+    return {
+      ...row,
+      current_position: `${step.title} · ${stepStageLabel(step)}`,
+      next_action: step.buttonLabel || step.title,
+      next_action_due: step.dueAt,
+    };
+  });
 }
 
 /** Card counts only — no chase overlay. Overlay is for next-action labels, not for how many files sit in a queue. */
@@ -260,7 +281,8 @@ function renewalDeskWording(row: ChaseView): { text: string; tone: DeskWorkItem[
   return { text: "Due", tone: "today", sortDays: 0 };
 }
 
-function stepNextActionItems(handlerId: string | null, chases: ChaseView[]): DeskWorkItem[] {
+/** The open step for each claim, read from the history in two queries. Closed files have none. */
+function currentStepRows(handlerId: string | null, chases: ChaseView[], claimIds?: string[]) {
   const rows = all<{
     id: string;
     file_reference: string;
@@ -305,8 +327,9 @@ function stepNextActionItems(handlerId: string | null, chases: ChaseView[]): Des
          WHERE closed.claim_id = c.id AND closed.event_type = 'case_closed'
        )
        ${handlerId ? "AND c.handler_id = ?" : ""}
+       ${claimIds ? `AND c.id IN (${claimIds.map(() => "?").join(",") || "NULL"})` : ""}
      ORDER BY c.file_reference`,
-    handlerId ? [handlerId] : [],
+    [...(handlerId ? [handlerId] : []), ...(claimIds || [])],
   );
   if (rows.length === 0) return [];
   const ids = rows.map((row) => String(row.id));
@@ -380,6 +403,13 @@ function stepNextActionItems(handlerId: string | null, chases: ChaseView[]): Des
     });
     const step = currentClaimStep(steps);
     if (!step) return [];
+    return [{ row, step }];
+  });
+}
+
+function stepNextActionItems(handlerId: string | null, chases: ChaseView[]): DeskWorkItem[] {
+  return currentStepRows(handlerId, chases).flatMap(({ row, step }) => {
+    const id = String(row.id);
     const due = step.dueAt ? dueWording(step.dueAt) : null;
     const tier = due && (due.tone === "overdue" || due.tone === "today") ? 1 : 3;
     return [
@@ -443,10 +473,8 @@ export function getDashboard(filter: { handlerId?: string | null } = {}) {
     if (t.due_at && isBeforeLondonDay(t.due_at)) byHandler[name].overdue += 1;
   }
 
-  const fleet = all<{ status: string; c: number }>(
-    "SELECT status, COUNT(*) AS c FROM fleet_vehicles WHERE removed_at IS NULL GROUP BY status",
-  );
-  const fleetMap = Object.fromEntries(fleet.map((r) => [r.status, Number(r.c)]));
+  // Counts come from the shared availability rule, not the stored status alone.
+  const fleetMap = fleetCountsToday();
 
   const lines = all<MoneyLineRow>(
     `${MONEY_LINE_SQL}
@@ -1386,24 +1414,14 @@ export function createReservation(input: {
   expectedVersion?: string;
 }) {
   const book = () => {
-    const existing = listReservations().map((r) => ({
-      vehicleId: String(r.fleet_vehicle_id),
-      startAt: String(r.start_at),
-      endAt: String(r.end_at),
-      status: String(r.status),
-    }));
-    const decision = canReserveVehicle({
-      vehicleId: input.fleetVehicleId,
-      startAt: input.startAt,
-      endAt: input.endAt,
-      existing,
-    });
-    if (!decision.ok) throw new Error(decision.reason);
+    if (input.endAt <= input.startAt) throw new Error("Reservation end must be after start.");
     const fleetRow = get<{ removed_at: string | null }>(`SELECT removed_at FROM fleet_vehicles WHERE id = ?`, [
       input.fleetVehicleId,
     ]);
     if (!fleetRow) throw new Error("Vehicle not found.");
     if (fleetRow.removed_at) throw new Error("That vehicle has been removed from the fleet and cannot be reserved.");
+    // The same availability rule as Choose a car: open bookings, cars not returned, and the fleet status.
+    assertFleetCarFree({ fleetVehicleId: input.fleetVehicleId, startAt: input.startAt, endAt: input.endAt, ignoreClaimId: input.claimId || null });
     touchFleetVersion({
       fleetVehicleId: input.fleetVehicleId,
       actorId: input.createdBy,

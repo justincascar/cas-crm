@@ -1,6 +1,7 @@
 import { CAS_COMPANY, CAS_HIRE_AGREEMENT_BANNER, CAS_HIRE_TERMS_HTML } from "../documents/cas-hire-terms";
 import {
   HIRE_PACK_MANDATORY,
+  plainPackFields,
   OWN_VEHICLE_DETAILS_HEADING,
   RENTAL_PERIOD_DECISION,
   STORAGE_RECOVERY_MANDATORY,
@@ -286,7 +287,7 @@ export function generateHirePackDocument(claimId: string, actorId: string) {
     claimId,
     eventType: "document_generated",
     occurredAt: nowUtcIso(),
-    details: `Hire Pack version ${version} generated from CRM data${pack.missing.length ? `. Missing: ${pack.missing.join(", ")}` : ""}`,
+    details: `Hire Pack version ${version} generated from the file${pack.missing.length ? `. Not on the file yet: ${plainPackFields(pack.missing)}` : ""}.`,
     actorId,
     channel: "letter",
     documentId,
@@ -322,7 +323,7 @@ export function generateStorageRecoveryDocument(claimId: string, actorId: string
     claimId,
     eventType: "document_generated",
     occurredAt: nowUtcIso(),
-    details: `Storage & Recovery Agreement version ${version} generated as a draft. ${DRAFT_WORDING_NOT_APPROVED}. It was not sent.${pack.srMissing.length ? ` Missing: ${pack.srMissing.join(", ")}` : ""}`,
+    details: `Storage & Recovery Agreement version ${version} generated as a draft. ${DRAFT_WORDING_NOT_APPROVED}. It was not sent.${pack.srMissing.length ? ` Not on the file yet: ${plainPackFields(pack.srMissing)}.` : ""}`,
     actorId,
     channel: "letter",
     documentId,
@@ -395,7 +396,7 @@ export function renderHirePack(pack: NonNullable<ReturnType<typeof getHirePack>>
   const chargeableHireEnd = chargeableHireEndLabel(hire?.billing_end_at ? String(hire.billing_end_at) : null);
   const missingBanner =
     pack.missing.length > 0
-      ? `<p class="missing">Missing from CRM (shown as Unknown — not invented): ${pack.missing.join(", ")}</p>`
+      ? `<p class="missing">Not on the file yet (shown as Unknown): ${plainPackFields(pack.missing)}</p>`
       : "";
 
   return `<article class="letter hire-pack">
@@ -527,7 +528,7 @@ export function renderStorageRecovery(pack: NonNullable<ReturnType<typeof getHir
   const clientVehicle = `${v(pack.clientMake)} ${v(pack.clientModel)}`.replace("Unknown Unknown", "Unknown");
   const missingBanner =
     pack.srMissing.length > 0
-      ? `<p class="missing">Missing from CRM (shown as Unknown — not invented): ${pack.srMissing.join(", ")}</p>`
+      ? `<p class="missing">Not on the file yet (shown as Unknown): ${plainPackFields(pack.srMissing)}</p>`
       : "";
   const recoveredOn = pack.claim.storage_started_on
     ? formatUkDate(String(pack.claim.storage_started_on))

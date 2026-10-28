@@ -67,6 +67,30 @@ export const HIRE_PACK_MANDATORY = [
   "clientVehicleRegistration",
 ] as const;
 
+/** Plain words for each pack field, for screens and history. Field codes are never shown. */
+export const HIRE_PACK_FIELD_LABELS: Record<string, string> = {
+  agreementNumber: "CAS reference",
+  hirerName: "hirer's name",
+  hirerAddress: "hirer's address",
+  hirerDob: "date of birth",
+  licenceNumber: "licence number",
+  licenceIssuedOn: "licence issue date",
+  licenceExpiresOn: "licence expiry date",
+  hireMake: "hire car make",
+  hireModel: "hire car model",
+  hireRegistration: "hire car registration",
+  hireTransmission: "hire car gearbox",
+  dateOut: "handover date",
+  dailyRatePence: "daily rate",
+  needReason: "why a hire car is needed",
+  clientVehicleRegistration: "client's registration",
+  clientName: "client's name",
+};
+
+export function plainPackFields(keys: readonly string[]): string {
+  return keys.map((key) => HIRE_PACK_FIELD_LABELS[key] || key).join(", ");
+}
+
 /** On the supplied pack, captured even when not required to generate a hire agreement. */
 export const HIRE_PACK_OPTIONAL = [
   "satNavPence",

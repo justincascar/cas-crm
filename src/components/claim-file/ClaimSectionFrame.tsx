@@ -35,7 +35,7 @@ export function ClaimSectionFrame({
 
   return (
     <>
-      <nav aria-label="Claim sections" className="flex max-w-full flex-nowrap gap-1.5 rounded-xl border border-line bg-card px-3 py-3 print:hidden">
+      <nav aria-label="Claim sections" className="flex max-w-full flex-wrap gap-1.5 rounded-xl border border-line bg-card px-3 py-3 print:hidden">
         {(Object.keys(TAB_LABELS) as ClaimTabKey[]).map((tab) => {
           const active = tab === current;
           return (

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, it } from "node:test";
@@ -14,6 +15,7 @@ import {
   completeHireHandover,
   loadHireArea,
   saveHireNeed,
+  setHireDailyRate,
 } from "../src/lib/db/hire-choice.ts";
 import { recordPrehireOverride } from "../src/lib/db/prehire-checks.ts";
 import { hireDaysOverlap } from "../src/lib/domain/hire-availability.ts";
@@ -21,6 +23,8 @@ import { agreementDayNumber } from "../src/lib/domain/rules.ts";
 import { londonDateIso } from "../src/lib/dates.ts";
 
 const schema = fs.readFileSync(path.join(process.cwd(), "src/lib/db/schema.sql"), "utf8");
+
+process.env.CAS_FILES_DIR ||= fs.mkdtempSync(path.join(os.tmpdir(), "cas-hire-flow-"));
 
 function prepared() {
   const db = new DatabaseSync(":memory:");
@@ -85,7 +89,7 @@ describe("joined-up hire", () => {
       }
 
       const beforeEvents = count(db, `SELECT COUNT(*) AS n FROM claim_events`);
-      const opened = loadHireArea(firstId, { date: "2026-11-02" });
+      const opened = loadHireArea(firstId, { date: "2026-11-02", transmission: "", seats: "" });
       assert.equal(count(db, `SELECT COUNT(*) AS n FROM claim_events`), beforeEvents);
       assert.equal(opened?.cars.some((item) => item.id === car.id), true);
 
@@ -98,6 +102,7 @@ describe("joined-up hire", () => {
         address: "1 Test Street, Cardiff",
         actorId: "staff-sian",
         submitKey: "choose-once",
+        driverId: "staff-driver",
       });
       chooseHireCar({
         claimId: firstId,
@@ -108,6 +113,7 @@ describe("joined-up hire", () => {
         address: "1 Test Street, Cardiff",
         actorId: "staff-sian",
         submitKey: "choose-once",
+        driverId: "staff-driver",
       });
       assert.equal(count(db, `SELECT COUNT(*) AS n FROM reservations WHERE claim_id = ? AND status = 'reserved'`, [firstId]), 1);
       assert.equal(count(db, `SELECT COUNT(*) AS n FROM day_assignments WHERE claim_id = ? AND job_kind = 'hire_delivery' AND cancelled_at IS NULL`, [firstId]), 1);
@@ -121,7 +127,7 @@ describe("joined-up hire", () => {
       assert.equal(job.place_text, "1 Test Street, Cardiff");
       assert.ok(job.planned_at);
 
-      const offered = loadHireArea(secondId, { date: "2026-11-02" });
+      const offered = loadHireArea(secondId, { date: "2026-11-02", transmission: "", seats: "" });
       assert.equal(offered?.cars.some((item) => item.id === car.id), false);
       assert.throws(
         () =>
@@ -167,7 +173,9 @@ describe("joined-up hire", () => {
         /Choose a car/,
       );
 
+      setHireDailyRate({ claimId: firstId, group: "S3", actorId: "staff-sian", submitKey: "rate-first" });
       const started = completeHireHandover({
+        signedCopy: { buffer: Buffer.from("%PDF-1.4"), filename: "signed.pdf", mimeType: "application/pdf" },
         claimId: firstId,
         mileage: 1200,
         fuelLevel: "full",

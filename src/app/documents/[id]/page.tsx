@@ -8,6 +8,7 @@ import { canReadDocument } from "@/lib/db/jobs";
 import { getDocument } from "@/lib/db/chronology";
 import { claimDocumentTypeLabel } from "@/lib/domain/claim-documents";
 import { specForTemplate } from "@/lib/documents/catalog";
+import { plainPackFields } from "@/lib/documents/hire-pack-fields";
 import { CAS_LEGAL_SIGNOFF_NOTICE, CAS_TEMPLATE_NOTICE } from "@/lib/documents/correspondence";
 
 export default async function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
@@ -66,7 +67,7 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
         <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm print:hidden">
           {storedPath
             ? `Fields left blank from this V5C (not guessed): ${missing.join(", ")}.`
-            : `Missing from the file (shown in the letter as [not yet on file] or Unknown, not left blank): ${missing.join(", ")}.`}
+            : `Not on the file yet (shown in the letter as [not yet on file] or Unknown): ${plainPackFields(missing)}.`}
         </p>
       ) : null}
       {!storedPath ? <p className="text-xs text-slate print:hidden">{CAS_TEMPLATE_NOTICE}</p> : null}

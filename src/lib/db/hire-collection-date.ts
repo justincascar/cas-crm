@@ -57,6 +57,23 @@ function noteCollectionDay(episodeId: string, day: string) {
   run(`UPDATE hire_episodes SET collection_at = ? WHERE id = ?`, [day, episodeId]);
 }
 
+/** The car is back: its booking for this file is closed and, if nothing else holds it, it is available again. */
+function releaseCollectedCar(episodeId: string) {
+  const row = get<{ claim_id: string; fleet_vehicle_id: string | null }>(`SELECT claim_id, fleet_vehicle_id FROM hire_episodes WHERE id = ?`, [episodeId]);
+  if (!row?.fleet_vehicle_id) return;
+  run(`UPDATE reservations SET status = 'completed' WHERE claim_id = ? AND fleet_vehicle_id = ? AND status IN ('reserved', 'active')`, [
+    row.claim_id,
+    row.fleet_vehicle_id,
+  ]);
+  const held = get<{ id: string }>(
+    `SELECT r.id FROM reservations r WHERE r.fleet_vehicle_id = ? AND r.status IN ('reserved', 'active')
+     UNION SELECT he.id FROM hire_episodes he WHERE he.fleet_vehicle_id = ? AND he.started_at IS NOT NULL AND he.collection_at IS NULL AND he.billing_end_at IS NULL
+     LIMIT 1`,
+    [row.fleet_vehicle_id, row.fleet_vehicle_id],
+  );
+  if (!held) run(`UPDATE fleet_vehicles SET status = 'available' WHERE id = ? AND status = 'on_hire'`, [row.fleet_vehicle_id]);
+}
+
 function clearReview(episodeId: string) {
   run(`UPDATE hire_episodes SET hire_end_review_on = NULL WHERE id = ?`, [episodeId]);
 }
@@ -83,6 +100,7 @@ export function applyHireCollectionActualDate(input: {
   const episode = readEpisode(episodeId);
   if (!episode || episode.claim_id !== input.claimId) return { status: "skipped" };
   noteCollectionDay(episode.id, jobDate);
+  releaseCollectedCar(episode.id);
   const hireEndDay = calendarDay(episode.billing_end_at);
   if (hireEndDay && hireEndDay !== jobDate) {
     run(`UPDATE hire_episodes SET hire_end_review_on = ? WHERE id = ?`, [jobDate, episode.id]);

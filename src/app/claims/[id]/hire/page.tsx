@@ -3,9 +3,9 @@ import { HireJourney } from "@/components/claims/HireJourney";
 import { canDoFieldJob, isOfficeRole } from "@/lib/auth/roles";
 import { requireStaff } from "@/lib/auth/session";
 import { loadHireArea } from "@/lib/db/hire-choice";
+import { accountCanOverridePreHireChecks } from "@/lib/db/permissions";
 import { loadClash } from "@/lib/db/record-version";
 import { listStaff } from "@/lib/db/queries";
-import { londonTodayIso } from "@/lib/dates";
 
 export default async function ClaimHirePage({
   params,
@@ -23,13 +23,13 @@ export default async function ClaimHirePage({
   }
   const staff = await requireStaff();
   if (!isOfficeRole(staff.role)) redirect("/jobs");
-  const filters = {
-    date: query.date && /^\d{4}-\d{2}-\d{2}$/.test(query.date) ? query.date : londonTodayIso(),
-    transmission: query.transmission || "",
-    vehicleClass: query.class || "",
-    seats: query.seats || "",
-  };
-  const area = loadHireArea(id, filters);
+  // A filter missing from the address uses the client's own car. A blank one means any.
+  const area = loadHireArea(id, {
+    date: query.date,
+    transmission: query.transmission,
+    vehicleClass: query.class,
+    seats: query.seats,
+  });
   if (!area) notFound();
   const handlers = listStaff()
     .filter((person) => canDoFieldJob(person.role))
@@ -41,7 +41,8 @@ export default async function ClaimHirePage({
       saved={query.saved}
       clash={loadClash(query.clash)}
       handlers={handlers}
-      filters={filters}
+      mayOverride={accountCanOverridePreHireChecks(staff.id, staff.role)}
+      showPack={query.pack === "all"}
     />
   );
 }

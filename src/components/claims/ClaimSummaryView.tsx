@@ -40,7 +40,13 @@ export function ClaimSummaryView({ model }: { model: ClaimSummaryModel }) {
         <p className="mt-1 text-sm">
           {model.statusLine}
           {" · "}
-          {model.runningText}
+          {model.runningHref ? (
+            <a href={model.runningHref} className="font-semibold text-overdue underline" data-running-warning>
+              {model.runningText}
+            </a>
+          ) : (
+            model.runningText
+          )}
           {" · Outstanding "}
           {model.outstandingTotal}
         </p>

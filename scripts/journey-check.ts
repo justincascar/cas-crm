@@ -9,7 +9,7 @@
  *
  * Later stages extend tests/journeys/claim-journeys.ts and this script.
  */
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -164,7 +164,7 @@ async function openBrowser(): Promise<{ session: BrowserSession; stop: () => voi
     { stdio: "ignore" },
   );
   const stop = () => {
-    if (browser.exitCode === null && !browser.killed) browser.kill();
+    if (browser.exitCode === null && !browser.killed) stopTree(browser);
     try {
       fs.rmSync(userData, { recursive: true, force: true });
     } catch {
@@ -400,8 +400,6 @@ function storedJourney(dbPath: string, reference: string) {
 
 type MadeClaim = { id: JourneyId; reference: string; claimId: string };
 
-const HIRE_DAY = "2026-11-02";
-
 async function gotoPath(session: BrowserSession, origin: string, path: string) {
   await session.send("Page.navigate", { url: `${origin}${path}` });
   const deadline = Date.now() + 20_000;
@@ -429,32 +427,103 @@ async function postFields(session: BrowserSession, path: string, fields: Record<
   })()`);
 }
 
-function storedLicence(dbPath: string, claimId: string) {
+function readDb<T>(dbPath: string, work: (db: DatabaseSync) => T): T {
   const db = new DatabaseSync(dbPath);
   try {
-    const row = db
-      .prepare(
-        `SELECT p.licence_number AS licence
-         FROM claims c JOIN people p ON p.id = c.client_person_id
-         WHERE c.id = ?`,
-      )
-      .get(claimId) as { licence: string | null } | undefined;
-    return row?.licence || "";
+    return work(db);
   } finally {
     db.close();
   }
 }
 
-async function saveClientLicence(session: BrowserSession, origin: string, dbPath: string, claimId: string) {
+/**
+ * The journey database starts from the fictional seed. Two changes are made before the hire journeys:
+ * CAS 2's booking on TEST-0003 is moved into the past while the car is still out, so a car on hire with a booking
+ * past its end date is on the fleet; and CAS 6 comes back from the bodyshop, so the three files have three free cars.
+ */
+function prepareFleet(dbPath: string) {
+  readDb(dbPath, (db) => {
+    const ended = new Date(Date.now() - 10 * 86_400_000).toISOString();
+    db.prepare(`UPDATE reservations SET end_at = ? WHERE id = 'r-c3'`).run(ended);
+    db.prepare(`UPDATE fleet_vehicles SET status = 'available', location = 'CAS yard, Bridgend' WHERE id = 'fv-6'`).run();
+  });
+}
+
+function londonToday(): string {
+  const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
+  const get = (type: string) => parts.find((part) => part.type === type)?.value || "";
+  return `${get("year")}-${get("month")}-${get("day")}`;
+}
+
+const HIRE_DAY = londonToday();
+const HIRE_DAY_UK = HIRE_DAY.split("-").reverse().join("/");
+
+type Submitted = { status: number; location: string; problem?: string };
+
+/**
+ * Fills a form on the page by its field names and submits it the way the button would.
+ * A file is attached as a small fictional PDF.
+ */
+async function submitForm(
+  session: BrowserSession,
+  selector: string,
+  values: Record<string, string>,
+  files: string[] = [],
+): Promise<Submitted> {
+  const spec = JSON.stringify({ selector, values, files });
+  return session.evaluate<Submitted>(`(() => {
+    const spec = ${spec};
+    const form = document.querySelector(spec.selector);
+    if (!(form instanceof HTMLFormElement)) return { status: 0, location: "", problem: "No form " + spec.selector };
+    for (const [name, value] of Object.entries(spec.values)) {
+      const fields = [...form.querySelectorAll('[name="' + name + '"]')];
+      if (fields.length === 0) return { status: 0, location: "", problem: "No field " + name };
+      for (const field of fields) {
+        if (field instanceof HTMLInputElement && (field.type === "radio" || field.type === "checkbox")) {
+          field.checked = field.value === value || (field.type === "checkbox" && value === "on");
+        } else {
+          field.value = value;
+        }
+      }
+    }
+    const body = new FormData(form);
+    if (!body.get("submitKey")) body.set("submitKey", crypto.randomUUID());
+    for (const name of spec.files) {
+      const bytes = new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52, 10]);
+      body.set(name, new File([bytes], name + ".pdf", { type: "application/pdf" }));
+    }
+    return fetch(form.action, { method: "POST", body, credentials: "same-origin", redirect: "follow" }).then((response) => ({
+      status: response.status,
+      location: response.url || "",
+    }));
+  })()`);
+}
+
+function followed(result: Submitted, label: string): string | null {
+  if (result.problem) return `${label}: ${result.problem}`;
+  const location = decodeURIComponent(result.location.replaceAll("+", " "));
+  if (result.status >= 400 || result.status === 0 || location.includes("error=")) return `${label} ${result.status} ${location}`;
+  return null;
+}
+
+function refusedWith(result: Submitted, words: RegExp, label: string): string | null {
+  if (result.problem) return `${label}: ${result.problem}`;
+  const location = decodeURIComponent(result.location.replaceAll("+", " "));
+  if (!location.includes("error=")) return `${label} was not refused. ${location}`;
+  if (!words.test(location)) return `${label} was refused for the wrong reason. ${location}`;
+  return null;
+}
+
+async function saveClientDetails(session: BrowserSession, origin: string, dbPath: string, claimId: string) {
   await gotoPath(session, origin, `/claims/${claimId}/details/client`);
   const filled = await session.evaluate<string>(`(() => {
     ${FILL}
     for (const box of document.querySelectorAll('input[type="checkbox"]')) {
       if (box instanceof HTMLInputElement && box.name.startsWith("saveAnyway_") && !box.checked) box.click();
     }
-    return setControl("licenceNumber", "TEST-LIC-0001");
+    return [setControl("address", "12 Journey Road\\nCardiff"), setControl("postcode", "CF10 1AA"), setControl("dob", "1985-04-12")].join("|");
   })()`);
-  if (filled !== "TEST-LIC-0001") return `licence field ${filled}`;
+  if (filled.includes("missing")) return `client fields ${filled}`;
   await session.evaluate<void>(`(() => {
     const button = [...document.querySelectorAll("button")].find((item) => item.textContent?.trim() === "Save this screen");
     if (!button) throw new Error("Save this screen was not on the client page.");
@@ -463,133 +532,90 @@ async function saveClientLicence(session: BrowserSession, origin: string, dbPath
   const deadline = Date.now() + 20_000;
   let retried = false;
   while (Date.now() < deadline) {
-    if (storedLicence(dbPath, claimId) === "TEST-LIC-0001") return null;
-    const page = await session.evaluate<{ href: string; error: string; saved: boolean }>(`({
-      href: location.href,
-      error: document.querySelector("[data-form-error]")?.innerText || "",
-      saved: document.body.innerText.includes("Saved."),
-    })`);
-    if (page.saved && storedLicence(dbPath, claimId) === "TEST-LIC-0001") return null;
+    const stored = readDb(dbPath, (db) =>
+      db
+        .prepare(`SELECT p.date_of_birth AS dob, p.postcode FROM claims c JOIN people p ON p.id = c.client_person_id WHERE c.id = ?`)
+        .get(claimId) as { dob: string | null; postcode: string | null },
+    );
+    if (stored.dob === "1985-04-12" && stored.postcode === "CF10 1AA") return null;
+    const page = await session.evaluate<{ error: string }>(`({ error: document.querySelector("[data-form-error]")?.innerText || "" })`);
     if (page.error && /Save anyway/.test(page.error) && !retried) {
       retried = true;
       await session.evaluate<void>(`(() => {
         for (const box of document.querySelectorAll('input[type="checkbox"]')) {
           if (box instanceof HTMLInputElement && box.name.startsWith("saveAnyway_") && !box.checked) box.click();
         }
-        const button = [...document.querySelectorAll("button")].find((item) => item.textContent?.trim() === "Save this screen");
-        button?.click();
+        [...document.querySelectorAll("button")].find((item) => item.textContent?.trim() === "Save this screen")?.click();
       })()`);
       continue;
     }
     if (page.error && !/Save anyway/.test(page.error)) return page.error;
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
-  const stuck = await session.evaluate<{ href: string; text: string }>(`({
-    href: location.href,
-    text: document.body.innerText.replace(/\\s+/g, " ").slice(0, 400),
-  })`);
-  return `The client licence was not saved. ${stuck.href} ${stuck.text}`;
+  return "The client address and date of birth were not saved.";
 }
 
 function claimFiles(dbPath: string, claimId: string, documentType: string) {
-  const db = new DatabaseSync(dbPath);
-  try {
-    return db
+  return readDb(dbPath, (db) =>
+    db
       .prepare(`SELECT id, title FROM documents WHERE claim_id = ? AND document_type = ? ORDER BY created_at ASC, rowid ASC`)
-      .all(claimId, documentType) as Array<{ id: string; title: string | null }>;
-  } finally {
-    db.close();
-  }
+      .all(claimId, documentType) as Array<{ id: string; title: string | null }>,
+  );
 }
 
-function followed(result: { status: number; location: string }, label: string): string | null {
-  const location = decodeURIComponent(result.location.replaceAll("+", " "));
-  if (result.status >= 400 || result.status === 0 || location.includes("error=")) return `${label} ${result.status} ${location}`;
-  return null;
-}
-
-async function saveLicenceCheck(session: BrowserSession, origin: string, claimId: string) {
+async function saveLicenceCheck(session: BrowserSession, origin: string, claimId: string, licenceNumber: string) {
   await gotoPath(session, origin, `/claims/${claimId}/hire`);
-  const saved = await session.evaluate<{ status: number; location: string; problem?: string }>(`(() => {
-    const form = document.querySelector('form[action$="/prehire/save"]');
-    if (!(form instanceof HTMLFormElement)) return { status: 0, location: "", problem: "No licence form." };
-    const category = form.querySelector('[name="category"]');
-    const points = form.querySelector('[name="penaltyPoints"]');
-    const expiry = form.querySelector('[name="licenceExpiresOn"]');
-    const ok = form.querySelector('[name="result"][value="ok"]');
-    if (category instanceof HTMLInputElement) category.value = "B";
-    if (points instanceof HTMLInputElement) points.value = "0";
-    if (expiry instanceof HTMLInputElement) expiry.value = "2030-01-01";
-    if (ok instanceof HTMLInputElement) ok.checked = true;
-    const body = new FormData(form);
-    if (!body.get("submitKey")) body.set("submitKey", crypto.randomUUID());
-    const bytes = new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52, 10]);
-    body.set("document", new File([bytes], "licence-check.pdf", { type: "application/pdf" }));
-    return fetch(form.action, { method: "POST", body, credentials: "same-origin", redirect: "follow" }).then((response) => ({
-      status: response.status,
-      location: response.url || "",
-    }));
-  })()`);
-  if (saved.problem) return saved.problem;
+  const box = await session.evaluate<boolean>(`Boolean(document.querySelector('form[action$="/prehire/save"] [data-licence-number-box] input[name="licenceNumber"]'))`);
+  if (!box) return "The licence card did not ask for the missing licence number.";
+  const withoutNumber = await submitForm(
+    session,
+    'form[action$="/prehire/save"]',
+    { licenceNumber: "", category: "B", penaltyPoints: "0", licenceExpiresOn: "2030-01-01", result: "ok" },
+  );
+  const refused = refusedWith(withoutNumber, /licence number/, "Licence check with no licence number");
+  if (refused) return refused;
+  await gotoPath(session, origin, `/claims/${claimId}/hire`);
+  const saved = await submitForm(
+    session,
+    'form[action$="/prehire/save"]',
+    { licenceNumber, category: "B", penaltyPoints: "0", licenceExpiresOn: "2030-01-01", result: "ok" },
+    ["document"],
+  );
   return followed(saved, "licence check");
 }
 
 async function uploadBankStatement(session: BrowserSession, origin: string, claimId: string) {
   await gotoPath(session, origin, `/claims/${claimId}/hire`);
-  const saved = await session.evaluate<{ status: number; location: string; problem?: string }>(`(() => {
-    const form = document.querySelector('form[action$="/hire/bank"]');
-    if (!(form instanceof HTMLFormElement)) return { status: 0, location: "", problem: "No bank statement form." };
-    const period = form.querySelector('[name="statementPeriod"]');
-    if (period instanceof HTMLInputElement) period.value = "July to September 2026";
-    const body = new FormData(form);
-    if (!body.get("submitKey")) body.set("submitKey", crypto.randomUUID());
-    const bytes = new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52, 10]);
-    body.set("document", new File([bytes], "statement.pdf", { type: "application/pdf" }));
-    return fetch(form.action, { method: "POST", body, credentials: "same-origin", redirect: "follow" }).then((response) => ({
-      status: response.status,
-      location: response.url || "",
-    }));
-  })()`);
-  if (saved.problem) return saved.problem;
-  return followed(saved, "bank statement");
+  return followed(
+    await submitForm(session, 'form[action$="/hire/bank"]', { statementPeriod: "July to September 2026" }, ["document"]),
+    "bank statement",
+  );
 }
 
 async function saveNoBank(session: BrowserSession, origin: string, claimId: string) {
   await gotoPath(session, origin, `/claims/${claimId}/hire`);
-  const saved = await session.evaluate<{ status: number; location: string; problem?: string }>(`(() => {
-    const form = document.querySelector('form[action$="/hire/no-bank"]');
-    if (!(form instanceof HTMLFormElement)) return { status: 0, location: "", problem: "No bank-account form." };
-    const box = form.querySelector('[name="noBank"]');
-    const explanation = form.querySelector('[name="explanation"]');
-    if (box instanceof HTMLInputElement) box.checked = true;
-    if (explanation instanceof HTMLTextAreaElement) explanation.value = "The client has no bank account.";
-    const body = new FormData(form);
-    if (!body.get("submitKey")) body.set("submitKey", crypto.randomUUID());
-    return fetch(form.action, { method: "POST", body, credentials: "same-origin", redirect: "follow" }).then((response) => ({
-      status: response.status,
-      location: response.url || "",
-    }));
-  })()`);
-  if (saved.problem) return saved.problem;
-  return followed(saved, "no bank account");
+  return followed(
+    await submitForm(session, 'form[action$="/hire/no-bank"]', { noBank: "yes", explanation: "The client has no bank account." }),
+    "no bank account",
+  );
+}
+
+async function setDailyRate(session: BrowserSession, origin: string, claimId: string, group: string) {
+  await gotoPath(session, origin, `/claims/${claimId}/hire`);
+  const missing = await session.evaluate<string>(`document.querySelector("[data-rate]")?.getAttribute("data-rate") || ""`);
+  if (missing !== "missing") return `The Hire tab did not say the daily rate is missing (${missing || "no rate box"}).`;
+  return followed(await submitForm(session, 'form[action$="/hire/rate"]', { group }), "daily rate");
 }
 
 function countOnHire(dbPath: string) {
-  const db = new DatabaseSync(dbPath);
-  try {
-    const row = db.prepare(`SELECT COUNT(*) AS n FROM fleet_vehicles WHERE status = 'on_hire'`).get() as { n: number };
-    return Number(row.n);
-  } finally {
-    db.close();
-  }
+  return readDb(dbPath, (db) => Number((db.prepare(`SELECT COUNT(*) AS n FROM fleet_vehicles WHERE status = 'on_hire'`).get() as { n: number }).n));
 }
 
 function hireFacts(dbPath: string, claimId: string) {
-  const db = new DatabaseSync(dbPath);
-  try {
+  return readDb(dbPath, (db) => {
     const episode = db
       .prepare(
-        `SELECT he.started_at, he.fleet_vehicle_id, v.registration
+        `SELECT he.started_at, he.fleet_vehicle_id, he.rate_pence_per_day, he.rate_taken_on, v.registration
          FROM hire_episodes he
          LEFT JOIN fleet_vehicles fv ON fv.id = he.fleet_vehicle_id
          LEFT JOIN vehicles v ON v.id = fv.vehicle_id
@@ -597,76 +623,65 @@ function hireFacts(dbPath: string, claimId: string) {
          ORDER BY CASE WHEN he.collection_at IS NULL AND he.billing_end_at IS NULL THEN 0 ELSE 1 END
          LIMIT 1`,
       )
-      .get(claimId) as { started_at: string | null; fleet_vehicle_id: string; registration: string | null } | undefined;
+      .get(claimId) as
+      | { started_at: string | null; fleet_vehicle_id: string; rate_pence_per_day: number | null; rate_taken_on: string | null; registration: string | null }
+      | undefined;
     const job = db
       .prepare(
         `SELECT id, assignee_id, planned_at, place_text FROM day_assignments
          WHERE claim_id = ? AND job_kind = 'hire_delivery' AND cancelled_at IS NULL LIMIT 1`,
       )
-      .get(claimId) as { id: string; assignee_id: string; planned_at: string | null; place_text: string | null } | undefined;
+      .get(claimId) as { id: string; assignee_id: string | null; planned_at: string | null; place_text: string | null } | undefined;
     const docs = db
       .prepare(`SELECT COUNT(*) AS n FROM documents WHERE claim_id = ? AND template_key IN ('hire_agreement', 'hire_pack')`)
       .get(claimId) as { n: number };
-    return { episode, job, documents: Number(docs.n) };
-  } finally {
-    db.close();
-  }
+    const licence = db
+      .prepare(`SELECT p.licence_number AS n FROM claims c JOIN people p ON p.id = c.client_person_id WHERE c.id = ?`)
+      .get(claimId) as { n: string | null };
+    return { episode, job, documents: Number(docs.n), licenceNumber: licence.n || "" };
+  });
 }
 
-async function chooseFirstCar(session: BrowserSession, origin: string, claimId: string) {
+async function offeredCars(session: BrowserSession) {
+  return session.evaluate<string[]>(`(() => {
+    const select = document.querySelector('form[action$="/hire/choose"] [name="fleetVehicleId"]');
+    if (!(select instanceof HTMLSelectElement)) return [];
+    return [...select.options].map((item) => item.value).filter(Boolean);
+  })()`);
+}
+
+async function chooseFirstCar(session: BrowserSession, origin: string, claimId: string, driverId: string) {
   await gotoPath(session, origin, `/claims/${claimId}/hire?date=${HIRE_DAY}`);
-  const picked = await session.evaluate<{ id: string; options: string }>(`(() => {
-    const select = document.querySelector('[name="fleetVehicleId"]');
-    if (!(select instanceof HTMLSelectElement)) return { id: "", options: "missing" };
-    const option = [...select.options].find((item) => item.value);
-    if (!option) return { id: "", options: select.innerText };
-    select.value = option.value;
-    select.dispatchEvent(new Event("change", { bubbles: true }));
-    const date = document.querySelector('form[action$="/hire/choose"] [name="date"]');
-    const time = document.querySelector('form[action$="/hire/choose"] [name="time"]');
-    if (date instanceof HTMLInputElement) date.value = ${JSON.stringify(HIRE_DAY)};
-    if (time instanceof HTMLInputElement) time.value = "09:30";
-    const button = [...document.querySelectorAll('form[action$="/hire/choose"] button')].find((item) => /Reserve|Change car/.test(item.textContent || ""));
-    button?.click();
-    return { id: option.value, options: String(select.options.length) };
-  })()`);
-  if (!picked.id) return { problem: `No free car was offered. ${picked.options}` };
-  const deadline = Date.now() + 15_000;
-  while (Date.now() < deadline) {
-    const chosen = await session.evaluate<string>(`document.querySelector("[data-chosen-car]")?.getAttribute("data-chosen-car") || ""`);
-    const error = await session.evaluate<string>(`document.querySelector(".text-overdue")?.innerText || ""`);
-    if (chosen) return { fleetId: picked.id, registration: chosen };
-    if (error) return { problem: error };
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  return { problem: "The car was not kept after Choose a car." };
+  const options = await offeredCars(session);
+  if (!options.length) return { problem: "No free car was offered." };
+  const picked = options[0];
+  const sent = await submitForm(session, 'form[action$="/hire/choose"]', {
+    fleetVehicleId: picked,
+    method: "deliver",
+    driverId,
+    date: HIRE_DAY,
+    time: "09:30",
+  });
+  const problem = followed(sent, "Reserve this car");
+  if (problem) return { problem };
+  await gotoPath(session, origin, `/claims/${claimId}/hire`);
+  const chosen = await session.evaluate<{ registration: string; summary: string }>(`({
+    registration: document.querySelector("[data-chosen-car]")?.getAttribute("data-chosen-car") || "",
+    summary: document.querySelector("[data-car-summary]")?.textContent?.replace(/\\s+/g, " ").trim() || "",
+  })`);
+  if (!chosen.registration) return { problem: "The car was not kept after Reserve this car." };
+  return { fleetId: picked, registration: chosen.registration, summary: chosen.summary, options };
 }
 
-async function completeHandover(session: BrowserSession, origin: string, claimId: string) {
+async function completeHandover(session: BrowserSession, origin: string, claimId: string, signed: boolean) {
   await gotoPath(session, origin, `/claims/${claimId}/hire`);
-  const ready = await session.evaluate<string>(`(() => {
-    const form = document.querySelector('form[action$="/hire/handover"]');
-    if (!form) return "missing";
-    const mileage = form.querySelector('[name="mileage"]');
-    const date = form.querySelector('[name="date"]');
-    const time = form.querySelector('[name="time"]');
-    if (mileage instanceof HTMLInputElement) mileage.value = "1500";
-    if (date instanceof HTMLInputElement) date.value = ${JSON.stringify(HIRE_DAY)};
-    if (time instanceof HTMLInputElement) time.value = "09:30";
-    const button = [...form.querySelectorAll("button")].find((item) => item.textContent?.includes("Complete handover"));
-    button?.click();
-    return "sent";
-  })()`);
-  if (ready !== "sent") return ready;
-  const deadline = Date.now() + 15_000;
-  while (Date.now() < deadline) {
-    const onHire = await session.evaluate<boolean>(`document.getElementById("on-hire") !== null`);
-    const error = await session.evaluate<string>(`document.querySelector(".text-overdue")?.innerText || ""`);
-    if (onHire) return null;
-    if (error) return error;
-    await new Promise((resolve) => setTimeout(resolve, 250));
-  }
-  return "Handover did not start the hire.";
+  const sent = await submitForm(
+    session,
+    'form[action$="/hire/handover"]',
+    { mileage: "1500", date: HIRE_DAY, time: "09:30", fuelLevel: "full" },
+    signed ? ["signedAgreement"] : [],
+  );
+  return sent;
 }
 
 async function hireOutline(session: BrowserSession) {
@@ -676,8 +691,9 @@ async function hireOutline(session: BrowserSession) {
     bank: boolean;
     error: string;
     still: string;
-    produce: boolean;
+    produce: number;
     links: number;
+    text: string;
   }>(`(() => {
     const steps = [...document.querySelectorAll("[data-hire-step]")];
     const error = document.querySelector("[data-form-error]");
@@ -687,57 +703,80 @@ async function hireOutline(session: BrowserSession) {
       bank: Boolean(document.querySelector("[data-bank-step]")),
       error: error?.textContent?.replace(/\\s+/g, " ").trim() || "",
       still: document.querySelector("[data-still-needed]")?.textContent?.replace(/\\s+/g, " ").trim() || "",
-      produce: [...document.querySelectorAll("button")].some((item) => (item.textContent || "").includes("Produce agreement for signature")),
+      produce: [...document.querySelectorAll("button")].filter((item) => (item.textContent || "").includes("Produce agreement for signature")).length,
       links: error ? error.querySelectorAll("a").length : 0,
+      text: document.body.innerText,
     };
   })()`);
 }
 
-async function runHireJourneys(session: BrowserSession, origin: string, dbPath: string, made: MadeClaim[]) {
+async function pageText(origin: string, path: string, cookie: string) {
+  const response = await fetch(`${origin}${path}`, { headers: { cookie }, redirect: "manual" });
+  return { status: response.status, text: await response.text() };
+}
+
+async function runHireJourneys(session: BrowserSession, origin: string, dbPath: string, made: MadeClaim[], officeCookie: string) {
   const repairable = made.find((item) => item.id === "repairable");
   const totalLoss = made.find((item) => item.id === "total-loss");
   const fault = made.find((item) => item.id === "fault-courtesy");
   if (!repairable || !totalLoss || !fault) return "The three files were not all created.";
+  prepareFleet(dbPath);
 
-  const licenceNumber = await saveClientLicence(session, origin, dbPath, repairable.claimId);
-  if (licenceNumber) return `Repairable licence: ${licenceNumber}`;
-  const yes = await postFields(session, `/claims/${repairable.claimId}/hire/need`, { choice: "yes", reason: "", returnHash: "#need" });
-  const yesProblem = followed(yes, "Hire needed");
-  if (yesProblem) return yesProblem;
+  // 1. A new blank non-fault file. Address and date of birth are typed on the client's details.
+  const details = await saveClientDetails(session, origin, dbPath, repairable.claimId);
+  if (details) return `Repairable client details: ${details}`;
+  await gotoPath(session, origin, `/claims/${repairable.claimId}/hire`);
+  const needSent = await submitForm(session, 'form[action$="/hire/need"]', {
+    choice: "yes",
+    reason: "The client's car cannot be driven and is needed for work.",
+  });
+  const needProblem = followed(needSent, "Hire needed");
+  if (needProblem) return needProblem;
   await gotoPath(session, origin, `/claims/${repairable.claimId}/hire`);
   const opened = await hireOutline(session);
   if (opened.count !== 5) return `Repairable showed ${opened.count} hire steps, not 5.`;
-  if (opened.error) return `Repairable showed an error before Produce was pressed. ${opened.error}`;
+  if (opened.error) return `Repairable showed an error before anything was pressed. ${opened.error}`;
   if (!opened.still.includes("licence check") || !opened.still.includes("bank statements")) {
     return `Repairable did not say what is still needed. ${opened.still}`;
   }
   if (!opened.bank) return "Repairable hid the bank-statement step.";
+  if (opened.produce > 1) return `Repairable showed ${opened.produce} Produce agreement buttons.`;
 
+  // 2. Only genuinely free cars. CAS 2 is out on TEST-0003 with a booking that ended ten days ago.
+  await gotoPath(session, origin, `/claims/${repairable.claimId}/hire?date=${HIRE_DAY}`);
+  const offered = await offeredCars(session);
+  for (const held of ["fv-1", "fv-2", "fv-3", "fv-5", "fv-7", "fv-8", "fv-9"]) {
+    if (offered.includes(held)) return `A car that is not free (${held}) was offered: ${offered.join(", ")}.`;
+  }
+  const fleetPage = await pageText(origin, "/hire", officeCookie);
+  if (!/Fleet records to check/.test(fleetPage.text) || !/ended .* but the car has not been returned/.test(fleetPage.text)) {
+    return "Hire / Fleet did not list CAS 2 under Fleet records to check.";
+  }
+
+  // 3. Reserve with a driver. The job is on Driver jobs and on that driver's My jobs today.
   const before = countOnHire(dbPath);
-  const chosen = await chooseFirstCar(session, origin, repairable.claimId);
+  const chosen = await chooseFirstCar(session, origin, repairable.claimId, "staff-driver");
   if ("problem" in chosen) return `Repairable car: ${chosen.problem}`;
+  if (!/reserved for .*delivery · driver Demo Driver/.test(chosen.summary)) return `The chosen car did not collapse to one line. ${chosen.summary}`;
   const facts = hireFacts(dbPath, repairable.claimId);
   if (!facts.job) return "Repairable: no driver delivery job was saved.";
-  if (facts.job.assignee_id !== "staff-driver") return "Repairable: the delivery job was not on the driver login.";
+  if (facts.job.assignee_id !== "staff-driver") return "Repairable: the delivery job was not on the chosen driver.";
   if (!facts.job.planned_at || !facts.job.place_text) return "Repairable: the delivery job has no date or address.";
   if (facts.episode?.started_at) return "Repairable: choosing a car started the hire.";
+  const driverJobs = await pageText(origin, "/driver-jobs", officeCookie);
+  if (!driverJobs.text.includes(`data-driver-job="${repairable.reference}"`) || !driverJobs.text.includes('data-driver-assignee="staff-driver"')) {
+    return "The delivery was not on the office Driver jobs list for the chosen driver.";
+  }
+  const driverCookie = await signIn(origin, "driver", passwordFor("Demo Driver", "driver"));
+  const myJobs = await pageText(origin, "/jobs", driverCookie);
+  if (!myJobs.text.includes(repairable.reference)) return "The delivery was not on the driver's My jobs today.";
 
+  // 4. The agreement is refused while the checks are missing, with a link for each.
   await gotoPath(session, origin, `/claims/${repairable.claimId}/hire`);
-  const pack = await session.evaluate<{ licence: string; retype: boolean; car: string; agreement: boolean }>(`({
-    licence: document.querySelector("[data-pack-licence]")?.textContent || "",
-    retype: Boolean(document.querySelector('[name="licence_number"]')),
-    car: document.querySelector("[data-chosen-car]")?.getAttribute("data-chosen-car") || "",
-    agreement: [...document.querySelectorAll("button")].some((item) => (item.textContent || "").includes("Produce agreement for signature")),
-  })`);
-  if (!pack.licence.includes("TEST-LIC-0001")) return "Repairable pack did not show the licence from the client record.";
-  if (pack.retype) return "Repairable pack asked for the licence number again.";
-  if (!pack.car) return "Repairable pack did not show the chosen car.";
-  if (!pack.agreement) return "Repairable pack did not offer Produce agreement for signature.";
-
-  const blocked = await postFields(session, `/claims/${repairable.claimId}/hire/agreement`, { returnHash: "#pack" });
+  const blocked = await submitForm(session, 'form[action$="/hire/agreement"]', {});
   const blockedText = decodeURIComponent(blocked.location.replaceAll("+", " "));
   if (!/licence check/i.test(blockedText) || !/bank statement/i.test(blockedText)) {
-    return `Produce agreement was not blocked with a list. ${blockedText}`;
+    return `Produce agreement was not blocked by the checks. ${blockedText}`;
   }
   await session.send("Page.navigate", { url: blocked.location });
   const shown = Date.now() + 15_000;
@@ -748,8 +787,10 @@ async function runHireJourneys(session: BrowserSession, origin: string, dbPath: 
   }
   if (listed.links < 2) return `The block did not link each missing check. ${listed.error}`;
 
-  const licenceCheck = await saveLicenceCheck(session, origin, repairable.claimId);
-  if (licenceCheck) return `Repairable licence check: ${licenceCheck}`;
+  // 5. Licence number typed on the check card, then the check, then the bank statement.
+  const licence = await saveLicenceCheck(session, origin, repairable.claimId, "JOURN850412AB9CD");
+  if (licence) return `Repairable licence check: ${licence}`;
+  if (hireFacts(dbPath, repairable.claimId).licenceNumber !== "JOURN850412AB9CD") return "The licence number was not saved to the client's record.";
   const licenceFiles = claimFiles(dbPath, repairable.claimId, "licence_check");
   if (licenceFiles.length !== 1 || !String(licenceFiles[0].title || "").startsWith("Licence check")) {
     return "Repairable licence upload was not labelled and stored once.";
@@ -761,67 +802,60 @@ async function runHireJourneys(session: BrowserSession, origin: string, dbPath: 
     return "Repairable bank statement was not labelled and counted once.";
   }
 
-  const produced = await postFields(session, `/claims/${repairable.claimId}/hire/agreement`, { returnHash: "#pack" });
-  const producedProblem = followed(produced, "agreement");
-  if (producedProblem) return producedProblem;
+  // 6. Still refused: the client's car has no group, so there is no daily rate. Then the rate is set.
+  await gotoPath(session, origin, `/claims/${repairable.claimId}/hire`);
+  const noRate = refusedWith(await submitForm(session, 'form[action$="/hire/agreement"]', {}), /daily rate/, "Agreement with no daily rate");
+  if (noRate) return noRate;
+  const rate = await setDailyRate(session, origin, repairable.claimId, "S3");
+  if (rate) return `Repairable rate: ${rate}`;
+  const stored = hireFacts(dbPath, repairable.claimId).episode;
+  if (!stored?.rate_pence_per_day || stored.rate_taken_on !== HIRE_DAY) return "The daily rate was not stored on the hire with today's date.";
+
+  await gotoPath(session, origin, `/claims/${repairable.claimId}/hire`);
+  const produced = followed(await submitForm(session, 'form[action$="/hire/agreement"]', {}), "agreement");
+  if (produced) return produced;
   if (hireFacts(dbPath, repairable.claimId).documents < 1) return "Repairable agreement was not stored.";
 
-  const handed = await completeHandover(session, origin, repairable.claimId);
+  // 7. Handover is refused without the signed copy, then completed with it.
+  const unsigned = refusedWith(await completeHandover(session, origin, repairable.claimId, false), /signed hire agreement/i, "Handover with no signed copy");
+  if (unsigned) return unsigned;
+  const handed = followed(await completeHandover(session, origin, repairable.claimId, true), "handover");
   if (handed) return `Repairable handover: ${handed}`;
   const started = hireFacts(dbPath, repairable.claimId);
   const startedAt = started.episode?.started_at || "";
   const london = startedAt ? new Date(startedAt).toLocaleDateString("en-GB", { timeZone: "Europe/London" }) : "";
-  if (london !== "02/11/2026") return `Repairable hire started on ${london || "nothing"}, not the handover date.`;
-  await gotoPath(session, origin, `/claims/${repairable.claimId}/hire`);
-  const checksDone = await session.evaluate<string>(`document.querySelector('[data-hire-step="3"]')?.getAttribute("data-status") || ""`);
-  if (checksDone !== "done") return `Repairable pre-hire checks were ${checksDone || "missing"} after handover.`;
-  await gotoPath(session, origin, `/claims/${repairable.claimId}`);
-  const step = await session.evaluate<{ state: string; text: string }>(`({
-    state: document.querySelector('[data-step="hire"]')?.getAttribute("data-state") || "",
-    text: document.querySelector('[data-step="hire"]')?.innerText || "",
-  })`);
-  if (step.state !== "done") return `Repairable step 3 was ${step.state || "missing"}. ${step.text}`;
+  if (london !== HIRE_DAY_UK) return `Repairable hire started on ${london || "nothing"}, not the handover date.`;
+  if (started.episode?.rate_pence_per_day !== stored.rate_pence_per_day) return "The hire did not keep the stored daily rate.";
+  const signedFiles = claimFiles(dbPath, repairable.claimId, "signed_hire_agreement");
+  if (signedFiles.length !== 1 || signedFiles[0].title !== "Signed hire agreement") return "The signed copy was not filed as Signed hire agreement.";
   const after = countOnHire(dbPath);
   if (after !== before + 1) return `On-hire count did not rise by one (was ${before}, now ${after}).`;
 
-  const driverCookie = await signIn(origin, "driver", passwordFor("Demo Driver", "driver"));
-  const refused = await fetch(`${origin}/documents/${bankFiles[0].id}/file`, {
-    headers: { cookie: driverCookie },
-    redirect: "manual",
-  });
+  // 8. The header, the claims list and the next action have moved on.
+  await gotoPath(session, origin, `/claims/${repairable.claimId}`);
+  const header = await session.evaluate<{ step: string; summary: string; note: boolean }>(`({
+    step: document.querySelector('[data-step="hire"]')?.getAttribute("data-state") || "",
+    summary: document.querySelector("#claim-summary")?.textContent?.replace(/\\s+/g, " ") || "",
+    note: Boolean(document.querySelector("[data-staff-note]")),
+  })`);
+  if (header.step !== "done") return `Repairable step 3 was ${header.step || "missing"}.`;
+  if (header.note) return `The header still shows a stored note. ${header.summary}`;
+  if (/Daily rate missing|no daily rate/i.test(header.summary)) return `The header says the daily rate is missing. ${header.summary}`;
+  if (/Next action: Arrange hire/.test(header.summary)) return `The header next action did not move on. ${header.summary}`;
+  const list = await pageText(origin, `/claims?q=${encodeURIComponent(repairable.reference)}`, officeCookie);
+  if (/intake captured/.test(list.text) || /Pre-hire checks and choose a vehicle/.test(list.text)) return "The claims list still shows the old intake wording.";
+  if (/Hire · /.test(list.text)) return "The claims list position still says Hire after the hire started.";
+
+  const refused = await fetch(`${origin}/documents/${bankFiles[0].id}/file`, { headers: { cookie: driverCookie }, redirect: "manual" });
   const refusedText = await refused.text();
   if (refused.status !== 403 || !refusedText.includes("You cannot open that file.")) {
     return `Driver bank statement URL returned ${refused.status}.`;
   }
 
-  await gotoPath(session, origin, `/claims/${totalLoss.claimId}/hire?date=${HIRE_DAY}`);
-  const clashOffered = await session.evaluate<boolean>(`(() => {
-    const select = document.querySelector('[name="fleetVehicleId"]');
-    if (!(select instanceof HTMLSelectElement)) return true;
-    return [...select.options].some((item) => item.value === ${JSON.stringify(chosen.fleetId)});
-  })()`);
-  if (clashOffered) return "The booked car was still offered on the second file for the same dates.";
-  const forced = await postFields(session, `/claims/${totalLoss.claimId}/hire/choose`, {
-    fleetVehicleId: chosen.fleetId,
-    method: "deliver",
-    date: HIRE_DAY,
-    time: "10:00",
-    address: "2 Test Street, Cardiff",
-    returnHash: "#car",
-  });
-  const forcedText = decodeURIComponent(forced.location.replaceAll("+", " "));
-  if (!forcedText.includes("This car has just been booked")) {
-    return `Forced booking was not rejected. ${forcedText}`;
-  }
-
-  const notYet = await postFields(session, `/claims/${totalLoss.claimId}/hire/need`, {
-    choice: "not_yet",
-    reason: "",
-    returnHash: "#need",
-  });
-  if (notYet.status >= 400 || notYet.status === 0 || decodeURIComponent(notYet.location).includes("error=")) {
-    return `Not yet was not saved. ${decodeURIComponent(notYet.location)}`;
-  }
+  // Total loss: the booked car is not offered and a forced booking is refused.
+  await gotoPath(session, origin, `/claims/${totalLoss.claimId}/hire`);
+  const tlNeed = followed(await submitForm(session, 'form[action$="/hire/need"]', { choice: "not_yet", reason: "" }), "Not yet");
+  if (tlNeed) return tlNeed;
   await gotoPath(session, origin, `/claims/${totalLoss.claimId}`);
   const waiting = await session.evaluate<{ state: string; text: string }>(`({
     state: document.querySelector('[data-step="hire"]')?.getAttribute("data-state") || "",
@@ -829,39 +863,56 @@ async function runHireJourneys(session: BrowserSession, origin: string, dbPath: 
   })`);
   if (waiting.state === "done" || waiting.state === "not_needed") return `Not yet closed step 3 (${waiting.state}).`;
   if (!waiting.text.includes("Not yet – client keeps own car")) return `Step 3 did not stay open for not yet. ${waiting.text}`;
-
-  const laterYes = await postFields(session, `/claims/${totalLoss.claimId}/hire/need`, { choice: "yes", reason: "", returnHash: "#need" });
-  if (laterYes.status >= 400 || laterYes.status === 0 || decodeURIComponent(laterYes.location).includes("error=")) {
-    return `Hire needed was not saved later. ${decodeURIComponent(laterYes.location)}`;
-  }
-  const laterCar = await chooseFirstCar(session, origin, totalLoss.claimId);
+  await gotoPath(session, origin, `/claims/${totalLoss.claimId}/hire`);
+  const tlYes = followed(await submitForm(session, 'form[action$="/hire/need"]', { choice: "yes", reason: "Car written off. Client needs a car for work." }), "Hire needed later");
+  if (tlYes) return tlYes;
+  await gotoPath(session, origin, `/claims/${totalLoss.claimId}/hire?date=${HIRE_DAY}`);
+  if ((await offeredCars(session)).includes(chosen.fleetId)) return "The booked car was still offered on the second file for the same dates.";
+  const forcedSent = await session.evaluate<Submitted>(`(() => {
+    const body = new URLSearchParams({
+      fleetVehicleId: ${JSON.stringify(chosen.fleetId)},
+      method: "deliver",
+      date: ${JSON.stringify(HIRE_DAY)},
+      time: "10:00",
+      address: "2 Test Street, Cardiff",
+      returnHash: "#car",
+      submitKey: crypto.randomUUID(),
+    });
+    return fetch(location.pathname + "/choose", { method: "POST", body, credentials: "same-origin", redirect: "follow" }).then((r) => ({ status: r.status, location: r.url }));
+  })()`);
+  const forced = refusedWith(forcedSent, /This car has just been booked/, "Forced booking of a car already booked");
+  if (forced) return forced;
+  const laterCar = await chooseFirstCar(session, origin, totalLoss.claimId, "");
   if ("problem" in laterCar) return `Total loss car: ${laterCar.problem}`;
   if (laterCar.fleetId === chosen.fleetId) return "Total loss was given the car already booked on the other file.";
+  if (!/driver not chosen/.test(laterCar.summary)) return `An unassigned delivery did not say so. ${laterCar.summary}`;
   const noBank = await saveNoBank(session, origin, totalLoss.claimId);
   if (noBank) return `Total loss no bank account: ${noBank}`;
-  if (claimFiles(dbPath, totalLoss.claimId, "bank_statements").length !== 0) {
-    return "Total loss stored a bank statement when the client has none.";
-  }
-  const laterLicence = await saveLicenceCheck(session, origin, totalLoss.claimId);
-  if (laterLicence) return `Total loss licence check: ${laterLicence}`;
-  const laterHand = await completeHandover(session, origin, totalLoss.claimId);
-  if (laterHand) return `Total loss handover: ${laterHand}`;
+  const tlLicence = await saveLicenceCheck(session, origin, totalLoss.claimId, "JOURN850412TL9CD");
+  if (tlLicence) return `Total loss licence check: ${tlLicence}`;
+  const tlNoRate = refusedWith(await completeHandover(session, origin, totalLoss.claimId, true), /daily rate/, "Handover with no daily rate");
+  if (tlNoRate) return tlNoRate;
+  const tlRate = await setDailyRate(session, origin, totalLoss.claimId, "S2");
+  if (tlRate) return `Total loss rate: ${tlRate}`;
+  const tlHand = followed(await completeHandover(session, origin, totalLoss.claimId, true), "total loss handover");
+  if (tlHand) return tlHand;
 
+  // Fault courtesy car: licence check only, no rate, no agreement, no signed copy.
+  await gotoPath(session, origin, `/claims/${fault.claimId}/hire`);
+  const faultNeed = followed(await submitForm(session, 'form[action$="/hire/need"]', { choice: "yes", reason: "" }), "Courtesy needed");
+  if (faultNeed) return faultNeed;
   await gotoPath(session, origin, `/claims/${fault.claimId}/hire`);
   const courtesy = await hireOutline(session);
   if (courtesy.bank) return "The courtesy file showed a bank-statement step.";
   if (courtesy.produce) return "The courtesy file offered a hire agreement.";
-  const wording = await session.evaluate<string>(`document.body.innerText`);
-  if (/credit hire/i.test(wording)) return "The courtesy file showed credit-hire wording.";
-  if (wording.includes("Generate Hire Agreement") || wording.includes("Generate Hire Pack")) {
-    return "The courtesy file offered a hire agreement.";
-  }
-  const faultLicence = await saveLicenceCheck(session, origin, fault.claimId);
+  if (/credit hire/i.test(courtesy.text)) return "The courtesy file showed credit-hire wording.";
+  if (/taken from Settings|daily rate/i.test(courtesy.text)) return "The courtesy file talked about a daily rate.";
+  const faultLicence = await saveLicenceCheck(session, origin, fault.claimId, "JOURN850412FC9CD");
   if (faultLicence) return `Courtesy licence check: ${faultLicence}`;
-  const faultCar = await chooseFirstCar(session, origin, fault.claimId);
+  const faultCar = await chooseFirstCar(session, origin, fault.claimId, "staff-driver");
   if ("problem" in faultCar) return `Courtesy car: ${faultCar.problem}`;
-  const faultHand = await completeHandover(session, origin, fault.claimId);
-  if (faultHand) return `Courtesy handover: ${faultHand}`;
+  const faultHand = followed(await completeHandover(session, origin, fault.claimId, false), "courtesy handover");
+  if (faultHand) return faultHand;
   if (hireFacts(dbPath, fault.claimId).documents !== 0) return "The courtesy file stored a hire agreement.";
   await gotoPath(session, origin, `/claims/${fault.claimId}`);
   const faultStep = await session.evaluate<string>(`document.querySelector('[data-step="hire"]')?.getAttribute("data-state") || ""`);
@@ -894,7 +945,7 @@ async function main() {
     serverLog = (serverLog + chunk.toString("utf8")).slice(-2000);
   });
   const stopServer = () => {
-    if (child.exitCode === null && !child.killed) child.kill();
+    if (child.exitCode === null && !child.killed) stopTree(child);
     try {
       fs.rmSync(databaseDir, { recursive: true, force: true });
     } catch {
@@ -944,12 +995,12 @@ async function main() {
       }
     }
     if (results.every((item) => !item.problem) && made.length === CLAIM_JOURNEYS.length) {
-      const hireProblem = await runHireJourneys(browser.session, origin, databasePath, made);
+      const hireProblem = await runHireJourneys(browser.session, origin, databasePath, made, cookie);
       if (hireProblem) {
         results.push({ id: "repairable", problem: hireProblem });
         console.log(`FAIL  Hire  ${hireProblem}`);
       } else {
-        console.log("PASS  Hire  free cars, driver job, pack, handover, clash, not yet, courtesy");
+        console.log("PASS  Hire  only free cars, driver jobs, licence number, rate, agreement gates, signed copy, status wording, clash, not yet, courtesy");
       }
     }
   } catch (error) {
@@ -970,4 +1021,13 @@ async function main() {
   console.log("Journey checks passed. Email stayed on simulate. The demonstration database was not used.");
 }
 
-main();
+/** On Windows the browser and the server start child processes. Stop the whole tree so the check can finish. */
+function stopTree(child: ChildProcess) {
+  if (process.platform === "win32" && child.pid) {
+    spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
+  } else {
+    child.kill();
+  }
+}
+
+main().then(() => process.exit(process.exitCode ?? 0));

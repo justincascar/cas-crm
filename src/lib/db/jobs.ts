@@ -48,7 +48,8 @@ export function handoverSuggestion(kind: string): { vehicle: "hire" | "customer"
 
 export type DayJob = {
   id: string;
-  assigneeId: string;
+  assigneeId: string | null;
+  assigneeName: string;
   jobKind: string;
   jobLabel: string;
   claimId: string;
@@ -69,7 +70,8 @@ export type DayJob = {
 
 type JobRow = {
   id: string;
-  assignee_id: string;
+  assignee_id: string | null;
+  assignee_name?: string | null;
   job_kind: string;
   claim_id: string;
   file_reference: string | null;
@@ -87,13 +89,14 @@ type JobRow = {
   client_phone: string | null;
 };
 
-const JOB_SELECT = `SELECT a.id, a.assignee_id, a.job_kind, a.claim_id, c.file_reference, a.hire_episode_id, a.work_date,
+const JOB_SELECT = `SELECT a.id, a.assignee_id, assignee.name AS assignee_name, a.job_kind, a.claim_id, c.file_reference, a.hire_episode_id, a.work_date,
             a.completed_at, a.actual_driver_id, a.actual_occurred_at, a.planned_at, a.place_text,
             v.registration, v.make, v.model,
             client.full_name AS client_name, client.telephone AS client_phone
      FROM day_assignments a
      JOIN claims c ON c.id = a.claim_id
      LEFT JOIN people client ON client.id = c.client_person_id
+     LEFT JOIN staff assignee ON assignee.id = a.assignee_id
      LEFT JOIN hire_episodes he ON he.id = a.hire_episode_id
      LEFT JOIN fleet_vehicles fv ON fv.id = he.fleet_vehicle_id
      LEFT JOIN vehicles v ON v.id = COALESCE(fv.vehicle_id, c.client_vehicle_id)`;
@@ -104,6 +107,7 @@ function mapJob(row: JobRow): DayJob {
   return {
     id: row.id,
     assigneeId: row.assignee_id,
+    assigneeName: row.assignee_name ? String(row.assignee_name) : "",
     jobKind: row.job_kind,
     jobLabel: jobTypeLabel(row.job_kind),
     claimId: row.claim_id,
@@ -182,6 +186,52 @@ export function listMyUpcomingJobs(assigneeId: string): UpcomingDay[] {
     days.push({ date, jobs: jobs.filter((job) => job.workDate === date) });
   }
   return days;
+}
+
+export type DriverJobRow = DayJob & { cancelled: boolean };
+
+/**
+ * Driver jobs from today to a month ahead, plus any delivery, collection, recovery or return from an earlier day
+ * that is still not done (the same jobs My jobs today carries forward). Unassigned jobs are included.
+ * Cancelled jobs are left out.
+ */
+export function listDriverJobs(today = londonTodayIso()): DriverJobRow[] {
+  const kinds = [...HANDOVER_JOB_KINDS].map(() => "?").join(", ");
+  const carry = CARRY_FORWARD_JOB_KINDS.map(() => "?").join(", ");
+  const to = isoDateFromNow(31);
+  const rows = all<JobRow>(
+    `${JOB_SELECT}
+     WHERE a.cancelled_at IS NULL
+       AND a.job_kind IN (${kinds})
+       AND (
+         (a.work_date >= ? AND a.work_date <= ?)
+         OR (a.work_date < ? AND a.completed_at IS NULL AND a.job_kind IN (${carry}))
+       )
+     ORDER BY a.work_date, COALESCE(a.planned_at, a.work_date), CASE WHEN a.assignee_id IS NULL THEN 0 ELSE 1 END, assignee.name, c.file_reference`,
+    [...HANDOVER_JOB_KINDS, today, to, today, ...CARRY_FORWARD_JOB_KINDS],
+  );
+  return rows.map((row) => {
+    const job = mapJob(row);
+    return { ...job, overdue: !job.completed && job.workDate < today, cancelled: false };
+  });
+}
+
+/** The office chooses, changes or clears the driver on a job that is not done. */
+export function reassignDayJob(input: { jobId: string; assigneeId: string; actorId: string }) {
+  const actor = get<{ role: string }>("SELECT role FROM staff WHERE id = ?", [input.actorId]);
+  if (!actor || !isOfficeRole(actor.role)) throw new Error("Only office staff can choose the driver.");
+  const job = get<{ id: string; completed_at: string | null; cancelled_at: string | null }>(
+    "SELECT id, completed_at, cancelled_at FROM day_assignments WHERE id = ?",
+    [input.jobId],
+  );
+  if (!job || job.cancelled_at) throw new Error("That job was not found.");
+  if (job.completed_at) throw new Error("That job is done. The driver who did it stays on the record.");
+  const id = input.assigneeId.trim();
+  if (id) {
+    const person = get<{ role: string }>("SELECT role FROM staff WHERE id = ? AND active = 1", [id]);
+    if (!person || !canDoFieldJob(person.role)) throw new Error("Choose a driver, or leave the job unassigned.");
+  }
+  run("UPDATE day_assignments SET assignee_id = ? WHERE id = ?", [id || null, job.id]);
 }
 
 export function getDayAssignment(id: string): DayJob | undefined {

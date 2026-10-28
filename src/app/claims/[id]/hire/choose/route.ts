@@ -17,6 +17,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       actorId: staffId,
       submitKey: key,
       expectedVersion: versionField == null ? undefined : String(versionField),
+      driverId: String(form.get("driverId") || ""),
     });
   });
 }

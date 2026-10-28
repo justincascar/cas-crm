@@ -23,11 +23,14 @@ import {
   STANDARD_SHOTS,
 } from "../src/lib/db/handover.ts";
 import { SIGNATURE_HONESTY } from "../src/lib/domain/handover-signature.ts";
-import { recordPassingPrehireChecks } from "./prehire-setup.ts";
+import { prepareAgreementItems, recordPassingPrehireChecks } from "./prehire-setup.ts";
 import { utcFromLondonDateTime } from "../src/lib/dates.ts";
 import { readStoredFile } from "../src/lib/storage/files.ts";
 import { migrate } from "../src/lib/db/migrate.ts";
 import { seed } from "../src/lib/db/seed.ts";
+
+/** A fictional signed copy. A credit-hire handover needs one before hire starts. */
+const SIGNED_COPY = { buffer: Buffer.from("%PDF-1.4"), filename: "signed-hire-agreement.pdf", mimeType: "application/pdf" };
 
 const schema = fs.readFileSync(path.join(process.cwd(), "src/lib/db/schema.sql"), "utf8");
 
@@ -169,7 +172,8 @@ describe("vehicle handover records", () => {
         }),
       );
       recordPassingPrehireChecks("c3");
-      const result = generateHireAgreementDocument("c3", "staff-sian", 6653);
+      prepareAgreementItems("c3");
+      const result = generateHireAgreementDocument("c3", "staff-sian");
       const html = String((db.prepare(`SELECT body_html FROM documents WHERE id = ?`).get(result.documentId) as { body_html: string }).body_html);
       assert.match(html, /Mileage at delivery: 22,222/);
       assert.match(html, /Fuel level at delivery: ½/);
@@ -285,7 +289,7 @@ describe("vehicle handover records", () => {
         });
         assert.equal(added.incomplete, false);
         assert.equal(requiredShotProgress(originalShots().map((photo) => photo.slot), "five").label, "5 of 5 done");
-        const finished = finishVehicleHandover({ claimId: "c3", handoverId: saved.id, actorId: "staff-sian" });
+        const finished = finishVehicleHandover({ claimId: "c3", handoverId: saved.id, actorId: "staff-sian", signedCopy: SIGNED_COPY });
         const row = listVehicleHandovers("c3").find((item) => item.id === saved.id);
         assert.equal(row?.incomplete, false);
         assert.equal(row?.photos.some((photo) => photo.slot === "dash" || photo.slot === "chassis"), false);
@@ -345,7 +349,7 @@ describe("vehicle handover records", () => {
           photos: originalShots(),
         });
         assert.equal(hireDone.incomplete, false);
-        finishVehicleHandover({ claimId: "c3", handoverId: hire.id, actorId: "staff-sian" });
+        finishVehicleHandover({ claimId: "c3", handoverId: hire.id, actorId: "staff-sian", signedCopy: SIGNED_COPY });
         const fiveOnly = addHandoverPhotographs({
           claimId: "c3",
           handoverId: own.id,

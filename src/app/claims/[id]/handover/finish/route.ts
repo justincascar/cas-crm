@@ -13,10 +13,16 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const form = await request.formData();
     const claimId = String(form.get("claimId") || id);
     if (claimId !== id) throw new Error("That handover is not on this file.");
+    const signed = form.get("signedAgreement");
+    const signedCopy =
+      signed instanceof File && signed.size > 0
+        ? { buffer: Buffer.from(await signed.arrayBuffer()), filename: signed.name || "signed-hire-agreement.jpg", mimeType: signed.type || "" }
+        : null;
     finishVehicleHandover({
       claimId,
       handoverId: String(form.get("handoverId") || ""),
       actorId: staff.id,
+      signedCopy,
     });
     const url = new URL("/jobs", origin);
     url.searchParams.set("finished", "1");
