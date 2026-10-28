@@ -100,6 +100,7 @@ DONE — 2a3d472. Known issues 45, 48 and 49 in the audit list what is left.
 - Changing a repairable claim to a total loss must keep the history.
 
 ### J6 — Money and chasing (step 10)
+DONE — 3e0b2fd. Invoice template and sending hours are questions 7 and 8. Known issues 45, 50 and 51 in the audit.
 - Each head of loss kept separately: repairs, recovery, storage, hire, other.
 - Track claimed, offered, agreed, paid, outstanding and overpaid.
 - Show quantity × rate, net, VAT and gross.
