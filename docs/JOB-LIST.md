@@ -77,6 +77,7 @@ DONE — fc743cb. Recovery mileage and the card fee are open questions.
 - Recovery mileage stays open (see the questions file).
 
 ### J4 — Letters and engineer (steps 4–7)
+DONE — ada76d4. Known issues 45–47 in the audit list what is left.
 - Generating a letter marks its step done, with an option to hold back the step if the letter wasn't sent.
 - Add an insurer email template on that screen.
 - Engineer instruction and Audatex estimate, sent, received and forwarded to the insurer, each as one click with a date.
