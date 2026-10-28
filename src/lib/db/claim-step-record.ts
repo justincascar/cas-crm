@@ -1,7 +1,9 @@
 import { isOfficeRole } from "../auth/roles";
 import { faultInvoicePence, isClaimStepKey, type ClaimStepKey } from "../domain/claim-steps";
 import { utcFromLondonDateTime } from "../dates";
-import { londonTodayIso, nowUtcIso } from "../dates";
+import { formatUkDate, londonDateIso, londonTodayIso, nowUtcIso } from "../dates";
+import { formatGbp } from "../money";
+import { SHARED_HIRE_END, guardSharedFields, hireEndAt } from "./shared-fields";
 import { poundsToPence } from "./intake";
 import { get, newId, run } from "./connection";
 import { recordClaimEvent } from "./chronology";
@@ -507,6 +509,143 @@ export function recordReportSentByHand(input: { claimId: string; actorId: string
     occurredAt,
     actorId: input.actorId,
     details: `Sent to ${recipient}. Marked as sent by ${staffName(input.actorId)} on the claim steps.`,
+    channel: "file",
+    source: "staff",
+  });
+}
+
+function latestDay(claimId: string, eventType: string): string | null {
+  const row = get<{ occurred_at: string }>(
+    `SELECT occurred_at FROM claim_events WHERE claim_id = ? AND event_type = ? ORDER BY occurred_at DESC LIMIT 1`,
+    [claimId, eventType],
+  );
+  return row?.occurred_at ? londonDateIso(new Date(row.occurred_at)) : null;
+}
+
+function notBefore(day: string, earlierDay: string | null, what: string) {
+  if (earlierDay && day < earlierDay) throw new Error(`The date cannot be before ${what} (${formatUkDate(earlierDay)}).`);
+}
+
+/** Step 8, repair authorisation received, with an optional authorised figure and reduction. Money heads are not changed. */
+export function recordRepairAuthorisedByHand(input: {
+  claimId: string;
+  actorId: string;
+  role: string;
+  occurredOn: string;
+  authorised: string;
+  reduction: string;
+  reductionNote: string;
+}) {
+  assertOffice(input.role);
+  const occurredAt = pastOrToday(input.occurredOn, "the date authorisation was received");
+  const authorisedOn = latestDay(input.claimId, "repairs_authorised");
+  const clearedOn = latestDay(input.claimId, "repairs_authorised_cleared");
+  if (authorisedOn && (!clearedOn || clearedOn < authorisedOn)) throw new Error("Repair authorisation is already on the file.");
+  const authorisedPence = optionalPence(input.authorised);
+  const cut = reduction(input.reduction, input.reductionNote, "reduction");
+  const parts = ["Repair authorisation received."];
+  if (authorisedPence != null) parts.push(`Authorised for ${formatGbp(authorisedPence)}.`);
+  if (cut.pence != null) parts.push(`Reduction ${formatGbp(cut.pence)}: ${cut.note}.`);
+  parts.push(`Recorded by ${staffName(input.actorId)} on the claim steps. Claimed, agreed and received were not changed.`);
+  return recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "repairs_authorised",
+    occurredAt,
+    actorId: input.actorId,
+    details: parts.join(" "),
+    channel: "file",
+    source: "staff",
+  });
+}
+
+/** Step 9, repairs started or repairs complete, each once, in order. */
+export function recordRepairMilestoneByHand(input: {
+  claimId: string;
+  actorId: string;
+  role: string;
+  occurredOn: string;
+  milestone: "repairs_started" | "repairs_complete";
+}) {
+  assertOffice(input.role);
+  const words = input.milestone === "repairs_started" ? "Repairs started" : "Repairs complete";
+  const occurredAt = pastOrToday(input.occurredOn, `the date for ${words.toLowerCase()}`);
+  if (hasEvent(input.claimId, input.milestone)) throw new Error(`${words} is already on the file.`);
+  if (input.milestone === "repairs_complete") {
+    const started = latestDay(input.claimId, "repairs_started");
+    if (!started) throw new Error("Record repairs started first.");
+    notBefore(input.occurredOn.trim(), started, "repairs started");
+  }
+  return recordClaimEvent({
+    claimId: input.claimId,
+    eventType: input.milestone,
+    occurredAt,
+    actorId: input.actorId,
+    details: `${words}. Recorded by ${staffName(input.actorId)} on the claim steps.`,
+    channel: "file",
+    source: "staff",
+  });
+}
+
+/** Step 9, the repaired car back with the client. Only after repairs are complete. */
+export function recordCarReturnedByHand(input: { claimId: string; actorId: string; role: string; occurredOn: string }) {
+  assertOffice(input.role);
+  const occurredAt = pastOrToday(input.occurredOn, "the date the car was returned");
+  if (hasEvent(input.claimId, "vehicle_returned")) throw new Error("The car is already recorded as returned.");
+  const complete = latestDay(input.claimId, "repairs_complete");
+  if (!complete) throw new Error("Record repairs complete first.");
+  notBefore(input.occurredOn.trim(), complete, "repairs complete");
+  return recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "vehicle_returned",
+    occurredAt,
+    actorId: input.actorId,
+    details: `Repaired car returned to the client. Recorded by ${staffName(input.actorId)} on the claim steps.`,
+    channel: "file",
+    source: "staff",
+  });
+}
+
+/**
+ * Step 9, repairable hire end, confirmed by a handler. Hire ends only after repairs are complete and the repaired
+ * car is back with the client. The day is the day the hire car was collected. The daily rate is not changed.
+ */
+export function confirmRepairableHireEnd(input: { claimId: string; actorId: string; role: string; occurredOn: string }) {
+  assertOffice(input.role);
+  const day = input.occurredOn.trim();
+  pastOrToday(day, "the day the hire car was collected");
+  const claim = get<{ total_loss: number | null }>(`SELECT total_loss FROM claims WHERE id = ?`, [input.claimId]);
+  if (!claim) throw new Error("File not found.");
+  if (Number(claim.total_loss) === 1) throw new Error("A total-loss hire ends 7 days after the qualifying payment. It is confirmed on that step.");
+  if (!hasEvent(input.claimId, "repairs_complete") || !hasEvent(input.claimId, "vehicle_returned")) {
+    throw new Error("Hire ends only after repairs are complete and the repaired car is back with the client.");
+  }
+  notBefore(day, latestDay(input.claimId, "vehicle_returned"), "the car was returned");
+  const episode = get<{ id: string }>(
+    `SELECT id FROM hire_episodes WHERE claim_id = ? AND started_at IS NOT NULL AND (billing_end_at IS NULL OR billing_end_at = '')
+     ORDER BY started_at DESC LIMIT 1`,
+    [input.claimId],
+  );
+  if (!episode) throw new Error("There is no open hire on this file.");
+  guardSharedFields({
+    scope: SHARED_HIRE_END,
+    recordKey: episode.id,
+    actorId: input.actorId,
+    current: { billing_end_at: hireEndAt(episode.id) },
+    next: { billing_end_at: day },
+    labels: { billing_end_at: "Hire end" },
+    submitted: { billing_end_at: day },
+  });
+  run(`UPDATE hire_episodes SET billing_end_at = ?, hire_end_review_on = NULL, collection_at = COALESCE(collection_at, ?) WHERE id = ?`, [
+    day,
+    day,
+    episode.id,
+  ]);
+  return recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "hire_ended",
+    occurredAt: utcFromLondonDateTime(`${day}T12:00`),
+    actorId: input.actorId,
+    details: `Hire end confirmed by ${staffName(input.actorId)}: ${formatUkDate(day)}, the day the hire car was collected. The daily rate was left as it is.`,
     channel: "file",
     source: "staff",
   });

@@ -38,6 +38,8 @@ export function totalLossOffHireDecision(input: {
   salvageMismatch: string | null;
   existingHireEndDay: string | null;
   keptSuggestionDay: string | null;
+  /** What a disputed shortfall is about, when one is recorded. */
+  disputedShortfall?: string | null;
 }): TotalLossOffHireDecision {
   if (input.receivedPence <= 0) return { kind: "waiting" };
   const reasons: string[] = [];
@@ -52,6 +54,7 @@ export function totalLossOffHireDecision(input: {
     reasons.push("The salvage sale does not match the engineer's salvage figure.");
   }
   if (input.salvageMismatch) reasons.push(input.salvageMismatch);
+  if (input.disputedShortfall) reasons.push(`A shortfall is disputed: ${input.disputedShortfall}.`);
   if (reasons.length > 0) return { kind: "review", reasons };
   if (!input.paymentAt) {
     return { kind: "review", reasons: ["The date the payment arrived is not on the file."] };

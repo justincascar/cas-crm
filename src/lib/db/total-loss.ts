@@ -4,12 +4,14 @@ import { buildMailtoHref } from "../email/mailto";
 import { mailboxSentDetails } from "../email/sent-wording";
 import { formatGbp } from "../money";
 import {
+  asSalvageCategory,
   disposalApplies,
   salvageRequestMismatch,
   salvageSaleVariance,
   totalLossSuggestion,
   type CasSalvageRequest,
   type InsurerSalvageInterest,
+  type SalvageCategory,
   type SalvageDisposal,
   type TotalLossFigures,
 } from "../domain/total-loss";
@@ -36,6 +38,9 @@ type ReportRow = {
   customer_charge_pence: number | null;
   cas_purchase_pence: number | null;
   cas_request: string | null;
+  salvage_category: string | null;
+  disputed_shortfall_pence: number | null;
+  disputed_shortfall_note: string | null;
 };
 
 const EMPTY: TotalLossFigures = {
@@ -49,6 +54,9 @@ const EMPTY: TotalLossFigures = {
   customerChargePence: null,
   casPurchasePence: null,
   casRequest: null,
+  salvageCategory: null,
+  disputedShortfallPence: null,
+  disputedShortfallNote: null,
 };
 
 function asInterest(value: string | null): InsurerSalvageInterest | null {
@@ -79,6 +87,9 @@ function mapRow(row: ReportRow | undefined): TotalLossFigures {
     customerChargePence: row.customer_charge_pence,
     casPurchasePence: row.cas_purchase_pence,
     casRequest: asRequest(row.cas_request),
+    salvageCategory: asSalvageCategory(row.salvage_category),
+    disputedShortfallPence: row.disputed_shortfall_pence,
+    disputedShortfallNote: row.disputed_shortfall_note,
   };
 }
 
@@ -103,7 +114,8 @@ export function getInsurerPaymentPromisedAt(claimId: string): string | null {
 export function getTotalLossReport(claimId: string): TotalLossFigures {
   const row = get<ReportRow>(
     `SELECT pav_pence, salvage_pence, insurer_salvage_interest, insurer_offered_pence, disposal,
-            sale_proceeds_pence, returned_on, customer_charge_pence, cas_purchase_pence, cas_request
+            sale_proceeds_pence, returned_on, customer_charge_pence, cas_purchase_pence, cas_request,
+            salvage_category, disputed_shortfall_pence, disputed_shortfall_note
      FROM total_loss_reports WHERE claim_id = ?`,
     [claimId],
   );
@@ -188,6 +200,10 @@ export function saveTotalLossReport(input: {
   casPurchasePence?: number | null;
   /** Undefined leaves the recorded request unchanged. Null clears it. */
   casRequest?: CasSalvageRequest | null;
+  /** Undefined leaves each of these unchanged. */
+  salvageCategory?: SalvageCategory | null;
+  disputedShortfallPence?: number | null;
+  disputedShortfallNote?: string | null;
 }): TotalLossFigures {
   assertTotalLoss(input.claimId);
   const current = getTotalLossReport(input.claimId);
@@ -204,13 +220,20 @@ export function saveTotalLossReport(input: {
       !applyDisposal || input.customerChargePence === undefined ? current.customerChargePence : input.customerChargePence,
     casPurchasePence: !applyDisposal || input.casPurchasePence === undefined ? current.casPurchasePence : input.casPurchasePence,
     casRequest: input.casRequest === undefined ? current.casRequest : input.casRequest,
+    salvageCategory: input.salvageCategory === undefined ? current.salvageCategory : input.salvageCategory,
+    disputedShortfallPence: input.disputedShortfallPence === undefined ? current.disputedShortfallPence : input.disputedShortfallPence,
+    disputedShortfallNote: input.disputedShortfallNote === undefined ? current.disputedShortfallNote : input.disputedShortfallNote,
   };
+  if (next.disputedShortfallPence != null && !String(next.disputedShortfallNote || "").trim()) {
+    throw new Error("Enter what the disputed shortfall is about.");
+  }
   const at = nowUtcIso();
   run(
     `INSERT INTO total_loss_reports(
       claim_id, pav_pence, salvage_pence, insurer_salvage_interest, insurer_offered_pence, disposal,
-      sale_proceeds_pence, returned_on, customer_charge_pence, cas_purchase_pence, cas_request, updated_at, updated_by
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      sale_proceeds_pence, returned_on, customer_charge_pence, cas_purchase_pence, cas_request,
+      salvage_category, disputed_shortfall_pence, disputed_shortfall_note, updated_at, updated_by
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(claim_id) DO UPDATE SET
       pav_pence = excluded.pav_pence,
       salvage_pence = excluded.salvage_pence,
@@ -222,6 +245,9 @@ export function saveTotalLossReport(input: {
       customer_charge_pence = excluded.customer_charge_pence,
       cas_purchase_pence = excluded.cas_purchase_pence,
       cas_request = excluded.cas_request,
+      salvage_category = excluded.salvage_category,
+      disputed_shortfall_pence = excluded.disputed_shortfall_pence,
+      disputed_shortfall_note = excluded.disputed_shortfall_note,
       updated_at = excluded.updated_at,
       updated_by = excluded.updated_by`,
     [
@@ -236,6 +262,9 @@ export function saveTotalLossReport(input: {
       next.customerChargePence,
       next.casPurchasePence,
       next.casRequest,
+      next.salvageCategory,
+      next.disputedShortfallPence,
+      next.disputedShortfallNote ? next.disputedShortfallNote.trim() : null,
       at,
       input.actorId,
     ],
@@ -248,12 +277,17 @@ export function saveTotalLossReport(input: {
       : ` Sale proceeds differ from the engineer's salvage value by ${(variance / 100).toFixed(2)} pounds. That difference is flagged and has not been added to the agreed or paid vehicle-damage amount.`;
   const mismatch = salvageRequestMismatch(next.casRequest, next.interest);
   const mismatchNote = mismatch ? ` ${mismatch} Storage and recovery figures were not changed.` : "";
+  const shortfallNote =
+    next.disputedShortfallPence != null
+      ? ` Disputed shortfall £${(next.disputedShortfallPence / 100).toFixed(2)}: ${String(next.disputedShortfallNote || "").trim()}. Flagged for review, not added to agreed or paid.`
+      : "";
+  const categoryNote = next.salvageCategory ? ` Salvage category ${next.salvageCategory}.` : "";
   recordClaimEvent({
     claimId: input.claimId,
     eventType: "total_loss_figures_recorded",
     occurredAt: at,
     actorId: input.actorId,
-    details: `Engineer's total-loss figures saved. Agreed and paid amounts were not changed.${varianceNote}${mismatchNote}`,
+    details: `Engineer's total-loss figures saved. Agreed and paid amounts were not changed.${categoryNote}${varianceNote}${mismatchNote}${shortfallNote}`,
     source: "staff",
   });
   if (next.disposal === "sold" || next.disposal === "returned" || next.disposal === "bought_by_cas") {

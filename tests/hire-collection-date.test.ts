@@ -51,7 +51,7 @@ function snapshot(db: DatabaseSync, claimId: string, episodeId: string) {
 }
 
 describe("hire ends on the day the hire car is collected", () => {
-  it("uses the collection job date when the booking has no hire end, and leaves rate, storage and off-hire alone", () => {
+  it("proposes the collection job date when the booking has no hire end, for a handler to confirm, and leaves rate, storage and off-hire alone", () => {
     const db = prepared();
     const before = withDatabase(db, () => snapshot(db, "c3", "h-c3"));
     withDatabase(db, () => {
@@ -62,10 +62,10 @@ describe("hire ends on the day the hire car is collected", () => {
         actualOccurredAt: occurred,
         actorId: "staff-sian",
       });
-      assert.equal(result.status, "applied");
+      assert.equal(result.status, "proposed");
       const after = snapshot(db, "c3", "h-c3");
-      assert.equal(after.episode?.billing_end_at, "2026-09-18");
-      assert.equal(after.episode?.hire_end_review_on, null);
+      assert.equal(after.episode?.billing_end_at, null);
+      assert.equal(after.episode?.hire_end_review_on, "2026-09-18");
       assert.equal(after.episode?.collection_at, "2026-09-18");
       assert.equal(before.episode?.collection_at, null);
       assert.equal(after.episode?.rate_pence_per_day, before.episode?.rate_pence_per_day);
@@ -121,7 +121,7 @@ describe("hire ends on the day the hire car is collected", () => {
     db.close();
   });
 
-  it("sets the end date from a completed collection job, and a delivery does not", () => {
+  it("proposes the end date from a completed collection job, and a delivery does not", () => {
     const db = prepared();
     withDatabase(db, () => {
       const collected = assignDayJob({
@@ -138,7 +138,8 @@ describe("hire ends on the day the hire car is collected", () => {
       assert.equal(collected.hireEndReview, false);
       assert.equal(collected.storageDateReview, false);
       assert.equal(collected.storageEndReview, false);
-      assert.equal(snapshot(db, "c3", "h-c3").episode?.billing_end_at, "2026-09-18");
+      assert.equal(snapshot(db, "c3", "h-c3").episode?.billing_end_at, null);
+      assert.equal(snapshot(db, "c3", "h-c3").episode?.hire_end_review_on, "2026-09-18");
 
       db.prepare(`UPDATE hire_episodes SET billing_end_at = NULL, hire_end_review_on = NULL WHERE id = 'h-c4'`).run();
       assignDayJob({

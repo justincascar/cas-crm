@@ -1116,6 +1116,60 @@ async function runLettersJourney(session: BrowserSession, origin: string, dbPath
   return null;
 }
 
+/**
+ * Steps 8 and 9 on the repairable file after step 7: authorisation, repairs started and complete, car returned,
+ * then the storage end and hire end, each confirmed by the handler. The hire end waits until the car is back.
+ */
+async function runEndingsJourney(session: BrowserSession, origin: string, dbPath: string, made: MadeClaim[]) {
+  const repairable = made.find((item) => item.id === "repairable");
+  if (!repairable) return "The repairable file was not created.";
+  const page = `/claims/${repairable.claimId}`;
+  const clicks: Array<[string, Record<string, string>, string | null]> = [
+    ["authorisation", { authorised: "1850", reduction: "120", reductionNote: "labour rate reduced" }, "repair_authorisation"],
+    ["repairs_started", {}, null],
+    ["repairs_complete", {}, null],
+    ["car_returned", {}, null],
+  ];
+  for (const [intent, extra, doneStep] of clicks) {
+    await gotoPath(session, origin, page);
+    const problem = await oneClick(session, intent, extra);
+    if (problem) return problem;
+    if (doneStep) {
+      await gotoPath(session, origin, page);
+      if ((await stepState(session, doneStep)) !== "done") return `Step ${doneStep} was not done after one click.`;
+    }
+  }
+  await gotoPath(session, origin, page);
+  const offered = await session.evaluate<string[]>(
+    `[...document.querySelectorAll('[data-step="finish"] input[name="intent"]')].map((item) => item.value)`,
+  );
+  if (!offered.includes("hire_end")) return `Step 9 did not offer the hire end after the car was returned (${offered.join(", ")}).`;
+  if (offered.includes("storage_end")) {
+    const storage = await oneClick(session, "storage_end", { occurredOn: HIRE_DAY });
+    if (storage) return storage;
+    await gotoPath(session, origin, page);
+  }
+  const hire = await oneClick(session, "hire_end", { occurredOn: HIRE_DAY });
+  if (hire) return hire;
+  await gotoPath(session, origin, page);
+  const finish = await stepState(session, "finish");
+  if (finish !== "done") {
+    const text = await session.evaluate<string>(`document.querySelector('[data-step="finish"]')?.innerText || ""`);
+    return `Step 9 was ${finish || "missing"} after the endings were confirmed: ${text.replace(/\s+/g, " ")}`;
+  }
+  const facts = readDb(dbPath, (db) => ({
+    hire: db.prepare(`SELECT billing_end_at FROM hire_episodes WHERE claim_id = ? ORDER BY started_at DESC LIMIT 1`).get(repairable.claimId) as
+      | { billing_end_at: string | null }
+      | undefined,
+    agreed: db.prepare(`SELECT COALESCE(SUM(agreed_pence), 0) AS n FROM financial_lines WHERE claim_id = ? AND head_of_loss = 'repairs'`).get(repairable.claimId) as {
+      n: number;
+    },
+  }));
+  if (facts.hire?.billing_end_at !== HIRE_DAY) return `Hire end was ${facts.hire?.billing_end_at || "not set"}, not the confirmed day.`;
+  if (Number(facts.agreed.n) !== 0) return "Recording the authorisation changed the agreed repair figure.";
+  return null;
+}
+
 async function main() {
   if (!fs.existsSync(path.join(process.cwd(), ".next", "BUILD_ID"))) {
     console.error("There is no production build. Run npm run build, then npm run test:journeys.");
@@ -1203,6 +1257,13 @@ async function main() {
           console.log(`FAIL  Letters and engineer  ${lettersProblem}`);
         } else {
           console.log("PASS  Letters and engineer  letter marks step 4, insurer email offered, steps 5 to 7 one click each with a date, fault file on Audatex with no credit-hire items");
+          const endingsProblem = await runEndingsJourney(browser.session, origin, databasePath, made);
+          if (endingsProblem) {
+            results.push({ id: "repairable", problem: endingsProblem });
+            console.log(`FAIL  Repairs and endings  ${endingsProblem}`);
+          } else {
+            console.log("PASS  Repairs and endings  authorisation with a reduction, repairs started and complete, car returned, storage end and hire end confirmed by the handler");
+          }
         }
       }
     }

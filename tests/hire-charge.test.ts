@@ -9,6 +9,7 @@ import { letterPreview } from "../src/lib/db/chronology.ts";
 import { migrate } from "../src/lib/db/migrate.ts";
 import { seed } from "../src/lib/db/seed.ts";
 import { applyHireCollectionActualDate } from "../src/lib/db/hire-collection-date.ts";
+import { confirmRepairableHireEnd } from "../src/lib/db/claim-step-record.ts";
 import { adoptHireClaimedIfNone, hireChargeForClaim, storedHireMoney } from "../src/lib/db/hire-charge.ts";
 import { confirmTotalLossOffHire } from "../src/lib/db/total-loss-off-hire.ts";
 import {
@@ -24,6 +25,19 @@ import { isoDaysFromNow, londonDateIso } from "../src/lib/dates.ts";
 import { ukDayLabel } from "../src/lib/domain/storage-charge.ts";
 
 const schema = fs.readFileSync(path.join(process.cwd(), "src/lib/db/schema.sql"), "utf8");
+
+/** The collection job only proposes the hire end. A handler confirms it once repairs are done and the car is back. */
+function handlerConfirmsHireEnd(claimId: string, collectedAt: string) {
+  const before = isoDaysFromNow(-2, 9, 0);
+  for (const type of ["repairs_complete", "vehicle_returned"]) {
+    run(
+      `INSERT INTO claim_events(id, claim_id, event_type, title, details, occurred_at, recorded_at, actor_id, source)
+       VALUES (?, ?, ?, ?, 'For the test.', ?, ?, 'staff-justin', 'staff')`,
+      [`test-${claimId}-${type}`, claimId, type, type, before, before],
+    );
+  }
+  confirmRepairableHireEnd({ claimId, actorId: "staff-justin", role: "staff", occurredOn: londonDateIso(new Date(collectedAt)) });
+}
 
 function prepared() {
   const db = new DatabaseSync(":memory:");
@@ -208,7 +222,7 @@ describe("hire charge on a file", () => {
     });
   });
 
-  it("keeps a repairable proposed end provisional until the collection job confirms it", () => {
+  it("keeps a repairable proposed end provisional until a handler confirms the collection day", () => {
     const db = prepared();
     withDatabase(db, () => {
       const handover = get<{ occurred_at: string }>(
@@ -230,6 +244,9 @@ describe("hire charge on a file", () => {
         actualOccurredAt: collectedAt,
         actorId: "staff-megan",
       });
+      const collectedOnly = hireChargeForClaim("c8");
+      assert.equal(collectedOnly.confirmedEndDay, null);
+      handlerConfirmsHireEnd("c8", collectedAt);
       const confirmed = hireChargeForClaim("c8");
       assert.equal(confirmed.confirmedEndDay, londonDateIso(new Date(collectedAt)));
       assert.equal(confirmed.charge.status, "calculated");
@@ -283,6 +300,7 @@ describe("hire charge on a file", () => {
         actualOccurredAt: collectedAt,
         actorId: "staff-megan",
       });
+      handlerConfirmsHireEnd("c8", collectedAt);
       const before = get<{ billing_end_at: string | null; rate_pence_per_day: number | null }>(
         `SELECT billing_end_at, rate_pence_per_day FROM hire_episodes WHERE id = 'h-c8'`,
       );

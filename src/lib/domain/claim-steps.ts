@@ -56,7 +56,17 @@ export type ClaimStepForm =
   | "invoice_paid"
   | "own_insurer"
   | "engineer_instructed"
-  | "report_sent";
+  | "report_sent"
+  | "authorisation"
+  | "repairs_started"
+  | "repairs_complete"
+  | "car_returned"
+  | "hire_end"
+  | "storage_end"
+  | "tl_off_hire";
+
+/** A date the CRM proposes for a handler to confirm, with a short reason. */
+export type ClaimStepProposal = { day: string; note: string };
 
 export type ClaimStepEvent = {
   event_type: string;
@@ -128,6 +138,12 @@ export type ClaimStepInput = {
   hireEndedOn: string | null;
   salvageRecorded: boolean;
   qualifyingOffHireOn: string | null;
+  /** Repairable hire: the day the hire car was collected, waiting for a handler to confirm it as the hire end. */
+  hireEndProposedOn?: string | null;
+  /** Storage end proposed from repair authorisation or repairs started, waiting for a handler. */
+  storageEndProposal?: ClaimStepProposal | null;
+  /** Total loss: 7 days after the qualifying payment, or the reasons a person must review first. */
+  offHire?: { day: string | null; reasons: string[] } | null;
   audatex?: AudatexFacts | null;
   events: ClaimStepEvent[];
   chases: ClaimStepChase[];
@@ -147,6 +163,7 @@ export type ClaimStepView = {
   buttonLabel: string | null;
   buttonHref: string | null;
   forms: ClaimStepForm[];
+  proposals: Partial<Record<ClaimStepForm, ClaimStepProposal>>;
   detailsHref: string;
   progressDone: number | null;
   progressTotal: number | null;
@@ -248,6 +265,15 @@ function reportSendWords(event: ClaimStepEvent): string {
   if (/not a live send/i.test(details) || /not auto-sent/i.test(details)) return "Not a live send";
   if (dispatchFromHistoryNote(details) === "sent") return "Marked as sent";
   return "Recorded on the file";
+}
+
+/** The authorised figure and any reduction, as the handler typed them on step 8. */
+function authorisationDetail(event: ClaimStepEvent): string | null {
+  const details = event.details || "";
+  const authorisedFor = /Authorised for (£[\d,]+\.\d{2})/.exec(details)?.[1];
+  const reduced = /Reduction (£[\d,]+\.\d{2}): ([^.]+)\./.exec(details);
+  const parts = [authorisedFor ? `Authorised ${authorisedFor}` : null, reduced ? `Reduced by ${reduced[1]}, ${reduced[2]}` : null].filter(Boolean);
+  return parts.length ? `${parts.join(". ")}.` : null;
 }
 
 function blank(value: string | null | undefined): boolean {
@@ -380,6 +406,8 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
   const hireEndedEvent = latest(events, "hire_ended");
   const storageEndedEvent = latest(events, "storage_ended");
   const storageStartedEvent = latest(events, "storage_started");
+  const hireEndConfirmed = latest(events, "hire_end_date_confirmed");
+  const storageEndConfirmed = latest(events, "storage_end_date_confirmed");
   const paymentReceived = latest(events, "total_loss_payment_received");
   const authorised = latest(events, "repairs_authorised");
   const audatexSent = latest(events, "audatex_estimate_sent");
@@ -429,12 +457,13 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
   steps.push(paymentsStep());
   return steps;
 
-  function shell(partial: Omit<ClaimStepView, "lines" | "historyLines" | "forms" | "dueAt" | "progressDone" | "progressTotal" | "missingCount" | "missingHref" | "detail" | "buttonLabel" | "buttonHref"> & Partial<ClaimStepView>): ClaimStepView {
+  function shell(partial: Omit<ClaimStepView, "lines" | "historyLines" | "forms" | "proposals" | "dueAt" | "progressDone" | "progressTotal" | "missingCount" | "missingHref" | "detail" | "buttonLabel" | "buttonHref"> & Partial<ClaimStepView>): ClaimStepView {
     return {
       detail: null,
       lines: [],
       historyLines: [],
       forms: [],
+      proposals: {},
       progressDone: null,
       progressTotal: null,
       missingCount: 0,
@@ -751,9 +780,8 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
       title: "Repair authorisation or payment agreed by the insurer",
       state: sent ? "waiting" : "not_started",
       statusText: sent ? (phrase ? `Waiting on the insurer, ${phrase}` : "Waiting on the insurer") : "Not started",
-      buttonLabel: sent ? "Record authorisation" : null,
-      buttonHref: sent ? href : null,
       detailsHref: href,
+      forms: sent ? ["authorisation"] : [],
       dueAt: sent ? chaseDue(chase) : null,
       lines: audatexLines(audatexAuthorised ? input.audatex : null, true),
     });
@@ -762,9 +790,10 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
         ...view,
         state: "done",
         statusText: doneText(authorised.occurred_at),
-        detail: phrase,
+        detail: authorisationDetail(authorised) || phrase,
         buttonLabel: null,
         buttonHref: null,
+        forms: [],
         dueAt: null,
       };
     }
@@ -894,6 +923,17 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
         buttonHref: path(input.claimId, "money/vehicle"),
         detailsHref: path(input.claimId, "money/vehicle"),
       });
+      if (hireStarted && !input.qualifyingOffHireOn && !hireEndConfirmed && input.offHire) {
+        if (input.offHire.day) {
+          view = {
+            ...view,
+            forms: ["tl_off_hire"],
+            proposals: { tl_off_hire: { day: input.offHire.day, note: "7 days after the payment that settled the vehicle damage." } },
+          };
+        } else if (input.offHire.reasons.length) {
+          view = { ...view, detail: `Hire end needs a person to review: ${input.offHire.reasons.join(" ")}` };
+        }
+      }
       if (paymentReceived && salvageEvent) {
         view = { ...view, state: "done", statusText: doneText(paymentReceived.occurred_at), detail: null, buttonHref: null };
       } else if (paymentReceived) {
@@ -906,17 +946,31 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
     const href = path(input.claimId, "repair");
     const hireApplies = Boolean(hireStarted);
     const storageApplies = Boolean(storageStartedEvent) || Boolean(input.storageOnFile);
-    const hireOk = !hireApplies || Boolean(hireEndedEvent);
-    const storageOk = !storageApplies || Boolean(storageEndedEvent);
+    const hireOk = !hireApplies || Boolean(hireEndedEvent) || Boolean(hireEndConfirmed);
+    const storageOk = !storageApplies || Boolean(storageEndedEvent) || Boolean(storageEndConfirmed);
+    const authorisationSettled = Boolean(authorised) || Boolean(notNeeded(events, "repair_authorisation"));
+    const forms: ClaimStepForm[] = [];
+    if (!repairsStarted && authorisationSettled) forms.push("repairs_started");
+    if (repairsStarted && !repairsComplete) forms.push("repairs_complete");
+    if (repairsComplete && !returned) forms.push("car_returned");
+    if (returned && hireApplies && !hireOk) forms.push("hire_end");
+    if (storageApplies && !storageOk && input.storageEndProposal) forms.push("storage_end");
+    const proposals: ClaimStepView["proposals"] = {};
+    if (input.hireEndProposedOn) proposals.hire_end = { day: input.hireEndProposedOn, note: "The day the hire car was collected." };
+    if (input.storageEndProposal) proposals.storage_end = input.storageEndProposal;
     let view = shell({
       key: "finish",
       title: "Repairs done and car returned",
       state: "not_started",
       statusText: "Not started",
-      lines: repairLines,
-      buttonLabel: "Record workshop step",
-      buttonHref: href,
+      lines: [
+        ...repairLines,
+        line("Hire end confirmed", hireEndConfirmed?.occurred_at),
+        line("Storage end confirmed", storageEndConfirmed?.occurred_at),
+      ].filter((item): item is ClaimStepLine => Boolean(item)),
       detailsHref: href,
+      forms,
+      proposals,
     });
     if (!hireEndedEvent && input.hireEndedOn) {
       view = { ...view, detail: "Cannot tell from the history. Hire is marked ended, and there is no hire-ended event." };
@@ -924,7 +978,7 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
       view = { ...view, detail: "Cannot tell from the history. Storage is marked ended, and there is no storage-ended event." };
     }
     if (repairsComplete && returned && hireOk && storageOk) {
-      view = { ...view, state: "done", statusText: doneText(returned.occurred_at), buttonLabel: null, buttonHref: null };
+      view = { ...view, state: "done", statusText: doneText(returned.occurred_at), buttonLabel: null, buttonHref: null, forms: [] };
     } else if (repairsComplete && !returned) {
       view = { ...view, state: "waiting", statusText: "Waiting on the car being returned" };
     } else if (returned && !hireOk) {

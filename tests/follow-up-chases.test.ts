@@ -32,6 +32,9 @@ const REPORT: TotalLossFigures = {
   customerChargePence: null,
   casPurchasePence: null,
   casRequest: "full_pav",
+  salvageCategory: null,
+  disputedShortfallPence: null,
+  disputedShortfallNote: null,
 };
 
 function prepared() {

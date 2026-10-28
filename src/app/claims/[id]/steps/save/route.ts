@@ -4,15 +4,21 @@ import { getRequestStaff } from "@/lib/auth/session";
 import { storeClaimDocument } from "@/lib/db/claim-documents";
 import {
   recordAudatexEstimate,
+  confirmRepairableHireEnd,
+  recordCarReturnedByHand,
   recordClientExcessPaid,
   recordEngineerInstructedByHand,
   recordFaultCarReturn,
   recordFaultInvoice,
   recordInspectionRoute,
   recordOwnInsurerNotified,
+  recordRepairAuthorisedByHand,
+  recordRepairMilestoneByHand,
   recordReportSentByHand,
 } from "@/lib/db/claim-step-record";
 import { formSubmitKey, replaySubmit, storeSubmit } from "@/lib/db/submit-key";
+import { confirmStorageAuthorisationEnd } from "@/lib/db/storage-authorisation-end";
+import { confirmTotalLossOffHire } from "@/lib/db/total-loss-off-hire";
 import { browserOrigin } from "@/lib/http/browser-origin";
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
@@ -83,6 +89,26 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       recordEngineerInstructedByHand({ claimId: id, actorId: staff.id, role: staff.role, occurredOn: text("occurredOn") });
     } else if (intent === "report_sent") {
       recordReportSentByHand({ claimId: id, actorId: staff.id, role: staff.role, occurredOn: text("occurredOn") });
+    } else if (intent === "authorisation") {
+      recordRepairAuthorisedByHand({
+        claimId: id,
+        actorId: staff.id,
+        role: staff.role,
+        occurredOn: text("occurredOn"),
+        authorised: text("authorised"),
+        reduction: text("reduction"),
+        reductionNote: text("reductionNote"),
+      });
+    } else if (intent === "repairs_started" || intent === "repairs_complete") {
+      recordRepairMilestoneByHand({ claimId: id, actorId: staff.id, role: staff.role, occurredOn: text("occurredOn"), milestone: intent });
+    } else if (intent === "car_returned") {
+      recordCarReturnedByHand({ claimId: id, actorId: staff.id, role: staff.role, occurredOn: text("occurredOn") });
+    } else if (intent === "hire_end") {
+      confirmRepairableHireEnd({ claimId: id, actorId: staff.id, role: staff.role, occurredOn: text("occurredOn") });
+    } else if (intent === "storage_end") {
+      confirmStorageAuthorisationEnd({ claimId: id, actorId: staff.id, choice: "suggested" });
+    } else if (intent === "tl_off_hire") {
+      confirmTotalLossOffHire({ claimId: id, actorId: staff.id, choice: "suggested" });
     } else if (intent === "own_insurer") {
       recordOwnInsurerNotified({
         claimId: id,

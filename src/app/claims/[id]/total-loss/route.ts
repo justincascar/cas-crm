@@ -12,7 +12,7 @@ import {
   recordTotalLossPaymentReceived,
   saveTotalLossReport,
 } from "@/lib/db/total-loss";
-import { optionalPoundsToPence, type CasSalvageRequest, type InsurerSalvageInterest, type SalvageDisposal } from "@/lib/domain/total-loss";
+import { asSalvageCategory, optionalPoundsToPence, type CasSalvageRequest, type InsurerSalvageInterest, type SalvageDisposal } from "@/lib/domain/total-loss";
 import { requireCalendarDate } from "@/lib/db/vehicle-offers";
 import { formVersion, postedVersion, withSectionSave } from "@/lib/db/record-version";
 import { formSubmitKey, SubmitNeedsConfirm } from "@/lib/db/submit-key";
@@ -167,6 +167,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
             applyDisposal && disposal === "returned" ? optionalPoundsToPence(String(form.get("customerCharge") || "")) : undefined,
           casPurchasePence: applyDisposal && disposal === "bought_by_cas" ? optionalPoundsToPence(String(form.get("casPurchase") || "")) : undefined,
           casRequest: requestOf(String(form.get("casRequest") || "")),
+          salvageCategory: form.has("salvageCategory") ? asSalvageCategory(String(form.get("salvageCategory") || "")) : undefined,
+          disputedShortfallPence: form.has("disputedShortfall") ? optionalPoundsToPence(String(form.get("disputedShortfall") || "")) : undefined,
+          disputedShortfallNote: form.has("disputedShortfallNote") ? String(form.get("disputedShortfallNote") || "").trim() || null : undefined,
         }),
     });
     if (intent === "prepare_email") {

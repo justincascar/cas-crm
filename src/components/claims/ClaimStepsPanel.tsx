@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { SubmitKeyInput } from "@/components/SubmitKeyInput";
-import { londonTodayIso } from "@/lib/dates";
-import type { ClaimStepForm, ClaimStepView } from "@/lib/domain/claim-steps";
+import { formatUkDate, londonTodayIso } from "@/lib/dates";
+import type { ClaimStepForm, ClaimStepProposal, ClaimStepView } from "@/lib/domain/claim-steps";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
@@ -84,7 +84,7 @@ export function ClaimStepsPanel({
               </Link>
             </div>
             {step.forms.map((form) => (
-              <StepForm key={form} claimId={claimId} form={form} today={today} />
+              <StepForm key={form} claimId={claimId} form={form} today={today} proposal={step.proposals[form]} />
             ))}
             {step.state !== "done" && step.state !== "not_needed" ? (
               <details className="mt-3">
@@ -99,7 +99,13 @@ export function ClaimStepsPanel({
   );
 }
 
-function StepForm({ claimId, form, today }: { claimId: string; form: ClaimStepForm; today: string }) {
+function StepForm({ claimId, form, today, proposal }: { claimId: string; form: ClaimStepForm; today: string; proposal?: ClaimStepProposal }) {
+  if (form === "authorisation") return <AuthorisationForm claimId={claimId} today={today} />;
+  if (form === "repairs_started") return <DatedClick claimId={claimId} intent="repairs_started" label="Repairs started" today={today} />;
+  if (form === "repairs_complete") return <DatedClick claimId={claimId} intent="repairs_complete" label="Repairs complete" today={today} />;
+  if (form === "car_returned") return <DatedClick claimId={claimId} intent="car_returned" label="Car returned to the client" today={today} />;
+  if (form === "hire_end") return <HireEndForm claimId={claimId} today={today} proposal={proposal} />;
+  if (form === "storage_end" || form === "tl_off_hire") return <ConfirmProposal claimId={claimId} intent={form} proposal={proposal} />;
   if (form === "report") return <ReportForm claimId={claimId} today={today} />;
   if (form === "route") return <RouteForm claimId={claimId} today={today} />;
   if (form === "engineer_instructed") return <DatedClick claimId={claimId} intent="engineer_instructed" label="Engineer instructed" today={today} />;
@@ -127,6 +133,84 @@ function DatedClick({ claimId, intent, label, today }: { claimId: string; intent
       </label>
       <button type="submit" className="rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white">
         {label}
+      </button>
+    </form>
+  );
+}
+
+function AuthorisationForm({ claimId, today }: { claimId: string; today: string }) {
+  return (
+    <form action={`/claims/${claimId}/steps/save`} method="post" className="mt-3 grid gap-2">
+      <input type="hidden" name="returnTo" value={`/claims/${claimId}`} />
+      <input type="hidden" name="intent" value="authorisation" />
+      <SubmitKeyInput />
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-sm">
+          Date
+          <input name="occurredOn" type="date" required max={today} defaultValue={today} className={field} />
+        </label>
+        <button type="submit" className="rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white">
+          Authorisation received
+        </button>
+      </div>
+      <details>
+        <summary className="cursor-pointer text-sm text-slate">Add the authorised figure or a reduction (optional)</summary>
+        <div className="mt-2 grid gap-2 sm:grid-cols-2">
+          <label className="text-sm">
+            Authorised (£)
+            <input name="authorised" inputMode="decimal" className={field} />
+          </label>
+          <label className="text-sm">
+            Reduction (£)
+            <input name="reduction" inputMode="decimal" className={field} />
+          </label>
+          <label className="text-sm sm:col-span-2">
+            Reason for the reduction
+            <input name="reductionNote" className={field} />
+          </label>
+        </div>
+      </details>
+    </form>
+  );
+}
+
+/** Hire end on a repairable file: the day the hire car was collected, confirmed by a handler. */
+function HireEndForm({ claimId, today, proposal }: { claimId: string; today: string; proposal?: ClaimStepProposal }) {
+  return (
+    <form action={`/claims/${claimId}/steps/save`} method="post" className="mt-3 grid gap-2">
+      <input type="hidden" name="returnTo" value={`/claims/${claimId}`} />
+      <input type="hidden" name="intent" value="hire_end" />
+      <SubmitKeyInput />
+      <p className="text-sm">
+        {proposal ? `Hire car collected on ${formatUkDate(proposal.day)}. Check it, then confirm.` : "Enter the day the hire car was collected."}
+      </p>
+      <div className="flex flex-wrap items-end gap-2">
+        <label className="text-sm">
+          Hire ends on
+          <input name="occurredOn" type="date" required max={today} defaultValue={proposal?.day || ""} className={field} />
+        </label>
+        <button type="submit" className="rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white">
+          Confirm hire end
+        </button>
+      </div>
+    </form>
+  );
+}
+
+/** A date the CRM worked out. Nothing changes until a handler confirms it. */
+function ConfirmProposal({ claimId, intent, proposal }: { claimId: string; intent: "storage_end" | "tl_off_hire"; proposal?: ClaimStepProposal }) {
+  if (!proposal) return null;
+  const what = intent === "storage_end" ? "Storage ends" : "Hire ends";
+  return (
+    <form action={`/claims/${claimId}/steps/save`} method="post" className="mt-3 flex flex-wrap items-center gap-2">
+      <input type="hidden" name="returnTo" value={`/claims/${claimId}`} />
+      <input type="hidden" name="intent" value={intent} />
+      <SubmitKeyInput />
+      <p className="text-sm">
+        Proposed: {what.toLowerCase()} on {formatUkDate(proposal.day)}. {proposal.note}
+      </p>
+      <button type="submit" className="rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white">
+        Confirm {what === "Storage ends" ? "storage end" : "hire end"}
       </button>
     </form>
   );

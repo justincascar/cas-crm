@@ -14,6 +14,7 @@ import { getInsurerPaymentPromisedAt, getPreparedTotalLossNotice, getTotalLossRe
 import { totalLossOffHireForClaim } from "@/lib/db/total-loss-off-hire";
 import { OFF_HIRE_REVIEW_HEADING } from "@/lib/domain/total-loss-off-hire";
 import {
+  SALVAGE_CATEGORIES,
   disposalApplies,
   figuresIncomplete,
   salvageRequestMismatch,
@@ -104,6 +105,28 @@ export function TotalLossPanel({
             Salvage value from the engineer (£)
             <input name="salvage" inputMode="decimal" className={field} defaultValue={poundsInput(report.salvagePence)} />
           </label>
+          <label className="text-sm">
+            Salvage category
+            <select name="salvageCategory" className={field} defaultValue={report.salvageCategory || ""}>
+              <option value="">Not given yet</option>
+              {SALVAGE_CATEGORIES.map((category) => (
+                <option key={category} value={category}>
+                  Category {category}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className="text-sm">
+            Disputed shortfall (£), if any
+            <input name="disputedShortfall" inputMode="decimal" className={field} defaultValue={poundsInput(report.disputedShortfallPence)} />
+          </label>
+          <label className="text-sm">
+            What the shortfall is about
+            <input name="disputedShortfallNote" className={field} defaultValue={report.disputedShortfallNote || ""} />
+          </label>
+          <p className="text-sm text-slate sm:col-span-2">A disputed shortfall is flagged for review. It is never added to the agreed or paid amount.</p>
         </div>
 
         <fieldset className="text-sm">

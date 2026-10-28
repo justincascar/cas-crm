@@ -9,6 +9,9 @@ import { listChasesForClaim } from "../db/chase";
 import { hireChargeForClaim } from "../db/hire-charge";
 import { hireAgreementPrehireBlock } from "../db/prehire-checks";
 import { get } from "../db/connection";
+import { storageAuthorisationEndForClaim } from "../db/storage-authorisation-end";
+import { totalLossOffHireForClaim } from "../db/total-loss-off-hire";
+import { proposedStorageEndSentence } from "../domain/storage-authorisation-end";
 import { claimOutstandingSummary, getClaim } from "../db/queries";
 
 const REQUEST_EVENTS: Record<ClaimPaymentLineInput["key"], string[]> = {
@@ -111,6 +114,25 @@ export function loadClaimSteps(claimId: string): ClaimStepView[] | null {
   }
 
   const hireStatus = String(claim.hire_status || "");
+  const proposedHire = get<{ review: string | null; collected: string | null }>(
+    `SELECT hire_end_review_on AS review, collection_at AS collected FROM hire_episodes
+     WHERE claim_id = ? AND started_at IS NOT NULL AND (billing_end_at IS NULL OR billing_end_at = '')
+     ORDER BY started_at DESC LIMIT 1`,
+    [id],
+  );
+  const hireEndProposedOn = String(proposedHire?.review || proposedHire?.collected || "").slice(0, 10) || null;
+  const storageView = String(claim.storage_started_on || "").trim() ? storageAuthorisationEndForClaim(id) : null;
+  const storageEndProposal =
+    storageView?.kind === "suggest"
+      ? { day: storageView.date, note: proposedStorageEndSentence(storageView.basis, storageView.earlierThanAuthorisation) }
+      : null;
+  const offHireView = totalLoss ? totalLossOffHireForClaim(id) : null;
+  const offHire =
+    offHireView?.kind === "suggest"
+      ? { day: offHireView.date, reasons: [] }
+      : offHireView?.kind === "review"
+        ? { day: null, reasons: offHireView.reasons }
+        : null;
   return deriveClaimSteps({
     claimId: id,
     claimType: String(claim.claim_type || ""),
@@ -139,6 +161,9 @@ export function loadClaimSteps(claimId: string): ClaimStepView[] | null {
     hireEndedOn: hireStatus === "ended" && hireView.confirmedEndDay ? hireView.confirmedEndDay : null,
     salvageRecorded: false,
     audatex,
+    hireEndProposedOn,
+    storageEndProposal,
+    offHire,
     qualifyingOffHireOn:
       Number(claim.payment_qualifies_off_hire) === 1 && claim.off_hire_scheduled_on ? String(claim.off_hire_scheduled_on) : null,
     events,

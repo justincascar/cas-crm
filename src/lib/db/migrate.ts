@@ -68,6 +68,9 @@ const TABLES: Record<string, Array<[string, string]>> = {
   total_loss_reports: [
     ["cas_request", "TEXT"],
     ["insurer_payment_promised_at", "TEXT"],
+    ["salvage_category", "TEXT"],
+    ["disputed_shortfall_pence", "INTEGER"],
+    ["disputed_shortfall_note", "TEXT"],
   ],
   claims: [
     ["client_role", "TEXT"],

@@ -58,6 +58,7 @@ export function totalLossOffHireForClaim(claimId: string): TotalLossOffHireView 
     salvageMismatch: salvageRequestMismatch(report.casRequest, report.interest),
     existingHireEndDay: calendarDay(episode?.billing_end_at),
     keptSuggestionDay: keptSuggestionDay(claimId),
+    disputedShortfall: report.disputedShortfallPence != null ? report.disputedShortfallNote || "no reason given" : null,
   });
   return { ...decision, episodeId: episode?.id || null };
 }

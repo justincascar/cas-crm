@@ -1044,3 +1044,19 @@ Finish on 28 October 2026: 580 tests passed, 0 failed. Type check: 0 errors. Pro
 **Fault files.** A fault file already showed the client's own insurer and Audatex instead of the third-party letter and the engineer. Now Messages also hides the third-party insurer letters and email on a fault file (initial letter and email, liability chaser, hire pack cover, the three rebuttals, total-loss cessation), and the CRM refuses to produce or send them there. The problems list on a fault file no longer lists Send liability notification letter, Instruct the engineer or Request repair authorisation, and the driving licence, insurance certificate, V5C and bank statement chases are not started on a fault file. "1 open flags" now reads "1 open flag".
 
 Finish on 28 October 2026: 586 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 69 passed, 0 failed, no sideways scroll at 1280px or 1024px, database unchanged. Journey checks passed, including steps 4 to 7 on the new repairable file and the fault file's letters and problems list. `EMAIL_SEND_MODE` stays `simulate`.
+
+## Repairs, return and endings, steps 8 and 9 (J5, 28 October 2026)
+
+**Step 8.** Once the report is sent to the insurer, step 8 has an "Authorisation received" button with a date that starts as today. An authorised figure and a reduction with its reason are optional and folded away. They are shown on the step and in the history. They do not change claimed, agreed or received. Recording it twice is refused.
+
+**Step 9 on a repairable file.** Repairs started, Repairs complete and Car returned to the client are one click each with a date, in that order. A date before the earlier step, or in the future, is refused. Repairs started is offered once authorisation is recorded or step 8 is marked not needed.
+
+**Hire end, repairable.** The driver's Hire car collection job no longer sets the hire end by itself. It records the collection day and proposes it. Step 9 shows "Hire car collected on …" with a Confirm hire end button, only after repairs are complete and the car is back with the client. The handler can change the day, but not to before the car was returned. A booking that already had a different hire end still goes to the existing review, as before.
+
+**Storage end.** When repair authorisation or repairs started gives a proposed storage end, step 9 shows it with Confirm storage end. Nothing changes until the handler confirms.
+
+**Total loss.** Step 9 shows the hire end proposed 7 days after the payment that settled the vehicle damage, with Confirm hire end. If the payment does not match the agreed figure, the salvage sale does not match, or a shortfall is disputed, it shows the reasons for a person to review instead of a date. The total-loss figures now also keep the salvage category (A, B, S or N) and a disputed shortfall with what it is about. A disputed shortfall is flagged and is never added to agreed or paid. Pre-accident value, salvage, payments received, salvage collection and sale proceeds were already kept.
+
+**Repairable to total loss.** The repair history stays on the file and is listed under Earlier repair history on the total-loss step.
+
+Finish on 28 October 2026: 590 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 69 passed, 0 failed, no sideways scroll at 1280px or 1024px, database unchanged. Journey checks passed, including steps 8 and 9 on the new repairable file with the storage end and hire end confirmed. `EMAIL_SEND_MODE` stays `simulate`.

@@ -11,7 +11,7 @@ export type HireEndDateReview = {
 };
 
 export type ApplyHireEndResult =
-  | { status: "applied" | "already_matches"; date: string }
+  | { status: "applied" | "already_matches" | "proposed"; date: string }
   | { status: "review"; review: HireEndDateReview }
   | { status: "skipped" };
 
@@ -115,16 +115,17 @@ export function applyHireCollectionActualDate(input: {
     return { status: "review", review: { episodeId: episode.id, jobDate, hireEndDay } };
   }
   if (!hireEndDay) {
-    writeHireEnd(episode.id, jobDate);
+    // Proposed only. A handler confirms the hire end on step 9.
+    run(`UPDATE hire_episodes SET hire_end_review_on = ? WHERE id = ?`, [jobDate, episode.id]);
     recordClaimEvent({
       claimId: input.claimId,
-      eventType: "hire_ended",
+      eventType: "hire_car_collected",
       occurredAt: input.actualOccurredAt,
       actorId: input.actorId,
-      details: `Hire ends on ${ukDay(jobDate)}, the day the hire car was collected. Taken from the Hire car collection job. The daily rate was left as it is. This is a CAS charging rule for a person to check, not a legal conclusion.`,
+      details: `The hire car was collected on ${ukDay(jobDate)}. A handler confirms the hire end on the claim steps. The daily rate was left as it is.`,
       source: "staff",
     });
-    return { status: "applied", date: jobDate };
+    return { status: "proposed", date: jobDate };
   }
   clearReview(episode.id);
   return { status: "already_matches", date: jobDate };
@@ -141,9 +142,10 @@ export function getHireEndDateReviews(claimId: string): HireEndDateReview[] {
     const jobDate = calendarDay(episode.hire_end_review_on);
     if (!jobDate) continue;
     const hireEndDay = calendarDay(episode.billing_end_at);
-    if (!hireEndDay || hireEndDay === jobDate) {
-      if (!hireEndDay) writeHireEnd(episode.id, jobDate);
-      else clearReview(episode.id);
+    // No hire end yet: the collection day waits on the claim steps for a handler to confirm it.
+    if (!hireEndDay) continue;
+    if (hireEndDay === jobDate) {
+      clearReview(episode.id);
       continue;
     }
     open.push({ episodeId: episode.id, jobDate, hireEndDay });

@@ -35,7 +35,20 @@ export type TotalLossFigures = {
   customerChargePence: number | null;
   casPurchasePence: number | null;
   casRequest: CasSalvageRequest | null;
+  /** The salvage category the engineer gave: A, B, S or N. */
+  salvageCategory: SalvageCategory | null;
+  /** An amount the client or CAS says is still owed and the insurer disputes. Never added to agreed or paid. */
+  disputedShortfallPence: number | null;
+  disputedShortfallNote: string | null;
 };
+
+export const SALVAGE_CATEGORIES = ["A", "B", "S", "N"] as const;
+export type SalvageCategory = (typeof SALVAGE_CATEGORIES)[number];
+
+export function asSalvageCategory(value: string | null | undefined): SalvageCategory | null {
+  const text = String(value || "").trim().toUpperCase();
+  return (SALVAGE_CATEGORIES as readonly string[]).includes(text) ? (text as SalvageCategory) : null;
+}
 
 export type TotalLossSuggestion =
   | { kind: "hidden" }
