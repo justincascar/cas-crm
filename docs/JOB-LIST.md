@@ -85,6 +85,7 @@ DONE — ada76d4. Known issues 45–47 in the audit list what is left.
 - The fault file's problems list must not mention credit-hire documents.
 
 ### J5 — Repairs, return and endings (steps 8–9)
+DONE — 2a3d472. Known issues 45, 48 and 49 in the audit list what is left.
 - Repair authorisation or reductions, repairs started, repairs complete, car returned to the client.
 - Hire end:
   - **Repairable:** the hire car collection date, confirmed by a handler.
