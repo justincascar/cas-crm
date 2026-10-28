@@ -48,7 +48,7 @@ Every claim shows one clear next step. The history is kept, and can be printed a
 DONE — 65a3112 (hire fixes) and d3660a0 (Justin's answers: GTA table in Settings, signed copy before or at handover).
 
 ### J2 — E-signing, two routes
-DONE — see the commit that marks this line. Known issues 39–41 in the audit list what is left.
+DONE — 17bfa43. Known issues 39–41 in the audit list what is left.
 Either route satisfies the handover rule:
 - **(a)** A signing link is sent to the client before handover. Use the email send path, which stays simulated, and keep WhatsApp ready for later.
 - **(b)** The client signs on the driver's phone at the doorstep handover.
