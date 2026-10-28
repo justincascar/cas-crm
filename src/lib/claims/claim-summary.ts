@@ -172,7 +172,10 @@ export function buildClaimSummaryModel(claimId: string): ClaimSummaryModel | nul
     ? [...data.events].reverse().find((event) => event.event_type === "next_action_noted" && String(event.details || "").trim() === displayed.note)
     : null;
   const due = dueWording(displayed.dueAt);
-  const registration = claim.registration ? formatVehicleRegistration(String(claim.registration)) : "Not recorded";
+  const storedRegistration = String(claim.registration || "").trim();
+  // Older files stored "Unknown" for a blank registration. It reads as needed, never UNKNOWN.
+  const registration =
+    storedRegistration && storedRegistration.toLowerCase() !== "unknown" ? formatVehicleRegistration(storedRegistration) : "Registration needed";
 
   return {
     reference: String(claim.file_reference),

@@ -22,7 +22,7 @@ export default async function ClaimHirePage({
     redirect(`/claims/${id}/hire#${query.section}`);
   }
   const staff = await requireStaff();
-  if (!isOfficeRole(staff.role)) redirect("/jobs");
+  if (!isOfficeRole(staff.role)) redirect("/jobs?notice=office");
   // A filter missing from the address uses the client's own car. A blank one means any.
   const area = loadHireArea(id, {
     date: query.date,

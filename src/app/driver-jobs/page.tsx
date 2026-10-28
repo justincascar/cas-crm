@@ -15,7 +15,7 @@ function statusWord(job: DriverJobRow): string {
 
 export default async function DriverJobsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string }> }) {
   const staff = await requireSignedIn();
-  if (!isOfficeRole(staff.role)) redirect("/jobs");
+  if (!isOfficeRole(staff.role)) redirect("/jobs?notice=office");
   const { error, saved } = await searchParams;
   const jobs = listDriverJobs();
   const drivers = listAssignablePeople()

@@ -165,7 +165,7 @@ export async function HandoverScreen({
   const todayJobs = office
     ? []
     : listMyJobs(staffUser.id).filter((job) => job.claimId === id && isHandoverAssignment(job.jobKind));
-  if (!office && todayJobs.length === 0) redirect("/jobs");
+  if (!office && todayJobs.length === 0) redirect("/jobs?notice=no-job");
   const assignedEpisodes = office
     ? null
     : new Set(todayJobs.map((job) => job.hireEpisodeId).filter((episodeId): episodeId is string => Boolean(episodeId)));

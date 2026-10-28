@@ -729,6 +729,8 @@ export function seedScreenDefaults(claimId: string, screenKey: string): ScreenVa
   const fill = (key: string, value: string | number | null | undefined) => {
     if (defaults[key]) return;
     if (value === null || value === undefined || value === "") return;
+    // Older files stored "Unknown" for a blank address. The box is left empty so it reads "Address needed".
+    if ((key === "address" || key === "postcode") && String(value).trim().toLowerCase() === "unknown") return;
     defaults[key] = String(value);
   };
 
@@ -752,7 +754,7 @@ export function seedScreenDefaults(claimId: string, screenKey: string): ScreenVa
         fill("surname", names[names.length - 1]);
       }
     }
-    fill("address", [claim.address_line1, claim.town].filter(Boolean).join("\n"));
+    fill("address", [claim.address_line1, claim.town].filter((part) => part && String(part).trim().toLowerCase() !== "unknown").join("\n"));
     fill("postcode", claim.postcode);
     fill("telMain", claim.telephone);
     fill("telMobile", claim.mobile_tel);
@@ -768,7 +770,7 @@ export function seedScreenDefaults(claimId: string, screenKey: string): ScreenVa
   }
   if (screenKey === "owner") {
     fill("companyName", claim.full_name);
-    fill("address", [claim.address_line1, claim.town].filter(Boolean).join("\n"));
+    fill("address", [claim.address_line1, claim.town].filter((part) => part && String(part).trim().toLowerCase() !== "unknown").join("\n"));
     fill("postcode", claim.postcode);
     fill("telMain", claim.telephone);
     fill("email", claim.email);

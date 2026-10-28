@@ -9,10 +9,10 @@ import { listAssignableBookings, listAssignableClaims, listAssignablePeople, lis
 export default async function MyJobsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string; finished?: string; review?: string; reviewEnd?: string; reviewHire?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; finished?: string; review?: string; reviewEnd?: string; reviewHire?: string; notice?: string }>;
 }) {
   const staff = await requireSignedIn();
-  const { error, saved, finished, review, reviewEnd, reviewHire } = await searchParams;
+  const { error, saved, finished, review, reviewEnd, reviewHire, notice } = await searchParams;
   const jobs = listMyJobs(staff.id);
   const upcoming = listMyUpcomingJobs(staff.id);
   const office = isOfficeRole(staff.role);
@@ -26,6 +26,15 @@ export default async function MyJobsPage({
         title="My jobs today"
         subtitle={`${formatUkDate(londonTodayIso())}. Jobs assigned to you for today, plus any delivery, collection, recovery or return still not done from an earlier day.${office ? " This is a shortcut. Your usual screens are unchanged." : ""}`}
       />
+      {notice === "office" ? (
+        <p className="rounded-md border border-line bg-card px-4 py-3 text-sm" data-redirect-notice>
+          That page is for the office. Your jobs are below.
+        </p>
+      ) : notice === "no-job" ? (
+        <p className="rounded-md border border-line bg-card px-4 py-3 text-sm" data-redirect-notice>
+          That handover is not one of your jobs today. Your jobs are below.
+        </p>
+      ) : null}
       {error ? <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p> : null}
       {finished ? <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm">Handover finished.</p> : null}
       {review ? (

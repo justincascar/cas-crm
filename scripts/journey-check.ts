@@ -10,6 +10,7 @@
  * Later stages extend tests/journeys/claim-journeys.ts and this script.
  */
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { stopBrowserProfile } from "./stop-browser-profile.ts";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -165,6 +166,7 @@ async function openBrowser(): Promise<{ session: BrowserSession; stop: () => voi
   );
   const stop = () => {
     if (browser.exitCode === null && !browser.killed) stopTree(browser);
+    stopBrowserProfile(userData);
     try {
       fs.rmSync(userData, { recursive: true, force: true });
     } catch {

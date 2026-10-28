@@ -18,7 +18,7 @@ export default async function ClaimLayout({
   const staffUser = await requireSignedIn();
   const { id } = await params;
   const pathname = (await headers()).get("x-cas-pathname") || "";
-  if (pathname && !pathAllowedForRole(staffUser.role, pathname)) redirect("/jobs");
+  if (pathname && !pathAllowedForRole(staffUser.role, pathname)) redirect("/jobs?notice=office");
   const office = isOfficeRole(staffUser.role);
   const data = getClaim(id);
   if (!data) notFound();

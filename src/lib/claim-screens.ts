@@ -1,4 +1,5 @@
 import { DEFAULT_VEHICLE_LOCATION } from "./constants";
+import { JOURNEY_OPTIONS, WEATHER_OPTIONS } from "./domain/intake-choices";
 import { GTA_GROUPS, GTA_NOT_CLASSIFIED } from "./documents/gta";
 import { VEHICLE_CLASSES, VEHICLE_CLASS_LABELS } from "./fleet/classes";
 
@@ -32,6 +33,11 @@ export type ClaimScreenDef = {
   hidden?: boolean;
   sections: ScreenSection[];
 };
+
+/** Stored as the label, as the new-claim form stores it. A typed "Other: …" already on the file stays selectable. */
+function choiceOptions(options: readonly { value: string; label: string }[]) {
+  return [{ value: "", label: "Not recorded" }, ...options.filter((item) => item.value !== "other").map((item) => ({ value: item.label, label: item.label }))];
+}
 
 const yesNo = [
   { value: "", label: "Unknown" },
@@ -113,7 +119,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
           ]},
           { name: "forename", label: "Forename" },
           { name: "surname", label: "Surname" },
-          { name: "address", label: "Address", type: "textarea", span: 2 },
+          { name: "address", label: "Address", type: "textarea", span: 2, placeholder: "Address needed" },
           { name: "postcode", label: "Postcode" },
           { name: "telMain", label: "Tel main" },
           { name: "telHome", label: "Tel home" },
@@ -147,7 +153,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
           { name: "forename", label: "Forename" },
           { name: "surname", label: "Surname" },
           { name: "dob", label: "Date of birth", type: "date" },
-          { name: "address", label: "Address", type: "textarea", span: 2 },
+          { name: "address", label: "Address", type: "textarea", span: 2, placeholder: "Address needed" },
           { name: "postcode", label: "Postcode" },
           { name: "telMain", label: "Tel main" },
           { name: "telMobile", label: "Tel mobile" },
@@ -169,7 +175,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
       {
         fields: [
           { name: "companyName", label: "Company / name" },
-          { name: "address", label: "Address", type: "textarea", span: 2 },
+          { name: "address", label: "Address", type: "textarea", span: 2, placeholder: "Address needed" },
           { name: "postcode", label: "Postcode" },
           { name: "telMain", label: "Tel main" },
           { name: "email", label: "Email" },
@@ -186,7 +192,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
       {
         fields: [
           { name: "companyName", label: "Company name" },
-          { name: "address", label: "Address", type: "textarea", span: 2 },
+          { name: "address", label: "Address", type: "textarea", span: 2, placeholder: "Address needed" },
           { name: "postcode", label: "Postcode" },
           { name: "telMain", label: "Tel main" },
           { name: "email", label: "Email" },
@@ -270,7 +276,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
         fields: [
           { name: "accidentDate", label: "Date", type: "date" },
           { name: "accidentTime", label: "Time", type: "time" },
-          { name: "weather", label: "Weather conditions" },
+          { name: "weather", label: "Weather conditions", type: "select", options: choiceOptions(WEATHER_OPTIONS) },
           { name: "location", label: "Location", span: 2 },
           { name: "details", label: "Details", type: "textarea", span: 2 },
           { name: "photosAtScene", label: "Were any photographs taken at the scene?", type: "select", options: yesNo, span: 2 },
@@ -278,7 +284,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
           { name: "injuries", label: "Injuries", type: "textarea", span: 2 },
           { name: "witnessesPolice", label: "Witnesses / police", type: "textarea", span: 2 },
           { name: "losses", label: "Losses", type: "textarea", span: 2 },
-          { name: "purpose", label: "Purpose of journey", span: 2 },
+          { name: "purpose", label: "Purpose of journey", type: "select", options: choiceOptions(JOURNEY_OPTIONS), span: 2 },
           { name: "clientSpeed", label: "Speed of client vehicle" },
           { name: "tpSpeed", label: "Speed of third-party vehicle" },
         ],
@@ -296,7 +302,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
           { name: "title", label: "Title" },
           { name: "forename", label: "Forename" },
           { name: "surname", label: "Surname" },
-          { name: "address", label: "Address", type: "textarea", span: 2 },
+          { name: "address", label: "Address", type: "textarea", span: 2, placeholder: "Address needed" },
           { name: "postcode", label: "Postcode" },
           { name: "telMain", label: "Tel main" },
           { name: "telMobile", label: "Tel mobile" },
@@ -320,7 +326,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
           { name: "title", label: "Title" },
           { name: "forename", label: "Forename" },
           { name: "surname", label: "Surname" },
-          { name: "address", label: "Address", type: "textarea", span: 2 },
+          { name: "address", label: "Address", type: "textarea", span: 2, placeholder: "Address needed" },
           { name: "postcode", label: "Postcode" },
           { name: "telMain", label: "Tel main" },
           { name: "email", label: "Email" },
@@ -701,7 +707,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
       {
         fields: [
           { name: "name", label: "Name" },
-          { name: "address", label: "Address", type: "textarea", span: 2 },
+          { name: "address", label: "Address", type: "textarea", span: 2, placeholder: "Address needed" },
           { name: "postcode", label: "Postcode" },
           { name: "telMain", label: "Tel main" },
           { name: "email", label: "Email" },
@@ -729,7 +735,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
         title: "Recoverer",
         fields: [
           { name: "name", label: "Name" },
-          { name: "address", label: "Address", type: "textarea", span: 2 },
+          { name: "address", label: "Address", type: "textarea", span: 2, placeholder: "Address needed" },
           { name: "postcode", label: "Postcode" },
           { name: "telMain", label: "Tel main" },
           { name: "email", label: "Email" },

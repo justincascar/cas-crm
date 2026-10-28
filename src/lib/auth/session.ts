@@ -100,7 +100,7 @@ export async function requireSignedIn(): Promise<StaffUser> {
 /** Administrator and staff. Driver and mechanic are sent to My jobs today. */
 export async function requireStaff(): Promise<StaffUser> {
   const staff = await requireSignedIn();
-  if (!isOfficeRole(staff.role)) redirect("/jobs");
+  if (!isOfficeRole(staff.role)) redirect("/jobs?notice=office");
   return staff;
 }
 

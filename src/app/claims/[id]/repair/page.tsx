@@ -26,7 +26,7 @@ export async function RepairEvidenceScreen({
   try {
     assertCanUploadRepair(staff, id);
   } catch {
-    redirect("/jobs");
+    redirect("/jobs?notice=office");
   }
   const vehicle = repairVehicleLabel(id);
   if (!vehicle) notFound();

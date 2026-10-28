@@ -42,7 +42,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     redirect("/login");
   }
   if (staff && pathname && !pathAllowedForRole(staff.role, pathname)) {
-    redirect("/jobs");
+    redirect("/jobs?notice=office");
   }
 
   const emailBanner = emailSendBanner();

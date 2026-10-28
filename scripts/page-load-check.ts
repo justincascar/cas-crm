@@ -9,6 +9,7 @@
  * After sign-in, and before any page is opened, it hashes the database. Opening the pages must not change that hash.
  */
 import { spawn, type ChildProcess } from "node:child_process";
+import { stopBrowserProfile } from "./stop-browser-profile.ts";
 import fs from "node:fs";
 import net from "node:net";
 import os from "node:os";
@@ -253,6 +254,7 @@ async function measureClaimPages(origin: string, cookie: string): Promise<Array<
   );
   const stopBrowser = () => {
     if (browser.exitCode === null && !browser.killed) browser.kill();
+    stopBrowserProfile(userData);
     try {
       fs.rmSync(userData, { recursive: true, force: true });
     } catch {

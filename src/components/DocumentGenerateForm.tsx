@@ -37,7 +37,9 @@ export function DocumentGenerateForm({
 
   const options = useMemo(() => {
     const fault = liabilityStatus === "fault";
-    return DOCUMENT_TEMPLATES.filter((item) => !(fault && THIRD_PARTY_ONLY_TEMPLATES.includes(item.key))).map((item) => ({
+    // A fault file has no engineer and no credit-hire impecuniosity response.
+    const hidden = fault ? [...THIRD_PARTY_ONLY_TEMPLATES, "engineer_instruction", "impecuniosity_disclosure"] : [];
+    return DOCUMENT_TEMPLATES.filter((item) => !hidden.includes(item.key)).map((item) => ({
       ...item,
       suggested: item.key === suggested,
     }));

@@ -1082,3 +1082,19 @@ Finish on 28 October 2026: 595 tests passed, 0 failed. Type check: 0 errors. Pro
 **One list.** Today's work is the only list, with a single next step per claim. The claim's other items are on the claim. Payments awaiting a decision, repair gaps, chases due and tasks still reach Today's work as before. The separate chase, task, fleet, money-by-head and all-files sections were removed from the dashboard; Financials, Hire / Fleet, Claims and Gaps keep those views. New enquiries / incomplete stays above Today's work when there are any.
 
 Finish on 28 October 2026: 595 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 70 passed, 0 failed, database unchanged. Journey checks passed. `EMAIL_SEND_MODE` stays `simulate`.
+
+## Intake and loose ends (J8, 28 October 2026)
+
+**Address needed.** A blank address now reads "Address needed" on the claim, and the address and postcode boxes on the details screens are empty with "Address needed" as the hint. Older files that stored "Unknown" are treated as blank. The new-claim form no longer stores "Unknown" for a blank address. A blank registration in the claim header reads "Registration needed" instead of UNKNOWN.
+
+**UK phone checks.** Already on the new-claim form and the details screens: a mobile starts 07 or +447 and has 11 digits; a main number may be a landline (0 or +44, 10 or 11 digits); Save anyway is there for an overseas number. Now covered by tests.
+
+**Claim not found.** A claim address that does not exist shows a plain "Claim not found" page with a search box and links back.
+
+**Redirect explanation.** A mechanic or driver sent away from an office page lands on My jobs today with one line: "That page is for the office. Your jobs are below." A driver sent away from a handover that is not theirs today is told that instead.
+
+**Dropdowns.** Weather and purpose of journey on the accident screen are dropdowns with the same choices as the new-claim form. A typed "Other: …" already on a file still shows and is kept.
+
+**Also.** A fault file's Messages no longer offers the engineer instruction or the impecuniosity response (known issue 46). The page check and journey check now stop every browser they started on Windows; 282 leftover test browsers had built up and were holding the debugging ports.
+
+Finish on 28 October 2026: 599 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 70 passed, 0 failed, database unchanged. Journey checks passed. `EMAIL_SEND_MODE` stays `simulate`.

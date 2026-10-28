@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { addressLine } from "@/lib/domain/address-text";
 import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { actionAddNote, actionAddTask, actionCompleteTask, actionUpdateClaim } from "@/app/actions";
@@ -319,7 +320,7 @@ export async function ClaimDetailsBody({
               <br />
               DOB: {claim.date_of_birth ? formatUkDate(String(claim.date_of_birth)) : "Unknown"}
               <br />
-              {pretty(claim.address_line1)}, {pretty(claim.town)} {pretty(claim.postcode)}
+              {addressLine(claim.address_line1, claim.town, claim.postcode)}
               <br />
               Mobile {pretty(claim.mobile_tel || claim.telephone)} · Other {Number(claim.other_contact_skipped) ? "skipped" : pretty(claim.home_tel)}
               <br />
@@ -365,7 +366,7 @@ export async function ClaimDetailsBody({
             <div key={String(tp.id)} className="mt-4 border-t border-line pt-3 text-sm first:mt-3 first:border-0 first:pt-0">
               <strong>TP {String(tp.sequence || 1)}: {String(tp.full_name)}</strong>
               <div>
-                {String(tp.address_line1 || "Unknown")}, {String(tp.town || "")} {String(tp.postcode || "")} · {String(tp.telephone || "Unknown")}
+                {addressLine(tp.address_line1, tp.town, tp.postcode)} · {String(tp.telephone || "Unknown")}
               </div>
               <div className="text-slate">
                 Vehicle{" "}

@@ -14,7 +14,7 @@ import { CAS_LEGAL_SIGNOFF_NOTICE, CAS_TEMPLATE_NOTICE } from "@/lib/documents/c
 export default async function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
   const staff = await requireSignedIn();
   const { id } = await params;
-  if (!canReadDocument(staff, id)) redirect("/jobs");
+  if (!canReadDocument(staff, id)) redirect("/jobs?notice=office");
   const doc = getDocument(id);
   if (!doc) notFound();
   const missing = doc.missing_json ? (JSON.parse(String(doc.missing_json)) as string[]) : [];
