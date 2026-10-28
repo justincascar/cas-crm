@@ -684,6 +684,67 @@ async function completeHandover(session: BrowserSession, origin: string, claimId
   return sent;
 }
 
+/**
+ * Route (a): office sends the signing link (simulated email), the link is read from the email filed on the claim,
+ * and the client signs on that page: name, a drawn signature, the agreement tick.
+ */
+async function signThroughLink(session: BrowserSession, origin: string, dbPath: string, claimId: string) {
+  await gotoPath(session, origin, `/claims/${claimId}/hire`);
+  const sent = followed(
+    await submitForm(session, 'form[action$="/hire/esign-link"]', { to: "journey.client@example.test" }),
+    "Send signing link",
+  );
+  if (sent) return sent;
+  const body = readDb(dbPath, (db) =>
+    String(
+      (db
+        .prepare(`SELECT body FROM correspondence WHERE claim_id = ? AND template_key = 'hire_agreement_signing_link' ORDER BY created_at DESC LIMIT 1`)
+        .get(claimId) as { body: string } | undefined)?.body || "",
+    ),
+  );
+  const link = /\/sign\/[A-Za-z0-9_-]+/.exec(body)?.[0];
+  if (!link) return "The signing link was not in the email filed on the claim.";
+  await gotoPath(session, origin, link);
+  const drawn = await session.evaluate<string>(`(() => {
+    const canvas = document.querySelector('canvas[aria-label="Signature"]');
+    if (!(canvas instanceof HTMLCanvasElement)) return "no signature box";
+    const box = canvas.getBoundingClientRect();
+    const fire = (type, x, y) => canvas.dispatchEvent(new PointerEvent(type, {
+      bubbles: true, cancelable: true, pointerId: 1, pointerType: "pen", isPrimary: true,
+      clientX: box.left + x * box.width, clientY: box.top + y * box.height,
+    }));
+    fire("pointerdown", 0.1, 0.6);
+    for (let i = 1; i <= 12; i += 1) fire("pointermove", 0.1 + i * 0.06, 0.6 - Math.sin(i / 2) * 0.3);
+    fire("pointerup", 0.85, 0.5);
+    const hidden = document.querySelector('[name="signaturePng"]');
+    const tick = document.querySelector('[name="agreed"]');
+    if (tick instanceof HTMLInputElement && !tick.checked) tick.click();
+    return hidden instanceof HTMLInputElement && hidden.value.startsWith("data:image/png") ? "drawn" : "not drawn";
+  })()`);
+  if (drawn !== "drawn") return `The signature could not be drawn (${drawn}).`;
+  await session.evaluate<void>(`(() => {
+    const button = [...document.querySelectorAll("button")].find((item) => item.textContent?.trim() === "Sign the agreement");
+    button?.click();
+  })()`);
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    const state = await session.evaluate<{ thanks: boolean; error: string }>(`({
+      thanks: Boolean(document.querySelector("[data-sign-thanks]")),
+      error: document.querySelector("[data-form-error]")?.textContent || "",
+    })`);
+    if (state.thanks) break;
+    if (state.error) return state.error;
+    await new Promise((resolve) => setTimeout(resolve, 250));
+  }
+  const signed = readDb(dbPath, (db) =>
+    db.prepare(`SELECT status, signer_name, device FROM esign_requests WHERE claim_id = ? ORDER BY requested_at DESC LIMIT 1`).get(claimId) as
+      | { status: string; signer_name: string | null; device: string | null }
+      | undefined,
+  );
+  if (signed?.status !== "signed" || !signed.signer_name || !signed.device) return `The signing was not recorded (${signed?.status || "none"}).`;
+  return null;
+}
+
 async function hireOutline(session: BrowserSession) {
   return session.evaluate<{
     count: number;
@@ -816,10 +877,12 @@ async function runHireJourneys(session: BrowserSession, origin: string, dbPath: 
   if (produced) return produced;
   if (hireFacts(dbPath, repairable.claimId).documents < 1) return "Repairable agreement was not stored.";
 
-  // 7. Handover is refused without the signed copy, then completed with it.
+  // 7. Handover is refused without a signed agreement. The client signs through the link, then the handover completes.
   const unsigned = refusedWith(await completeHandover(session, origin, repairable.claimId, false), /signed hire agreement/i, "Handover with no signed copy");
   if (unsigned) return unsigned;
-  const handed = followed(await completeHandover(session, origin, repairable.claimId, true), "handover");
+  const signedByLink = await signThroughLink(session, origin, dbPath, repairable.claimId);
+  if (signedByLink) return `Repairable signing link: ${signedByLink}`;
+  const handed = followed(await completeHandover(session, origin, repairable.claimId, false), "handover");
   if (handed) return `Repairable handover: ${handed}`;
   const started = hireFacts(dbPath, repairable.claimId);
   const startedAt = started.episode?.started_at || "";

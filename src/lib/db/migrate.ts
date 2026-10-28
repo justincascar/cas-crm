@@ -1,5 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 import { ensureGtaTables } from "./gta-rates";
+import { ensureEsignTable } from "./esign";
 import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_SETTLEMENT, EXTENDED_WAIT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS, RELEASE_WITHOUT_EXCESS } from "../auth/roles";
 
 const TABLES: Record<string, Array<[string, string]>> = {
@@ -358,6 +359,7 @@ export function migrate(db: DatabaseSync) {
     CREATE INDEX IF NOT EXISTS idx_fleet_record_checks ON fleet_record_checks(fleet_vehicle_id, check_key);
   `);
   ensureGtaTables(db);
+  ensureEsignTable(db);
   db.exec(`
     CREATE TABLE IF NOT EXISTS repair_evidence (
       id TEXT PRIMARY KEY,

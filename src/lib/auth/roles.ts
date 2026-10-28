@@ -161,6 +161,7 @@ export function pathAllowedForRole(role: string | null | undefined, pathname: st
   if (role === DRIVER_ROLE) {
     return (
       /^\/claims\/[^/]+\/handover(\/(photo|start|finish))?$/.test(path) ||
+      /^\/claims\/[^/]+\/sign(\/submit)?$/.test(path) ||
       /^\/documents\/[^/]+(\/file|\/preview|\/preview\/\d+)?$/.test(path)
     );
   }

@@ -116,7 +116,14 @@ function guidedShots(claimId: string, handoverId: string, photos: HandoverPhoto[
             {needsSignedCopy ? (
               <div className="space-y-2" data-signed-agreement-needed>
                 <p className="text-sm font-medium">Signed hire agreement</p>
-                <p className="text-sm">Photograph the signed pages. Hire cannot start without them.</p>
+                <Link
+                  href={`/claims/${claimId}/sign`}
+                  className="block min-h-11 rounded-md border border-navy px-3 py-3 text-center text-base font-semibold text-navy"
+                  data-doorstep-sign
+                >
+                  Client signs on this phone
+                </Link>
+                <p className="text-sm">Or photograph the signed paper pages. Hire cannot start without a signed agreement.</p>
                 <input
                   name="signedAgreement"
                   type="file"
@@ -321,6 +328,15 @@ export async function HandoverScreen({
             )}
             {/* A missing signature stays on this line. It does not use the Incomplete badge. */}
             {record.conditionNote ? <p className="mt-2">{record.conditionNote}</p> : null}
+            {record.eventKind === "hire_delivered" && needsSignedCopy && !record.finishedAt ? (
+              <Link
+                href={`/claims/${id}/sign`}
+                className="mt-4 block min-h-11 rounded-md bg-navy px-3 py-3 text-center text-base font-semibold text-white"
+                data-doorstep-sign-top
+              >
+                Client signs the agreement on this phone
+              </Link>
+            ) : null}
             <div className="mt-4 space-y-3">
               <p className="text-sm font-medium">Photographs</p>
               {guidedShots(

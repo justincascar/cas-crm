@@ -1002,3 +1002,19 @@ Questions are in `docs/QUESTIONS-FOR-JUSTIN.md`.
 Finish on 28 October 2026 (after these answers): 568 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 69 passed, 0 failed, no sideways scroll at 1280px or 1024px, database unchanged. Journey checks passed on their own database. `EMAIL_SEND_MODE` stays `simulate`.
 
 Finish on 28 October 2026: 564 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 69 passed, 0 failed, no sideways scroll at 1280px or 1024px, database unchanged. Journey checks passed on their own database. `EMAIL_SEND_MODE` stays `simulate`.
+
+## E-signing, two routes (J2, 28 October 2026)
+
+Credit-hire agreements can now be signed electronically. Either route satisfies the handover rule. The paper copy upload still works.
+
+**Route (a), signing link.** On the Hire tab, once the agreement is produced, "Send signing link" sends a one-time link to the client's email. Email stays simulated: the email is filed on the claim (Messages) with the link, and nothing reaches a real mailbox. The link works once, expires after 7 days, stops working when a newer link is sent, and refuses if the agreement has been produced again since. The client's page has no CAS login and no staff menus. It shows the agreement, then a name box, a drawn signature and an "I have read and agree" tick.
+
+**Route (b), doorstep.** "Client signs on this phone" on the driver's handover page (at the top of the delivery record and again before Finish), or "Client signs on this screen" on the Hire tab. The page hides the staff summary because the client holds the screen. A driver can use it only on a file assigned to them today.
+
+**Audit trail.** Each signature is a row in `esign_requests`: the agreement document and version, a SHA-256 fingerprint of the text signed, the route, who sent the link or witnessed the doorstep signature, when, the signer's typed name, the drawn signature, the device (browser user agent) and the network address. The only thing kept of a link is a fingerprint of it; the link itself is only in the filed email.
+
+**Signed PDF.** The CRM builds the PDF on this computer (`src/lib/documents/signed-pdf.ts`, using the canvas library already in the project): the agreement text as signed, then a signature page with the drawn signature and the audit trail. It is filed as "Signed hire agreement". Agreement 1 is recorded on the hire at the handover, at the stored rate, as before.
+
+**Safeguards.** An agreement produced with details missing cannot be signed; a new version must be produced. The CRM's note about which pages are included is left off what the client sees and the PDF. Courtesy cars have no agreement to sign until Justin's template is approved.
+
+Finish on 28 October 2026: 574 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 69 passed, 0 failed, no sideways scroll at 1280px or 1024px, database unchanged. Journey checks passed, including the client signing through the link. `EMAIL_SEND_MODE` stays `simulate`.

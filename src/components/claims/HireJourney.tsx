@@ -348,7 +348,12 @@ export function HireJourney({
                     <Link href={`/documents/${area.agreement.id}`} className="text-teal-dark underline">
                       {area.agreement.title}
                     </Link>{" "}
-                    · filed {formatUkDate(area.agreement.createdAt)} · {area.signed ? "signed copy on file" : "not signed yet"}
+                    · filed {formatUkDate(area.agreement.createdAt)} ·{" "}
+                    {area.esign?.status === "signed"
+                      ? `signed electronically by ${area.esign.signerName} on ${formatUkDateTime(area.esign.signedAt)}`
+                      : area.signed
+                        ? "signed copy on file"
+                        : "not signed yet"}
                   </>
                 }
                 open={showPack}
@@ -358,24 +363,48 @@ export function HireJourney({
             ) : (
               <AgreementBody claimId={id} stillNeeded={agreementStillNeeded} showPack={showPack} again={false} />
             )}
-            {area.chosen && !area.signed && !started ? (
-              <form
-                method="post"
-                action={`/claims/${id}/hire/signed`}
-                encType="multipart/form-data"
-                className="mt-4 flex flex-wrap items-end gap-3 border-t border-line pt-4"
-                data-signed-before
-              >
-                <SubmitKeyInput />
-                <input type="hidden" name="returnHash" value="#pack" />
-                <label className="min-w-0 flex-1 text-sm">
-                  Signed already? Upload the signed copy (photograph or PDF)
-                  <input name="signedAgreement" type="file" required accept={fileAccept} className={field} />
-                </label>
-                <button className={quiet} type="submit">
-                  Upload signed copy
-                </button>
-              </form>
+            {agreementDone && !area.signed && !started ? (
+              <div className="mt-4 space-y-3 border-t border-line pt-4 text-sm" data-get-signed>
+                <p className="font-semibold">Get it signed</p>
+                {area.esign?.status === "sent" ? (
+                  <p data-link-sent>
+                    Signing link sent to {area.esign.sentTo} on {formatUkDateTime(area.esign.requestedAt)}. Waiting for the client.
+                  </p>
+                ) : null}
+                <form method="post" action={`/claims/${id}/hire/esign-link`} className="flex flex-wrap items-end gap-3">
+                  <SubmitKeyInput />
+                  <input type="hidden" name="returnHash" value="#pack" />
+                  <label className="min-w-0 flex-1">
+                    Client&apos;s email
+                    <input name="to" type="email" required defaultValue={area.email} className={field} />
+                  </label>
+                  <button className={button} type="submit">
+                    {area.esign?.status === "sent" ? "Send a new link" : "Send signing link"}
+                  </button>
+                </form>
+                <p>
+                  <Link href={`/claims/${id}/sign`} className="text-teal-dark underline">
+                    Client signs on this screen
+                  </Link>
+                </p>
+                <form
+                  method="post"
+                  action={`/claims/${id}/hire/signed`}
+                  encType="multipart/form-data"
+                  className="flex flex-wrap items-end gap-3"
+                  data-signed-before
+                >
+                  <SubmitKeyInput />
+                  <input type="hidden" name="returnHash" value="#pack" />
+                  <label className="min-w-0 flex-1">
+                    Or upload the signed paper copy (photograph or PDF)
+                    <input name="signedAgreement" type="file" required accept={fileAccept} className={field} />
+                  </label>
+                  <button className={quiet} type="submit">
+                    Upload signed copy
+                  </button>
+                </form>
+              </div>
             ) : null}
           </li>
         ) : null}
@@ -454,6 +483,14 @@ export function HireJourney({
                         ))}
                       </select>
                     </label>
+                    {signedNeeded ? (
+                      <p className="text-sm">
+                        <Link href={`/claims/${id}/sign`} className="text-teal-dark underline">
+                          Client signs on this screen
+                        </Link>
+                        , or upload the signed paper copy:
+                      </p>
+                    ) : null}
                     {signedNeeded ? (
                       <label className="block text-sm" data-signed-upload>
                         Signed hire agreement (photograph or PDF)

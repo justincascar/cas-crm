@@ -32,6 +32,7 @@ import {
   type SignedAgreementOverride,
 } from "./hire-readiness";
 import { all, get, newId, run } from "./connection";
+import { latestEsign, type EsignView } from "./esign";
 import { withImmediateTransaction, sectionVersion } from "./record-version";
 import { replaySubmit, storeSubmit } from "./submit-key";
 
@@ -69,6 +70,7 @@ export type HireArea = {
   agreement: { id: string; title: string; createdAt: string } | null;
   signed: SignedAgreementFile | null;
   signedOverride: SignedAgreementOverride | null;
+  esign: EsignView | null;
   windowDays: number;
   chosen: {
     fleetVehicleId: string;
@@ -897,6 +899,7 @@ export function loadHireArea(
       : null,
     signed,
     signedOverride,
+    esign: creditHire ? latestEsign(claimId) : null,
     windowDays: licenceCheckWindowDays(),
     chosen,
     startedAt,

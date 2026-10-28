@@ -20,7 +20,11 @@ export function SignaturePad() {
 
   function start(event: PointerEvent<HTMLCanvasElement>) {
     drawing.current = true;
-    event.currentTarget.setPointerCapture(event.pointerId);
+    try {
+      event.currentTarget.setPointerCapture(event.pointerId);
+    } catch {
+      // Some browsers refuse capture for a pen or a stale pointer. Drawing still works without it.
+    }
     const ctx = canvasRef.current?.getContext("2d");
     if (!ctx) return;
     const at = point(event);

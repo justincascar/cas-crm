@@ -24,14 +24,17 @@ export default async function ClaimLayout({
   if (!data) notFound();
   const saved = listScreenSummaries(String(data.claim.id)).map((r) => r.screen_key);
 
-  if (!office) {
+  // The client holds the screen on the signing page, so the staff summary and tabs are not shown.
+  if (!office || /\/sign$/.test(pathname)) {
     return (
       <div className="space-y-4">
-        <p className="text-sm">
-          <Link href="/jobs" className="text-teal-dark underline">
-            My jobs today
-          </Link>
-        </p>
+        {office ? null : (
+          <p className="text-sm">
+            <Link href="/jobs" className="text-teal-dark underline">
+              My jobs today
+            </Link>
+          </p>
+        )}
         {children}
       </div>
     );
