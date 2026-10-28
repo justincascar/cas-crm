@@ -126,6 +126,7 @@ DONE — 3bf60aa.
 - One "Today's work" list, with a single next step per claim.
 
 ### J8 — Intake and loose ends
+DONE — 359c73a.
 - A blank address shows as "Address needed", never "Unknown / UNKNOWN".
 - UK phone checks.
 - A friendly "Claim not found" page.
@@ -142,3 +143,7 @@ DONE — 3bf60aa.
 
 ## Where I stopped
 (Claude Code writes here when it pauses.)
+
+## Where I stopped (28 October 2026)
+
+J1 to J8 are done and pushed. J9 is not started: it needs Justin's approval and the costs first. Open questions are 1 to 8 in QUESTIONS-FOR-JUSTIN.md. Known issues still open are listed in CLAIM-JOURNEY-AUDIT.md (35, 37–41, 45, 47–51).
