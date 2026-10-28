@@ -61,7 +61,7 @@ It needs:
 Credit-hire agreements first. The courtesy-car agreement follows when its template is approved.
 
 ### J3 — Recovery (step 2)
-DONE — HASH_J3. Recovery mileage and the card fee are open questions.
+DONE — fc743cb. Recovery mileage and the card fee are open questions.
 - Recording the recovery as done:
   - offers the standard £395 + VAT, already filled in for the handler to confirm, never added silently
   - shows the extras as tick boxes with their default fees, each overridable with a reason:
