@@ -8,7 +8,9 @@ import { browserOrigin } from "./browser-origin";
 export async function officeHirePost(
   request: Request,
   context: { params: Promise<{ id: string }> },
-  work: (input: { id: string; staffId: string; form: FormData; key: string }) => void,
+  work: (
+    input: { id: string; staffId: string; staffRole: string; form: FormData; key: string },
+  ) => void | { hash?: string } | Promise<void | { hash?: string }>,
 ) {
   const { id } = await context.params;
   const origin = browserOrigin(request);
@@ -27,7 +29,13 @@ export async function officeHirePost(
   try {
     const key = formSubmitKey(form);
     if (replaySubmit(key)) return back();
-    work({ id, staffId: staff.id, form, key });
+    const outcome = await work({ id, staffId: staff.id, staffRole: staff.role, form, key });
+    if (outcome?.hash) {
+      const url = new URL(`/claims/${id}/hire`, origin);
+      url.searchParams.set("saved", "1");
+      url.hash = outcome.hash;
+      return NextResponse.redirect(url, 303);
+    }
     return back();
   } catch (error) {
     if (error instanceof VersionConflictError) {

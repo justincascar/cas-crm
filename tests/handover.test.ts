@@ -23,11 +23,11 @@ import {
   STANDARD_SHOTS,
 } from "../src/lib/db/handover.ts";
 import { SIGNATURE_HONESTY } from "../src/lib/domain/handover-signature.ts";
+import { recordPassingPrehireChecks } from "./prehire-setup.ts";
 import { utcFromLondonDateTime } from "../src/lib/dates.ts";
 import { readStoredFile } from "../src/lib/storage/files.ts";
 import { migrate } from "../src/lib/db/migrate.ts";
 import { seed } from "../src/lib/db/seed.ts";
-import { recordPassingPrehireChecks } from "./prehire-setup.ts";
 
 const schema = fs.readFileSync(path.join(process.cwd(), "src/lib/db/schema.sql"), "utf8");
 
@@ -270,6 +270,7 @@ describe("vehicle handover records", () => {
     const db = prepared();
     try {
       withDatabase(db, () => {
+        recordPassingPrehireChecks("c3");
         const saved = recordVehicleHandover(handover());
         assert.equal(listVehicleHandovers("c3").find((row) => row.id === saved.id)?.shotSet, "five");
         assert.throws(
@@ -330,6 +331,7 @@ describe("vehicle handover records", () => {
     const db = prepared();
     try {
       withDatabase(db, () => {
+        recordPassingPrehireChecks("c3");
         const hire = recordVehicleHandover(handover());
         const own = recordVehicleHandover(
           handover({ eventKind: "client_returned", hireEpisodeId: "", mileage: "88001", fuelLevel: "quarter" }),

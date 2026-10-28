@@ -16,7 +16,8 @@ import { agreementDayNumber } from "../domain/rules";
 import { canDoFieldJob } from "../auth/roles";
 import { getHirePack } from "./hire-pack";
 import { getGtaMarkupPercent } from "./hire-agreement";
-import { hireAgreementPrehireBlock } from "./prehire-checks";
+import { hireAgreementPrehireBlock, listHireGaps } from "./prehire-checks";
+import { licenceCheckWindowDays } from "./licence-window";
 import { recordVehicleHandover } from "./handover";
 import { activeReservationFor, startHireFromHandover } from "./hire-start";
 import { recordClaimEvent } from "./chronology";
@@ -39,8 +40,10 @@ export type HireArea = {
   licenceNumber: string;
   need: HireNeed;
   needReason: string;
-  checksClear: boolean;
-  checksMessage: string | null;
+  checksDone: boolean;
+  gaps: Array<{ key: string; kind: string; label: string; href: string }>;
+  agreementCount: number;
+  windowDays: number;
   chosen: {
     fleetVehicleId: string;
     episodeId: string;
@@ -417,10 +420,6 @@ export function chooseHireCar(input: {
       [input.claimId],
     );
     if (parseHireNeed(decision?.details) !== "yes") throw new Error("Say that hire is needed before choosing a car.");
-    if (claim.claim_type !== "fault") {
-      const blocked = hireAgreementPrehireBlock(input.claimId);
-      if (blocked) throw new Error(blocked);
-    }
     const clock = deliveryClock(input.date, input.time);
     const endAt = requireLondonDateTime(`${clock.endDay}T23:59`);
     const car = fleetCars().find((item) => item.id === input.fleetVehicleId);
@@ -588,6 +587,8 @@ export function completeHireHandover(input: {
       [input.claimId],
     );
     if (!episode) throw new Error("Choose a car before the handover. Use Choose a car on the Hire tab.");
+    const blocked = hireAgreementPrehireBlock(input.claimId, { asAtYmd: clock.day, purpose: "handover" });
+    if (blocked) throw new Error(blocked);
     const saved = recordVehicleHandover({
       claimId: input.claimId,
       eventKind: "hire_delivered",
@@ -685,7 +686,7 @@ export function loadHireArea(
   );
   const need = parseHireNeed(decision?.details);
   const creditHire = claim.claim_type !== "fault";
-  const block = creditHire ? hireAgreementPrehireBlock(claimId) : null;
+  const gaps = need === "yes" ? listHireGaps(claimId) : [];
   const episode = get<{
     id: string;
     fleet_vehicle_id: string | null;
@@ -758,13 +759,19 @@ export function loadHireArea(
         reservationId: reservation ? String(reservation.id) : null,
       }
     : null;
+  const agreementCount = Number(
+    get<{ n: number }>(
+      `SELECT COUNT(*) AS n FROM documents WHERE claim_id = ? AND template_key = 'hire_agreement'`,
+      [claimId],
+    )?.n || 0,
+  );
   const base = `/claims/${claimId}/hire`;
   let next = { label: "Hire needed?", href: `${base}#need` };
   if (need === "no") next = { label: "Hire not needed", href: `${base}#need` };
   else if (!need || need === "not_yet") next = { label: "Hire needed?", href: `${base}#need` };
-  else if (block) next = { label: "Pre-hire checks", href: `${base}#checks` };
   else if (!chosen) next = { label: "Choose a car", href: `${base}#car` };
-  else if (creditHire && (pack?.missing.length || 0) > 0 && !episode?.started_at) next = { label: "Hire pack", href: `${base}#pack` };
+  else if (gaps.length) next = { label: "Pre-hire checks", href: `${base}#checks` };
+  else if (creditHire && agreementCount === 0 && !episode?.started_at) next = { label: "Hire pack", href: `${base}#pack` };
   else if (!episode?.started_at) next = { label: "Handover", href: `${base}#handover` };
   else next = { label: "On hire", href: `${base}#on-hire` };
   const planned = deliveryJob?.planned_at ? toLondonDateTimeLocal(String(deliveryJob.planned_at)) : "";
@@ -780,8 +787,10 @@ export function loadHireArea(
     licenceNumber: String(claim.licence_number || ""),
     need,
     needReason: decision?.details?.match(/Reason:\s*(.+)$/i)?.[1]?.trim() || "",
-    checksClear: !block,
-    checksMessage: block,
+    checksDone: gaps.length === 0,
+    gaps,
+    agreementCount,
+    windowDays: licenceCheckWindowDays(),
     chosen,
     startedAt: episode?.started_at ? String(episode.started_at) : null,
     dayCount: count.dayCount,

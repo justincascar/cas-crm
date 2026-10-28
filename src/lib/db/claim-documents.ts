@@ -237,6 +237,9 @@ export function storeClaimDocument(input: {
   vehicleChoice?: string;
   replacesDocumentId?: string;
   file: ClaimDocumentFile;
+  title?: string;
+  statementPeriod?: string;
+  joinTransaction?: boolean;
 }): { id: string; version: number } {
   assertOffice(input.actorRole);
   ensureReplacesColumn();
@@ -276,10 +279,10 @@ export function storeClaimDocument(input: {
     buffer: file.buffer,
   });
   const db = getDb();
-  db.exec("BEGIN");
+  if (!input.joinTransaction) db.exec("BEGIN");
   try {
     const id = insertStoredDocument({
-      title: label,
+      title: (input.title || "").trim() || label,
       documentType,
       kind: "file",
       claimId: input.claimId,
@@ -292,7 +295,12 @@ export function storeClaimDocument(input: {
       createdBy: input.actorId,
       simulated: 0,
     });
-    run(`UPDATE documents SET version = ?, replaces_document_id = ? WHERE id = ?`, [version, replacesDocumentId, id]);
+    run(`UPDATE documents SET version = ?, replaces_document_id = ?, statement_period = ? WHERE id = ?`, [
+      version,
+      replacesDocumentId,
+      (input.statementPeriod || "").trim() || null,
+      id,
+    ]);
     recordClaimEvent({
       claimId: input.claimId,
       eventType: "document_filed",
@@ -304,10 +312,10 @@ export function storeClaimDocument(input: {
         : `${label} filed on the file. Nothing was attached to an email.`,
       source: "staff",
     });
-    db.exec("COMMIT");
+    if (!input.joinTransaction) db.exec("COMMIT");
     return { id, version };
   } catch (error) {
-    db.exec("ROLLBACK");
+    if (!input.joinTransaction) db.exec("ROLLBACK");
     throw error;
   }
 }

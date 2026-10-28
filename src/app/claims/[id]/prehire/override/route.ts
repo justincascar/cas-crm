@@ -2,12 +2,14 @@ import { NextResponse } from "next/server";
 import { isOfficeRole } from "@/lib/auth/roles";
 import { getRequestStaff } from "@/lib/auth/session";
 import { recordPrehireOverride } from "@/lib/db/prehire-checks";
+import { formSubmitKey, replaySubmit, storeSubmit } from "@/lib/db/submit-key";
 import { browserOrigin } from "@/lib/http/browser-origin";
 
-function back(origin: string, claimId: string, error?: string, saved?: string) {
-  const url = new URL(`/claims/${claimId}/prehire`, origin);
+function back(origin: string, claimId: string, error?: string) {
+  const url = new URL(`/claims/${claimId}/hire`, origin);
+  url.hash = "checks";
   if (error) url.searchParams.set("error", error);
-  else if (saved) url.searchParams.set("saved", saved);
+  else url.searchParams.set("saved", "override");
   return NextResponse.redirect(url, 303);
 }
 
@@ -20,13 +22,16 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
   try {
     const form = await request.formData();
-    recordPrehireOverride({
+    const key = formSubmitKey(form);
+    if (replaySubmit(key)) return back(origin, id);
+    const saved = recordPrehireOverride({
       claimId: id,
       actorId: staff.id,
       checkKind: String(form.get("checkKind") || ""),
       reason: String(form.get("reason") || ""),
     });
-    return back(origin, id, undefined, "override");
+    storeSubmit(key, saved);
+    return back(origin, id);
   } catch (error) {
     const message = error instanceof Error ? error.message : "The override was not saved.";
     return back(origin, id, message);

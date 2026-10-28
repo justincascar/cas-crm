@@ -18,7 +18,7 @@ The banner on every page still says no real email will be sent.
 
 ## What does not join up
 
-**Hire is one path on the Hire tab.** In order: whether a car is needed, the existing pre-hire checks, choose a car, the hire pack, the handover, then the car on hire. Old addresses for the pack, the checks, reserve, and delivery notes open the right place on that tab. Hire money and financial circumstances stay on their own pages.
+**Hire is one path on the Hire tab.** After Yes, all five steps stay on the page: Hire needed, Choose a car, Pre-hire checks, Hire pack & agreement, Handover. A step that is not ready yet says what it is waiting for. Choosing a car and drafting the pack are not blocked by the checks. The checks block producing the agreement for signature, and completing the handover. Old addresses for the pack, the checks, reserve, and delivery notes open the right place on that tab. Hire money and financial circumstances stay on their own pages.
 
 A reservation does not start hire or any charge. Hire starts when the handover is completed, on that date. Only a free car is offered. The same calendar day counts as an overlap. If two people take the same car, the second is told which file booked it. Choosing a car for delivery creates one job for the driver login. The client collecting the car does not. A collection job can be arranged at the end. It does not, by itself, end the hire charge. A repairable hire still ends when a handler confirms the hire car is back. A total-loss hire still ends seven days after the qualifying payment, with handler confirmation.
 
@@ -28,9 +28,7 @@ A fault file uses the same choose-a-car and handover steps for a courtesy car. I
 
 The agreement is 89 days. Alerts start on day 80 and are overdue on day 88. That margin is deliberate. It was confirmed on 27 October 2026. It is not still to be decided. A renewal or a swap does not restart the day count, and it does not change when hire charges end. The rate is the Settings rate at the time the car is chosen. Changing Settings later does not change a hire already booked.
 
-**The licence check is still a typed note.** This is known issue 24 and is left for Stage 3. Pre-hire checks still have a text link to gov.uk/check-driving-licence, then boxes for a check code, the date, categories, points, and expiry. The CRM does not call DVLA.
-
-**Bank statements still do not sit on the check.** This is known issue 25 and is left for Stage 3. The check is still satisfied by a bank account on Financial circumstances, or by a saved explanation that the client has no bank account. Uploading a file does not, by itself, satisfy the check.
+**The licence check and the bank statements are on the Hire tab.** Known issues 24 and 25 were closed on 28 October 2026. Each driver has a card: the licence number from the file, a link to the current GOV.UK check page, a short result, and an upload. The CRM does not call DVLA. The licence number already on the file is not this check. A non-fault file also asks for bank statements, or a ticked explanation that the client has no bank account. That is the same record as Financial circumstances. A fault courtesy file asks for the licence check only. A check older than the Settings window (default 21 days, which needs Justin's confirmation) blocks the agreement and the handover.
 
 **Letters do not move the step on their own.** Preview of the non-fault initial letter on TEST-0015 worked, and missing facts are marked “[not yet on file]”. Generating a letter files it. It does not send it. The step is only recorded if a separate tick, “Also record this as a dated step”, is used. There is no email template for the third-party insurer on that screen. The payment chases are prepared elsewhere, and nothing is sent until Send is pressed. Send was not pressed.
 
@@ -101,9 +99,9 @@ Five stages. Each later stage extends the same three journeys one step further: 
 
 **Stage 1 — this job.** Create claim works. Skip other number is not a telephone. A refused save says what is wrong and where. The journey test fills the form, ticks Skip other number, accepts the telephone warning with Save anyway, presses Create claim, and checks that a number is issued and step 1 is Done. It stops there.
 
-**Stage 2 — done on 27 October 2026.** One Hire tab: needed, checks, choose a car, pack, handover, then on hire. The pack fills from the file. The handover uses the car already chosen. Choosing a car for delivery creates the driver’s job. The journey test covers a free car, a clash, “not yet”, and a courtesy car with no hire agreement.
+**Stage 2 — done on 27 October 2026.** One Hire tab: needed, choose a car, pack, handover, then on hire. The pack fills from the file. The handover uses the car already chosen. Choosing a car for delivery creates the driver’s job. The journey test covers a free car, a clash, “not yet”, and a courtesy car with no hire agreement.
 
-**Stage 3 — licence and bank.** A GOV.UK button, a short result, an upload, and the full licence number asked once and reused. A bank-statement upload counts toward the check, with one clear sentence. The journey test continues through those checks. No live DVLA or bank connection is built. Known issues 24 and 25 stay open for this stage.
+**Stage 3 — licence and bank, done on 28 October 2026.** The Hire tab has a GOV.UK link, a short result, and an upload. The licence number is asked once on the client or driver record and reused. A bank-statement upload counts toward the check, or the client is recorded as having no bank account. The checks block the agreement and the handover, not the car or the draft pack. No live DVLA or bank connection is built. The CRM does not call DVLA. Known issues 24 and 25 are closed.
 
 **Stage 4 — letters and the engineer.** The letter marks its step from the file. A fault file stops warning about an engineer. A total loss, once ticked, keeps the valuation steps. The journey test continues through that next step on each of the three files.
 
@@ -111,8 +109,8 @@ Five stages. Each later stage extends the same three journeys one step further: 
 
 ## Known issues
 
-24. **Open — Stage 3.** The licence check is still a typed note. There is no GOV.UK button, short result, or upload on that check. The CRM does not call DVLA.
-25. **Open — Stage 3.** Bank statements do not sit on the pre-hire check. A listed bank account or a no-bank explanation satisfies it. An upload on its own does not.
+24. **Closed 28 October 2026.** The licence check is a GOV.UK link, a short result, and an upload on the Hire tab. The CRM does not call DVLA. The licence number already on the file is not this check.
+25. **Closed 28 October 2026.** Bank statements sit on the Hire tab and on Financial circumstances, as the same stored file. An upload counts. So does a ticked explanation that the client has no bank account. A listed bank account still counts. A fault courtesy file does not ask for them.
 26. **Closed 27 October 2026.** Hire was split across several screens. It is now one Hire tab.
 27. **Closed 27 October 2026.** Choosing a car did not create a driver job. A delivery now creates one job for the driver login. Client collection does not.
 
@@ -120,12 +118,17 @@ Five stages. Each later stage extends the same three journeys one step further: 
 
 Use a fictional file. Do not confirm TEST-0005’s storage end. Do not change TEST-0009’s vehicle-damage offers, TEST-0006’s money, or TEST-0007’s £800.
 
-1. Open a non-fault file and the Hire tab. Choose Yes. Complete the existing licence check and bank explanation if they are asked.
-2. Put the driving licence number on the client record once. Choose a free car, delivery, a date and a time. Save. The car is reserved. Hire charges have not started.
-3. Open a second file for the same dates. That registration is not in the list. Two windows on the same free car: the first save keeps it; the second says which file booked it.
-4. Sign in as the driver. My jobs today shows that delivery, with the client, telephone, address, car and time.
-5. On the first file, open the hire pack. The licence and the car are already there. They are not typed again. Print, sign and upload. E-signature is not set up.
-6. Complete the handover. The car is not asked for again. Hire starts on that date. Step 3 is Done. Today’s work agrees. The dashboard “On hire / courtesy” count has gone up by one.
+Use a non-fault file that is not already on hire, and that does not already have the checks done. Do not use TEST-0005, TEST-0006, TEST-0007 or TEST-0009. If TEST-0001 already shows a licence-check override, use a different file.
+
+1. Open the Hire tab. Choose Yes and save. All five steps stay on the page. The page moves to Choose a car. Nothing is in red yet. A line says what is still needed.
+2. Choose a free car, delivery, a date and a time. Save. The car is reserved. Hire charges have not started. The checks can still be waiting.
+3. Press Produce agreement for signature before the checks. The page names what is missing, each with a link. It does not file an agreement.
+4. On the licence card, open the GOV.UK link if you want to see the public page. The CRM does not call DVLA. Enter today’s date, OK to drive, the categories, penalty points, and an expiry. Upload a screenshot or PDF. Save. The file is labelled Licence check, the person’s name, and the date.
+5. Upload a bank statement. It is labelled Bank statement, the client’s name, and the date. The same file is on Financial circumstances. Or tick Client has no bank account and write a short explanation. That also completes the check.
+6. Press Produce agreement for signature again. The agreement is filed unsigned. E-signature is not set up. Print, sign and upload. The wording is the existing CAS template.
+7. Complete the handover. Hire starts on that date. Step 3 is Done. The dashboard “On hire / courtesy” count has gone up by one.
+8. On a fault file, the Hire tab asks for the licence check only. There is no bank-statement step and no credit-hire agreement. Complete the licence check, choose a courtesy car, and complete the handover.
+9. Sign in as the driver. Bank statements are not on My jobs today. Opening the file address `/documents/{id}/file` directly is refused. The same refusal applies to the mechanic.
 
 ## How to run the journey test
 

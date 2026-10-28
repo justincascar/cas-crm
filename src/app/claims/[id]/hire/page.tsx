@@ -3,6 +3,7 @@ import { HireJourney } from "@/components/claims/HireJourney";
 import { canDoFieldJob, isOfficeRole } from "@/lib/auth/roles";
 import { requireStaff } from "@/lib/auth/session";
 import { loadHireArea } from "@/lib/db/hire-choice";
+import { loadClash } from "@/lib/db/record-version";
 import { listStaff } from "@/lib/db/queries";
 import { londonTodayIso } from "@/lib/dates";
 
@@ -33,5 +34,14 @@ export default async function ClaimHirePage({
   const handlers = listStaff()
     .filter((person) => canDoFieldJob(person.role))
     .map((person) => ({ id: String(person.id), name: String(person.name) }));
-  return <HireJourney area={area} error={query.error} saved={query.saved} handlers={handlers} filters={filters} />;
+  return (
+    <HireJourney
+      area={area}
+      error={query.error}
+      saved={query.saved}
+      clash={loadClash(query.clash)}
+      handlers={handlers}
+      filters={filters}
+    />
+  );
 }

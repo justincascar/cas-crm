@@ -1,16 +1,24 @@
-import { canOverridePreHireChecks } from "../auth/roles";
-import { londonTodayIso, nowUtcIso } from "../dates";
+import { canOverridePreHireChecks, isOfficeRole } from "../auth/roles";
+import { formatUkDate, londonTodayIso, nowUtcIso } from "../dates";
 import {
   hireAgreementRefusal,
+  hireCheckAnchor,
   isPrehireCheckKind,
+  licenceCheckIsStale,
+  latestLicenceCheck,
+  type HireGap,
   type NamedHireDriver,
   type PrehireCheckKind,
 } from "../domain/prehire-checks";
+import { MAX_CLAIM_DOCUMENT_BYTES, claimDocumentMime } from "../domain/claim-documents";
 import { recordClaimEvent } from "./chronology";
 import { all, get, getDb, newId, run } from "./connection";
-import { listFinancialCircumstances, listImpecuniosityAccounts } from "./impecuniosity";
+import { storeClaimDocument, type ClaimDocumentFile } from "./claim-documents";
+import { listFinancialCircumstances, listImpecuniosityAccounts, saveFinancialCircumstances } from "./impecuniosity";
+import { licenceCheckWindowDays } from "./licence-window";
 import { migrate } from "./migrate";
 import { listStaffPermissions } from "./permissions";
+import { replaySubmit, requireSubmitKey, storeSubmit } from "./submit-key";
 
 let licenceTableReady = false;
 
@@ -23,6 +31,8 @@ function ensureLicenceTable() {
 
 export type HireDriver = NamedHireDriver & {
   basis: string;
+  licenceNumber: string;
+  licenceHref: string;
 };
 
 export type LicenceCheckRow = {
@@ -37,10 +47,22 @@ export type LicenceCheckRow = {
   checked_on: string;
   recorded_at: string;
   recorded_by_name: string | null;
+  result: string;
+  notes: string;
+  penalty_points: number;
+  document_id: string | null;
+};
+
+export type StoredBankStatement = {
+  id: string;
+  title: string;
+  createdAt: string;
+  period: string;
 };
 
 export type BankStatementPosition = {
   bankAccounts: Array<{ id: string; label: string }>;
+  statements: StoredBankStatement[];
   noBankExplanation: string;
   satisfied: boolean;
 };
@@ -115,11 +137,11 @@ export function listHireDrivers(claimId: string): HireDriver[] {
     [claimId],
   );
 
-  const drivers: HireDriver[] = [];
+  const drivers: Array<NamedHireDriver & { basis: string }> = [];
   const seenNames = new Set<string>();
   const seenKeys = new Set<string>();
 
-  function push(driver: HireDriver) {
+  function push(driver: NamedHireDriver & { basis: string }) {
     const name = cleanName(driver.name);
     const norm = normName(name);
     if (!name || norm === "unknown" || seenKeys.has(driver.key) || seenNames.has(norm)) return;
@@ -169,14 +191,44 @@ export function listHireDrivers(claimId: string): HireDriver[] {
     });
   }
 
-  return drivers;
+  return drivers.map((driver) => ({ ...driver, ...licencePlacement(claimId, driver, client?.person_id || "") }));
+}
+
+function licencePlacement(claimId: string, driver: NamedHireDriver, clientPersonId: string): { licenceNumber: string; licenceHref: string } {
+  const base = `/claims/${claimId}`;
+  if (driver.key.startsWith("person:")) {
+    const personId = driver.key.slice("person:".length);
+    const row = get<{ licence_number: string | null }>(`SELECT licence_number FROM people WHERE id = ?`, [personId]);
+    return {
+      licenceNumber: String(row?.licence_number || "").trim(),
+      licenceHref: personId === clientPersonId ? `${base}/details/client` : `${base}/details/driver`,
+    };
+  }
+  const extras = screenValues(claimId, "additional-drivers");
+  const norm = normName(driver.name);
+  if (normName(extras.d1Name || "") === norm) {
+    return { licenceNumber: String(extras.d1LicenceNumber || "").trim(), licenceHref: `${base}/details/additional-drivers` };
+  }
+  if (normName(extras.d2Name || "") === norm) {
+    return { licenceNumber: String(extras.d2LicenceNumber || "").trim(), licenceHref: `${base}/details/additional-drivers` };
+  }
+  const pack = get<{ additional_name: string | null; additional_licence: string | null }>(
+    `SELECT additional_name, additional_licence FROM hire_pack_data WHERE claim_id = ?`,
+    [claimId],
+  );
+  if (normName(String(pack?.additional_name || "")) === norm) {
+    return { licenceNumber: String(pack?.additional_licence || "").trim(), licenceHref: `${base}/details/additional-drivers` };
+  }
+  return { licenceNumber: "", licenceHref: `${base}/details/additional-drivers` };
 }
 
 export function listLicenceChecks(claimId: string): LicenceCheckRow[] {
   ensureLicenceTable();
   return all<LicenceCheckRow>(
     `SELECT l.id, l.claim_id, l.driver_key, l.driver_name, l.check_code, l.category, l.points_endorsements,
-            l.licence_expires_on, l.checked_on, l.recorded_at, s.name AS recorded_by_name
+            l.licence_expires_on, l.checked_on, l.recorded_at, s.name AS recorded_by_name,
+            COALESCE(l.result, 'ok') AS result, COALESCE(l.notes, '') AS notes,
+            COALESCE(l.penalty_points, 0) AS penalty_points, l.document_id
      FROM licence_checks l
      LEFT JOIN staff s ON s.id = l.recorded_by
      WHERE l.claim_id = ?
@@ -189,12 +241,16 @@ export function recordLicenceCheck(input: {
   claimId: string;
   actorId: string;
   driverKey: string;
-  checkCode: string;
+  checkCode?: string;
   category: string;
-  pointsEndorsements: string;
+  pointsEndorsements?: string;
+  penaltyPoints?: number;
   licenceExpiresOn: string;
   checkedOn: string;
-}): { id: string; driverName: string } {
+  result?: string;
+  notes?: string;
+  documentId?: string | null;
+}): { id: string; driverName: string; result: "ok" | "problem" } {
   ensureLicenceTable();
   const claim = get<{ id: string }>(`SELECT id FROM claims WHERE id = ?`, [input.claimId]);
   if (!claim) throw new Error("File not found.");
@@ -202,44 +258,98 @@ export function recordLicenceCheck(input: {
   if (!driver) throw new Error("That person is not recorded as someone who will drive the hire vehicle.");
   const checkedOn = requireYmd(input.checkedOn, "the date the check was done");
   if (checkedOn > londonTodayIso()) throw new Error("The date of the check cannot be after today.");
+  const result = input.result === "problem" ? "problem" : "ok";
+  const points =
+    input.pointsEndorsements != null && input.pointsEndorsements.trim()
+      ? requireText(input.pointsEndorsements, "Enter the penalty points.")
+      : String(normalPoints(input.penaltyPoints));
+  const code = String(input.checkCode || "").trim();
+  if (code.length > 200) throw new Error("That entry is too long. Keep it to what the check showed.");
+  const notes = (input.notes || "").trim();
+  if (notes.length > 1000) throw new Error("Keep the notes short.");
   const id = newId("lic");
   run(
     `INSERT INTO licence_checks(
        id, claim_id, driver_key, driver_name, check_code, category, points_endorsements,
-       licence_expires_on, checked_on, recorded_by, recorded_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       licence_expires_on, checked_on, recorded_by, recorded_at, result, notes, penalty_points, document_id
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       input.claimId,
       driver.key,
       driver.name,
-      requireText(input.checkCode, "Enter the DVLA check code from the gov.uk page."),
+      code,
       requireText(input.category, "Enter the categories the check showed."),
-      requireText(input.pointsEndorsements, "Enter the points and endorsements the check showed. If none were shown, say so."),
+      points,
       requireYmd(input.licenceExpiresOn, "the licence expiry the check showed"),
       checkedOn,
       input.actorId,
       nowUtcIso(),
+      result,
+      notes,
+      normalPoints(input.penaltyPoints ?? (Number(points) || 0)),
+      input.documentId || null,
     ],
   );
-  return { id, driverName: driver.name };
+  return { id, driverName: driver.name, result };
+}
+
+function normalPoints(value: number | undefined): number {
+  const n = Number(value ?? 0);
+  if (!Number.isInteger(n) || n < 0 || n > 99) throw new Error("Enter penalty points as a whole number from 0.");
+  return n;
+}
+
+export function listStoredBankStatements(claimId: string): StoredBankStatement[] {
+  return all<{ id: string; title: string | null; created_at: string; statement_period: string | null }>(
+    `SELECT id, title, created_at, statement_period FROM documents
+     WHERE claim_id = ? AND document_type = 'bank_statements'
+     ORDER BY created_at ASC, rowid ASC`,
+    [claimId],
+  ).map((row) => ({
+    id: String(row.id),
+    title: String(row.title || "Bank statement"),
+    createdAt: String(row.created_at),
+    period: String(row.statement_period || "").trim(),
+  }));
 }
 
 /**
- * A listed bank account satisfies this. So does the latest saved no-bank explanation.
- * Wage slips and other evidence kinds do not. An uploaded file is not labelled as a bank statement, so it does not.
- * Checklist Complete and impecuniosity approval are not consulted.
+ * A stored bank statement, a listed bank account, or the latest no-bank explanation satisfies this.
+ * Wage slips do not. Checklist Complete and impecuniosity approval are not consulted.
  */
 export function bankStatementPosition(claimId: string): BankStatementPosition {
   const bankAccounts = listImpecuniosityAccounts(claimId)
     .filter((row) => row.kind === "bank_account")
     .map((row) => ({ id: row.id, label: row.label }));
+  const statements = listStoredBankStatements(claimId);
   const noBankExplanation = (listFinancialCircumstances(claimId).at(-1)?.no_bank_explanation || "").trim();
   return {
     bankAccounts,
+    statements,
     noBankExplanation,
-    satisfied: bankAccounts.length > 0 || noBankExplanation.length > 0,
+    satisfied: statements.length > 0 || bankAccounts.length > 0 || noBankExplanation.length > 0,
   };
+}
+
+export function recordNoBankExplanation(input: { claimId: string; actorId: string; explanation: string }): string {
+  const explanation = input.explanation.trim();
+  if (!explanation) throw new Error("Say why the client has no bank account.");
+  if (explanation.length > 1000) throw new Error("Keep the explanation short.");
+  const previous = listFinancialCircumstances(input.claimId);
+  const last = previous.at(-1);
+  return saveFinancialCircumstances({
+    claimId: input.claimId,
+    actorId: input.actorId,
+    employmentStatus: last?.employment_status || "not_stated",
+    employmentWords: last?.employment_words || "",
+    incomeAsStated: last?.income_as_stated || "",
+    benefitsAsStated: last?.benefits_as_stated || "",
+    abilityToPay: last?.ability_to_pay || "not_answered",
+    abilityToPayWords: last?.ability_to_pay_words || "",
+    noBankExplanation: explanation,
+    correctionReason: previous.length > 0 ? "Recorded on the Hire tab." : undefined,
+  });
 }
 
 export type PrehireOverrideRow = {
@@ -268,11 +378,35 @@ export function prehireCheckOverridden(claimId: string, checkKind: PrehireCheckK
   return listPrehireOverrides(claimId).some((row) => row.check_kind === checkKind);
 }
 
-function licenceEvidenceMissing(claimId: string): boolean {
+function licenceEvidenceMissing(claimId: string, asAtYmd = londonTodayIso()): boolean {
+  const names = licenceGapNames(claimId, asAtYmd);
+  return !names.recorded || names.missing.length > 0 || names.problem.length > 0 || names.stale.length > 0;
+}
+
+function licenceGapNames(claimId: string, asAtYmd: string): {
+  missing: string[];
+  problem: string[];
+  stale: string[];
+  recorded: boolean;
+} {
   const drivers = listHireDrivers(claimId);
-  if (drivers.length === 0) return true;
-  const checked = new Set(listLicenceChecks(claimId).map((row) => row.driver_key));
-  return drivers.some((driver) => !checked.has(driver.key));
+  const checks = listLicenceChecks(claimId).map((row) => ({
+    driverKey: row.driver_key,
+    checkedOn: row.checked_on,
+    recordedAt: row.recorded_at,
+    result: row.result,
+  }));
+  const windowDays = licenceCheckWindowDays();
+  const missing: string[] = [];
+  const problem: string[] = [];
+  const stale: string[] = [];
+  for (const driver of drivers) {
+    const latest = latestLicenceCheck(checks, driver.key);
+    if (!latest) missing.push(driver.name);
+    else if (latest.result === "problem") problem.push(driver.name);
+    else if (licenceCheckIsStale(latest.checkedOn, asAtYmd, windowDays)) stale.push(driver.name);
+  }
+  return { missing, problem, stale, recorded: drivers.length > 0 };
 }
 
 /**
@@ -329,15 +463,107 @@ export function recordPrehireOverride(input: {
  * There is no bypass argument. Stored overrides are read for this claim only.
  * The caller's role is not consulted.
  */
-export function hireAgreementPrehireBlock(claimId: string): string | null {
-  const drivers = listHireDrivers(claimId);
-  const checked = new Set(listLicenceChecks(claimId).map((row) => row.driver_key));
-  const missing = drivers.filter((driver) => !checked.has(driver.key)).map((driver) => driver.name);
+export function listHireGaps(claimId: string, asAtYmd = londonTodayIso()): HireGap[] {
+  const claim = get<{ claim_type: string }>(`SELECT claim_type FROM claims WHERE id = ?`, [claimId]);
+  const creditHire = String(claim?.claim_type || "") !== "fault";
+  const names = licenceGapNames(claimId, asAtYmd);
+  const licenceOverridden = prehireCheckOverridden(claimId, "licence");
+  const bankOverridden = prehireCheckOverridden(claimId, "bank");
+  const gaps: HireGap[] = [];
+  if (!licenceOverridden) {
+    if (!names.recorded) {
+      gaps.push({
+        key: "driver",
+        kind: "driver",
+        label: "Somebody who will drive",
+        href: `/claims/${claimId}/details/client`,
+      });
+    }
+    for (const name of names.missing) {
+      gaps.push({ key: `missing:${name}`, kind: "licence", label: `Licence check for ${name}`, href: "#checks" });
+    }
+    for (const name of names.problem) {
+      gaps.push({ key: `problem:${name}`, kind: "problem", label: `Licence check for ${name} found a problem`, href: "#checks" });
+    }
+    for (const name of names.stale) {
+      gaps.push({
+        key: `stale:${name}`,
+        kind: "stale",
+        label: `Licence check is older than ${licenceCheckWindowDays()} days — please recheck (${name})`,
+        href: "#checks",
+      });
+    }
+  }
+  if (creditHire && !bankOverridden && !bankStatementPosition(claimId).satisfied) {
+    gaps.push({ key: "bank", kind: "bank", label: "Bank statements", href: "#bank" });
+  }
+  return gaps;
+}
+
+export function hireAgreementPrehireBlock(
+  claimId: string,
+  options: { asAtYmd?: string; purpose?: "agreement" | "handover" } = {},
+): string | null {
+  const claim = get<{ claim_type: string }>(`SELECT claim_type FROM claims WHERE id = ?`, [claimId]);
+  const asAtYmd = options.asAtYmd && /^\d{4}-\d{2}-\d{2}$/.test(options.asAtYmd) ? options.asAtYmd : londonTodayIso();
+  const names = licenceGapNames(claimId, asAtYmd);
   return hireAgreementRefusal({
-    missingDriverNames: missing,
-    driverRecorded: drivers.length > 0,
+    missingDriverNames: names.missing,
+    problemDriverNames: names.problem,
+    staleDriverNames: names.stale,
+    driverRecorded: names.recorded,
     bankSatisfied: bankStatementPosition(claimId).satisfied,
     licenceOverridden: prehireCheckOverridden(claimId, "licence"),
     bankOverridden: prehireCheckOverridden(claimId, "bank"),
+    requireBank: String(claim?.claim_type || "") !== "fault",
+    windowDays: licenceCheckWindowDays(),
+    purpose: options.purpose,
   });
 }
+
+export function waitingForChecks(gaps: HireGap[]): string {
+  const parts: string[] = [];
+  if (gaps.some((gap) => gap.kind === "licence" || gap.kind === "problem" || gap.kind === "stale" || gap.kind === "driver")) {
+    parts.push("licence check");
+  }
+  if (gaps.some((gap) => gap.kind === "bank")) parts.push("bank statements");
+  return parts.join(", ");
+}
+
+export function storeHireBankStatement(input: {
+  claimId: string;
+  actorId: string;
+  actorRole: string;
+  clientName: string;
+  period?: string;
+  submitKey: string;
+  file: ClaimDocumentFile;
+}): { id: string } {
+  const key = requireSubmitKey(input.submitKey);
+  const prior = replaySubmit<{ id: string }>(key);
+  if (prior?.id) return prior;
+  if (!isOfficeRole(input.actorRole)) throw new Error("You cannot store documents on a file.");
+  const period = (input.period || "").trim();
+  if (period.length > 80) throw new Error("Keep the statement period short.");
+  readUpload(input.file);
+  const stored = storeClaimDocument({
+    claimId: input.claimId,
+    actorId: input.actorId,
+    actorRole: input.actorRole,
+    documentType: "bank_statements",
+    file: input.file,
+    title: `Bank statement – ${input.clientName || "Client"} – ${formatUkDate(nowUtcIso())}`,
+    statementPeriod: period,
+  });
+  storeSubmit(key, { id: stored.id });
+  return { id: stored.id };
+}
+
+export function readUpload(file: ClaimDocumentFile): void {
+  const filename = (file.filename || "").trim() || "document";
+  if (!file.buffer || file.buffer.length < 1) throw new Error("Choose a file to store.");
+  if (file.buffer.length > MAX_CLAIM_DOCUMENT_BYTES) throw new Error("Each document must be 12 MB or smaller.");
+  claimDocumentMime(filename, file.mimeType);
+}
+
+export { hireCheckAnchor };

@@ -54,6 +54,7 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["mime_type", "TEXT"],
     ["byte_size", "INTEGER"],
     ["created_by", "TEXT"],
+    ["statement_period", "TEXT"],
   ],
   hire_episodes: [
     ["hire_end_review_on", "TEXT"],
@@ -524,6 +525,9 @@ export function migrate(db: DatabaseSync) {
     INSERT INTO settings(key, value)
       SELECT 'next_hire_agreement_number', '1'
       WHERE NOT EXISTS (SELECT 1 FROM settings WHERE key = 'next_hire_agreement_number');
+    INSERT INTO settings(key, value)
+      SELECT 'licence_check_window_days', '21'
+      WHERE NOT EXISTS (SELECT 1 FROM settings WHERE key = 'licence_check_window_days');
     CREATE TABLE IF NOT EXISTS financial_circumstances (
       id TEXT PRIMARY KEY,
       claim_id TEXT NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
@@ -597,6 +601,20 @@ export function migrate(db: DatabaseSync) {
       recorded_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS idx_licence_checks_claim ON licence_checks(claim_id, recorded_at);
+  `);
+  const licenceColumns = db.prepare(`PRAGMA table_info(licence_checks)`).all() as Array<{ name: string }>;
+  const licenceNames = new Set(licenceColumns.map((column) => column.name));
+  for (const [column, type] of [
+    ["result", "TEXT NOT NULL DEFAULT 'ok'"],
+    ["notes", "TEXT"],
+    ["penalty_points", "INTEGER NOT NULL DEFAULT 0"],
+    ["document_id", "TEXT"],
+  ] as const) {
+    if (licenceColumns.length > 0 && !licenceNames.has(column)) {
+      db.exec(`ALTER TABLE licence_checks ADD COLUMN ${column} ${type}`);
+    }
+  }
+  db.exec(`
     CREATE TABLE IF NOT EXISTS staff_permissions (
       staff_id TEXT NOT NULL REFERENCES staff(id) ON DELETE CASCADE,
       permission TEXT NOT NULL,

@@ -112,6 +112,7 @@ describe("pre-hire checks before a hire agreement", () => {
   it("refuses generation when bank-statement evidence is missing, and does not treat wage slips as a bank account", () => {
     const db = prepared();
     withDatabase(db, () => {
+      db.prepare(`UPDATE claims SET claim_type = 'non_fault' WHERE id = 'c4'`).run();
       for (const driver of listHireDrivers("c4")) licenceFor("c4", driver.key);
       addImpecuniosityAccount({ claimId: "c4", actorId: "staff-sian", label: "March wages", kind: "wage_slips" });
       assert.throws(() => generateHireAgreementDocument("c4", "staff-sian", 0), /no bank account listed/);
@@ -164,7 +165,7 @@ describe("pre-hire checks before a hire agreement", () => {
     db.close();
   });
 
-  it("still treats a check outside the 21-day demonstration window as recorded, and flags it at handover", () => {
+  it("blocks the agreement when the licence check is older than the window", () => {
     const db = prepared();
     withDatabase(db, () => {
       const staleOn = isoDateFromNow(-22);
@@ -174,17 +175,18 @@ describe("pre-hire checks before a hire agreement", () => {
       const driver = listHireDrivers("c4")[0];
       licenceFor("c4", driver.key, staleOn);
       addImpecuniosityAccount({ claimId: "c4", actorId: "staff-sian", label: "Barclays current", kind: "bank_account" });
-      assert.equal(hireAgreementPrehireBlock("c4"), null);
       db.prepare(`UPDATE claims SET claim_type = 'non_fault' WHERE id = 'c4'`).run();
-      const result = generateHireAgreementDocument("c4", "staff-sian", 0);
-      assert.ok(result.documentId);
+      const block = hireAgreementPrehireBlock("c4");
+      assert.match(String(block), /older than 21 days/);
+      assert.throws(() => generateHireAgreementDocument("c4", "staff-sian", 0), /older than 21 days/);
+      assert.equal(hireAgreementCount(db, "c4"), 0);
       const lines = handoverStaleLines({
         drivers: listHireDrivers("c4"),
         checks: [{ driverKey: driver.key, checkedOn: staleOn, recordedAt: "2026-01-01T00:00:00.000Z" }],
         asAtYmd: londonTodayIso(),
       });
       assert.equal(lines.length, 1);
-      assert.match(lines[0], /21-day demonstration window/);
+      assert.match(lines[0], /older than 21 days/);
       assert.match(lines[0], /Dafydd Jones/);
     });
     db.close();
@@ -302,6 +304,7 @@ describe("pre-hire check overrides", () => {
         reason: "Proceeding without a check code.",
       });
       assert.equal(listPrehireOverrides("c4").map((row) => row.check_kind).join(","), "licence");
+      db.prepare(`UPDATE claims SET claim_type = 'non_fault' WHERE id = 'c4'`).run();
       assert.throws(() => generateHireAgreementDocument("c4", "staff-sian", 0), /no bank account listed/);
       assert.equal(hireAgreementCount(db, "c4"), 0);
       assert.match(String(hireAgreementPrehireBlock("c5")), /Elin Powell/);

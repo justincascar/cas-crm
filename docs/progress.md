@@ -435,7 +435,7 @@ Blocked: per-file permissions, shared hosting, live DVLA. Incoming mail is not b
 - The people who will drive are: anyone recorded on the file as a driver; anyone named on Client driver details; and each additional driver named on the hire pack or on Additional drivers. An owner, hirer or client who is not one of those is not included. If nobody is recorded as a driver, the client is treated as the person who will drive. The licence number already stored on the file is not the check.
 - Staff type what the free check at gov.uk/check-driving-licence showed: the check code, categories, points and endorsements, expiry, the date checked, and the system records who entered it. The CRM does not call DVLA. No DVLA account is waiting. Automated checking could be revisited only if CAS ever secures bulk DVLA access. Nothing here connects to an API.
 - Bank statements are the existing Financial circumstances list. There is no second upload area. A listed bank account satisfies that half. A saved explanation that the client has no bank account, on the latest financial-circumstances entry, also satisfies it. The evidence checklist does not need to be Complete, and approval to rely on impecuniosity is a different gate. A stored file on that page is not labelled as a bank statement, so the file on its own does not count. Wage slips do not count.
-- 21 days is the demonstration window used on screen. It is not a DVLA ruling. A check older than that still counts as recorded, so generation is not blocked for age alone. The handover screen warns when a recorded check is outside that window as at the handover date. Handover is not stopped, and a saved handover is not changed.
+- 21 days is the demonstration window used on screen. It is not a DVLA ruling. Superseded on 28 October 2026: a check older than the Settings window now blocks the agreement and the handover. See Hire checks (28 October 2026).
 - The refusal is in `generateHireAgreementDocument`, before an agreement number is allocated and before the document is inserted. A direct call is refused. There is no separate preview-for-signing or mark-ready-to-sign step in this CRM. Generating the agreement is the step that files it, and the copy stays unsigned. The Hire Pack screen shows the same reason. The button is not the only block.
 - Tests: `tests/prehire-checks.test.ts` (six cases: who counts as a driver, direct refusal with nothing filed, bank evidence missing, a saved no-bank explanation, an extra driver without a check, and a stale check still counting as recorded). Full suite before this stage: 260 passing, 0 failing. After: 266 passing, 0 failing.
 - On 9 October 2026 a separate permission was added so one missing check can be overridden on that file. See the next section. The hard refusal remains for anyone who does not have that permission.
@@ -934,7 +934,29 @@ A fault file uses the same choose-a-car and handover steps for a courtesy car. I
 
 The pack uses the existing CAS wording. E-signature is not set up. Staff print, sign, and upload. The full licence number is stored once on the client or driver record and reused. Missing details are listed with a link. A draft is still saved.
 
-Known issue 26 (hire split across screens) and known issue 27 (no driver job) are closed. Known issues 24 and 25, the typed licence check and bank statements not sitting on the check, stay open for Stage 3.
+Known issue 26 (hire split across screens) and known issue 27 (no driver job) are closed. Known issues 24 and 25 were closed on 28 October 2026. See Hire checks (28 October 2026). The order in the paragraph above (checks before the car) is superseded by that decision: the car and the pack draft are no longer blocked by the checks.
 
 Recovery mileage charging remains undecided. That is the open decision from 19 October 2026.
+
+## Hire checks (28 October 2026)
+
+Reversible. Choosing a car, and drafting the pack, are no longer blocked by the pre-hire checks. The checks block only two actions: producing the final hire agreement for signature, and completing the handover.
+
+After Hire needed is Yes, the Hire tab keeps all five steps on the page: Hire needed, Choose a car, Pre-hire checks, Hire pack & agreement, Handover. A step that cannot be done yet stays visible and says what it is waiting for.
+
+A non-fault credit hire needs a current licence check for every person who will drive, and a bank-statement check. The bank-statement check is a stored bank statement, a bank account already listed on Financial circumstances, or a saved explanation that the client has no bank account. The upload is the same document Financial circumstances shows. There is no second copy. A fault courtesy car needs the licence check only. It does not ask for bank statements, and it still does not create a credit-hire agreement or a hire pack that uses credit-hire wording.
+
+The licence number already on the file is not this check. Staff open the current GOV.UK page (https://www.gov.uk/check-driving-information) themselves. The CRM does not call DVLA. Saving “OK to drive” marks that person’s check done. “Problem found” leaves it not done. An upload is labelled “Licence check – [name] – [date]” and is stored on the claim. A bank statement is labelled “Bank statement – [client] – [date uploaded]”.
+
+A licence check counts as current at the agreement and at the handover if it was done within the Settings window. The default is 21 days, the same period as a GOV.UK check code. 21 days is the demonstration window until Justin confirms it. It needs Justin's confirmation. It is not, by itself, a ruling that CAS must use 21. A check older than that window blocks the agreement and the handover until it is rechecked or overridden. This replaces the 7 October rule that age did not stop generation or handover.
+
+The evidence checklist does not need to be Complete, and approval to rely on impecuniosity is a different gate. Wage slips do not count as a bank statement.
+
+An override still needs `overridePreHireChecks` on that staff row. That permission is not the administrator role. It is not the username. Justin’s staff row (`staff-justin`) has it. Each override needs a reason, stays on the file, and covers one check on one file only. The form is not shown to anyone without the permission. An override already on the file is one line: who, the date, and the reason.
+
+Bank statements and licence-check uploads are office staff only. A driver or a mechanic who opens the file address directly is refused. Signing stays print, sign and upload. E-signature is not set up. The agreement text is the existing CAS template. Unapproved wording still cannot be sent.
+
+Choosing a car still only reserves it. Hire and charges still start at the completed handover. The agreement is still 89 days. Alerts still start on day 80 and are overdue on day 88. Repairable hire still ends on collection with handler confirmation. Total-loss hire still ends 7 days after the qualifying payment, with handler confirmation.
+
+Finish on 28 October 2026: 539 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 68 passed, 0 failed, database unchanged on open. Journey checks passed on their own database, including the new hire checks. No live email was sent. `EMAIL_SEND_MODE` stays `simulate`. TEST-0001’s stored override was not rewritten. TEST-0005’s storage end was not confirmed. TEST-0009’s vehicle-damage offers, TEST-0006’s money, and TEST-0007’s £800 were not changed.
 

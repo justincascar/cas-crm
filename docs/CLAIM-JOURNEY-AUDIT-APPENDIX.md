@@ -23,7 +23,7 @@ Hire is one route, `/claims/{id}/hire`.
 | Screen | Route | What it does |
 | --- | --- | --- |
 | Hire | `/claims/{id}/hire` | Needed, checks, choose a car, pack, handover, on hire |
-| Pre-hire checks | `.../hire#checks` (also `/prehire`) | The existing licence check and bank position |
+| Pre-hire checks | `.../hire#checks` (also `/prehire`) | Licence result and upload. Bank statements on a non-fault file |
 | Choose a car | `.../hire#car` (also `/details/reserve`) | Free cars only. A reservation does not start charges |
 | Hire pack | `.../hire#pack` (also `/hire-pack`) | Filled from the file. The licence number is not typed again |
 | Handover | `.../hire#handover` | The car already chosen. Photographs stay on `/handover` |
@@ -49,8 +49,8 @@ Total loss is one more screen (Assessed damage) and one tick. The steps list the
 ## Confirmed issues
 
 - Hire is one tab. A reservation does not start charges. The pack copies the file. The licence number is not typed again. Handover uses the car already chosen. Delivery creates one driver job. Known issues 26 and 27 are closed.
-- Licence check is still a typed form plus a text link, `gov.uk/check-driving-licence`. No result upload. Known issue 24, left for Stage 3. The full licence number is on the client record and is reused.
-- Bank: the check is still satisfied by a listed account or a no-bank explanation on Financial circumstances. An upload does not, by itself, satisfy it. Known issue 25, left for Stage 3.
+- Licence check is a GOV.UK link to https://www.gov.uk/check-driving-information, a short result, and an upload. Known issue 24 is closed. The CRM does not call DVLA. The full licence number is on the client record and is reused. The licence number already on the file is not this check.
+- Bank statements are uploaded on the Hire tab and listed on Financial circumstances as the same file. An upload counts. A listed account or a no-bank explanation also counts. Known issue 25 is closed. A fault file does not ask for them.
 - A hire delivery is created when a car is chosen for delivery. Other jobs are still assigned by hand on `/jobs`.
 - `/claims/does-not-exist` is the framework 404. `notFound()` in `src/app/claims/[id]/layout.tsx`. Not changed. A 404 page is not a form.
 - TEST-0013 (`claim_e6ee0ed9-2614-4586-87fd-390c1cab4219`) still shows both open flags: inherited £195 in a note, and recovery 09:00 before the accident at 14:30. Not rewritten.

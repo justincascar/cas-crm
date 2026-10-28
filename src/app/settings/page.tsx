@@ -16,6 +16,7 @@ import { listInsurerPaymentTerms } from "@/lib/db/insurers";
 import { accountCanManageBankDetails } from "@/lib/db/permissions";
 import { PAYMENT_DUE_ON_RECEIPT, PAYMENT_DUE_ON_RECEIPT_SENTENCE } from "@/lib/constants";
 import { getGtaMarkupPercent } from "@/lib/db/hire-agreement";
+import { licenceCheckWindowDays } from "@/lib/db/licence-window";
 import { getInsurerPaymentDetails } from "@/lib/db/payment-details";
 import { loadClash, sectionVersion } from "@/lib/db/record-version";
 import { GTA_RATE_PERIOD_LABEL } from "@/lib/documents/gta";
@@ -128,6 +129,32 @@ export default async function SettingsPage({
             Save agreement day limits
           </button>
         </ValidatedForm>
+      </section>
+      <section className="rounded-xl border border-line bg-card p-5">
+        <h2 className="font-serif text-xl text-navy-deep">Licence check window</h2>
+        <p className="mt-2 text-sm">
+          Needs Justin&apos;s confirmation. A licence check older than this blocks the agreement and the handover. The
+          default is 21 days, the same period as a GOV.UK check code.
+        </p>
+        <form method="post" action="/settings/licence-window" className="mt-4 flex flex-wrap items-end gap-3">
+          <RecordVersionField version={versionFor("settings-licence-window")} />
+          <label className="text-sm">
+            Days
+            <input
+              name="licenceCheckWindowDays"
+              type="number"
+              min={1}
+              max={365}
+              step={1}
+              required
+              className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
+              defaultValue={licenceCheckWindowDays()}
+            />
+          </label>
+          <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
+            Save licence check window
+          </button>
+        </form>
       </section>
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Repair progress gap — review prompt</h2>

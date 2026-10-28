@@ -1,6 +1,7 @@
 import { canDoFieldJob, isOfficeRole } from "../auth/roles";
-import { formatUkDateTime, nowUtcIso, requireLondonDateTime } from "../dates";
+import { formatUkDateTime, londonDateIso, nowUtcIso, requireLondonDateTime } from "../dates";
 import { activeReservationFor, startHireFromHandover } from "./hire-start";
+import { hireAgreementPrehireBlock } from "./prehire-checks";
 import { assertCanRecordHandover } from "./jobs";
 import { CHOOSE_CAR_BEFORE_HANDOVER } from "../domain/hire-availability";
 import { storeFileCopy } from "../storage/files";
@@ -633,6 +634,14 @@ export function finishVehicleHandover(input: { claimId: string; handoverId: stri
     throw new Error(`Take ${missing.map((shot) => shot.label).join(", ")} before finishing. Damage photographs are optional.`);
   }
   if (row.finished_at) return { finishedAt: row.finished_at };
+  if (row.event_kind === "hire_delivered") {
+    const when = get<{ occurred_at: string }>(`SELECT occurred_at FROM vehicle_handovers WHERE id = ?`, [row.id]);
+    const blocked = hireAgreementPrehireBlock(input.claimId, {
+      asAtYmd: when?.occurred_at ? londonDateIso(new Date(when.occurred_at)) : undefined,
+      purpose: "handover",
+    });
+    if (blocked) throw new Error(blocked);
+  }
   if (row.event_kind === "hire_delivered") {
     const episode = row.hire_episode_id
       ? get<{ started_at: string | null }>(`SELECT started_at FROM hire_episodes WHERE id = ?`, [row.hire_episode_id])

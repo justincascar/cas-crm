@@ -3,6 +3,7 @@ export const CLAIM_DOCUMENT_TYPES = [
   { value: "v5c_client", label: "V5C — client's vehicle", vehicle: "client" },
   { value: "v5c_cas", label: "V5C — CAS vehicle", vehicle: "fleet" },
   { value: "driving_licence", label: "Driving licence", vehicle: "none" },
+  { value: "licence_check", label: "Licence check", vehicle: "none" },
   { value: "bank_statements", label: "Bank statements", vehicle: "none" },
   { value: "impecuniosity_evidence", label: "Impecuniosity evidence", vehicle: "none" },
   { value: "insurance_certificate", label: "Insurance certificate", vehicle: "client" },

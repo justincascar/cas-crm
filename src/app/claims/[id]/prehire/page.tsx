@@ -1,245 +1,244 @@
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
-import { PageHeader } from "@/components/ClaimTable";
+import { SubmitKeyInput } from "@/components/SubmitKeyInput";
+import { RecordVersionField } from "@/components/SaveClashNotice";
 import { requireStaff } from "@/lib/auth/session";
 import { accountCanOverridePreHireChecks } from "@/lib/db/permissions";
-import { bankStatementPosition, listHireDrivers, listLicenceChecks, listPrehireOverrides } from "@/lib/db/prehire-checks";
-import { formatUkDateTime, londonTodayIso } from "@/lib/dates";
 import {
-  BANK_REUSE_NOTICE,
-  DRIVERS_NOTICE,
-  DVLA_MANUAL_NOTICE,
-  GOV_LICENCE_CHECK_URL,
-  LICENCE_CHECK_WINDOW_NOTICE,
-  NO_OVERRIDE_NOTICE,
-  PREHIRE_OVERRIDE_NOTICE,
-  formatLicenceDate,
-  latestLicenceCheck,
-  licenceCheckIsStale,
-  prehireCheckKindLabel,
-  staleLicenceLine,
-} from "@/lib/domain/prehire-checks";
+  bankStatementPosition,
+  listHireDrivers,
+  listLicenceChecks,
+  listPrehireOverrides,
+} from "@/lib/db/prehire-checks";
+import { sectionVersion } from "@/lib/db/record-version";
+import { formatUkDate, formatUkDateTime, londonTodayIso } from "@/lib/dates";
+import { GOV_LICENCE_CHECK_URL, formatLicenceDate, hireCheckAnchor, latestLicenceCheck, licenceCheckIsStale } from "@/lib/domain/prehire-checks";
+import { licenceCheckWindowDays } from "@/lib/db/licence-window";
 import { getClaim } from "@/lib/db/queries";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
+const button = "inline-flex min-h-11 items-center rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white";
 
 export async function PrehireChecksScreen({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; saved?: string }>;
+  searchParams?: Promise<{ error?: string; saved?: string }>;
 }) {
-  const staff = await requireStaff();
   const { id } = await params;
-  const query = await searchParams;
   const data = getClaim(id);
   if (!data) notFound();
+  const staff = await requireStaff();
   const mayOverride = accountCanOverridePreHireChecks(staff.id, staff.role);
+  const creditHire = String(data.claim.claim_type || "") !== "fault";
   const drivers = listHireDrivers(id);
   const checks = listLicenceChecks(id);
   const overrides = listPrehireOverrides(id);
-  const licenceOverridden = overrides.some((row) => row.check_kind === "licence");
-  const bankOverridden = overrides.some((row) => row.check_kind === "bank");
+  const licenceOverride = overrides.find((row) => row.check_kind === "licence");
+  const bankOverride = overrides.find((row) => row.check_kind === "bank");
+  const bank = bankStatementPosition(id);
+  const today = londonTodayIso();
+  const windowDays = licenceCheckWindowDays();
   const snapshots = checks.map((row) => ({
     driverKey: row.driver_key,
     checkedOn: row.checked_on,
     recordedAt: row.recorded_at,
+    result: row.result,
   }));
-  const bank = bankStatementPosition(id);
-  const today = londonTodayIso();
-  const checkedKeys = new Set(checks.map((row) => row.driver_key));
-  const missingLicenceNames = drivers.filter((driver) => !checkedKeys.has(driver.key)).map((driver) => driver.name);
-  const licenceEvidenceMissing = drivers.length === 0 || missingLicenceNames.length > 0;
 
   return (
-    <div className="max-w-4xl space-y-6">
-      <PageHeader
-        title="Pre-hire checks"
-        subtitle="Required before a hire agreement can be generated. The agreement is still produced unsigned."
-        actions={
-          <Link href={`/claims/${id}/hire-pack`} className="text-sm text-teal-dark underline">
-            Hire Pack
-          </Link>
-        }
-      />
-      <p className="rounded-md border border-line bg-card px-4 py-3 text-sm">
-        {mayOverride ? PREHIRE_OVERRIDE_NOTICE : NO_OVERRIDE_NOTICE}
-      </p>
-      <p className="text-sm text-slate">{DVLA_MANUAL_NOTICE}</p>
-      <p className="text-sm text-slate">{LICENCE_CHECK_WINDOW_NOTICE}</p>
-      <p className="text-sm">
-        <a className="text-teal-dark underline" href={GOV_LICENCE_CHECK_URL} target="_blank" rel="noreferrer">
-          gov.uk/check-driving-licence
-        </a>
-      </p>
-      {query.error ? (
-        <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{query.error}</p>
-      ) : null}
-      {query.saved === "override" ? (
-        <p className="rounded-md border border-ok/40 bg-[#eef6ef] px-4 py-3 text-sm">
-          The override was saved on this file. It stays, including if the evidence is added later.
-        </p>
-      ) : query.saved ? (
-        <p className="rounded-md border border-ok/40 bg-[#eef6ef] px-4 py-3 text-sm">Saved on this file. It stays after you sign out.</p>
-      ) : null}
-
-      <section className="space-y-4 rounded-xl border border-line bg-card p-5">
-        <h2 className="font-serif text-xl text-navy-deep">Licence checks</h2>
-        <p className="text-sm text-slate">{DRIVERS_NOTICE}</p>
-        {drivers.length === 0 ? <p className="text-sm">Nobody is recorded as the person who will drive the hire vehicle.</p> : null}
-        {drivers.map((driver) => {
-          const latest = latestLicenceCheck(snapshots, driver.key);
-          const history = checks.filter((row) => row.driver_key === driver.key);
-          const stale = latest ? licenceCheckIsStale(latest.checkedOn, today) : false;
-          return (
-            <div key={driver.key} className="space-y-3 rounded-lg border border-line p-4">
-              <div>
-                <h3 className="font-serif text-lg text-navy-deep">{driver.name}</h3>
-                <p className="text-sm text-slate">{driver.basis}</p>
-              </div>
-              {latest && stale ? (
-                <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2 text-sm">
-                  {staleLicenceLine(driver.name, latest.checkedOn, today)}
-                </p>
-              ) : latest ? (
-                <p className="text-sm">
-                  A check is recorded, dated {formatLicenceDate(latest.checkedOn)}. It is inside the demonstration window as at today.
-                </p>
-              ) : licenceOverridden ? (
-                <p className="rounded-md border border-line bg-white px-3 py-2 text-sm">
-                  No licence check is recorded for {driver.name}. The licence check was overridden on this file. That record stays.
-                </p>
-              ) : (
-                <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2 text-sm">
-                  No licence check is recorded for {driver.name}. A hire agreement cannot be generated until it is.
-                </p>
-              )}
-              {history.length > 0 ? (
-                <ul className="space-y-2 text-sm">
-                  {history.map((row) => (
-                    <li key={row.id} className="rounded-lg border border-line px-3 py-2">
-                      <p>
-                        Checked {formatLicenceDate(row.checked_on)}
-                        {row.recorded_by_name ? ` · recorded by ${row.recorded_by_name}` : ""} · {formatUkDateTime(row.recorded_at)}
-                      </p>
-                      <p>Check code (restricted): {row.check_code}</p>
-                      <p>Categories shown: {row.category}</p>
-                      <p>Points and endorsements shown: {row.points_endorsements}</p>
-                      <p>Licence expiry shown: {formatLicenceDate(row.licence_expires_on)}</p>
-                    </li>
-                  ))}
-                </ul>
-              ) : null}
-              <form method="post" action={`/claims/${id}/prehire/save`} className="grid gap-3 sm:grid-cols-2">
-                <input type="hidden" name="driverKey" value={driver.key} />
-                <label className="text-sm">
-                  DVLA check code (restricted)
-                  <input name="checkCode" required autoComplete="off" className={field} />
+    <div className="space-y-4">
+      {drivers.length === 0 ? <p className="text-sm">Nobody is recorded as the person who will drive.</p> : null}
+      {drivers.map((driver) => {
+        const latest = latestLicenceCheck(snapshots, driver.key);
+        const stale = latest && latest.result !== "problem" ? licenceCheckIsStale(latest.checkedOn, today, windowDays) : false;
+        const done = Boolean(latest && latest.result !== "problem" && !stale);
+        return (
+          <div key={driver.key} id={hireCheckAnchor(driver.key)} className="space-y-3 rounded-lg border border-line p-4">
+            <h3 className="font-serif text-lg text-navy-deep">{driver.name}</h3>
+            {driver.licenceNumber ? (
+              <p className="text-sm">Licence number: {driver.licenceNumber}</p>
+            ) : (
+              <p className="text-sm">
+                <Link href={driver.licenceHref} className="text-teal-dark underline">
+                  Add licence number
+                </Link>
+              </p>
+            )}
+            <p className="text-sm">
+              <a className="text-teal-dark underline" href={GOV_LICENCE_CHECK_URL} target="_blank" rel="noreferrer">
+                Open GOV.UK licence check
+              </a>
+            </p>
+            {done && latest ? (
+              <p className="text-sm text-ok">Done. Checked {formatLicenceDate(latest.checkedOn)}.</p>
+            ) : latest?.result === "problem" ? (
+              <p className="text-sm">Problem found. This check is not done. Recheck, choose another driver, or use an override.</p>
+            ) : stale && latest ? (
+              <p className="text-sm">Licence check is older than {windowDays} days — please recheck.</p>
+            ) : (
+              <p className="text-sm">Still needed.</p>
+            )}
+            <form method="post" action={`/claims/${id}/prehire/save`} encType="multipart/form-data" className="grid gap-3 sm:grid-cols-2">
+              <SubmitKeyInput />
+              <RecordVersionField version={sectionVersion("licence-check", `${id}:${driver.key}`)} />
+              <input type="hidden" name="driverKey" value={driver.key} />
+              <label className="text-sm">
+                Date checked
+                <input name="checkedOn" type="date" required max={today} defaultValue={today} className={field} />
+              </label>
+              <fieldset className="text-sm">
+                <legend>Result</legend>
+                <label className="mt-1 flex items-center gap-2">
+                  <input type="radio" name="result" value="ok" required defaultChecked />
+                  OK to drive
                 </label>
-                <label className="text-sm">
-                  Date the check was done
-                  <input name="checkedOn" type="date" required max={today} defaultValue={today} className={field} />
+                <label className="mt-1 flex items-center gap-2">
+                  <input type="radio" name="result" value="problem" />
+                  Problem found
                 </label>
-                <label className="text-sm">
-                  Categories the check showed
-                  <input name="category" required className={field} />
-                </label>
-                <label className="text-sm">
-                  Points and endorsements the check showed
-                  <input name="pointsEndorsements" required className={field} placeholder="None shown" />
-                </label>
-                <label className="text-sm sm:col-span-2">
-                  Licence expiry the check showed
-                  <input name="licenceExpiresOn" type="date" required className={field} />
-                </label>
-                <button className="w-fit rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white" type="submit">
-                  Save licence check
-                </button>
-              </form>
-            </div>
-          );
-        })}
-        {mayOverride && licenceEvidenceMissing && !licenceOverridden ? (
-          <OverrideForm
-            claimId={id}
-            checkKind="licence"
-            intro={
-              missingLicenceNames.length > 0
-                ? `This overrides the licence check on this file for ${missingLicenceNames.join(", ")}. It does not override the bank-statement check, and it does not apply to any other file.`
-                : "This overrides the licence check on this file. It does not override the bank-statement check, and it does not apply to any other file."
-            }
-          />
-        ) : null}
-      </section>
-
-      <section className="space-y-3 rounded-xl border border-line bg-card p-5">
-        <h2 className="font-serif text-xl text-navy-deep">Bank statements</h2>
-        <p className="text-sm text-slate">{BANK_REUSE_NOTICE}</p>
-        {bank.satisfied ? (
-          <p className="rounded-md border border-ok/40 bg-[#eef6ef] px-3 py-2 text-sm">
-            The bank-statement check is satisfied.
-            {bank.bankAccounts.length > 0
-              ? ` Listed bank account${bank.bankAccounts.length === 1 ? "" : "s"}: ${bank.bankAccounts.map((row) => row.label).join(", ")}.`
-              : ""}
-            {bank.noBankExplanation ? ` Saved explanation that there is no bank account: ${bank.noBankExplanation}` : ""}
-          </p>
-        ) : bankOverridden ? (
-          <p className="rounded-md border border-line bg-white px-3 py-2 text-sm">
-            Neither a bank account nor a saved no-bank explanation is on this file. The bank-statement check was overridden on this file. That record stays.
-          </p>
-        ) : (
-          <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2 text-sm">
-            Neither a bank account nor a saved no-bank explanation is on this file. A hire agreement cannot be generated until one of those is saved.
-          </p>
-        )}
-        {mayOverride && !bank.satisfied && !bankOverridden ? (
-          <OverrideForm
-            claimId={id}
-            checkKind="bank"
-            intro="This overrides the bank-statement check on this file only. It does not override the licence check, and it does not apply to any other file."
-          />
-        ) : null}
+              </fieldset>
+              <label className="text-sm">
+                Categories
+                <input name="category" required className={field} />
+              </label>
+              <label className="text-sm">
+                Penalty points
+                <input name="penaltyPoints" type="number" min={0} max={99} step={1} defaultValue={0} required className={field} />
+              </label>
+              <label className="text-sm">
+                Expiry date
+                <input name="licenceExpiresOn" type="date" required className={field} />
+              </label>
+              <label className="text-sm">
+                Check code (office only)
+                <input name="checkCode" autoComplete="off" className={field} />
+              </label>
+              <label className="text-sm sm:col-span-2">
+                Notes
+                <textarea name="notes" rows={2} className={field} />
+              </label>
+              <label className="text-sm sm:col-span-2">
+                Screenshot or PDF
+                <input
+                  name="document"
+                  type="file"
+                  accept="application/pdf,image/jpeg,image/png,image/webp,image/gif,.pdf,.jpg,.jpeg,.png,.webp,.gif"
+                  className={field}
+                />
+              </label>
+              <button className={button} type="submit">
+                Save licence check
+              </button>
+            </form>
+          </div>
+        );
+      })}
+      {licenceOverride ? (
         <p className="text-sm">
-          <Link href={`/claims/${id}/financial#bank-accounts`} className="text-teal-dark underline">
-            Financial circumstances — bank accounts and the no-bank explanation
-          </Link>
+          Licence check overridden by {licenceOverride.recorded_by_name || "Unknown"} on {formatUkDate(licenceOverride.recorded_at)}:{" "}
+          {licenceOverride.reason}
         </p>
-      </section>
+      ) : null}
+      {mayOverride && !licenceOverride ? (
+        <details className="text-sm">
+          <summary className="cursor-pointer text-teal-dark underline">Override (authorised users only)</summary>
+          <OverrideForm claimId={id} checkKind="licence" />
+        </details>
+      ) : null}
 
-      {overrides.length > 0 ? (
-        <section className="space-y-3 rounded-xl border border-line bg-card p-5">
-          <h2 className="font-serif text-xl text-navy-deep">Overrides on this file</h2>
-          <p className="text-sm text-slate">
-            Each override stays on this file. It is not removed if the missing evidence is added later.
+      {creditHire ? (
+        <div id="bank" data-bank-step="yes" className="space-y-3 rounded-lg border border-line p-4">
+          <h3 className="font-serif text-lg text-navy-deep">Bank statements</h3>
+          <p className="text-sm">Upload the client&apos;s recent bank statements, or record that they have no bank account.</p>
+          {bank.statements.length > 0 ? (
+            <ul className="space-y-1 text-sm">
+              {bank.statements.map((row) => (
+                <li key={row.id}>
+                  <Link href={`/documents/${row.id}`} className="text-teal-dark underline">
+                    {row.title}
+                  </Link>
+                  {row.period ? ` · ${row.period}` : ""} · {formatUkDateTime(row.createdAt)}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {bank.bankAccounts.length > 0 ? (
+            <p className="text-sm">Bank account listed: {bank.bankAccounts.map((row) => row.label).join(", ")}.</p>
+          ) : null}
+          {bank.noBankExplanation ? <p className="text-sm">Client has no bank account: {bank.noBankExplanation}</p> : null}
+          {bank.satisfied ? <p className="text-sm text-ok">Done.</p> : <p className="text-sm">Still needed.</p>}
+          <form method="post" action={`/claims/${id}/hire/bank`} encType="multipart/form-data" className="grid gap-3 sm:grid-cols-2">
+            <SubmitKeyInput />
+            <RecordVersionField version={sectionVersion("bank-check", id)} />
+            <input type="hidden" name="returnHash" value="#bank" />
+            <label className="text-sm">
+              Statement
+              <input
+                name="document"
+                type="file"
+                required
+                accept="application/pdf,image/jpeg,image/png,image/webp,image/gif,.pdf,.jpg,.jpeg,.png,.webp,.gif"
+                className={field}
+              />
+            </label>
+            <label className="text-sm">
+              Statement period (optional)
+              <input name="statementPeriod" className={field} />
+            </label>
+            <button className={button} type="submit">
+              Upload
+            </button>
+          </form>
+          <form method="post" action={`/claims/${id}/hire/no-bank`} className="space-y-3">
+            <SubmitKeyInput />
+            <RecordVersionField version={sectionVersion("bank-check", id)} />
+            <input type="hidden" name="returnHash" value="#bank" />
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="noBank" value="yes" required />
+              Client has no bank account
+            </label>
+            <label className="block text-sm">
+              Explanation
+              <textarea name="explanation" required rows={2} className={field} defaultValue={bank.noBankExplanation} />
+            </label>
+            <button className={button} type="submit">
+              Save
+            </button>
+          </form>
+          {bankOverride ? (
+            <p className="text-sm">
+              Bank-statement check overridden by {bankOverride.recorded_by_name || "Unknown"} on {formatUkDate(bankOverride.recorded_at)}:{" "}
+              {bankOverride.reason}
+            </p>
+          ) : null}
+          {mayOverride && !bankOverride && !bank.satisfied ? (
+            <details className="text-sm">
+              <summary className="cursor-pointer text-teal-dark underline">Override (authorised users only)</summary>
+              <OverrideForm claimId={id} checkKind="bank" />
+            </details>
+          ) : null}
+          <p className="text-sm">
+            <Link href={`/claims/${id}/financial#bank-accounts`} className="text-teal-dark underline">
+              Financial circumstances
+            </Link>
           </p>
-          <ul className="space-y-2 text-sm">
-            {overrides.map((row) => (
-              <li key={row.id} className="rounded-lg border border-line px-3 py-2">
-                <p>
-                  {prehireCheckKindLabel(row.check_kind)} overridden by {row.recorded_by_name || "Unknown"} on{" "}
-                  {formatUkDateTime(row.recorded_at)}.
-                </p>
-                <p>Reason: {row.reason}</p>
-              </li>
-            ))}
-          </ul>
-        </section>
+        </div>
       ) : null}
     </div>
   );
 }
 
-function OverrideForm({ claimId, checkKind, intro }: { claimId: string; checkKind: "licence" | "bank"; intro: string }) {
+function OverrideForm({ claimId, checkKind }: { claimId: string; checkKind: "licence" | "bank" }) {
   return (
-    <form method="post" action={`/claims/${claimId}/prehire/override`} className="space-y-3 rounded-lg border border-line bg-white p-4">
+    <form method="post" action={`/claims/${claimId}/prehire/override`} className="mt-3 space-y-3">
+      <SubmitKeyInput />
       <input type="hidden" name="checkKind" value={checkKind} />
-      <p className="text-sm">{intro}</p>
       <label className="block text-sm">
-        Reason (required)
-        <textarea name="reason" required rows={3} maxLength={1000} autoComplete="off" className={field} />
+        Reason
+        <textarea name="reason" required rows={2} maxLength={1000} autoComplete="off" className={field} />
       </label>
-      <button className="w-fit rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white" type="submit">
+      <button className={button} type="submit">
         Save override
       </button>
     </form>

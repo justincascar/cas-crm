@@ -351,12 +351,17 @@ export function assertCanUploadRepair(actor: Actor, claimId: string) {
   if (!job) throw new Error("That repair is not assigned to you today.");
 }
 
+const OFFICE_ONLY_DOCUMENTS = new Set(["bank_statements", "licence_check"]);
+
 export function canReadDocument(actor: Actor, documentId: string): boolean {
-  if (isOfficeRole(actor.role)) return true;
   const doc = get<{ claim_id: string | null; document_type: string | null }>(
     "SELECT claim_id, document_type FROM documents WHERE id = ?",
     [documentId],
   );
+  if (doc && OFFICE_ONLY_DOCUMENTS.has(String(doc.document_type || ""))) {
+    return isOfficeRole(actor.role);
+  }
+  if (isOfficeRole(actor.role)) return true;
   if (!doc?.claim_id) return false;
   if (actor.role === DRIVER_ROLE && doc.document_type === "handover_photo") {
     return Boolean(assignedToday(actor.id, "handover", doc.claim_id));

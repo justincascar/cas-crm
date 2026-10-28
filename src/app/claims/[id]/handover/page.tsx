@@ -24,7 +24,8 @@ import {
 } from "@/lib/db/handover";
 import { getDayAssignment, handoverSuggestion, isHandoverAssignment, listAssignablePeople, listMyJobs } from "@/lib/db/jobs";
 import { SIGNATURE_HONESTY } from "@/lib/domain/handover-signature";
-import { LICENCE_CHECK_WINDOW_NOTICE, handoverStaleLines } from "@/lib/domain/prehire-checks";
+import { handoverStaleLines } from "@/lib/domain/prehire-checks";
+import { licenceCheckWindowDays } from "@/lib/db/licence-window";
 import { listHireDrivers, listLicenceChecks } from "@/lib/db/prehire-checks";
 import { getClaim } from "@/lib/db/queries";
 
@@ -172,12 +173,14 @@ export async function HandoverScreen({
   const savedText =
     saved === "photo" ? "Photograph saved." : saved === "details" ? "Details saved. Take the photographs below." : saved ? "Handover saved." : "";
   const hireUsers = listHireDrivers(id);
+  const windowDays = licenceCheckWindowDays();
   const licenceSnapshots = listLicenceChecks(id).map((row) => ({
     driverKey: row.driver_key,
     checkedOn: row.checked_on,
     recordedAt: row.recorded_at,
+    result: row.result,
   }));
-  const staleToday = handoverStaleLines({ drivers: hireUsers, checks: licenceSnapshots, asAtYmd: londonTodayIso() });
+  const staleToday = handoverStaleLines({ drivers: hireUsers, checks: licenceSnapshots, asAtYmd: londonTodayIso(), windowDays });
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -218,7 +221,7 @@ export async function HandoverScreen({
               {line}
             </p>
           ))}
-          <p className="mt-2 text-slate">{LICENCE_CHECK_WINDOW_NOTICE} Handover is not stopped.</p>
+          <p className="mt-2">Complete handover on the Hire tab is blocked until this is rechecked.</p>
         </div>
       ) : null}
 
@@ -248,6 +251,7 @@ export async function HandoverScreen({
             drivers: hireUsers,
             checks: licenceSnapshots,
             asAtYmd: londonDateIso(new Date(record.occurredAt)),
+            windowDays,
           });
           return (
           <article key={record.id} className="rounded-xl border border-line bg-card p-5 text-sm">
@@ -279,7 +283,7 @@ export async function HandoverScreen({
                 {staleOnRecord.map((line) => (
                   <p key={line}>{line}</p>
                 ))}
-                <p className="mt-2 text-slate">{LICENCE_CHECK_WINDOW_NOTICE} This handover is not changed.</p>
+                <p className="mt-2">This saved handover is not changed.</p>
               </div>
             ) : null}
             <p className="mt-3">

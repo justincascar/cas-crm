@@ -67,14 +67,18 @@ class BrowserSession {
   }
 }
 
-function sianPassword(): string {
+function passwordFor(name: string, username: string): string {
   const notes = fs.readFileSync(path.join(process.cwd(), "docs", "AUTH-NOTES.md"), "utf8");
-  const line = notes.split(/\r?\n/).find((row) => row.includes("| Sian Evans |"));
+  const line = notes.split(/\r?\n/).find((row) => row.includes(`| ${name} |`));
   const cells = line?.split("|").map((cell) => cell.trim().replaceAll("`", "")) ?? [];
-  if (cells[2] !== "sian" || !cells[3]) {
-    throw new Error("The Sian test sign-in is not in docs/AUTH-NOTES.md in the expected place.");
+  if (cells[2] !== username || !cells[3]) {
+    throw new Error(`The ${name} test sign-in is not in docs/AUTH-NOTES.md in the expected place.`);
   }
   return cells[3];
+}
+
+function sianPassword(): string {
+  return passwordFor("Sian Evans", "sian");
 }
 
 function freePort(start = 3200): Promise<number> {
@@ -130,15 +134,15 @@ async function waitUntilReady(origin: string, child: ChildProcess): Promise<void
   throw new Error(`The journey server did not answer on ${origin} (${last}).`);
 }
 
-async function signIn(origin: string): Promise<string> {
+async function signIn(origin: string, username = "sian", password = sianPassword()): Promise<string> {
   const response = await fetch(`${origin}/login/submit`, {
     method: "POST",
     redirect: "manual",
     headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ username: "sian", password: sianPassword(), next: "/" }),
+    body: new URLSearchParams({ username, password, next: "/" }),
   });
   const cookie = sessionCookie(response);
-  if (!cookie || response.status !== 303) throw new Error("Sign-in as Sian did not return a session.");
+  if (!cookie || response.status !== 303) throw new Error(`Sign-in as ${username} did not return a session.`);
   return cookie;
 }
 
@@ -487,31 +491,87 @@ async function saveClientLicence(session: BrowserSession, origin: string, dbPath
   return `The client licence was not saved. ${stuck.href} ${stuck.text}`;
 }
 
-async function clearHireGate(session: BrowserSession, origin: string, claimId: string) {
-  const bank = await postFields(session, `/claims/${claimId}/financial/save`, {
-    intent: "circumstances",
-    employmentStatus: "not_stated",
-    abilityToPay: "not_answered",
-    noBankExplanation: "The client said they have no bank account. Journey test only.",
-  });
-  if (bank.status >= 400 || bank.status === 0 || decodeURIComponent(bank.location).includes("error=")) {
-    return `bank ${bank.status} ${decodeURIComponent(bank.location)}`;
+function claimFiles(dbPath: string, claimId: string, documentType: string) {
+  const db = new DatabaseSync(dbPath);
+  try {
+    return db
+      .prepare(`SELECT id, title FROM documents WHERE claim_id = ? AND document_type = ? ORDER BY created_at ASC, rowid ASC`)
+      .all(claimId, documentType) as Array<{ id: string; title: string | null }>;
+  } finally {
+    db.close();
   }
-  await gotoPath(session, origin, `/claims/${claimId}/hire`);
-  const driverKey = await session.evaluate<string>(`document.querySelector('[name="driverKey"]')?.value || ""`);
-  if (!driverKey) return "No driver was listed for the licence check.";
-  const licence = await postFields(session, `/claims/${claimId}/prehire/save`, {
-    driverKey,
-    checkCode: "TEST-CHECK",
-    checkedOn: "2026-10-27",
-    category: "B",
-    pointsEndorsements: "None shown",
-    licenceExpiresOn: "2030-01-01",
-  });
-  if (licence.status >= 400 || licence.status === 0 || decodeURIComponent(licence.location).includes("error=")) {
-    return `licence check ${licence.status} ${decodeURIComponent(licence.location)}`;
-  }
+}
+
+function followed(result: { status: number; location: string }, label: string): string | null {
+  const location = decodeURIComponent(result.location.replaceAll("+", " "));
+  if (result.status >= 400 || result.status === 0 || location.includes("error=")) return `${label} ${result.status} ${location}`;
   return null;
+}
+
+async function saveLicenceCheck(session: BrowserSession, origin: string, claimId: string) {
+  await gotoPath(session, origin, `/claims/${claimId}/hire`);
+  const saved = await session.evaluate<{ status: number; location: string; problem?: string }>(`(() => {
+    const form = document.querySelector('form[action$="/prehire/save"]');
+    if (!(form instanceof HTMLFormElement)) return { status: 0, location: "", problem: "No licence form." };
+    const category = form.querySelector('[name="category"]');
+    const points = form.querySelector('[name="penaltyPoints"]');
+    const expiry = form.querySelector('[name="licenceExpiresOn"]');
+    const ok = form.querySelector('[name="result"][value="ok"]');
+    if (category instanceof HTMLInputElement) category.value = "B";
+    if (points instanceof HTMLInputElement) points.value = "0";
+    if (expiry instanceof HTMLInputElement) expiry.value = "2030-01-01";
+    if (ok instanceof HTMLInputElement) ok.checked = true;
+    const body = new FormData(form);
+    if (!body.get("submitKey")) body.set("submitKey", crypto.randomUUID());
+    const bytes = new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52, 10]);
+    body.set("document", new File([bytes], "licence-check.pdf", { type: "application/pdf" }));
+    return fetch(form.action, { method: "POST", body, credentials: "same-origin", redirect: "follow" }).then((response) => ({
+      status: response.status,
+      location: response.url || "",
+    }));
+  })()`);
+  if (saved.problem) return saved.problem;
+  return followed(saved, "licence check");
+}
+
+async function uploadBankStatement(session: BrowserSession, origin: string, claimId: string) {
+  await gotoPath(session, origin, `/claims/${claimId}/hire`);
+  const saved = await session.evaluate<{ status: number; location: string; problem?: string }>(`(() => {
+    const form = document.querySelector('form[action$="/hire/bank"]');
+    if (!(form instanceof HTMLFormElement)) return { status: 0, location: "", problem: "No bank statement form." };
+    const period = form.querySelector('[name="statementPeriod"]');
+    if (period instanceof HTMLInputElement) period.value = "July to September 2026";
+    const body = new FormData(form);
+    if (!body.get("submitKey")) body.set("submitKey", crypto.randomUUID());
+    const bytes = new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52, 10]);
+    body.set("document", new File([bytes], "statement.pdf", { type: "application/pdf" }));
+    return fetch(form.action, { method: "POST", body, credentials: "same-origin", redirect: "follow" }).then((response) => ({
+      status: response.status,
+      location: response.url || "",
+    }));
+  })()`);
+  if (saved.problem) return saved.problem;
+  return followed(saved, "bank statement");
+}
+
+async function saveNoBank(session: BrowserSession, origin: string, claimId: string) {
+  await gotoPath(session, origin, `/claims/${claimId}/hire`);
+  const saved = await session.evaluate<{ status: number; location: string; problem?: string }>(`(() => {
+    const form = document.querySelector('form[action$="/hire/no-bank"]');
+    if (!(form instanceof HTMLFormElement)) return { status: 0, location: "", problem: "No bank-account form." };
+    const box = form.querySelector('[name="noBank"]');
+    const explanation = form.querySelector('[name="explanation"]');
+    if (box instanceof HTMLInputElement) box.checked = true;
+    if (explanation instanceof HTMLTextAreaElement) explanation.value = "The client has no bank account.";
+    const body = new FormData(form);
+    if (!body.get("submitKey")) body.set("submitKey", crypto.randomUUID());
+    return fetch(form.action, { method: "POST", body, credentials: "same-origin", redirect: "follow" }).then((response) => ({
+      status: response.status,
+      location: response.url || "",
+    }));
+  })()`);
+  if (saved.problem) return saved.problem;
+  return followed(saved, "no bank account");
 }
 
 function countOnHire(dbPath: string) {
@@ -609,16 +669,49 @@ async function completeHandover(session: BrowserSession, origin: string, claimId
   return "Handover did not start the hire.";
 }
 
+async function hireOutline(session: BrowserSession) {
+  return session.evaluate<{
+    count: number;
+    statuses: string[];
+    bank: boolean;
+    error: string;
+    still: string;
+    produce: boolean;
+    links: number;
+  }>(`(() => {
+    const steps = [...document.querySelectorAll("[data-hire-step]")];
+    const error = document.querySelector("[data-form-error]");
+    return {
+      count: steps.length,
+      statuses: steps.map((item) => item.getAttribute("data-status") || ""),
+      bank: Boolean(document.querySelector("[data-bank-step]")),
+      error: error?.textContent?.replace(/\\s+/g, " ").trim() || "",
+      still: document.querySelector("[data-still-needed]")?.textContent?.replace(/\\s+/g, " ").trim() || "",
+      produce: [...document.querySelectorAll("button")].some((item) => (item.textContent || "").includes("Produce agreement for signature")),
+      links: error ? error.querySelectorAll("a").length : 0,
+    };
+  })()`);
+}
+
 async function runHireJourneys(session: BrowserSession, origin: string, dbPath: string, made: MadeClaim[]) {
   const repairable = made.find((item) => item.id === "repairable");
   const totalLoss = made.find((item) => item.id === "total-loss");
   const fault = made.find((item) => item.id === "fault-courtesy");
   if (!repairable || !totalLoss || !fault) return "The three files were not all created.";
 
-  const licence = await saveClientLicence(session, origin, dbPath, repairable.claimId);
-  if (licence) return `Repairable licence: ${licence}`;
-  const gate = await clearHireGate(session, origin, repairable.claimId);
-  if (gate) return `Repairable checks: ${gate}`;
+  const licenceNumber = await saveClientLicence(session, origin, dbPath, repairable.claimId);
+  if (licenceNumber) return `Repairable licence: ${licenceNumber}`;
+  const yes = await postFields(session, `/claims/${repairable.claimId}/hire/need`, { choice: "yes", reason: "", returnHash: "#need" });
+  const yesProblem = followed(yes, "Hire needed");
+  if (yesProblem) return yesProblem;
+  await gotoPath(session, origin, `/claims/${repairable.claimId}/hire`);
+  const opened = await hireOutline(session);
+  if (opened.count !== 5) return `Repairable showed ${opened.count} hire steps, not 5.`;
+  if (opened.error) return `Repairable showed an error before Produce was pressed. ${opened.error}`;
+  if (!opened.still.includes("licence check") || !opened.still.includes("bank statements")) {
+    return `Repairable did not say what is still needed. ${opened.still}`;
+  }
+  if (!opened.bank) return "Repairable hid the bank-statement step.";
 
   const before = countOnHire(dbPath);
   const chosen = await chooseFirstCar(session, origin, repairable.claimId);
@@ -627,27 +720,61 @@ async function runHireJourneys(session: BrowserSession, origin: string, dbPath: 
   if (!facts.job) return "Repairable: no driver delivery job was saved.";
   if (facts.job.assignee_id !== "staff-driver") return "Repairable: the delivery job was not on the driver login.";
   if (!facts.job.planned_at || !facts.job.place_text) return "Repairable: the delivery job has no date or address.";
+  if (facts.episode?.started_at) return "Repairable: choosing a car started the hire.";
 
   await gotoPath(session, origin, `/claims/${repairable.claimId}/hire`);
   const pack = await session.evaluate<{ licence: string; retype: boolean; car: string; agreement: boolean }>(`({
     licence: document.querySelector("[data-pack-licence]")?.textContent || "",
     retype: Boolean(document.querySelector('[name="licence_number"]')),
     car: document.querySelector("[data-chosen-car]")?.getAttribute("data-chosen-car") || "",
-    agreement: document.body.innerText.includes("Generate Hire Agreement"),
+    agreement: [...document.querySelectorAll("button")].some((item) => (item.textContent || "").includes("Produce agreement for signature")),
   })`);
   if (!pack.licence.includes("TEST-LIC-0001")) return "Repairable pack did not show the licence from the client record.";
   if (pack.retype) return "Repairable pack asked for the licence number again.";
   if (!pack.car) return "Repairable pack did not show the chosen car.";
-  if (!pack.agreement) return "Repairable pack did not keep the existing hire agreement button.";
+  if (!pack.agreement) return "Repairable pack did not offer Produce agreement for signature.";
+
+  const blocked = await postFields(session, `/claims/${repairable.claimId}/hire/agreement`, { returnHash: "#pack" });
+  const blockedText = decodeURIComponent(blocked.location.replaceAll("+", " "));
+  if (!/licence check/i.test(blockedText) || !/bank statement/i.test(blockedText)) {
+    return `Produce agreement was not blocked with a list. ${blockedText}`;
+  }
+  await session.send("Page.navigate", { url: blocked.location });
+  const shown = Date.now() + 15_000;
+  let listed = await hireOutline(session);
+  while (Date.now() < shown && listed.links < 2) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    listed = await hireOutline(session);
+  }
+  if (listed.links < 2) return `The block did not link each missing check. ${listed.error}`;
+
+  const licenceCheck = await saveLicenceCheck(session, origin, repairable.claimId);
+  if (licenceCheck) return `Repairable licence check: ${licenceCheck}`;
+  const licenceFiles = claimFiles(dbPath, repairable.claimId, "licence_check");
+  if (licenceFiles.length !== 1 || !String(licenceFiles[0].title || "").startsWith("Licence check")) {
+    return "Repairable licence upload was not labelled and stored once.";
+  }
+  const bank = await uploadBankStatement(session, origin, repairable.claimId);
+  if (bank) return `Repairable bank statement: ${bank}`;
+  const bankFiles = claimFiles(dbPath, repairable.claimId, "bank_statements");
+  if (bankFiles.length !== 1 || !String(bankFiles[0].title || "").startsWith("Bank statement")) {
+    return "Repairable bank statement was not labelled and counted once.";
+  }
+
+  const produced = await postFields(session, `/claims/${repairable.claimId}/hire/agreement`, { returnHash: "#pack" });
+  const producedProblem = followed(produced, "agreement");
+  if (producedProblem) return producedProblem;
+  if (hireFacts(dbPath, repairable.claimId).documents < 1) return "Repairable agreement was not stored.";
 
   const handed = await completeHandover(session, origin, repairable.claimId);
   if (handed) return `Repairable handover: ${handed}`;
   const started = hireFacts(dbPath, repairable.claimId);
   const startedAt = started.episode?.started_at || "";
-  const london = startedAt
-    ? new Date(startedAt).toLocaleDateString("en-GB", { timeZone: "Europe/London" })
-    : "";
+  const london = startedAt ? new Date(startedAt).toLocaleDateString("en-GB", { timeZone: "Europe/London" }) : "";
   if (london !== "02/11/2026") return `Repairable hire started on ${london || "nothing"}, not the handover date.`;
+  await gotoPath(session, origin, `/claims/${repairable.claimId}/hire`);
+  const checksDone = await session.evaluate<string>(`document.querySelector('[data-hire-step="3"]')?.getAttribute("data-status") || ""`);
+  if (checksDone !== "done") return `Repairable pre-hire checks were ${checksDone || "missing"} after handover.`;
   await gotoPath(session, origin, `/claims/${repairable.claimId}`);
   const step = await session.evaluate<{ state: string; text: string }>(`({
     state: document.querySelector('[data-step="hire"]')?.getAttribute("data-state") || "",
@@ -657,10 +784,16 @@ async function runHireJourneys(session: BrowserSession, origin: string, dbPath: 
   const after = countOnHire(dbPath);
   if (after !== before + 1) return `On-hire count did not rise by one (was ${before}, now ${after}).`;
 
-  const laterLicence = await saveClientLicence(session, origin, dbPath, totalLoss.claimId);
-  if (laterLicence) return `Total loss licence: ${laterLicence}`;
-  const laterGate = await clearHireGate(session, origin, totalLoss.claimId);
-  if (laterGate) return `Total loss checks: ${laterGate}`;
+  const driverCookie = await signIn(origin, "driver", passwordFor("Demo Driver", "driver"));
+  const refused = await fetch(`${origin}/documents/${bankFiles[0].id}/file`, {
+    headers: { cookie: driverCookie },
+    redirect: "manual",
+  });
+  const refusedText = await refused.text();
+  if (refused.status !== 403 || !refusedText.includes("You cannot open that file.")) {
+    return `Driver bank statement URL returned ${refused.status}.`;
+  }
+
   await gotoPath(session, origin, `/claims/${totalLoss.claimId}/hire?date=${HIRE_DAY}`);
   const clashOffered = await session.evaluate<boolean>(`(() => {
     const select = document.querySelector('[name="fleetVehicleId"]');
@@ -697,24 +830,36 @@ async function runHireJourneys(session: BrowserSession, origin: string, dbPath: 
   if (waiting.state === "done" || waiting.state === "not_needed") return `Not yet closed step 3 (${waiting.state}).`;
   if (!waiting.text.includes("Not yet – client keeps own car")) return `Step 3 did not stay open for not yet. ${waiting.text}`;
 
-  const yes = await postFields(session, `/claims/${totalLoss.claimId}/hire/need`, { choice: "yes", reason: "", returnHash: "#need" });
-  if (yes.status >= 400 || yes.status === 0 || decodeURIComponent(yes.location).includes("error=")) {
-    return `Hire needed was not saved later. ${decodeURIComponent(yes.location)}`;
+  const laterYes = await postFields(session, `/claims/${totalLoss.claimId}/hire/need`, { choice: "yes", reason: "", returnHash: "#need" });
+  if (laterYes.status >= 400 || laterYes.status === 0 || decodeURIComponent(laterYes.location).includes("error=")) {
+    return `Hire needed was not saved later. ${decodeURIComponent(laterYes.location)}`;
   }
   const laterCar = await chooseFirstCar(session, origin, totalLoss.claimId);
   if ("problem" in laterCar) return `Total loss car: ${laterCar.problem}`;
   if (laterCar.fleetId === chosen.fleetId) return "Total loss was given the car already booked on the other file.";
+  const noBank = await saveNoBank(session, origin, totalLoss.claimId);
+  if (noBank) return `Total loss no bank account: ${noBank}`;
+  if (claimFiles(dbPath, totalLoss.claimId, "bank_statements").length !== 0) {
+    return "Total loss stored a bank statement when the client has none.";
+  }
+  const laterLicence = await saveLicenceCheck(session, origin, totalLoss.claimId);
+  if (laterLicence) return `Total loss licence check: ${laterLicence}`;
   const laterHand = await completeHandover(session, origin, totalLoss.claimId);
   if (laterHand) return `Total loss handover: ${laterHand}`;
 
-  const faultCar = await chooseFirstCar(session, origin, fault.claimId);
-  if ("problem" in faultCar) return `Courtesy car: ${faultCar.problem}`;
   await gotoPath(session, origin, `/claims/${fault.claimId}/hire`);
+  const courtesy = await hireOutline(session);
+  if (courtesy.bank) return "The courtesy file showed a bank-statement step.";
+  if (courtesy.produce) return "The courtesy file offered a hire agreement.";
   const wording = await session.evaluate<string>(`document.body.innerText`);
   if (/credit hire/i.test(wording)) return "The courtesy file showed credit-hire wording.";
   if (wording.includes("Generate Hire Agreement") || wording.includes("Generate Hire Pack")) {
     return "The courtesy file offered a hire agreement.";
   }
+  const faultLicence = await saveLicenceCheck(session, origin, fault.claimId);
+  if (faultLicence) return `Courtesy licence check: ${faultLicence}`;
+  const faultCar = await chooseFirstCar(session, origin, fault.claimId);
+  if ("problem" in faultCar) return `Courtesy car: ${faultCar.problem}`;
   const faultHand = await completeHandover(session, origin, fault.claimId);
   if (faultHand) return `Courtesy handover: ${faultHand}`;
   if (hireFacts(dbPath, fault.claimId).documents !== 0) return "The courtesy file stored a hire agreement.";

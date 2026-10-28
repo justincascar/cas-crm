@@ -13,6 +13,7 @@ import {
   listImpecuniosityAccounts,
   listMitigationStatements,
 } from "@/lib/db/impecuniosity";
+import { listStoredBankStatements } from "@/lib/db/prehire-checks";
 import { getClaim } from "@/lib/db/queries";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import {
@@ -53,6 +54,7 @@ export async function FinancialCircumstancesScreen({
   const approved = impecuniosityApproved(id);
   const gate = impecuniosityGate(id);
   const evidence = listClaimFileDocuments(id).filter((item) => item.documentType === "impecuniosity_evidence");
+  const bankStatements = listStoredBankStatements(id);
   const administrator = isAdministrator(staff.role);
   const latestCircumstances = circumstances.at(-1);
   const q = MITIGATION_QUESTIONNAIRE;
@@ -197,6 +199,17 @@ export async function FinancialCircumstancesScreen({
           </form>
         </div>
         <h3 id="bank-accounts" className="font-serif text-lg text-navy-deep">Accounts and papers, each listed separately</h3>
+        {bankStatements.length === 0 ? <p className="text-sm">No bank statement stored yet.</p> : null}
+        <ul className="space-y-1 text-sm">
+          {bankStatements.map((row) => (
+            <li key={row.id}>
+              <Link className="text-teal-dark underline" href={`/documents/${row.id}`}>
+                {row.title}
+              </Link>
+              {row.period ? ` · ${row.period}` : ""} · {formatUkDateTime(row.createdAt)}
+            </li>
+          ))}
+        </ul>
         {accounts.length === 0 ? <p className="text-sm">Nothing listed yet.</p> : null}
         <ul className="space-y-2 text-sm">
           {accounts.map((row) => (

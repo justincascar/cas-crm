@@ -12,9 +12,6 @@ import { requireStaff } from "@/lib/auth/session";
 import { getHirePack } from "@/lib/db/hire-pack";
 import { loadClash, sectionVersion } from "@/lib/db/record-version";
 import { SHARED_CLIENT_GTA, SHARED_CLIENT_PERSON } from "@/lib/db/shared-fields";
-import { hireAgreementPrehireBlock, listPrehireOverrides } from "@/lib/db/prehire-checks";
-import { formatUkDateTime } from "@/lib/dates";
-import { hireAgreementReadyLine, prehireCheckKindLabel } from "@/lib/domain/prehire-checks";
 import { RENTAL_PERIOD_DECISION } from "@/lib/documents/hire-pack-fields";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
@@ -27,9 +24,11 @@ function pounds(pence: string | number | null | undefined) {
 export async function HirePackScreen({
   params,
   searchParams,
+  embedded = false,
 }: {
   params: Promise<{ id: string }>;
   searchParams: Promise<{ error?: string; field?: string; clash?: string }>;
+  embedded?: boolean;
 }) {
   const { id } = await params;
   const staffUser = await requireStaff();
@@ -49,54 +48,23 @@ export async function HirePackScreen({
   const suppliedHigher = !groupChargedAboveClient(charged, clientGroup) && groupChargedAboveClient(suppliedGroup, clientGroup);
   const chargedHigher = groupChargedAboveClient(charged, clientGroup);
   const parts = pack.parts;
-  const prehireBlock = hireAgreementPrehireBlock(id);
-  const prehireOverrides = listPrehireOverrides(id);
-  const readyLine = hireAgreementReadyLine({
-    licenceOverridden: prehireOverrides.some((row) => row.check_kind === "licence"),
-    bankOverridden: prehireOverrides.some((row) => row.check_kind === "bank"),
-  });
 
   return (
     <div className="max-w-4xl space-y-6">
-      <PageHeader
-        title={`Hire Pack — ${pack.ctx.agreementNumber}`}
-        subtitle="Hire Agreement from CAS's Hire Pack.doc. Only the pages that apply to this file are generated. The daily rate follows the client's own vehicle GTA group. Missing items are listed, not invented. Signatures are not added."
-        actions={
-          <Link href={`/claims/${id}`} className="text-sm text-teal-dark underline">
-            Back to file
-          </Link>
-        }
-      />
+      {embedded ? null : (
+        <PageHeader
+          title={`Hire Pack — ${pack.ctx.agreementNumber}`}
+          subtitle="Hire Agreement from CAS's Hire Pack.doc. Only the pages that apply to this file are generated. The daily rate follows the client's own vehicle GTA group. Missing items are listed, not invented. Signatures are not added."
+          actions={
+            <Link href={`/claims/${id}`} className="text-sm text-teal-dark underline">
+              Back to file
+            </Link>
+          }
+        />
+      )}
 
       {error ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
-      ) : null}
-
-      {prehireBlock ? (
-        <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">
-          {prehireBlock}{" "}
-          <Link href={`/claims/${id}/prehire`} className="underline">
-            Pre-hire checks
-          </Link>
-        </p>
-      ) : (
-        <p className="rounded-md border border-ok/40 bg-[#eef6ef] px-4 py-3 text-sm">
-          {readyLine}{" "}
-          <Link href={`/claims/${id}/prehire`} className="text-teal-dark underline">
-            Pre-hire checks
-          </Link>
-        </p>
-      )}
-
-      {prehireOverrides.length > 0 ? (
-        <ul className="space-y-2 text-sm">
-          {prehireOverrides.map((row) => (
-            <li key={row.id} className="rounded-md border border-line bg-card px-4 py-3">
-              {prehireCheckKindLabel(row.check_kind)} overridden by {row.recorded_by_name || "Unknown"} on{" "}
-              {formatUkDateTime(row.recorded_at)}. Reason: {row.reason}
-            </li>
-          ))}
-        </ul>
       ) : null}
 
       <section className="rounded-xl border border-line bg-card p-5 text-sm">
@@ -421,7 +389,7 @@ export async function HirePackScreen({
             Save pack information
           </button>
           <button className="rounded-md bg-teal px-4 py-2 text-sm text-white" type="submit" formAction={actionGenerateHireAgreement}>
-            Generate Hire Agreement
+            Produce agreement for signature
           </button>
           <button className="rounded-md bg-navy px-4 py-2 text-sm text-white" type="submit" formAction={actionGenerateHirePack}>
             Generate Hire Pack

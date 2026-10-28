@@ -8,5 +8,6 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       throw new Error("Choose whether a hire car is needed.");
     }
     saveHireNeed({ claimId: id, choice, reason: String(form.get("reason") || ""), actorId: staffId, submitKey: key });
+    if (choice === "yes") return { hash: "#car" };
   });
 }

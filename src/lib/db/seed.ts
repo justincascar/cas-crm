@@ -48,6 +48,7 @@ export function seed(db: DatabaseSync) {
   run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", [SETTING_REPAIR_AUTH_CHASE_INTERVAL_DAYS, "3"]);
   run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", [SETTING_DEFAULT_VEHICLE_LOCATION, DEFAULT_VEHICLE_LOCATION]);
   run(db, "INSERT INTO settings(key, value) VALUES (?, ?)", [SETTING_STORAGE_DAILY_RATE_PENCE, "3900"]);
+  run(db, "INSERT OR IGNORE INTO settings(key, value) VALUES (?, ?)", ["licence_check_window_days", "21"]);
 
   for (const person of DEMO_STAFF) {
     run(
