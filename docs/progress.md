@@ -1074,3 +1074,11 @@ Finish on 28 October 2026: 590 tests passed, 0 failed. Type check: 0 errors. Pro
 **Draft invoices.** The Money tab has a Draft invoice button for each head. It builds a plain invoice from the figures on the file (quantity × rate, net, VAT, gross, received, balance), files it on the claim and sends nothing. It says it is a draft, because CAS's invoice template, numbering and VAT number have not been supplied (question 7). A head with no charge is refused.
 
 Finish on 28 October 2026: 595 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 70 passed (Aged debt added), 0 failed, no sideways scroll at 1280px or 1024px, database unchanged. Journey checks passed. `EMAIL_SEND_MODE` stays `simulate`.
+
+## Dashboard simplified (J7, 28 October 2026)
+
+**Six counts.** The 19 count boxes are now six, with no sentence under any of them: Need action today, Overdue, Cars on hire (credit hire and courtesy shown separately), In storage, Money awaited (the aged-debt total, opening Aged debt) and Fleet free today. My claims / All claims still applies to them.
+
+**One list.** Today's work is the only list, with a single next step per claim. The claim's other items are on the claim. Payments awaiting a decision, repair gaps, chases due and tasks still reach Today's work as before. The separate chase, task, fleet, money-by-head and all-files sections were removed from the dashboard; Financials, Hire / Fleet, Claims and Gaps keep those views. New enquiries / incomplete stays above Today's work when there are any.
+
+Finish on 28 October 2026: 595 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 70 passed, 0 failed, database unchanged. Journey checks passed. `EMAIL_SEND_MODE` stays `simulate`.

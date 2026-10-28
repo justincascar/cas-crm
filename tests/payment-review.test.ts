@@ -611,9 +611,10 @@ describe("payment review — log first, decide later", () => {
     assert.doesNotMatch(page, /PaymentDecisionScreen/);
     const frame = fs.readFileSync(path.join(process.cwd(), "src/components/claim-file/ClaimSectionFrame.tsx"), "utf8");
     assert.match(frame, /money: "Money"/);
-    const dashboard = fs.readFileSync(path.join(process.cwd(), "src/app/page.tsx"), "utf8");
-    assert.match(dashboard, /Awaiting decision/);
-    assert.match(dashboard, /Payments to review/);
+    // The dashboard has one Today's work list (J7). A payment awaiting a decision is one of its items.
+    const desk = fs.readFileSync(path.join(process.cwd(), "src/lib/db/queries.ts"), "utf8");
+    assert.match(desk, /awaitingDecisions\.map\(\(row\) => attentionWorkItem\(row, "decision"\)\)/);
+    assert.match(desk, /paymentsAfterSettlement\.map\(\(row\) => attentionWorkItem\(row, "review"\)\)/);
   });
 
   it("flags a payment that arrives after accept, and does not change the settled figures", () => {

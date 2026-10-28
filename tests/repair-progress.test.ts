@@ -698,11 +698,12 @@ describe("repair progress", () => {
     const screen = fs.readFileSync(path.join(process.cwd(), "src/components/claims/RecordRepairSteps.tsx"), "utf8");
     const notice = fs.readFileSync(path.join(process.cwd(), "src/components/claims/SendPreparedEmailForm.tsx"), "utf8");
     const comms = fs.readFileSync(path.join(process.cwd(), "src/components/claim-file/CommsDesk.tsx"), "utf8");
-    const dashboard = fs.readFileSync(path.join(process.cwd(), "src/app/page.tsx"), "utf8");
+    const desk = fs.readFileSync(path.join(process.cwd(), "src/lib/db/queries.ts"), "utf8");
     assert.match(screen, /SIMULATED_REPORT_NOT_RECORDED/);
     assert.match(notice, /SIMULATED_REPORT_NOT_RECORDED/);
     assert.match(comms, /engineerReportNotice/);
-    assert.match(dashboard, /Repair progress gaps to explain/);
+    // A repair gap reaches the one Today's work list on the dashboard (J7).
+    assert.match(desk, /repairProgressGaps\.map\(\(row\) => gapWorkItem/);
     assert.equal(SIMULATED_REPORT_NOT_RECORDED, "Simulated, not recorded as sent");
   });
 });

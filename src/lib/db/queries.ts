@@ -191,6 +191,10 @@ function queueWhere(queue: string): { sql: string; params: unknown[] } {
       return { sql: "(c.is_new_enquiry = 1 OR c.incomplete_client_submission = 1)", params: [] };
     case "active_hire":
       return { sql: "c.hire_status IN ('active', 'approaching_off_hire')", params: [] };
+    case "active_hire_credit":
+      return { sql: "c.hire_status IN ('active', 'approaching_off_hire') AND COALESCE(c.claim_type, '') != 'fault'", params: [] };
+    case "active_hire_courtesy":
+      return { sql: "c.hire_status IN ('active', 'approaching_off_hire') AND c.claim_type = 'fault'", params: [] };
     case "storage":
       return { sql: "c.storage_status = 'active'", params: [] };
     case "storage_chargeable":

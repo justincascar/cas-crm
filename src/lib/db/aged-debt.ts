@@ -21,7 +21,10 @@ export type AgedDebtRow = {
  * Every head of loss with money still owed: the agreed figure, or a confirmed claimed figure, less what was received.
  * A provisional hire or storage figure is not counted. Offers are never counted as money owed or received.
  */
-export function listAgedDebt(today = londonTodayIso()): { rows: AgedDebtRow[]; totals: Record<AgedDebtBand, number> } {
+export function listAgedDebt(
+  today = londonTodayIso(),
+  handlerId: string | null = null,
+): { rows: AgedDebtRow[]; totals: Record<AgedDebtBand, number> } {
   const lines = all<{
     claim_id: string;
     file_reference: string;
@@ -35,7 +38,9 @@ export function listAgedDebt(today = londonTodayIso()): { rows: AgedDebtRow[]; t
      FROM financial_lines f
      JOIN claims c ON c.id = f.claim_id
      LEFT JOIN people p ON p.id = c.client_person_id
+     WHERE (? IS NULL OR c.handler_id = ?)
      ORDER BY c.file_reference, f.head_of_loss`,
+    [handlerId, handlerId],
   );
   const requests = all<{ claim_id: string; event_type: string; first_at: string }>(
     `SELECT claim_id, event_type, MIN(occurred_at) AS first_at FROM claim_events
