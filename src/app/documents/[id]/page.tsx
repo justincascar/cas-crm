@@ -70,7 +70,9 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
             : `Not on the file yet (shown in the letter as [not yet on file] or Unknown): ${plainPackFields(missing)}.`}
         </p>
       ) : null}
-      {!storedPath ? <p className="text-xs text-slate print:hidden">{CAS_TEMPLATE_NOTICE}</p> : null}
+      {!storedPath && !String(doc.template_key || "").startsWith("draft_invoice") ? (
+        <p className="text-xs text-slate print:hidden">{CAS_TEMPLATE_NOTICE}</p>
+      ) : null}
       {specForTemplate(String(doc.template_key || ""))?.legalCitations ? (
         <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm print:hidden">{CAS_LEGAL_SIGNOFF_NOTICE}</p>
       ) : null}

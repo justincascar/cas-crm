@@ -12,6 +12,8 @@ import { recoveryFeeSchedule } from "@/lib/db/recovery-fee-settings";
 import { RECOVERY_FEE_DEFS, filledPounds } from "@/lib/domain/recovery-fees";
 import { getAgreementApproachingDay, getAgreementMaxDays, getChaseIntervalDays } from "@/lib/db/chase";
 import { getRepairGapThresholdDays } from "@/lib/db/repair-progress";
+import { getSendingHours } from "@/lib/db/sending-hours";
+import { describeSendingHours } from "@/lib/domain/sending-hours";
 import { listInsurerPaymentTerms } from "@/lib/db/insurers";
 import { accountCanManageBankDetails } from "@/lib/db/permissions";
 import { PAYMENT_DUE_ON_RECEIPT, PAYMENT_DUE_ON_RECEIPT_SENTENCE } from "@/lib/constants";
@@ -53,6 +55,7 @@ export default async function SettingsPage({
   const agreementRenewalApproachingDay = getAgreementApproachingDay();
   const agreementMaxDays = getAgreementMaxDays();
   const repairProgressGapDays = getRepairGapThresholdDays();
+  const sendingHours = getSendingHours();
   const gtaMarkupPercent = getGtaMarkupPercent();
   const gtaTables = listGtaTables();
   const gtaInForce = gtaTableFor();
@@ -155,6 +158,38 @@ export default async function SettingsPage({
           </label>
           <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
             Save licence check window
+          </button>
+        </form>
+      </section>
+      <section className="rounded-xl border border-line bg-card p-5">
+        <h2 className="font-serif text-xl text-navy-deep">Chaser sending hours</h2>
+        <p className="mt-2 text-sm">
+          Now: {describeSendingHours(sendingHours)}, UK time. A chase email is only sent inside these hours, once the
+          mailbox is live. Not yet confirmed by CAS.
+        </p>
+        <form method="post" action="/settings/sending-hours" className="mt-4 flex flex-wrap items-end gap-3">
+          <RecordVersionField version={versionFor("settings-sending-hours")} />
+          <fieldset className="text-sm">
+            <legend>Days</legend>
+            <div className="mt-1 flex flex-wrap gap-3">
+              {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((name, day) => (
+                <label key={name} className="flex items-center gap-1">
+                  <input type="checkbox" name="day" value={day} defaultChecked={sendingHours.days.includes(day)} />
+                  {name}
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <label className="text-sm">
+            From
+            <input name="start" type="time" required className="mt-1 rounded-md border border-line bg-white px-3 py-2 text-sm" defaultValue={sendingHours.start} />
+          </label>
+          <label className="text-sm">
+            Until
+            <input name="end" type="time" required className="mt-1 rounded-md border border-line bg-white px-3 py-2 text-sm" defaultValue={sendingHours.end} />
+          </label>
+          <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
+            Save sending hours
           </button>
         </form>
       </section>

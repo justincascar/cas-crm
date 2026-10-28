@@ -70,6 +70,7 @@ const PAGES: Array<{ name: string; path: string }> = [
   { name: "Documents", path: "/documents" },
   { name: "Communications", path: "/communications" },
   { name: "Financials", path: "/financials" },
+  { name: "Aged debt", path: "/financials/aged-debt" },
   { name: "Automations", path: "/automations" },
   { name: "Litigation", path: "/litigation" },
   { name: "Settings", path: "/settings" },

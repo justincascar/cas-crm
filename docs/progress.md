@@ -1060,3 +1060,17 @@ Finish on 28 October 2026: 586 tests passed, 0 failed. Type check: 0 errors. Pro
 **Repairable to total loss.** The repair history stays on the file and is listed under Earlier repair history on the total-loss step.
 
 Finish on 28 October 2026: 590 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 69 passed, 0 failed, no sideways scroll at 1280px or 1024px, database unchanged. Journey checks passed, including steps 8 and 9 on the new repairable file with the storage end and hire end confirmed. `EMAIL_SEND_MODE` stays `simulate`.
+
+## Money and chasing, step 10 (J6, 28 October 2026)
+
+**Already in place and checked.** Each head of loss is its own ledger line (repairs or vehicle damage, recovery, storage, hire, other). Claimed, offered, agreed, received, outstanding and overpaid stay separate; an offer is never counted as received. A reply that is only an acknowledgement or an out-of-office does not resolve a chase. A chase is due once its interval has passed and stays one chase however long it waits, so an outage leaves no backlog: one email goes and the clock restarts from that send.
+
+**Financials.** The Financials list now shows quantity × rate, net, VAT and gross for each line, and outstanding and overpaid beside claimed, offered, agreed and received. A provisional hire or storage figure shows outstanding as Under review.
+
+**Aged debt.** Financials → Aged debt lists every head with money still owed (agreed figure, or a confirmed claimed figure, less received), grouped 0–30, 31–60, 61–90 and over 90 days from the day the payment request for that head was sent, and Not requested yet.
+
+**Sending hours and the check before each send.** Chaser sending hours are a Settings value: Monday to Friday, 09:00 to 17:00 UK time until CAS confirms them (question 8). Once the mailbox is live, a chase email outside those hours is refused and nothing is sent. Immediately before any chase email goes, the chase is worked out again from the file: if a reply is on file, or it is paused or cancelled, nothing is sent. Payment chases keep their own fuller check (paid in full, bank details). Email stays simulated.
+
+**Draft invoices.** The Money tab has a Draft invoice button for each head. It builds a plain invoice from the figures on the file (quantity × rate, net, VAT, gross, received, balance), files it on the claim and sends nothing. It says it is a draft, because CAS's invoice template, numbering and VAT number have not been supplied (question 7). A head with no charge is refused.
+
+Finish on 28 October 2026: 595 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 70 passed (Aged debt added), 0 failed, no sideways scroll at 1280px or 1024px, database unchanged. Journey checks passed. `EMAIL_SEND_MODE` stays `simulate`.

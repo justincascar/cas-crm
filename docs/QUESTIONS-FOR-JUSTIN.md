@@ -10,6 +10,8 @@ Each open question has a reversible default already in the CRM. Nothing here is 
 4. **21-day licence window.** A licence check older than 21 days blocks the agreement and the handover. Still to be confirmed.
 5. **Recovery mileage.** Still undecided how mileage is charged. The mileage box stays off the new-claim form.
 6. **Card fee on recovery.** The new Record the recovery form (step 2) has the standard fee, the four extras, the typed extras and a manual charge, as J3 asked. The 4.5% card fee was only on the older recovery screen, which is now hidden on step 2 (its saved figures are kept). Default: no card fee on the new form. Should it be added there?
+7. **Invoice template.** J6 asks for invoices from CAS templates. No CAS invoice template, invoice numbering or VAT number has been supplied. Default: the Money tab produces a plain draft invoice per head from the figures on the file (quantity × rate, net, VAT, gross, received, balance), marked draft and not sent. Please send the template, how invoices are numbered, and the VAT number to show.
+8. **Chaser sending hours.** Default: Monday to Friday, 09:00 to 17:00 UK time, in Settings. Applied to real sends once the mailbox is live. Please confirm the days and hours.
 
 ## Answered (28 October 2026)
 
