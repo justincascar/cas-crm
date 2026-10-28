@@ -118,7 +118,7 @@ export async function PrehireChecksScreen({
           <div
             key={driver.key}
             id={hireCheckAnchor(driver.key)}
-            className="space-y-3 rounded-lg border border-line p-4"
+            className="scroll-mt-16 space-y-3 rounded-lg border border-line p-4"
             data-licence-card={done ? "done" : "open"}
           >
             {done && latest ? (
@@ -171,7 +171,7 @@ export async function PrehireChecksScreen({
           id="bank"
           data-bank-step="yes"
           data-bank-card={bank.satisfied ? "done" : "open"}
-          className="space-y-3 rounded-lg border border-line p-4"
+          className="scroll-mt-16 space-y-3 rounded-lg border border-line p-4"
         >
           {bank.satisfied ? (
             <details>

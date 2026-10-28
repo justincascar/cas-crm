@@ -1,5 +1,7 @@
 /**
- * GTA reference ceilings for hires starting 1 July 2026 – 30 June 2027.
+ * The supplied GTA table for hires starting 1 July 2026 – 30 June 2027.
+ * It is copied once into Settings (gta_rate_tables) with its effective date. The rate on a hire is read from Settings,
+ * never from this list, so a later table can be added in Settings without changing code.
  * These replace the July 2025 – June 2026 workbook (GTA-Grouping-Car-Rates-wef-1st-July-2025).
  * That older file is not the current table. Figures are maximum daily rates excluding VAT, in pence.
  * This list ends at SP10. SP11–SP13 were only in the 2025–26 workbook and are not carried forward.
@@ -75,18 +77,27 @@ export function gtaRatePence(group: string | null | undefined): number | null {
   return GTA_REFERENCE_RATES_PENCE[code];
 }
 
-/** GTA ceiling × (1 + markup%). Rounded to the nearest penny. */
-export function standardDailyRatePence(group: string | null | undefined, markupPercent: number): number | null {
-  const ceiling = gtaRatePence(group);
+/** GTA ceiling × (1 + markup%). Rounded to the nearest penny. Pass the table in force from Settings. */
+export function standardDailyRatePence(
+  group: string | null | undefined,
+  markupPercent: number,
+  rates: Record<string, number> = GTA_REFERENCE_RATES_PENCE,
+): number | null {
+  const key = String(group || "").trim().toUpperCase();
+  const ceiling = key && rates[key] != null ? rates[key] : null;
   if (ceiling == null) return null;
   const percent = Number.isFinite(markupPercent) ? markupPercent : GTA_MARKUP_PERCENT_DEFAULT;
   return Math.round((ceiling * (100 + percent)) / 100);
 }
 
 /** True when the charged group's GTA ceiling is higher than the client's own group. */
-export function groupChargedAboveClient(charged: string | null | undefined, clientGroup: string | null | undefined): boolean {
-  const chargedRate = gtaRatePence(charged);
-  const clientRate = gtaRatePence(clientGroup);
+export function groupChargedAboveClient(
+  charged: string | null | undefined,
+  clientGroup: string | null | undefined,
+  rates: Record<string, number> = GTA_REFERENCE_RATES_PENCE,
+): boolean {
+  const chargedRate = rates[String(charged || "").trim().toUpperCase()] ?? null;
+  const clientRate = rates[String(clientGroup || "").trim().toUpperCase()] ?? null;
   if (chargedRate == null || clientRate == null) return false;
   if (normaliseGtaGroup(charged) === normaliseGtaGroup(clientGroup)) return false;
   return chargedRate > clientRate;

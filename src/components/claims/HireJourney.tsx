@@ -5,7 +5,6 @@ import { PrehireChecksScreen } from "@/app/claims/[id]/prehire/page";
 import { SaveClashNotice } from "@/components/SaveClashNotice";
 import { SubmitKeyInput } from "@/components/SubmitKeyInput";
 import { formatUkDate, formatUkDateTime, londonTodayIso } from "@/lib/dates";
-import { GTA_GROUPS } from "@/lib/documents/gta";
 import type { HireArea, HireCarChoice } from "@/lib/db/hire-choice";
 import type { SaveClashView } from "@/lib/db/record-version";
 import { FUEL_LEVELS } from "@/lib/db/handover";
@@ -76,7 +75,7 @@ export function HireJourney({
   const filters = area.filters;
   const signedNeeded = area.creditHire && !area.signed && !area.signedOverride;
   const box = (active: boolean) =>
-    `rounded-xl p-5 ${active ? "border border-overdue bg-[#f8ecec]" : "border border-line bg-card"}`;
+    `scroll-mt-16 rounded-xl p-5 ${active ? "border border-overdue bg-[#f8ecec]" : "border border-line bg-card"}`;
   const agreementStillNeeded = [
     ...area.gaps.map((gap) => ({ key: `check-${gap.key}`, label: gap.label, href: gapHref(id, gap.href) })),
     ...area.agreementGaps,
@@ -205,11 +204,11 @@ export function HireJourney({
         <div className="rounded-md border border-overdue/40 bg-[#f8ecec] p-3">
           <p className="text-sm font-semibold text-overdue">Daily rate missing</p>
           <p className="mt-1 text-sm">Choose the group charged. The rate for that group is taken from Settings and kept on this hire.</p>
-          <RateForm claimId={id} group={area.groupCharged || area.clientGroup || ""} label="Set the daily rate" />
+          <RateForm claimId={id} group={area.groupCharged || area.clientGroup || ""} groups={area.rateGroups} label="Set the daily rate" />
         </div>
       ) : area.canChangeRate ? (
         <DoneLine summary={<>Daily rate: {area.rate.line}</>}>
-          <RateForm claimId={id} group={area.groupCharged || ""} label="Take the rate again from Settings" />
+          <RateForm claimId={id} group={area.groupCharged || ""} groups={area.rateGroups} label="Take the rate again from Settings" />
         </DoneLine>
       ) : (
         <p className="text-sm" data-rate-line>
@@ -359,6 +358,25 @@ export function HireJourney({
             ) : (
               <AgreementBody claimId={id} stillNeeded={agreementStillNeeded} showPack={showPack} again={false} />
             )}
+            {area.chosen && !area.signed && !started ? (
+              <form
+                method="post"
+                action={`/claims/${id}/hire/signed`}
+                encType="multipart/form-data"
+                className="mt-4 flex flex-wrap items-end gap-3 border-t border-line pt-4"
+                data-signed-before
+              >
+                <SubmitKeyInput />
+                <input type="hidden" name="returnHash" value="#pack" />
+                <label className="min-w-0 flex-1 text-sm">
+                  Signed already? Upload the signed copy (photograph or PDF)
+                  <input name="signedAgreement" type="file" required accept={fileAccept} className={field} />
+                </label>
+                <button className={quiet} type="submit">
+                  Upload signed copy
+                </button>
+              </form>
+            ) : null}
           </li>
         ) : null}
 
@@ -469,7 +487,7 @@ export function HireJourney({
       </ol>
 
       {started ? (
-        <section id="on-hire" className="rounded-xl border border-line bg-card p-5">
+        <section id="on-hire" className="scroll-mt-16 rounded-xl border border-line bg-card p-5">
           <h2 className="font-serif text-xl text-navy-deep">On hire</h2>
           <p className="mt-2 text-sm">
             {area.chosen ? `${area.chosen.label} · ` : ""}
@@ -553,7 +571,7 @@ function NeedForm({ area }: { area: HireArea }) {
   );
 }
 
-function RateForm({ claimId, group, label }: { claimId: string; group: string; label: string }) {
+function RateForm({ claimId, group, groups, label }: { claimId: string; group: string; groups: string[]; label: string }) {
   return (
     <form method="post" action={`/claims/${claimId}/hire/rate`} className="mt-3 flex flex-wrap items-end gap-3">
       <SubmitKeyInput />
@@ -564,7 +582,7 @@ function RateForm({ claimId, group, label }: { claimId: string; group: string; l
           <option value="" disabled>
             Choose a group
           </option>
-          {GTA_GROUPS.map((code) => (
+          {groups.map((code) => (
             <option key={code} value={code}>
               {code}
             </option>

@@ -9,6 +9,7 @@ import { RecordVersionField, SaveClashNotice } from "@/components/SaveClashNotic
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { requireStaff } from "@/lib/auth/session";
 import { getHirePack } from "@/lib/db/hire-pack";
+import { gtaTableFor } from "@/lib/db/gta-rates";
 import { loadClash, sectionVersion } from "@/lib/db/record-version";
 import { SHARED_CLIENT_GTA, SHARED_CLIENT_PERSON } from "@/lib/db/shared-fields";
 import { RENTAL_PERIOD_DECISION, plainPackFields } from "@/lib/documents/hire-pack-fields";
@@ -41,8 +42,9 @@ export async function HirePackScreen({
   const suppliedGroup = normaliseGtaGroup(String(pack.hire?.supplied_gta_group || ""));
   const charged = normaliseGtaGroup(String(s.group_charged || "")) || clientGroup;
   const storedRate = Number(pack.hire?.rate_pence_per_day || 0) || null;
-  const suppliedHigher = !groupChargedAboveClient(charged, clientGroup) && groupChargedAboveClient(suppliedGroup, clientGroup);
-  const chargedHigher = groupChargedAboveClient(charged, clientGroup);
+  const rates = gtaTableFor()?.rates || {};
+  const suppliedHigher = !groupChargedAboveClient(charged, clientGroup, rates) && groupChargedAboveClient(suppliedGroup, clientGroup, rates);
+  const chargedHigher = groupChargedAboveClient(charged, clientGroup, rates);
   const parts = pack.parts;
 
   return (

@@ -1,6 +1,6 @@
 import { canOverridePreHireChecks } from "../auth/roles";
 import { claimDocumentMime, MAX_CLAIM_DOCUMENT_BYTES } from "../domain/claim-documents";
-import { normaliseGtaGroup } from "../documents/gta";
+import { settingsGtaGroup } from "./gta-rates";
 import { formatUkDate, londonDateIso, nowUtcIso } from "../dates";
 import { formatGbp } from "../money";
 import { storeFileCopy } from "../storage/files";
@@ -63,7 +63,7 @@ export function groupChargedFor(claimId: string): string | null {
      WHERE c.id = ?`,
     [claimId],
   );
-  return normaliseGtaGroup(row?.group_charged) || normaliseGtaGroup(row?.client_group);
+  return settingsGtaGroup(row?.group_charged) || settingsGtaGroup(row?.client_group);
 }
 
 export function needReasonFor(claimId: string): string {
@@ -237,29 +237,8 @@ export function storeSignedHireAgreement(input: {
   });
   run(`UPDATE documents SET signed = 1 WHERE id = ?`, [documentId]);
   const now = nowUtcIso();
-  if (episode && creditHireClaim(input.claimId)) {
-    const existing = get<{ id: string }>(`SELECT id FROM agreements WHERE hire_episode_id = ? LIMIT 1`, [episode.id]);
-    if (!existing) {
-      const startDay = input.startDay || (episode.started_at ? londonDateIso(new Date(episode.started_at)) : londonDateIso(new Date()));
-      const [year, month, day] = startDay.split("-").map(Number);
-      const end = new Date(Date.UTC(year, month - 1, day + AGREEMENT_LENGTH_DAYS - 1)).toISOString().slice(0, 10);
-      run(
-        `INSERT INTO agreements(id, hire_episode_id, sequence, start_on, planned_end_on, max_days, renewal_alert_day, signed, signed_at, signature_status, template_note, rate_pence_per_day)
-         VALUES (?, ?, 1, ?, ?, ?, ?, 1, ?, 'signed', ?, ?)`,
-        [
-          newId("ag"),
-          episode.id,
-          startDay,
-          end,
-          AGREEMENT_LENGTH_DAYS,
-          AGREEMENT_ALERT_FROM_DAY,
-          now,
-          "Signed copy uploaded. Signed date is the upload.",
-          Number(episode.rate_pence_per_day) > 0 ? Number(episode.rate_pence_per_day) : null,
-        ],
-      );
-    }
-  }
+  // Signed before the handover: agreement 1 is recorded when the car is handed over. Signed after: recorded now.
+  if (episode?.started_at) recordSignedAgreementOnHire(input.claimId, input.startDay || londonDateIso(new Date(episode.started_at)));
   recordClaimEvent({
     claimId: input.claimId,
     eventType: "document_filed",
@@ -270,6 +249,37 @@ export function storeSignedHireAgreement(input: {
     source: "staff",
   });
   return { documentId };
+}
+
+/**
+ * Records agreement 1 as signed on the hire, at the rate stored on the hire, once the car has been handed over
+ * and a signed copy is on the file. The signed date is when the signed copy was filed, never earlier.
+ * Does nothing on a courtesy car, without a signed copy, or when the hire already has an agreement.
+ */
+export function recordSignedAgreementOnHire(claimId: string, startDay: string) {
+  if (!creditHireClaim(claimId)) return;
+  const episode = currentHireEpisode(claimId);
+  const signed = signedHireAgreementOnFile(claimId);
+  if (!episode?.started_at || !signed) return;
+  const existing = get<{ id: string }>(`SELECT id FROM agreements WHERE hire_episode_id = ? LIMIT 1`, [episode.id]);
+  if (existing) return;
+  const [year, month, day] = startDay.split("-").map(Number);
+  const end = new Date(Date.UTC(year, month - 1, day + AGREEMENT_LENGTH_DAYS - 1)).toISOString().slice(0, 10);
+  run(
+    `INSERT INTO agreements(id, hire_episode_id, sequence, start_on, planned_end_on, max_days, renewal_alert_day, signed, signed_at, signature_status, template_note, rate_pence_per_day)
+     VALUES (?, ?, 1, ?, ?, ?, ?, 1, ?, 'signed', ?, ?)`,
+    [
+      newId("ag"),
+      episode.id,
+      startDay,
+      end,
+      AGREEMENT_LENGTH_DAYS,
+      AGREEMENT_ALERT_FROM_DAY,
+      signed.createdAt,
+      "Signed paper copy uploaded. Signed date is when it was filed.",
+      Number(episode.rate_pence_per_day) > 0 ? Number(episode.rate_pence_per_day) : null,
+    ],
+  );
 }
 
 /** An authorised user lets the handover go ahead without the signed copy. Kept on the file with the reason. */

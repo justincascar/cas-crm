@@ -2,6 +2,7 @@ import { formatUkDateTime, londonDateIso } from "../dates";
 import { CHOOSE_CAR_BEFORE_HANDOVER } from "../domain/hire-availability";
 import { get, run } from "./connection";
 import { recordClaimEvent } from "./chronology";
+import { recordSignedAgreementOnHire } from "./hire-readiness";
 
 export function activeReservationFor(claimId: string) {
   return get<{ id: string; fleet_vehicle_id: string; status: string }>(
@@ -73,6 +74,7 @@ export function startHireFromHandover(input: {
       source: "staff",
     });
   }
+  recordSignedAgreementOnHire(input.claimId, londonDateIso(new Date(when)));
   run(`UPDATE hire_pack_data SET date_out = ? WHERE claim_id = ? AND (date_out IS NULL OR trim(date_out) = '')`, [
     when,
     input.claimId,

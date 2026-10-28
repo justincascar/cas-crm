@@ -15,7 +15,15 @@ import {
 } from "../src/lib/db/fleet-availability.ts";
 import { generateHireAgreementDocument, setGtaMarkupPercent } from "../src/lib/db/hire-agreement.ts";
 import { hireChargeForClaim } from "../src/lib/db/hire-charge.ts";
-import { chooseHireCar, completeHireHandover, loadHireArea, saveHireNeed, setHireDailyRate } from "../src/lib/db/hire-choice.ts";
+import {
+  chooseHireCar,
+  completeHireHandover,
+  loadHireArea,
+  saveHireNeed,
+  setHireDailyRate,
+  uploadSignedHireAgreement,
+} from "../src/lib/db/hire-choice.ts";
+import { gtaTableFor, listGtaTables, parseGtaFigures, saveGtaTable, settingsDailyRatePence } from "../src/lib/db/gta-rates.ts";
 import { agreementMandatoryGaps, hireHandoverBlock } from "../src/lib/db/hire-readiness.ts";
 import { createClaimFromIntake, intakeFromFormData } from "../src/lib/db/intake.ts";
 import { listDriverJobs, listMyJobs, reassignDayJob } from "../src/lib/db/jobs.ts";
@@ -24,7 +32,7 @@ import { listHireDrivers, recordLicenceCheck } from "../src/lib/db/prehire-check
 import { createReservation, listClaims } from "../src/lib/db/queries.ts";
 import { seed } from "../src/lib/db/seed.ts";
 import { isoDateFromNow, londonTodayIso } from "../src/lib/dates.ts";
-import { standardDailyRatePence } from "../src/lib/documents/gta.ts";
+import { GTA_REFERENCE_RATES_PENCE, standardDailyRatePence } from "../src/lib/documents/gta.ts";
 import { evaluateFleetAvailability, type FleetBooking, type FleetCarRecord } from "../src/lib/domain/fleet-availability.ts";
 import { prepareAgreementItems, recordPassingPrehireChecks, TEST_LICENCE_NUMBER } from "./prehire-setup.ts";
 
@@ -447,6 +455,89 @@ describe("status wording follows the steps", () => {
       assert.equal(header()?.staffNote, null);
       assert.doesNotMatch(String(header()?.stageLine), /^Hire/);
       assert.equal(header()?.runningText.includes("Daily rate missing"), false);
+    });
+    db.close();
+  });
+});
+
+describe("GTA table in Settings", () => {
+  it("copies the supplied 2026–27 table into Settings once, with its effective date and source", () => {
+    const db = prepared();
+    withDatabase(db, () => {
+      const tables = listGtaTables();
+      assert.equal(tables.length, 1);
+      assert.equal(tables[0].effectiveFrom, "2026-07-01");
+      assert.match(tables[0].source, /1 July 2026 – 30 June 2027/);
+      assert.deepEqual(tables[0].rates, GTA_REFERENCE_RATES_PENCE);
+      migrate(db);
+      assert.equal(listGtaTables().length, 1);
+      assert.equal(settingsDailyRatePence("S3"), 6653);
+    });
+    db.close();
+  });
+
+  it("uses a newer table for new reservations and leaves the rate on an existing hire unchanged", () => {
+    const db = prepared();
+    withDatabase(db, () => {
+      db.prepare(`UPDATE vehicles SET gta_group = 'S3' WHERE id IN (SELECT client_vehicle_id FROM claims WHERE id IN ('c1', 'c12'))`).run();
+      needYes("c1", "gta-need-c1");
+      choose("c1", "fv-10", "gta-choose-c1");
+      assert.equal(loadHireArea("c1")?.ratePence, 6653);
+      saveGtaTable({ effectiveFrom: londonTodayIso(), source: "Test table typed for this check", figures: "S1 40.00\nS3 60.00", actorId: "staff-sian" });
+      assert.equal(gtaTableFor()?.source, "Test table typed for this check");
+      assert.equal(settingsDailyRatePence("S3"), 7800);
+      assert.equal(loadHireArea("c1")?.ratePence, 6653);
+      db.prepare(`UPDATE fleet_vehicles SET status = 'available' WHERE id = 'fv-4'`).run();
+      needYes("c12", "gta-need-c12");
+      choose("c12", "fv-4", "gta-choose-c12");
+      assert.equal(loadHireArea("c12")?.ratePence, 7800);
+      assert.deepEqual(loadHireArea("c12")?.rateGroups, ["S1", "S3"]);
+    });
+    db.close();
+  });
+
+  it("takes no rate when no table is in force, and refuses figures it cannot read", () => {
+    const db = prepared();
+    withDatabase(db, () => {
+      db.prepare(`DELETE FROM gta_rate_tables`).run();
+      db.prepare(
+        `INSERT INTO gta_rate_tables(id, effective_from, source, rates_json, created_at) VALUES ('later', '2099-01-01', 'Future', '{"S3":6000}', '2026-10-28T00:00:00.000Z')`,
+      ).run();
+      assert.equal(settingsDailyRatePence("S3"), null);
+      needYes("c1", "none-need");
+      choose("c1", "fv-10", "none-choose");
+      assert.equal(loadHireArea("c1")?.rateMissing, true);
+      assert.throws(() => setHireDailyRate({ claimId: "c1", group: "S3", actorId: "staff-sian", submitKey: "none-rate" }), /GTA table in Settings/);
+      assert.throws(() => parseGtaFigures("S3 sixty pounds"), /could not be read/);
+      assert.throws(() => parseGtaFigures("S3 60\nS3 61"), /listed twice/);
+      assert.throws(() => saveGtaTable({ effectiveFrom: "2099-01-01", source: "Again", figures: "S3 60", actorId: "staff-sian" }), /already applies/);
+      assert.throws(() => saveGtaTable({ effectiveFrom: "2026-07-01", source: " ", figures: "S3 60", actorId: "staff-sian" }), /where the figures came from/);
+    });
+    db.close();
+  });
+});
+
+describe("signed copy before the handover", () => {
+  it("accepts a copy signed beforehand, and records agreement 1 at the handover with the stored rate", () => {
+    const db = prepared();
+    withDatabase(db, () => {
+      needYes("c1", "early-need");
+      choose("c1", "fv-10", "early-choose");
+      recordPassingPrehireChecks("c1");
+      prepareAgreementItems("c1");
+      generateHireAgreementDocument("c1", "staff-sian");
+      uploadSignedHireAgreement({ claimId: "c1", actorId: "staff-sian", submitKey: "early-upload", file: SIGNED });
+      assert.equal(get<{ n: number }>(`SELECT COUNT(*) AS n FROM agreements a JOIN hire_episodes he ON he.id = a.hire_episode_id WHERE he.claim_id = 'c1'`)?.n, 0);
+      assert.equal(hireHandoverBlock("c1"), null);
+      const day = isoDateFromNow(1);
+      completeHireHandover({ claimId: "c1", mileage: 10, fuelLevel: "full", driverId: "staff-driver", date: day, time: "09:00", actorId: "staff-sian", submitKey: "early-handover" });
+      const agreement = get<{ start_on: string; signed: number; rate_pence_per_day: number }>(
+        `SELECT a.start_on, a.signed, a.rate_pence_per_day FROM agreements a JOIN hire_episodes he ON he.id = a.hire_episode_id WHERE he.claim_id = 'c1'`,
+      );
+      assert.equal(agreement?.start_on, day);
+      assert.equal(agreement?.signed, 1);
+      assert.equal(agreement?.rate_pence_per_day, 6653);
+      assert.equal(get<{ n: number }>(`SELECT COUNT(*) AS n FROM documents WHERE claim_id = 'c1' AND document_type = 'signed_hire_agreement'`)?.n, 1);
     });
     db.close();
   });

@@ -1,12 +1,12 @@
 import { AGREEMENT_ALERT_FROM_DAY, AGREEMENT_LENGTH_DAYS, AGREEMENT_OVERDUE_DAY } from "../constants";
 import { formatGbp } from "../money";
 import { formatUkDate, formatUkDateTime, londonDateIso, londonTodayIso, nowUtcIso, requireLondonDateTime, toLondonDateTimeLocal } from "../dates";
-import { normaliseGtaGroup, standardDailyRatePence } from "../documents/gta";
+import { normaliseGtaGroup } from "../documents/gta";
+import { settingsDailyRatePence, settingsGtaGroup, settingsGtaGroups } from "./gta-rates";
 import { agreementHoldEndDay, parseHireNeed, type HireNeed } from "../domain/hire-availability";
 import { carNotFreeMessage } from "../domain/fleet-availability";
 import { agreementDayNumber } from "../domain/rules";
 import { canDoFieldJob } from "../auth/roles";
-import { getGtaMarkupPercent } from "./hire-agreement";
 import { listHireGaps } from "./prehire-checks";
 import { licenceCheckWindowDays } from "./licence-window";
 import { recordVehicleHandover } from "./handover";
@@ -86,6 +86,8 @@ export type HireArea = {
   canChangeRate: boolean;
   groupCharged: string | null;
   clientGroup: string | null;
+  /** Groups in the GTA table in force today, for the group charged list. */
+  rateGroups: string[];
   cars: HireCarChoice[];
   carsMissingDetails: HireCarChoice[];
   filters: HireCarFilters;
@@ -244,7 +246,7 @@ function releaseReservations(claimId: string, keepFleetId: string | null) {
 /** The Settings rate for the group charged on this file, or null when there is no group or no rate. */
 function settingsRate(claimId: string): { ratePence: number | null; group: string | null } {
   const group = groupChargedFor(claimId);
-  return { ratePence: standardDailyRatePence(group, getGtaMarkupPercent()), group };
+  return { ratePence: settingsDailyRatePence(group), group };
 }
 
 function ensurePackRow(claimId: string) {
@@ -555,10 +557,10 @@ export function setHireDailyRate(input: { claimId: string; group: string; actorI
     if (hasRate && (episode.started_at || agreements > 0)) {
       throw new Error("The daily rate is already stored on this hire. It is not changed after the agreement or the handover.");
     }
-    const group = normaliseGtaGroup(input.group);
-    if (!group) throw new Error("Choose the group charged.");
-    const ratePence = standardDailyRatePence(group, getGtaMarkupPercent());
-    if (!ratePence) throw new Error("Settings has no daily rate for that group. Set the daily rate in Settings.");
+    const group = settingsGtaGroup(input.group);
+    if (!group) throw new Error("Choose the group charged from the GTA table in Settings.");
+    const ratePence = settingsDailyRatePence(group);
+    if (!ratePence) throw new Error("Settings has no GTA rate in force for that group today. Add the published table in Settings.");
     const takenOn = londonTodayIso();
     ensurePackRow(input.claimId);
     run(
@@ -906,6 +908,7 @@ export function loadHireArea(
     canChangeRate: creditHire && Boolean(chosen) && !startedAt && agreementCount === 0,
     groupCharged: groupChargedFor(claimId),
     clientGroup,
+    rateGroups: creditHire ? settingsGtaGroups() : [],
     cars,
     carsMissingDetails,
     filters: used,

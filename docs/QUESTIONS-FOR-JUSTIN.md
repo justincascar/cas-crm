@@ -1,10 +1,17 @@
 # Questions for Justin
 
-Each has a reversible default already in the CRM. Nothing here is guessed as final.
+Each open question has a reversible default already in the CRM. Nothing here is guessed as final.
 
-1. **Signed agreement before handover (confirm).** Default: a credit-hire handover needs the signed hire agreement uploaded (a photograph is fine). Someone with the override permission (your staff row only) can hand over without it, with a reason kept on the file. Is that right?
-2. **Courtesy-car agreement.** A fault courtesy car has no agreement at the moment. Does CAS use a courtesy-car agreement template? If so, please send it.
-3. **21-day licence window (confirm).** A licence check older than 21 days blocks the agreement and the handover. Is 21 days right?
-4. **Recovery mileage.** Still undecided how mileage is charged. The mileage box stays off the new-claim form.
-5. **Daily rates per group.** The daily rate is the GTA ceiling for the group charged plus the Settings markup (30%), taken when the car is reserved. Is that CAS's rate, or does CAS have its own table per group?
-6. **Real fleet on claims.** CAS's real V5C cars appear under "Details missing – check before offering" on Choose a car. Should real cars be offered on TEST files at all?
+## Open
+
+1. **Uplift % on the GTA rate.** Daily rate = the GTA figure for the group charged + an uplift %, kept in Settings. The uplift is 30% until you confirm the figure. Please confirm it.
+2. **Check the GTA table in Settings.** The table in force (from 01/07/2026) is the supplied 2026–27 table that was already in the CRM. Please check its figures against the published GTA table. A new year's table is added in Settings with its own date; earlier hires keep their rate.
+3. **Courtesy-car agreement.** You will supply an approved template later. Until then a fault courtesy car has no agreement.
+4. **21-day licence window.** A licence check older than 21 days blocks the agreement and the handover. Still to be confirmed.
+5. **Recovery mileage.** Still undecided how mileage is charged. The mileage box stays off the new-claim form.
+
+## Answered (28 October 2026)
+
+- **Daily rates per group.** GTA rate for the group charged + an uplift %. The uplift stays a Settings value. GTA rates change each year, so the GTA table is kept in Settings with an effective date. The rate taken on each hire never changes. GTA figures are never invented.
+- **Real CAS fleet on TEST files.** They stay visible, in the "Details missing – check before offering" group.
+- **Signed agreement before handover.** Confirmed. A credit-hire handover needs a signed hire agreement on file. An authorised override with a reason is still allowed. The client may sign beforehand or on the doorstep at handover. For now the signed paper copy is photographed and uploaded, before or at handover. E-signing is the next job (known issue 36).

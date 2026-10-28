@@ -19,13 +19,13 @@ import { getGtaMarkupPercent } from "@/lib/db/hire-agreement";
 import { licenceCheckWindowDays } from "@/lib/db/licence-window";
 import { getInsurerPaymentDetails } from "@/lib/db/payment-details";
 import { loadClash, sectionVersion } from "@/lib/db/record-version";
-import { GTA_RATE_PERIOD_LABEL } from "@/lib/documents/gta";
+import { gtaTableFor, listGtaTables } from "@/lib/db/gta-rates";
 import { EmailSendModeBanner } from "@/components/EmailSendModeBanner";
 import { CAS_CLAIMS_MAILBOX, INDICATIVE_DEFAULTS } from "@/lib/constants";
 import { mailboxIsConnected } from "@/lib/email/microsoft-graph";
 import { emailSendBanner } from "@/lib/email/send-mode";
 import { formatGbp } from "@/lib/money";
-import { formatUkDateTime } from "@/lib/dates";
+import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import { currentCasInsuranceDocument } from "@/lib/db/company-insurance";
 import { PAYMENT_REQUEST_PACK_MISSING } from "@/lib/email/payment-request-pack";
 
@@ -54,6 +54,8 @@ export default async function SettingsPage({
   const agreementMaxDays = getAgreementMaxDays();
   const repairProgressGapDays = getRepairGapThresholdDays();
   const gtaMarkupPercent = getGtaMarkupPercent();
+  const gtaTables = listGtaTables();
+  const gtaInForce = gtaTableFor();
   const paymentDetails = getInsurerPaymentDetails();
   const casInsurance = currentCasInsuranceDocument();
   return (
@@ -324,17 +326,15 @@ export default async function SettingsPage({
           </p>
         </form>
       </section>
-      <section id="gta-rate" className="scroll-mt-4 rounded-xl border border-line bg-card p-5">
+      <section id="gta-rate" className="scroll-mt-16 rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">GTA daily rate</h2>
         <p className="mt-1 text-sm text-slate">
-          The daily rate on a hire agreement is the GTA ceiling for the client&apos;s own vehicle group, plus this markup.
-          The ceilings are the supplied table for hires from {GTA_RATE_PERIOD_LABEL}. The July 2025 – June 2026 workbook is not used. The
-          vehicle CAS supplies is recorded separately and is not used for the rate.
+          Daily rate = the GTA figure for the group charged, from the table in force, plus this uplift. A hire keeps the rate it was given.
         </p>
         <ValidatedForm action={actionSaveGtaMarkup} className="mt-4 flex flex-wrap items-end gap-3">
           <RecordVersionField version={versionFor("settings-gta")} />
           <label className="text-sm">
-            CAS markup (%)
+            Uplift (%)
             <input
               name="gtaMarkupPercent"
               type="number"
@@ -347,9 +347,62 @@ export default async function SettingsPage({
             />
           </label>
           <button className="rounded-md bg-navy px-4 py-2 text-sm text-white" type="submit">
-            Save markup
+            Save uplift
           </button>
         </ValidatedForm>
+        {gtaInForce ? (
+          <div className="mt-5" data-gta-in-force={gtaInForce.effectiveFrom}>
+            <h3 className="text-sm font-semibold text-navy">
+              Table in force from {formatUkDate(gtaInForce.effectiveFrom)}
+            </h3>
+            <p className="mt-1 text-xs text-slate">Source: {gtaInForce.source}</p>
+            <ul className="mt-2 grid grid-cols-3 gap-x-4 gap-y-1 text-sm tabular sm:grid-cols-5 lg:grid-cols-7">
+              {Object.entries(gtaInForce.rates).map(([group, pence]) => (
+                <li key={group}>
+                  {group} {formatGbp(pence)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <p className="mt-5 rounded-md border border-overdue/40 bg-[#f8ecec] px-3 py-2 text-sm text-overdue">
+            No GTA table is in force today. No daily rate can be taken until the published table is added below.
+          </p>
+        )}
+        {gtaTables.length > 1 ? (
+          <details className="mt-3 text-sm">
+            <summary className="cursor-pointer text-teal-dark underline">Other tables ({gtaTables.length - 1})</summary>
+            <ul className="mt-2 space-y-1">
+              {gtaTables
+                .filter((table) => table.id !== gtaInForce?.id)
+                .map((table) => (
+                  <li key={table.id}>
+                    From {formatUkDate(table.effectiveFrom)} · {Object.keys(table.rates).length} groups · {table.source}
+                  </li>
+                ))}
+            </ul>
+          </details>
+        ) : null}
+        <details className="mt-3 text-sm">
+          <summary className="cursor-pointer text-teal-dark underline">Add a new GTA table</summary>
+          <form method="post" action="/settings/gta-table" className="mt-3 grid gap-3 sm:grid-cols-2">
+            <label className="text-sm">
+              Applies to hires reserved from
+              <input name="effectiveFrom" type="date" required className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" />
+            </label>
+            <label className="text-sm">
+              Source (the published table and its date)
+              <input name="source" required className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" />
+            </label>
+            <label className="text-sm sm:col-span-2">
+              Figures in pounds excluding VAT, one group per line (for example S1 42.32)
+              <textarea name="figures" required rows={8} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 font-mono text-sm" />
+            </label>
+            <button className="rounded-md bg-navy px-4 py-2 text-sm text-white sm:w-fit" type="submit">
+              Add table
+            </button>
+          </form>
+        </details>
       </section>
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Indicative charge defaults</h2>

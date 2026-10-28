@@ -7,7 +7,6 @@ import {
   gtaGroupLabel,
   groupChargedAboveClient,
   normaliseGtaGroup,
-  standardDailyRatePence,
 } from "../documents/gta";
 import { formatUkDate, formatUkDateTime, nowUtcIso } from "../dates";
 import { HIRE_CONTINUING } from "../domain/rules";
@@ -18,6 +17,7 @@ import { formatHandoverMileage } from "./handover";
 import { getHirePack, type HirePackData } from "./hire-pack";
 import { hireAgreementPrehireBlock } from "./prehire-checks";
 import { agreementMandatoryRefusal, currentHireEpisode } from "./hire-readiness";
+import { gtaTableFor, settingsDailyRatePence } from "./gta-rates";
 
 export const HIRE_AGREEMENT_TEMPLATE_KEY = "hire_agreement";
 export const HIRE_AGREEMENT_DOCUMENT_TYPE = "hire_agreement";
@@ -113,9 +113,10 @@ function moneyOrNotEntered(pence: number | null | undefined) {
 }
 
 export function hireAgreementWarnings(view: Pick<HireAgreementView, "suppliedGroup" | "clientGroup" | "groupCharged" | "overrideReason">) {
-  const chargedAbove = groupChargedAboveClient(view.groupCharged, view.clientGroup);
+  const rates = gtaTableFor()?.rates || {};
+  const chargedAbove = groupChargedAboveClient(view.groupCharged, view.clientGroup, rates);
   const suppliedAbove =
-    !chargedAbove && groupChargedAboveClient(view.suppliedGroup, view.clientGroup);
+    !chargedAbove && groupChargedAboveClient(view.suppliedGroup, view.clientGroup, rates);
   return { chargedAbove, suppliedAbove };
 }
 
@@ -317,8 +318,7 @@ export function prepareHireRating(input: {
     run(`UPDATE vehicles SET gta_group = ? WHERE id = ?`, [clientGroup, vehicle.client_vehicle_id]);
   }
   const charged = parseGtaGroupField(input.groupChargedRaw) || clientGroup;
-  const markup = getGtaMarkupPercent();
-  const calculated = standardDailyRatePence(charged, markup);
+  const calculated = settingsDailyRatePence(charged);
   const raw = input.dailyRateRaw.trim();
   let dailyRatePence = calculated ?? 0;
   let dailyRateManual = 0;
@@ -328,7 +328,7 @@ export function prepareHireRating(input: {
     dailyRatePence = submitted;
     dailyRateManual = calculated != null && submitted !== calculated ? 1 : 0;
   }
-  if (input.actorId && groupChargedAboveClient(charged, clientGroup)) {
+  if (input.actorId && groupChargedAboveClient(charged, clientGroup, gtaTableFor()?.rates || {})) {
     recordClaimEvent({
       claimId: input.claimId,
       eventType: "hire_group_charged_override",

@@ -985,4 +985,20 @@ Reviewer tested f5c0ffe as Sian on TEST-0015, TEST-0016 and TEST-0017. These dec
 
 Questions are in `docs/QUESTIONS-FOR-JUSTIN.md`.
 
+## Justin's answers (28 October 2026)
+
+**Daily rate.** Daily rate = the GTA figure for the group charged + an uplift %. The uplift stays a Settings value (30% until Justin confirms the figure). GTA rates change each year, so the GTA table now lives in Settings (`gta_rate_tables`) with the date it applies from and its source. The table in force on the reservation date gives the rate, which is stored on the hire and never changed. A new table is added on Settings with its date, source and figures; earlier tables are kept as entered and two tables cannot share a date. No GTA figure is invented: the only table so far is the supplied 2026–27 table, copied once from the figures already in the CRM. If no table is in force, no rate is taken and the file says "Daily rate missing". The group charged list on the Hire tab comes from the table in force.
+
+**Real fleet.** CAS's real V5C cars stay visible on TEST files under "Details missing – check before offering".
+
+**Signed agreement (confirmed).** A credit-hire handover needs a signed hire agreement on file. An authorised override with a reason is still allowed. The client may sign beforehand or on the doorstep. The signed paper copy can be uploaded on the Hire tab before the handover, or on the handover form at the handover. Agreement 1 is recorded on the hire when the car is handed over (or at upload, if the car is already out), at the stored rate, with the signed date being when the copy was filed. E-signing is not built; it is the next job (known issue 36).
+
+**Courtesy-car agreement.** Justin will supply an approved template. Fault files keep no agreement until then.
+
+**Still open.** The 21-day licence window and recovery mileage.
+
+**Small fix.** Links to a step on the Hire tab (for example Set the daily rate) now land with the heading clear of the slim bar.
+
+Finish on 28 October 2026 (after these answers): 568 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 69 passed, 0 failed, no sideways scroll at 1280px or 1024px, database unchanged. Journey checks passed on their own database. `EMAIL_SEND_MODE` stays `simulate`.
+
 Finish on 28 October 2026: 564 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 69 passed, 0 failed, no sideways scroll at 1280px or 1024px, database unchanged. Journey checks passed on their own database. `EMAIL_SEND_MODE` stays `simulate`.

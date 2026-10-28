@@ -121,8 +121,11 @@ Five stages. Each later stage extends the same three journeys one step further: 
 31. **Closed 28 October 2026.** Handover did not need the signed agreement. It now does on credit hire, with an authorised override.
 32. **Closed 28 October 2026.** The header note and claims-list position kept intake wording. Both now follow the steps.
 33. **Closed 28 October 2026.** Office staff had no list of driver jobs. Driver jobs lists them, and the driver is chosen at reservation.
-34. **Open.** CAS's real V5C cars appear on Choose a car under "Details missing". Question 6 in `docs/QUESTIONS-FOR-JUSTIN.md`.
+34. **Closed 28 October 2026 (decision).** CAS's real V5C cars stay visible on TEST files, in the "Details missing – check before offering" group. Justin decided this.
 35. **Open.** TEST-0015's earlier licence check was saved without a licence number. It is kept as history. A new agreement would ask for the number.
+36. **Open — next job.** E-signing, two routes: (a) a signing link sent to the client by WhatsApp/email before handover; (b) the client signs on the driver's phone at the doorstep handover. Either route satisfies the handover rule. Needs a proper audit trail (who, when, which document version, device) and a signed PDF kept on the file. Until then the signed paper copy is photographed and uploaded, before or at handover.
+37. **Open.** Courtesy-car agreement. Justin will supply an approved template. Fault files have no agreement until then.
+38. **Open.** The Settings "Environment" panel still lists agreement maximum 88, amber 70 and red 80. Those are old figures. The confirmed rule is 89 days with alerts from day 80 and overdue on day 88. Not changed in this job.
 
 ## How to try hire on a demonstration file
 

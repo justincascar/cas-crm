@@ -11,6 +11,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       submitKey: key,
       file: { buffer: Buffer.from(await file.arrayBuffer()), filename: file.name || "signed-hire-agreement.pdf", mimeType: file.type || "" },
     });
-    return { hash: "#on-hire" };
+    const hash = String(form.get("returnHash") || "");
+    return { hash: hash.startsWith("#") ? hash : "#on-hire" };
   });
 }
