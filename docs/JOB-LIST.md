@@ -114,6 +114,7 @@ DONE — 3e0b2fd. Invoice template and sending hours are questions 7 and 8. Know
 - An aged-debt view.
 
 ### J7 — Dashboard simplified
+DONE — 3bf60aa.
 - Cut the 19 count boxes down to about 6 that matter:
   - claims needing action today
   - overdue
