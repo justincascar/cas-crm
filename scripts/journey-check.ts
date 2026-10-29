@@ -675,12 +675,34 @@ async function chooseFirstCar(session: BrowserSession, origin: string, claimId: 
   return { fleetId: picked, registration: chosen.registration, summary: chosen.summary, options };
 }
 
+function londonTimeNow(): string {
+  return new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());
+}
+
+/** Fills the "Before the client signs" box. Transmission and date of issue are sent only when the box asks for them. */
+async function fillBeforeSigning(session: BrowserSession, values: Record<string, string>): Promise<string | null> {
+  const spec = JSON.stringify(values);
+  const result = await session.evaluate<Submitted>(`(() => {
+    const values = ${spec};
+    const form = document.querySelector('form[action$="/hire/before-signing"]');
+    if (!(form instanceof HTMLFormElement)) return { status: 0, location: "", problem: "No before-signing form" };
+    const body = new FormData(form);
+    for (const [name, value] of Object.entries(values)) {
+      if (form.querySelector('[name="' + name + '"]')) body.set(name, value);
+    }
+    body.set("submitKey", crypto.randomUUID());
+    return fetch(form.action, { method: "POST", body, credentials: "same-origin", redirect: "follow" }).then((r) => ({ status: r.status, location: r.url }));
+  })()`);
+  return followed(result, "before signing");
+}
+
 async function completeHandover(session: BrowserSession, origin: string, claimId: string, signed: boolean) {
   await gotoPath(session, origin, `/claims/${claimId}/hire`);
   const sent = await submitForm(
     session,
     'form[action$="/hire/handover"]',
-    { mileage: "1500", date: HIRE_DAY, time: "09:30", fuelLevel: "full" },
+    // The car goes out after the client signs, so the handover time is now (R2).
+    { mileage: "1500", date: HIRE_DAY, time: londonTimeNow(), fuelLevel: "full" },
     signed ? ["signedAgreement"] : [],
   );
   return sent;
@@ -909,6 +931,10 @@ async function runHireJourneys(session: BrowserSession, origin: string, dbPath: 
   const stored = hireFacts(dbPath, repairable.claimId).episode;
   if (!stored?.rate_pence_per_day || stored.rate_taken_on !== HIRE_DAY) return "The daily rate was not stored on the hire with today's date.";
 
+  await gotoPath(session, origin, `/claims/${repairable.claimId}/hire`);
+  // R1: mileage and fuel out, and the licence date of issue, go on the agreement before the client signs.
+  const readings = await fillBeforeSigning(session, { mileage: "1500", fuelLevel: "full", licenceIssuedOn: "2015-06-01", transmission: "Manual" });
+  if (readings) return `Before signing: ${readings}`;
   await gotoPath(session, origin, `/claims/${repairable.claimId}/hire`);
   const produced = followed(await submitForm(session, 'form[action$="/hire/agreement"]', {}), "agreement");
   if (produced) return produced;

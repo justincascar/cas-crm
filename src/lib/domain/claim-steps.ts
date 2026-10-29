@@ -333,7 +333,8 @@ function claimNumberFrom(events: ClaimStepEvent[]): string | null {
 
 function paymentText(row: ClaimPaymentLineInput): string {
   if ((row.key === "hire" || row.key === "storage") && row.endConfirmed === false) {
-    return "Not ready (end date not confirmed)";
+    // Nothing charged yet reads as not started, not as waiting for an end date.
+    return row.chargeRecorded ? "Not ready (end date not confirmed)" : "Not started";
   }
   if (row.paidInFull) return "Paid in full";
   if (row.partPaid) return `Part paid ${formatGbp(Math.max(0, row.receivedPence))}`;
@@ -600,12 +601,22 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
         detail: courtesy ? "This is a courtesy car. There is no daily charge to an insurer." : null,
       };
     } else if (begun > 0) {
+      // The header names the hire item that is actually next, not "Arrange hire".
+      const next = !input.vehicleChosen
+        ? { label: courtesy ? "Arrange courtesy car" : "Arrange hire", anchor: "#car" }
+        : !input.prehireDone
+          ? { label: "Pre-hire checks", anchor: "#checks" }
+          : !courtesy && !input.agreementDone
+            ? { label: "Hire agreement – sign", anchor: "#pack" }
+            : { label: "Handover", anchor: "#handover" };
       view = {
         ...view,
         state: "in_progress",
         statusText: "In progress",
         progressDone: begun,
         progressTotal: 4,
+        buttonLabel: next.label,
+        buttonHref: `${href}${next.anchor}`,
       };
     }
     return applyNotNeeded("hire", view);

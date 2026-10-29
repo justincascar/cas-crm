@@ -3,7 +3,7 @@ import { redirect } from "next/navigation";
 import { PageHeader } from "@/components/ClaimTable";
 import { canDoFieldJob, isOfficeRole } from "@/lib/auth/roles";
 import { requireSignedIn } from "@/lib/auth/session";
-import { formatUkDate, formatUkTime, londonTodayIso } from "@/lib/dates";
+import { formatUkDate, formatUkTime, londonDateIso, londonTodayIso } from "@/lib/dates";
 import { listAssignablePeople, listDriverJobs, type DriverJobRow } from "@/lib/db/jobs";
 
 function statusWord(job: DriverJobRow): string {
@@ -21,10 +21,18 @@ export default async function DriverJobsPage({ searchParams }: { searchParams: P
   const drivers = listAssignablePeople()
     .filter((person) => canDoFieldJob(String(person.role)))
     .map((person) => ({ id: String(person.id), name: String(person.name) }));
-  const days = [...new Set(jobs.filter((job) => !job.overdue).map((job) => job.workDate))];
+  const today = londonTodayIso();
+  const doneToday = jobs.filter((job) => job.completed && job.completedAt && londonDateIso(new Date(job.completedAt)) === today);
+  const doneIds = new Set(doneToday.map((job) => job.id));
+  const days = [...new Set(jobs.filter((job) => !job.overdue && !doneIds.has(job.id) && !job.completed).map((job) => job.workDate))];
   const groups = [
     ...(jobs.some((job) => job.overdue) ? [{ key: "overdue", title: "Overdue – not done from an earlier day", rows: jobs.filter((job) => job.overdue) }] : []),
-    ...days.map((day) => ({ key: day, title: `${formatUkDate(day)}${day === londonTodayIso() ? " · today" : ""}`, rows: jobs.filter((job) => !job.overdue && job.workDate === day) })),
+    ...days.map((day) => ({
+      key: day,
+      title: `${formatUkDate(day)}${day === today ? " · today" : ""}`,
+      rows: jobs.filter((job) => !job.overdue && !job.completed && job.workDate === day),
+    })),
+    ...(doneToday.length ? [{ key: "done", title: "Done today", rows: doneToday }] : []),
   ];
   const unassigned = jobs.filter((job) => !job.assigneeId && !job.completed).length;
 

@@ -33,6 +33,7 @@ import {
 } from "./hire-readiness";
 import { all, get, newId, run } from "./connection";
 import { latestEsign, type EsignView } from "./esign";
+import { beforeSigningFor, type BeforeSigning } from "./hire-out-readings";
 import { withImmediateTransaction, sectionVersion } from "./record-version";
 import { replaySubmit, storeSubmit } from "./submit-key";
 
@@ -66,6 +67,8 @@ export type HireArea = {
   checksDone: boolean;
   gaps: Array<{ key: string; kind: string; label: string; href: string }>;
   agreementGaps: HireGapLink[];
+  /** Mileage and fuel out, transmission and licence date of issue, needed before the client signs. */
+  beforeSigning: BeforeSigning;
   agreementCount: number;
   agreement: { id: string; title: string; createdAt: string } | null;
   signed: SignedAgreementFile | null;
@@ -88,6 +91,8 @@ export type HireArea = {
   canChangeRate: boolean;
   groupCharged: string | null;
   clientGroup: string | null;
+  /** The client's own car, to explain the suggested group charged. */
+  clientVehicle: string;
   /** Groups in the GTA table in force today, for the group charged list. */
   rateGroups: string[];
   cars: HireCarChoice[];
@@ -137,10 +142,12 @@ function claimRow(claimId: string) {
     vehicle_class: string | null;
     gta_group: string | null;
     registration: string | null;
+    make: string | null;
+    model: string | null;
   }>(
     `SELECT c.id, c.file_reference, c.claim_type, p.full_name AS client_name, p.telephone, p.email,
             p.address_line1, p.town, p.postcode, p.licence_number,
-            v.transmission, v.seats, v.vehicle_class, v.gta_group, v.registration
+            v.transmission, v.seats, v.vehicle_class, v.gta_group, v.registration, v.make, v.model
      FROM claims c
      LEFT JOIN people p ON p.id = c.client_person_id
      LEFT JOIN vehicles v ON v.id = c.client_vehicle_id
@@ -630,6 +637,7 @@ export function completeHireHandover(input: {
   conditionNote?: string;
   signedCopy?: { buffer: Buffer; filename: string; mimeType: string } | null;
   overrideReason?: string;
+  timingReason?: string;
 }) {
   return once(input.submitKey, () => {
     if (!activeReservationFor(input.claimId)) {
@@ -669,6 +677,8 @@ export function completeHireHandover(input: {
       actualDriverId: input.driverId,
       actualOccurredAt: clock.at,
       deferCommit: true,
+      timingReason: input.timingReason,
+      signedCopyComing: Boolean(signedCopy),
     });
     const started = startHireFromHandover({
       claimId: input.claimId,
@@ -893,6 +903,7 @@ export function loadHireArea(
     checksDone: gaps.length === 0,
     gaps,
     agreementGaps,
+    beforeSigning: beforeSigningFor(claimId),
     agreementCount,
     agreement: agreementRow
       ? { id: String(agreementRow.id), title: String(agreementRow.title || "Hire agreement"), createdAt: String(agreementRow.created_at) }
@@ -911,6 +922,7 @@ export function loadHireArea(
     canChangeRate: creditHire && Boolean(chosen) && !startedAt && agreementCount === 0,
     groupCharged: groupChargedFor(claimId),
     clientGroup,
+    clientVehicle: [claim.make, claim.model, claim.registration].map((part) => String(part || "").trim()).filter((part) => part && !/^unknown$/i.test(part)).join(" "),
     rateGroups: creditHire ? settingsGtaGroups() : [],
     cars,
     carsMissingDetails,

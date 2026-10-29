@@ -10,6 +10,11 @@ import type { SaveClashView } from "@/lib/db/record-version";
 import { FUEL_LEVELS } from "@/lib/db/handover";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
+
+/** Hours and minutes now, UK time, for a time box that should start at the real time. */
+function londonTimeNow(): string {
+  return new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());
+}
 const button = "inline-flex min-h-11 items-center rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white";
 const quiet = "inline-flex min-h-11 items-center rounded-md border border-line bg-white px-3 py-2 text-sm font-semibold text-navy";
 const fileAccept = "application/pdf,image/*,.pdf,.jpg,.jpeg,.png,.webp,.gif";
@@ -204,7 +209,17 @@ export function HireJourney({
         <div className="rounded-md border border-overdue/40 bg-[#f8ecec] p-3">
           <p className="text-sm font-semibold text-overdue">Daily rate missing</p>
           <p className="mt-1 text-sm">Choose the group charged. The rate for that group is taken from Settings and kept on this hire.</p>
-          <RateForm claimId={id} group={area.groupCharged || area.clientGroup || ""} groups={area.rateGroups} label="Set the daily rate" />
+          <RateForm
+            claimId={id}
+            group={area.groupCharged || area.clientGroup || ""}
+            groups={area.rateGroups}
+            label="Set the daily rate"
+            hint={
+              area.clientGroup
+                ? `Suggested: ${area.clientGroup}, the group of the client's own car${area.clientVehicle ? ` (${area.clientVehicle})` : ""}. A like-for-like car is charged at that group.`
+                : `The client's own car${area.clientVehicle ? ` (${area.clientVehicle})` : ""} has no group on the file, so no group is suggested. Add it on the client's vehicle details.`
+            }
+          />
         </div>
       ) : area.canChangeRate ? (
         <DoneLine summary={<>Daily rate: {area.rate.line}</>}>
@@ -341,6 +356,7 @@ export function HireJourney({
             <p className="mt-2 text-sm" data-pack-licence>
               Licence number: {area.licenceNumber || "not on the file yet"}
             </p>
+            {carDone && !started && !area.signed ? <BeforeSigningForm claimId={id} before={area.beforeSigning} /> : null}
             {agreementDone && area.agreement ? (
               <DoneLine
                 summary={
@@ -452,19 +468,20 @@ export function HireJourney({
                     <div className="grid gap-3 sm:grid-cols-2">
                       <label className="text-sm">
                         Handover date
-                        <input type="date" name="date" required className={field} defaultValue={area.delivery?.date || londonTodayIso()} />
+                        <input type="date" name="date" required className={field} defaultValue={londonTodayIso()} />
                       </label>
                       <label className="text-sm">
                         Time
-                        <input type="time" name="time" required className={field} defaultValue={area.delivery?.time || "09:00"} />
+                        <input type="time" name="time" required className={field} defaultValue={londonTimeNow()} />
+                        {plannedWords ? <span className="mt-1 block text-slate">Booked for {plannedWords}.</span> : null}
                       </label>
                       <label className="text-sm">
                         Mileage out
-                        <input name="mileage" type="number" min={0} step={1} required className={field} />
+                        <input name="mileage" type="number" min={0} step={1} required className={field} defaultValue={area.beforeSigning.mileage ?? ""} />
                       </label>
                       <label className="text-sm">
                         Fuel out
-                        <select name="fuelLevel" className={field} required defaultValue="full">
+                        <select name="fuelLevel" className={field} required defaultValue={area.beforeSigning.fuelLevel || "full"}>
                           {FUEL_LEVELS.map((level) => (
                             <option key={level.value} value={level.value}>
                               {level.label}
@@ -512,6 +529,12 @@ export function HireJourney({
                       Condition note
                       <textarea name="conditionNote" className={field} rows={2} />
                     </label>
+                    {area.esign?.status === "signed" ? (
+                      <label className="block text-sm">
+                        Reason, only if the car was handed over before the signature time
+                        <input name="timingReason" className={field} />
+                      </label>
+                    ) : null}
                     <button className={button} type="submit">
                       Complete handover
                     </button>
@@ -608,7 +631,7 @@ function NeedForm({ area }: { area: HireArea }) {
   );
 }
 
-function RateForm({ claimId, group, groups, label }: { claimId: string; group: string; groups: string[]; label: string }) {
+function RateForm({ claimId, group, groups, label, hint }: { claimId: string; group: string; groups: string[]; label: string; hint?: string }) {
   return (
     <form method="post" action={`/claims/${claimId}/hire/rate`} className="mt-3 flex flex-wrap items-end gap-3">
       <SubmitKeyInput />
@@ -632,6 +655,64 @@ function RateForm({ claimId, group, groups, label }: { claimId: string; group: s
       <Link href="/settings#gta-rate" className="text-sm text-teal-dark underline">
         Rates in Settings
       </Link>
+      {hint ? (
+        <p className="w-full text-sm text-slate" data-group-hint>
+          {hint}
+        </p>
+      ) : null}
+    </form>
+  );
+}
+
+/** Printed on the agreement the client signs. A changed reading produces a new version of an unsigned agreement. */
+function BeforeSigningForm({ claimId, before }: { claimId: string; before: HireArea["beforeSigning"] }) {
+  const done = before.mileage != null && Boolean(before.fuelLevel) && Boolean(before.transmission) && Boolean(before.licenceIssuedOn);
+  return (
+    <form
+      id="before-signing"
+      method="post"
+      action={`/claims/${claimId}/hire/before-signing`}
+      className="mt-3 grid scroll-mt-16 gap-3 rounded-lg border border-line bg-white p-3 text-sm sm:grid-cols-2"
+      data-before-signing={done ? "done" : "needed"}
+    >
+      <SubmitKeyInput />
+      <p className="font-semibold sm:col-span-2">Before the client signs</p>
+      <label>
+        Mileage out
+        <input name="mileage" inputMode="numeric" required className={field} defaultValue={before.mileage ?? ""} />
+      </label>
+      <label>
+        Fuel out
+        <select name="fuelLevel" required className={field} defaultValue={before.fuelLevel}>
+          <option value="">Choose</option>
+          {FUEL_LEVELS.map((level) => (
+            <option key={level.value} value={level.value}>
+              {level.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      {!before.transmission ? (
+        <label>
+          Hire car transmission (saved to the fleet record)
+          <select name="transmission" required className={field} defaultValue="">
+            <option value="">Choose</option>
+            <option value="Manual">Manual</option>
+            <option value="Automatic">Automatic</option>
+          </select>
+        </label>
+      ) : null}
+      {!before.licenceIssuedOn ? (
+        <label>
+          Licence date of issue (4a)
+          <input name="licenceIssuedOn" type="date" required className={field} />
+        </label>
+      ) : null}
+      <div className="sm:col-span-2">
+        <button className={quiet} type="submit">
+          {done ? "Update readings" : "Save readings"}
+        </button>
+      </div>
     </form>
   );
 }

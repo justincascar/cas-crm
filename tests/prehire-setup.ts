@@ -41,7 +41,8 @@ export function prepareAgreementItems(claimId: string, ratePence = 6653, group =
       `UPDATE people SET
          licence_number = COALESCE(NULLIF(licence_number, ''), ?),
          licence_expires_on = COALESCE(NULLIF(licence_expires_on, ''), '2032-01-01'),
-         date_of_birth = COALESCE(NULLIF(date_of_birth, ''), '1985-01-01')
+         date_of_birth = COALESCE(NULLIF(date_of_birth, ''), '1985-01-01'),
+         licence_issued_on = COALESCE(NULLIF(licence_issued_on, ''), '2015-01-01')
        WHERE id = ?`,
       [TEST_LICENCE_NUMBER, claim.client_person_id],
     );
@@ -59,5 +60,17 @@ export function prepareAgreementItems(claimId: string, ratePence = 6653, group =
     `UPDATE hire_episodes SET rate_pence_per_day = ?, rate_taken_on = ?, rate_group = ?
      WHERE claim_id = ? AND fleet_vehicle_id IS NOT NULL AND (rate_pence_per_day IS NULL OR rate_pence_per_day <= 0)`,
     [ratePence, londonTodayIso(), group, claimId],
+  );
+  // Mileage and fuel out, and the car's transmission, are on the agreement the client signs.
+  run(
+    `UPDATE hire_episodes SET out_mileage = COALESCE(out_mileage, 12000), out_fuel_level = COALESCE(NULLIF(out_fuel_level, ''), 'full')
+     WHERE claim_id = ? AND fleet_vehicle_id IS NOT NULL AND started_at IS NULL`,
+    [claimId],
+  );
+  run(
+    `UPDATE vehicles SET transmission = 'Manual'
+     WHERE (transmission IS NULL OR trim(transmission) = '') AND id IN (
+       SELECT fv.vehicle_id FROM hire_episodes he JOIN fleet_vehicles fv ON fv.id = he.fleet_vehicle_id WHERE he.claim_id = ?)`,
+    [claimId],
   );
 }

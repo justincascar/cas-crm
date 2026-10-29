@@ -4,6 +4,9 @@ import { SigningFields } from "@/components/esign/SigningFields";
 import { isOfficeRole } from "@/lib/auth/roles";
 import { requireSignedIn } from "@/lib/auth/session";
 import { latestAgreementDocument, latestEsign } from "@/lib/db/esign";
+import { FUEL_LEVELS } from "@/lib/db/handover";
+import { beforeSigningFor } from "@/lib/db/hire-out-readings";
+import { SubmitKeyInput } from "@/components/SubmitKeyInput";
 import { signedHireAgreementOnFile } from "@/lib/db/hire-readiness";
 import { getClaim } from "@/lib/db/queries";
 
@@ -13,11 +16,11 @@ export default async function DoorstepSigningPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; job?: string }>;
+  searchParams: Promise<{ error?: string; job?: string; readings?: string }>;
 }) {
   const staff = await requireSignedIn();
   const { id } = await params;
-  const { error, job } = await searchParams;
+  const { error, job, readings } = await searchParams;
   const data = getClaim(id);
   if (!data) notFound();
   const back = isOfficeRole(staff.role) ? `/claims/${id}/hire#handover` : `/claims/${id}/handover${job ? `?job=${job}` : ""}`;
@@ -25,6 +28,8 @@ export default async function DoorstepSigningPage({
   const signed = signedHireAgreementOnFile(id);
   const esign = latestEsign(id);
   const clientName = String(data.claim.client_name || "");
+  const before = beforeSigningFor(id);
+  const readingsDone = before.mileage != null && Boolean(before.fuelLevel);
   return (
     <div className="mx-auto max-w-3xl space-y-5">
       <p className="text-sm">
@@ -45,7 +50,31 @@ export default async function DoorstepSigningPage({
         </p>
       ) : (
         <>
-          <p className="text-base">Hand the phone to {clientName || "the client"}. They read the agreement, then sign at the bottom.</p>
+          <form method="post" action={`/claims/${id}/sign/readings`} className="grid gap-3 rounded-xl border border-line bg-card p-4 sm:grid-cols-3" data-doorstep-readings>
+            <SubmitKeyInput />
+            <input type="hidden" name="job" value={job || ""} />
+            <p className="text-base font-semibold sm:col-span-3">1. Mileage and fuel out</p>
+            <label className="text-base">
+              Mileage
+              <input name="mileage" inputMode="numeric" required defaultValue={before.mileage ?? ""} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-3 text-base" />
+            </label>
+            <label className="text-base">
+              Fuel
+              <select name="fuelLevel" required defaultValue={before.fuelLevel} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-3 text-base">
+                <option value="">Choose</option>
+                {FUEL_LEVELS.map((level) => (
+                  <option key={level.value} value={level.value}>
+                    {level.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="submit" className="min-h-12 self-end rounded-md border border-line bg-white px-4 py-3 text-base font-semibold text-navy">
+              {readingsDone ? "Update readings" : "Save readings"}
+            </button>
+            {readings ? <p className="text-sm sm:col-span-3">Readings saved. The agreement below shows them.</p> : null}
+          </form>
+          <p className="text-base font-semibold">2. Hand the phone to {clientName || "the client"}. They read the agreement, then sign at the bottom.</p>
           {error ? (
             <p data-form-error className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-base text-overdue">
               {error}

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { LegalApprovalPanel } from "@/components/LegalApprovalPanel";
+import { accountCanApproveLegal, legalApprovalState } from "@/lib/db/legal-approval";
 import { notFound, redirect } from "next/navigation";
 import { PrintButton } from "@/components/PrintButton";
 import { StoredFilePreview } from "@/components/StoredFilePreview";
@@ -11,9 +13,16 @@ import { specForTemplate } from "@/lib/documents/catalog";
 import { plainPackFields } from "@/lib/documents/hire-pack-fields";
 import { CAS_LEGAL_SIGNOFF_NOTICE, CAS_TEMPLATE_NOTICE } from "@/lib/documents/correspondence";
 
-export default async function DocumentPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function DocumentPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string; saved?: string }>;
+}) {
   const staff = await requireSignedIn();
   const { id } = await params;
+  const { error: actionError } = await searchParams;
   if (!canReadDocument(staff, id)) redirect("/jobs?notice=office");
   const doc = getDocument(id);
   if (!doc) notFound();
@@ -70,6 +79,8 @@ export default async function DocumentPage({ params }: { params: Promise<{ id: s
             : `Not on the file yet (shown in the letter as [not yet on file] or Unknown): ${plainPackFields(missing)}.`}
         </p>
       ) : null}
+      {actionError ? <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue print:hidden">{actionError}</p> : null}
+      <LegalApprovalPanel documentId={id} state={legalApprovalState(id)} canApprove={accountCanApproveLegal(staff.id)} />
       {!storedPath && !String(doc.template_key || "").startsWith("draft_invoice") ? (
         <p className="text-xs text-slate print:hidden">{CAS_TEMPLATE_NOTICE}</p>
       ) : null}

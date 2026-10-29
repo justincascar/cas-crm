@@ -191,7 +191,7 @@ describe("claim steps from history", () => {
         assert.equal(moneyAfter[index]?.received_pence, moneyBefore[index]?.received_pence);
       }
       const model = buildClaimSummaryModel("c9");
-      assert.equal(model?.nextAction, "Arrange hire");
+      assert.equal(model?.nextAction, "Pre-hire checks");
       assert.match(model?.stageLine || "", /Hire · In progress/);
       assert.equal(model?.staffNote, "Chase vehicle damage payment from Hastings");
       const report = steps.find((item) => item.key === "engineer_report");

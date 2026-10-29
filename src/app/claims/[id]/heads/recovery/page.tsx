@@ -122,6 +122,13 @@ export async function RecoveryHeadScreen({
           ? "A claimed figure is already on this file. Opening this page has not replaced it, and it has not added another £395."
           : "This is the standard recovery charge of £395, plus VAT. Nothing else has been added.";
 
+  // Offer, agreed, payment and dispute stay folded until there is something to do on this head.
+  const moneyOpen =
+    Boolean(query.offerError || query.offerWarn || query.decisionError || query.figureError) ||
+    listChargeOffers(id, "recovery").length > 0 ||
+    (section.agreedPence || 0) > 0 ||
+    section.receivedPence > 0 ||
+    Boolean(latestChargeDecision(id, "recovery").recordedAt);
   return (
     <div className="space-y-6">
       <PageHeader
@@ -198,7 +205,7 @@ export async function RecoveryHeadScreen({
             ))}
           </ul>
         ) : null}
-        {recoveryLines.length ? (
+        {recoveryDone && recoveryLines.length ? (
           <div>
             <h3 className="text-sm font-semibold text-navy-deep">Each charge</h3>
             <ul className="mt-2 space-y-1 text-sm">
@@ -215,14 +222,16 @@ export async function RecoveryHeadScreen({
 
       <section className="space-y-3 rounded-xl border border-line bg-card p-5" aria-label="Recovery charge">
         <h2 className="font-serif text-xl text-navy-deep">Recovery charge</h2>
-        {recorded ? (
-          <p className="text-sm">{chargeNote}</p>
+        {recoveryDone ? (
+          <>
+            {recorded ? <p className="text-sm">{chargeNote}</p> : null}
+            <p className="text-sm font-semibold tabular">
+              Net {formatGbp(decision.netPence)} · VAT {formatGbp(decision.vatPence)} · Total {formatGbp(decision.totalPence)}
+            </p>
+          </>
         ) : (
-          <p className="text-sm font-semibold">No recovery recorded yet</p>
+          <p className="text-sm">No charge until the recovery is recorded above.</p>
         )}
-        <p className="text-sm font-semibold tabular">
-          Net {formatGbp(decision.netPence)} · VAT {formatGbp(decision.vatPence)} · Total {formatGbp(decision.totalPence)}
-        </p>
         {query.figureError ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.figureError}</p> : null}
         {query.offerError ? <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">{query.offerError}</p> : null}
         {query.offerWarn ? (
@@ -261,6 +270,8 @@ export async function RecoveryHeadScreen({
           }
           reloadHref={`/claims/${id}/heads/recovery`}
         />
+        <details data-recoverer-more>
+          <summary className="cursor-pointer text-sm text-teal-dark underline">More – recoverer details</summary>
         <ScreenForm
           claimId={id}
           actorId={staff.id}
@@ -276,8 +287,12 @@ export async function RecoveryHeadScreen({
           extraHidden={extraHidden}
           hideSections={["Charges"]}
         />
+        </details>
       </section>
 
+      <details open={moneyOpen || undefined} className="rounded-xl border border-line bg-card" data-recovery-money>
+        <summary className="cursor-pointer px-5 py-3 font-serif text-xl text-navy-deep">Money</summary>
+        <div className="space-y-4 px-2 pb-3 sm:px-3">
       <HeadOfLossScreen
         claimId={id}
         section={section}
@@ -316,6 +331,8 @@ export async function RecoveryHeadScreen({
         agreedOn={agreedOnFor(id, "recovery")}
         hasAgreed={(section.agreedPence || 0) > 0}
       />
+        </div>
+      </details>
     </div>
   );
 }

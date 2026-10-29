@@ -1,5 +1,6 @@
 import type { OutgoingMessage } from "../email/gateway";
 import { CAS_EMAIL_SPECS } from "./cas-wording";
+import { insurerReferenceLines } from "./notification-letters";
 import {
   emptyCorrespondenceFields,
   generateFromSpec,
@@ -102,11 +103,31 @@ export function generateEmail(templateKey: EmailTemplateKey, ctx: LetterContext 
   const spec = CAS_EMAIL_SPECS.find((item) => item.key === templateKey);
   if (!spec) throw new Error(`Unknown email template: ${templateKey}`);
   const full = asCorrespondence(ctx);
-  const generated = generateFromSpec(spec, full);
+  const raw = generateFromSpec(spec, full);
+  const generated = templateKey === "initial_tp_insurer_email" ? withInsurerReferences(raw, full) : raw;
   const to = recipientFor(spec.audience, full);
   return {
     ...generated,
     to,
     message: { to, subject: generated.subject, body: generated.text },
   };
+}
+
+/**
+ * The insurer's claim reference and policy number, whichever are held, in place of the policy line. The request for
+ * a claim reference is left out when we already hold it, and the remaining requests are renumbered.
+ */
+function withInsurerReferences(generated: GeneratedLetter, ctx: CorrespondenceContext): GeneratedLetter {
+  const refs = insurerReferenceLines(ctx.tpPolicyOrClaimRef, ctx.tpPolicyNumber, []);
+  const refText = refs.lines.map((line) => `${line.label}: ${line.value}`).join("\n");
+  let text = generated.text.replace(/^Policy Number: .*$/m, refText);
+  if (refs.haveClaimRef) {
+    let n = 0;
+    text = text
+      .split("\n")
+      .filter((line) => !/^1\. Provide your claim reference$/.test(line.trim()))
+      .map((line) => (/^\d+\. /.test(line) ? line.replace(/^\d+/, String(++n)) : line))
+      .join("\n");
+  }
+  return { ...generated, text };
 }

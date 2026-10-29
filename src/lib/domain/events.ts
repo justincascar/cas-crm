@@ -49,6 +49,8 @@ export const CLAIM_EVENT_TYPES = [
   { key: "hire_ended", label: "Hire ended" },
   { key: "hire_end_date_review", label: "Hire end date needs a check" },
   { key: "hire_car_collected", label: "Hire car collected" },
+  { key: "hire_car_readings_recorded", label: "Hire car readings recorded" },
+  { key: "legal_letter_approved", label: "Letter approved by Justin" },
   { key: "hire_end_date_confirmed", label: "Hire end date confirmed" },
   { key: "hire_agreement_renewed", label: "Hire agreement renewed" },
   { key: "hire_agreement_renewal_cleared", label: "Hire agreement renewal — cleared (correction)" },

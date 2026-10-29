@@ -1,6 +1,6 @@
 import { canDoFieldJob, isOfficeRole } from "../auth/roles";
 import { formatUkDateTime, londonDateIso, nowUtcIso, requireLondonDateTime } from "../dates";
-import { activeReservationFor, startHireFromHandover } from "./hire-start";
+import { activeReservationFor, agreementSignedWords, handoverBeforeSignatureRefusal, startHireFromHandover } from "./hire-start";
 import { hireHandoverBlock, readSignedUpload, storeSignedHireAgreement } from "./hire-readiness";
 import { assertCanRecordHandover } from "./jobs";
 import { CHOOSE_CAR_BEFORE_HANDOVER } from "../domain/hire-availability";
@@ -121,6 +121,10 @@ export type HandoverInput = {
   signature?: HandoverSignatureInput;
   /** Set when the caller already holds the database transaction. */
   deferCommit?: boolean;
+  /** Why the handover time is earlier than the electronic signature. */
+  timingReason?: string;
+  /** The signed paper copy is being uploaded with this handover. */
+  signedCopyComing?: boolean;
 };
 
 export type HandoverReading = {
@@ -470,6 +474,15 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
   const enteredAt = nowUtcIso();
   const actual = actualHandover(input, staff, enteredAt);
   const occurredAt = actual.occurredAt;
+  const startingHire = event.kind === "hire_delivered" && hireEpisodeId
+    ? !get<{ started_at: string | null }>(`SELECT started_at FROM hire_episodes WHERE id = ?`, [hireEpisodeId])?.started_at
+    : false;
+  const timingReason = String(input.timingReason || "").trim();
+  if (startingHire) {
+    const early = handoverBeforeSignatureRefusal(input.claimId, occurredAt, timingReason);
+    if (early) throw new Error(early);
+  }
+  const agreementWords = event.kind === "hire_delivered" ? agreementSignedWords(input.claimId, Boolean(input.signedCopyComing)) : "";
   const shotSet = shotSetForKind(event.kind);
   const signature = storedSignature(input.signature);
   const id = newId("vh");
@@ -520,7 +533,7 @@ export function recordVehicleHandover(input: HandoverInput): { id: string; incom
       eventType: "vehicle_handover_recorded",
       occurredAt,
       actorId: staff.id,
-      details: `${event.label} (${bookingLabel}). Mileage ${formatHandoverMileage(mileage)}. Fuel ${fuelLevelLabel(fuel)}. Happened ${formatUkDateTime(occurredAt)}. Driver ${actual.driverName}. Entered by ${staff.name}. ${signature.png ? `Signed by ${signature.name} (${signatoryRelationshipLabel(signature.relationship)}). ${SIGNATURE_HONESTY}` : signature.skipReason ? `Not signed. ${signature.skipReason}` : "Not signed."} ${photoProgress(input.photos.map((photo) => photo.slot), shotSet)}${attachedScans.length ? ` Diagnostic ${attachedScans.join(" and ")} attached.` : ""}${note ? ` Note: ${note}` : ""}`,
+      details: `${event.label} (${bookingLabel}). Mileage ${formatHandoverMileage(mileage)}. Fuel ${fuelLevelLabel(fuel)}. Happened ${formatUkDateTime(occurredAt)}. Driver ${actual.driverName}. Entered by ${staff.name}. ${agreementWords ? `${agreementWords} ` : ""}${signature.png ? `Handover sheet signed by ${signature.name} (${signatoryRelationshipLabel(signature.relationship)}). ${SIGNATURE_HONESTY}` : signature.skipReason ? `Handover sheet not signed. ${signature.skipReason}` : agreementWords ? "" : "Not signed."}${timingReason && startingHire ? ` Handed over before the signature time. Reason: ${timingReason}.` : ""} ${photoProgress(input.photos.map((photo) => photo.slot), shotSet)}${attachedScans.length ? ` Diagnostic ${attachedScans.join(" and ")} attached.` : ""}${note ? ` Note: ${note}` : ""}`,
       source: "staff",
     });
     if (event.kind === "client_recovered" && input.actualOccurredAt !== undefined) {

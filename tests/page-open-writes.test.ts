@@ -108,7 +108,7 @@ describe("opening a page does not write", () => {
     const hire = readPage("src/app/claims/[id]/heads/hire/page.tsx");
     assert.equal(recovery.includes("syncRecoveryClaimed"), false);
     assert.equal(recovery.includes("refreshFollowedFigure"), false);
-    assert.equal(recovery.includes("No recovery recorded yet"), true);
+    assert.equal(recovery.includes("No charge until the recovery is recorded above."), true);
     assert.equal(recovery.includes("Record recovery"), true);
     assert.equal(storage.includes("syncStorageClaimed"), false);
     assert.equal(storage.includes("refreshFollowedFigure"), false);

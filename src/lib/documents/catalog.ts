@@ -31,5 +31,7 @@ export function channelForTemplate(key: string): "letter" | "email" {
  */
 export function generationMarksStep(key: string): boolean {
   if (channelForTemplate(key) !== "letter" || key === "repair_commencement") return false;
+  // Legal arguments are marked as sent only after Justin approves them, on the document page.
+  if (["rebuttal_rate", "rebuttal_need", "rebuttal_duration", "impecuniosity_disclosure"].includes(key)) return false;
   return eventTypeForTemplate(key) !== "document_generated";
 }

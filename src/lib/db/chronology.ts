@@ -1,3 +1,4 @@
+import { unapprovedLegalAttachment } from "./legal-approval";
 import {
   ENGINEER_REPORT_DOCUMENT_TYPE,
   SIMULATED_REPORT_NOT_RECORDED,
@@ -529,6 +530,8 @@ async function deliverClaimEmail(input: {
   if (blocked) return { ok: false as const, status: "failed" as const, error: blocked };
   const notOnFault = thirdPartyTemplateOnFault(input.claimId, input.templateKey);
   if (notOnFault) return { ok: false as const, status: "failed" as const, error: `${notOnFault} It was not sent.` };
+  const legal = unapprovedLegalAttachment(input.claimId, input.attachmentIds || []);
+  if (legal) return { ok: false as const, status: "failed" as const, error: legal };
   const when = occurredFromForm(input.occurredAt);
   const loaded = loadClaimEmailAttachments(input.claimId, input.attachmentIds || []);
   if (!loaded.ok) return { ok: false as const, status: "failed" as const, error: loaded.error };

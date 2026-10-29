@@ -190,7 +190,8 @@ describe("e-signing at the doorstep", () => {
         fuelLevel: "full",
         driverId: "staff-driver",
         date: londonTodayIso(),
-        time: "10:30",
+        // The car goes out after the client signs, so the handover time is now.
+        time: new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date()),
         actorId: "staff-sian",
         submitKey: "doorstep-handover",
       });

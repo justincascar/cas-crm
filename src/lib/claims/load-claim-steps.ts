@@ -92,7 +92,10 @@ export function loadClaimSteps(claimId: string): ClaimStepView[] | null {
       }
     : null;
   const storageStatus = String(claim.storage_status || "");
-  const recoveryCharge = (byHead.get("recovery")?.claimedPence || 0) > 0 || data.recoveryJobs.some((job) => Number(job.charge_pence) > 0);
+  // Fee choices kept from the new-claim form are not a charge until the recovery itself is recorded (step 2).
+  const recoveryRecorded = events.some((event) => event.event_type === "recovery_completed");
+  const recoveryCharge =
+    recoveryRecorded && ((byHead.get("recovery")?.claimedPence || 0) > 0 || data.recoveryJobs.some((job) => Number(job.charge_pence) > 0));
 
   function pay(key: ClaimPaymentLineInput["key"], head: string, label: string, endConfirmed: boolean | null): ClaimPaymentLineInput {
     const row = byHead.get(head);

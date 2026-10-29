@@ -436,7 +436,7 @@ describe("status wording follows the steps", () => {
          WHERE id = (SELECT client_person_id FROM claims WHERE id = ?)`,
       ).run(created.id);
       assert.match(String(row()?.current_position), /^Hire · /);
-      assert.equal(row()?.next_action, "Arrange hire");
+      assert.equal(row()?.next_action, "Pre-hire checks");
       generateHireAgreementDocument(created.id, "staff-sian");
       completeHireHandover({
         claimId: created.id,

@@ -133,6 +133,42 @@ DONE — 359c73a.
 - A mechanic who is redirected gets a one-line explanation.
 - The weather and journey-purpose dropdowns.
 
+### J10 — Recovery and storage evidence (do after the review notes)
+Insurers are increasingly testing whether recovery and storage were necessary. The file must hold the evidence, and staff should capture it as they go, not afterwards.
+
+**Recovery (step 2)** — record:
+- where the car was
+- its condition
+- why it could not be driven safely (unsafe, obstructing, or at risk of further damage)
+
+**Every vehicle movement** gets its own record:
+- from, to and date
+- the purpose
+- whether it was required by the accident or made for convenience (workshop or business)
+
+**Storage chronology** — dated entries for each of:
+- inspection access
+- repair authorised
+- total-loss decision
+- uplift requests
+- salvage instructions
+- the earliest date the car could reasonably have been moved
+
+The proposed storage end uses these dates and shows the reason.
+
+**Customer liability:**
+- The recovery and storage terms the customer signs must make them liable for those charges. This needs Justin's CAS recovery and storage agreement wording; never invent it.
+- Add a customer invoice for recovery and storage.
+
+**Offers covering more than one head of loss:**
+- Recording an insurer offer that covers more than one head of loss requires splitting it by head before it can be accepted.
+
+**Not a GTA subscriber (once Justin confirms):**
+- Add an optional letter paragraph: CAS is not a GTA subscriber and does not accept GTA rates, discounts or ADR terms.
+
+**Intake:**
+- Add a jurisdiction flag: England & Wales, Scotland or Northern Ireland. Northern Ireland files get a reminder about the extra evidence that court expects.
+
 ### J9 — Before live use (needs Justin's approval and costs first)
 - Hosting with tested backups and a restore.
 - Real logins in place of the demo ones.
@@ -143,6 +179,8 @@ DONE — 359c73a.
 
 ## Where I stopped
 (Claude Code writes here when it pauses.)
+
+**29 October 2026 — reviewer:** new Open items in REVIEW-NOTES.md (R1–R12) come first, then J10. J9 still waits for Justin.
 
 ## Where I stopped (28 October 2026)
 

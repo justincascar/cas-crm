@@ -962,6 +962,11 @@ export function getClaim(idOrRef: string) {
   };
 }
 
+/** Claim handlers: office staff only. Drivers and mechanics are never claim handlers. */
+export function listClaimHandlers() {
+  return listStaff().filter((person) => person.role === "staff" || person.role === "administrator");
+}
+
 export function listStaff() {
   return all<{ id: string; name: string; email: string; role: string; username: string | null }>(
     "SELECT id, name, email, role, username FROM staff WHERE active = 1 ORDER BY name",

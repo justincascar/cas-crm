@@ -71,13 +71,31 @@ function letterClose(handlerName: string): { html: string; text: string } {
   };
 }
 
+/**
+ * Every insurer letter carries the CAS reference and the insurer's reference. The insurer's claim reference and the
+ * policy number are shown, whichever are held. A gap is shown only when neither is held.
+ */
+export function insurerReferenceLines(
+  claimRef: string | null | undefined,
+  policy: string | null | undefined,
+  missing: string[],
+): { lines: Array<{ label: string; value: string }>; haveClaimRef: boolean } {
+  const lines: Array<{ label: string; value: string }> = [];
+  const ref = isBlankClaimValue(claimRef) ? "" : String(claimRef).trim();
+  const pol = isBlankClaimValue(policy) ? "" : String(policy).trim();
+  if (ref) lines.push({ label: "Your Reference", value: ref });
+  if (pol) lines.push({ label: "Policy Number", value: pol });
+  if (!ref && !pol) lines.push({ label: "Your Reference", value: claimValueOrGap("", "Insurer's claim reference or policy number", missing) });
+  return { lines, haveClaimRef: Boolean(ref) };
+}
+
 export function generateFaultOwnInsurerLetter(ctx: LetterContext | CorrespondenceContext): GeneratedLetter {
   const missing: string[] = [];
   const letterDate = formatUkDate(ctx.letterDate);
   const ourRef = ourReference(ctx);
   const insurer = claimValueOrGap(ctx.ownInsurer, "Client's own insurer", missing);
   const address = claimValueOrGap(ctx.ownInsurerAddress, "Client's own insurer address", missing);
-  const policy = claimValueOrGap(ctx.ownPolicyRef, "Policy number", missing);
+  const refs = insurerReferenceLines(null, ctx.ownPolicyRef, missing);
   const client = claimValueOrGap(ctx.clientName, "Client name", missing);
   const vehicle = vehicleLine(ctx.make, ctx.model, ctx.registration, {
     makeModel: "Insured vehicle make and model",
@@ -96,7 +114,7 @@ export function generateFaultOwnInsurerLetter(ctx: LetterContext | Correspondenc
     : "authorisation to arrange payment of repairs.";
   const subject = `Fault claim — ${ctx.fileReference}`;
   const facts = [
-    `Policy Number – ${policy}`,
+    ...refs.lines.map((line) => `${line.label}: ${line.value}`),
     `Our Client: ${client}`,
     `Insured Vehicle: ${vehicle}`,
     `Accident Date: ${accidentDate}`,
@@ -120,7 +138,7 @@ export function generateFaultOwnInsurerLetter(ctx: LetterContext | Correspondenc
     instructed,
     "",
     "Please confirm by return:",
-    "- your claim reference;",
+    ...(refs.haveClaimRef ? [] : ["- your claim reference;"]),
     "- that the policy is in place and covers this incident;",
     "- the policy excess payable, if any;",
     "- your Audatex network code and work provider code, so that our repair estimate can be networked to you directly; and",
@@ -138,9 +156,8 @@ export function generateFaultOwnInsurerLetter(ctx: LetterContext | Correspondenc
     `<p>${markGapHtml(insurer)}</p>
 <p>${markGapHtml(address)}</p>
 <p>Our Reference: <strong>${escapeHtml(ourRef)}</strong></p>
-<p>${escapeHtml(letterDate)}</p>
 <p>Dear Sir / Madam,</p>
-<p>Policy Number – ${markGapHtml(policy)}</p>
+${refs.lines.map((line) => `<p>${line.label}: ${markGapHtml(line.value)}</p>`).join("\n")}
 <p>Our Client: ${markGapHtml(client)}</p>
 <p>Insured Vehicle: ${markGapHtml(vehicle)}</p>
 <p>Accident Date: ${markGapHtml(accidentDate)}</p>
@@ -151,8 +168,7 @@ export function generateFaultOwnInsurerLetter(ctx: LetterContext | Correspondenc
 <p>${escapeHtml(instructed)}</p>
 <p>Please confirm by return:</p>
 <ul>
-<li>your claim reference;</li>
-<li>that the policy is in place and covers this incident;</li>
+${refs.haveClaimRef ? "" : "<li>your claim reference;</li>\n"}<li>that the policy is in place and covers this incident;</li>
 <li>the policy excess payable, if any;</li>
 <li>your Audatex network code and work provider code, so that our repair estimate can be networked to you directly; and</li>
 <li>${escapeHtml(authorisation)}</li>
@@ -179,7 +195,7 @@ export function generateNonFaultTpInsurerLetter(ctx: LetterContext | Corresponde
   const ourRef = ourReference(ctx);
   const insurer = claimValueOrGap(ctx.tpInsurer, "Third-party insurer", missing);
   const handler = isBlankClaimValue(ctx.tpHandlerName) ? "" : String(ctx.tpHandlerName).trim();
-  const policy = claimValueOrGap(ctx.tpPolicyNumber, "Third-party policy number", missing);
+  const refs = insurerReferenceLines(ctx.tpPolicyOrClaimRef, ctx.tpPolicyNumber, missing);
   const client = claimValueOrGap(ctx.clientName, "Client name", missing);
   const showDriver = namesDiffer(ctx.clientDriverName || "", ctx.clientName);
   const driver = showDriver ? claimValueOrGap(ctx.clientDriverName, "Client's driver", missing) : "";
@@ -197,7 +213,7 @@ export function generateNonFaultTpInsurerLetter(ctx: LetterContext | Corresponde
   const location = claimValueOrGap(ctx.accidentLocation, "Accident location", missing);
   const subject = `Uninsured losses — ${ctx.fileReference}`;
   const facts = [
-    `Policy Number - ${policy}`,
+    ...refs.lines.map((line) => `${line.label}: ${line.value}`),
     `Our Client: ${client}`,
     ...(showDriver ? [`Our Client's Driver: ${driver}`] : []),
     `Our Insured's Vehicle: ${ownVehicle}`,
@@ -223,7 +239,7 @@ export function generateNonFaultTpInsurerLetter(ctx: LetterContext | Corresponde
     "Our client's losses include vehicle repair charges and credit hire charges. Full supporting documentation is being provided with our covering email.",
     "",
     "Please confirm by return:",
-    "- your claim reference;",
+    ...(refs.haveClaimRef ? [] : ["- your claim reference;"]),
     `- that you are the relevant insurer/claims handler for vehicle ${tpReg};`,
     "- that indemnity is in place; and",
     "- your position on liability.",
@@ -241,9 +257,8 @@ export function generateNonFaultTpInsurerLetter(ctx: LetterContext | Corresponde
     subject,
     `<p>${markGapHtml(insurer)}</p>
 ${handlerRow}<p>Our Reference: <strong>${escapeHtml(ourRef)}</strong></p>
-<p>${escapeHtml(letterDate)}</p>
 <p>Dear Sir / Madam,</p>
-<p>Policy Number - ${markGapHtml(policy)}</p>
+${refs.lines.map((line) => `<p>${line.label}: ${markGapHtml(line.value)}</p>`).join("\n")}
 <p>Our Client: ${markGapHtml(client)}</p>
 ${driverRow}<p>Our Insured's Vehicle: ${markGapHtml(ownVehicle)}</p>
 <p>Your Insured's Vehicle: ${markGapHtml(theirVehicle)}</p>
@@ -255,8 +270,7 @@ ${driverRow}<p>Our Insured's Vehicle: ${markGapHtml(ownVehicle)}</p>
 <p>Our client's losses include vehicle repair charges and credit hire charges. Full supporting documentation is being provided with our covering email.</p>
 <p>Please confirm by return:</p>
 <ul>
-<li>your claim reference;</li>
-<li>that you are the relevant insurer/claims handler for vehicle ${markGapHtml(tpReg)};</li>
+${refs.haveClaimRef ? "" : "<li>your claim reference;</li>\n"}<li>that you are the relevant insurer/claims handler for vehicle ${markGapHtml(tpReg)};</li>
 <li>that indemnity is in place; and</li>
 <li>your position on liability.</li>
 </ul>

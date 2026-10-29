@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   actionLogIncomingEmail,
@@ -66,6 +66,7 @@ export function CommsDesk({
   preparedByKind,
   mailboxConnected = false,
   impecuniosityBlockReason = null,
+  firstSection,
   repairVersion = "",
   overrideVersions = {},
   engineerVersion = "",
@@ -101,6 +102,8 @@ export function CommsDesk({
   >;
   mailboxConnected?: boolean;
   impecuniosityBlockReason?: string | null;
+  /** The part of the page for the claim's likely next action. It opens first. */
+  firstSection?: "documents" | "engineer" | "chases" | "email";
   repairVersion?: string;
   overrideVersions?: Record<string, string>;
   engineerVersion?: string;
@@ -177,14 +180,50 @@ export function CommsDesk({
     setEmailTemplate(next);
   }
 
-  return (
-    <div className="space-y-6">
-      <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">
-        {mailboxConnected
-          ? `Email sends from ${CAS_CLAIMS_MAILBOX} when you click Send. A failure is shown here and is not recorded as sent. WhatsApp and calls are still recorded on this file and do not leave this computer. Nothing sends itself.`
-          : `Email, WhatsApp and calls are recorded on this file. A click is not proof of delivery. Nothing is sent from ${CAS_CLAIMS_MAILBOX}.`}
-      </p>
+  const sections = { documents: true, engineer: true, chases: chases.length > 0, email: true, whatsapp: true, calls: true, onFile: true };
+  const first: string = firstSection || "email";
+  const order = (key: string) => (key === first ? 0 : 1);
 
+  return (
+    <div className="space-y-4">
+      <p className="text-sm font-semibold" data-email-status>
+        {mailboxConnected ? `Email: live – sends from ${CAS_CLAIMS_MAILBOX} when you click Send` : "Email: simulated – nothing leaves the CRM"}
+      </p>
+      <div className="flex flex-col gap-3">
+      {sections.documents ? (
+        <Fold key="documents" title="Letters and documents" open={first === "documents"} order={order("documents")}>
+      <DocumentGenerateForm
+        claimId={claimId}
+        handlerId={handlerId}
+        liabilityStatus={liabilityStatus}
+        variant="comms"
+        impecuniosityBlockReason={impecuniosityBlockReason}
+      />
+
+      {documents.length > 0 ? (
+        <section className="rounded-xl border border-line bg-card p-5">
+          <h2 className="font-serif text-xl text-navy-deep">Documents on this file</h2>
+          <ul className="mt-2 space-y-1 text-sm">
+            {documents.map((d) => (
+              <li key={String(d.id)}>
+                {d.body_html ? (
+                  <Link className="text-teal-dark underline" href={`/documents/${d.id}`}>
+                    {String(d.title)} v{String(d.version)}
+                  </Link>
+                ) : (
+                  <span>
+                    {String(d.title)} v{String(d.version)}
+                  </span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+        </Fold>
+      ) : null}
+      {sections.engineer ? (
+        <Fold key="engineer" title="Engineer" open={first === "engineer"} order={order("engineer")}>
       <InstructEngineerPanel
         claimId={claimId}
         engineers={engineers}
@@ -194,7 +233,10 @@ export function CommsDesk({
         returnTo={`/claims/${claimId}/work/comms`}
         engineerVersion={engineerVersion}
       />
-
+        </Fold>
+      ) : null}
+      {sections.chases ? (
+        <Fold key="chases" title="Chases" open={first === "chases"} order={order("chases")}>
       {chases.map((chase) => (
         <ChasePanel
           key={chase.kind}
@@ -209,33 +251,10 @@ export function CommsDesk({
           overrideVersion={overrideVersions[chase.kind] || ""}
         />
       ))}
-
-      <section className="rounded-xl border border-line bg-card p-5">
-        <h2 className="font-serif text-xl text-navy-deep">On this file</h2>
-        {correspondence.length === 0 ? (
-          <p className="mt-2 text-sm text-slate">Nothing filed yet.</p>
-        ) : (
-          <ul className="mt-3 space-y-2 text-sm">
-            {correspondence.map((row) => (
-              <li key={String(row.id)} className="border-b border-line pb-2">
-                <span className="text-xs text-slate">{formatUkDateTime(String(row.created_at))}</span>
-                {" · "}
-                <strong>
-                  {String(row.direction)} {String(row.channel)}
-                </strong>
-                {" — "}
-                {String(row.subject)}
-                <div className="text-xs text-slate">{String(row.preview || "")}</div>
-                <div className="text-xs text-slate">{String(row.sent_status)}</div>
-                {attachmentSummary(row.attachments_json) ? (
-                  <div className="text-xs text-slate">Attached: {attachmentSummary(row.attachments_json)}</div>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
+        </Fold>
+      ) : null}
+      {sections.email ? (
+        <Fold key="email" title="Email" open={first === "email"} order={order("email")}>
       <ValidatedForm
         className="grid gap-3 rounded-xl border border-line bg-card p-5 md:grid-cols-2"
         action={async (formData) => {
@@ -254,7 +273,7 @@ export function CommsDesk({
         <p className="text-sm text-slate md:col-span-2">
           {mailboxConnected
             ? `Fill the message, then click Send. It goes from ${CAS_CLAIMS_MAILBOX}. It is not sent until then. Hire pack cover letters are sent from here in the same way.`
-            : `Pick a CAS email template to fill from this file, then record the simulated send.`}
+            : `Pick a CAS email template to fill from this file.`}
         </p>
         <input type="hidden" name="claimId" value={claimId} />
         <input type="hidden" name="actorId" value={handlerId} />
@@ -473,7 +492,10 @@ export function CommsDesk({
           File incoming email
         </button>
       </ValidatedForm>
-
+        </Fold>
+      ) : null}
+      {sections.whatsapp ? (
+        <Fold key="whatsapp" title="WhatsApp" open={first === "whatsapp"} order={order("whatsapp")}>
       <ValidatedForm
         className="grid gap-3 rounded-xl border border-line bg-card p-5 md:grid-cols-2"
         action={async (formData) => {
@@ -529,7 +551,10 @@ export function CommsDesk({
           File incoming WhatsApp
         </button>
       </ValidatedForm>
-
+        </Fold>
+      ) : null}
+      {sections.calls ? (
+        <Fold key="calls" title="Calls" open={first === "calls"} order={order("calls")}>
       <ValidatedForm
         className="grid gap-3 rounded-xl border border-line bg-card p-5 md:grid-cols-2"
         action={async (formData) => {
@@ -593,36 +618,49 @@ export function CommsDesk({
         </button>
         {callMsg ? <p className="text-sm text-copper md:col-span-2">{callMsg}</p> : null}
       </ValidatedForm>
-
-      <DocumentGenerateForm
-        claimId={claimId}
-        handlerId={handlerId}
-        liabilityStatus={liabilityStatus}
-        variant="comms"
-        impecuniosityBlockReason={impecuniosityBlockReason}
-      />
-
-      {documents.length > 0 ? (
-        <section className="rounded-xl border border-line bg-card p-5">
-          <h2 className="font-serif text-xl text-navy-deep">Documents on this file</h2>
-          <ul className="mt-2 space-y-1 text-sm">
-            {documents.map((d) => (
-              <li key={String(d.id)}>
-                {d.body_html ? (
-                  <Link className="text-teal-dark underline" href={`/documents/${d.id}`}>
-                    {String(d.title)} v{String(d.version)}
-                  </Link>
-                ) : (
-                  <span>
-                    {String(d.title)} v{String(d.version)}
-                  </span>
-                )}
+        </Fold>
+      ) : null}
+      {sections.onFile ? (
+        <Fold key="onFile" title="On this file" open={first === "onFile"} order={order("onFile")}>
+      <section className="rounded-xl border border-line bg-card p-5">
+        <h2 className="font-serif text-xl text-navy-deep">On this file</h2>
+        {correspondence.length === 0 ? (
+          <p className="mt-2 text-sm text-slate">Nothing filed yet.</p>
+        ) : (
+          <ul className="mt-3 space-y-2 text-sm">
+            {correspondence.map((row) => (
+              <li key={String(row.id)} className="border-b border-line pb-2">
+                <span className="text-xs text-slate">{formatUkDateTime(String(row.created_at))}</span>
+                {" · "}
+                <strong>
+                  {String(row.direction)} {String(row.channel)}
+                </strong>
+                {" — "}
+                {String(row.subject)}
+                <div className="text-xs text-slate">{String(row.preview || "")}</div>
+                <div className="text-xs text-slate">{String(row.sent_status)}</div>
+                {attachmentSummary(row.attachments_json) ? (
+                  <div className="text-xs text-slate">Attached: {attachmentSummary(row.attachments_json)}</div>
+                ) : null}
               </li>
             ))}
           </ul>
-        </section>
+        )}
+      </section>
+        </Fold>
       ) : null}
+      </div>
     </div>
+  );
+}
+
+/** One part of the Messages page. Closed unless it is the claim's likely next action. */
+function Fold({ title, open, order, children }: { title: string; open: boolean; order: number; children: ReactNode }) {
+  return (
+    <details open={open || undefined} style={{ order }} className="rounded-xl border border-line bg-card" data-comms-section={title}>
+      <summary className="cursor-pointer px-5 py-3 font-serif text-lg text-navy-deep">{title}</summary>
+      <div className="space-y-4 px-2 pb-3 sm:px-3">{children}</div>
+    </details>
   );
 }
 

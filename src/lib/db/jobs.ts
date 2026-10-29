@@ -59,6 +59,7 @@ export type DayJob = {
   workDate: string;
   href: string;
   completed: boolean;
+  completedAt: string | null;
   overdue: boolean;
   actualDriverId: string | null;
   actualOccurredAt: string | null;
@@ -117,6 +118,7 @@ function mapJob(row: JobRow): DayJob {
     workDate: row.work_date,
     href: repair ? `/claims/${row.claim_id}/repair` : `/claims/${row.claim_id}/handover?job=${row.id}`,
     completed: Boolean(row.completed_at),
+    completedAt: row.completed_at ? String(row.completed_at) : null,
     overdue: false,
     actualDriverId: row.actual_driver_id,
     actualOccurredAt: row.actual_occurred_at,
@@ -206,9 +208,10 @@ export function listDriverJobs(today = londonTodayIso()): DriverJobRow[] {
        AND (
          (a.work_date >= ? AND a.work_date <= ?)
          OR (a.work_date < ? AND a.completed_at IS NULL AND a.job_kind IN (${carry}))
+         OR substr(a.completed_at, 1, 10) >= ?
        )
      ORDER BY a.work_date, COALESCE(a.planned_at, a.work_date), CASE WHEN a.assignee_id IS NULL THEN 0 ELSE 1 END, assignee.name, c.file_reference`,
-    [...HANDOVER_JOB_KINDS, today, to, today, ...CARRY_FORWARD_JOB_KINDS],
+    [...HANDOVER_JOB_KINDS, today, to, today, ...CARRY_FORWARD_JOB_KINDS, isoDateFromNow(-1)],
   );
   return rows.map((row) => {
     const job = mapJob(row);

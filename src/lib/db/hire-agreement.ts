@@ -16,7 +16,9 @@ import { recordClaimEvent } from "./chronology";
 import { formatHandoverMileage } from "./handover";
 import { getHirePack, type HirePackData } from "./hire-pack";
 import { hireAgreementPrehireBlock } from "./prehire-checks";
-import { agreementMandatoryRefusal, currentHireEpisode } from "./hire-readiness";
+import { agreementMandatoryRefusal, currentHireEpisode, plannedHandoverAt } from "./hire-readiness";
+import { beforeSigningFor } from "./hire-out-readings";
+import { FUEL_LEVELS } from "./handover";
 import { gtaTableFor, settingsDailyRatePence } from "./gta-rates";
 
 export const HIRE_AGREEMENT_TEMPLATE_KEY = "hire_agreement";
@@ -102,13 +104,14 @@ function blank(value: string | number | null | undefined) {
   return String(value).trim();
 }
 
-function shown(value: string | number | null | undefined, missingLabel = "Missing — not guessed") {
+/** The client reads and signs this document, so a blank optional item is a dash, never a staff placeholder. */
+function shown(value: string | number | null | undefined, missingLabel = "—") {
   const text = blank(value);
   return text ? escape(text) : `<span class="missing">${escape(missingLabel)}</span>`;
 }
 
 function moneyOrNotEntered(pence: number | null | undefined) {
-  if (pence === null || pence === undefined) return "not entered";
+  if (pence === null || pence === undefined) return "—";
   return formatGbp(pence);
 }
 
@@ -136,7 +139,7 @@ export function renderHireAgreement(view: HireAgreementView): string {
   const missing = hireAgreementMissing(view);
   const warnings = hireAgreementWarnings(view);
   const agreement = escape(view.agreementNumber);
-  const dateOut = view.dateOut ? formatUkDate(view.dateOut) : "";
+  const dateOut = view.dateOut ? (view.dateOut.includes("T") ? formatUkDateTime(view.dateOut) : formatUkDate(view.dateOut)) : "";
   const dateIn =
     view.dateIn === HIRE_CONTINUING ? HIRE_CONTINUING : view.dateIn ? formatUkDate(view.dateIn) : "";
   const missingBanner = missing.length
@@ -153,7 +156,7 @@ export function renderHireAgreement(view: HireAgreementView): string {
 
   const chargeRows = EXTRA_ROWS.map(([leftLabel, leftKey, rightLabel, rightKey]) => {
     const left =
-      leftKey === "daily" ? (view.dailyRatePence == null ? "Missing — not guessed" : formatGbp(view.dailyRatePence)) : moneyOrNotEntered(view.extras[leftKey]);
+      leftKey === "daily" ? (view.dailyRatePence == null ? "—" : formatGbp(view.dailyRatePence)) : moneyOrNotEntered(view.extras[leftKey]);
     const right = moneyOrNotEntered(view.extras[rightKey]);
     return `<tr><td>${leftLabel}</td><td>${escape(left)}</td><td>${rightLabel}</td><td>${escape(right)}</td></tr>`;
   }).join("");
@@ -191,12 +194,12 @@ ${view.includeHire ? `<section>
 <p>Delivery address: ${shown(view.deliveryAddress || view.hirerAddress)}</p>
 <h3>Vehicle details</h3>
 <p>Make: ${shown(view.hireMake)} &nbsp; Model: ${shown(view.hireModel)} &nbsp; Vehicle reg: ${shown(view.hireRegistration)}<br/>
-Transmission: ${shown(view.hireTransmission)} &nbsp; Fuel: ${shown(view.hireFuel, "not entered")}<br/>
+Transmission: ${shown(view.hireTransmission)} &nbsp; Fuel: ${shown(view.hireFuel)}<br/>
 Group of vehicle supplied (not used for the rate): ${escape(gtaGroupLabel(view.suppliedGroup))}<br/>
 Group Charged: ${shown(gtaGroupLabel(view.groupCharged) === GTA_NOT_CLASSIFIED ? "" : gtaGroupLabel(view.groupCharged))}<br/>
 Client's own vehicle group (the rating group): ${escape(gtaGroupLabel(view.clientGroup))}<br/>
-Date out: ${shown(dateOut)} &nbsp; Date in: ${escape(dateIn || "not entered")}<br/>
-Mileage at delivery: ${shown(view.hireMileage, "not entered")} &nbsp; Fuel level at delivery: ${shown(view.hireFuelLevel, "not entered")}</p>
+Date out: ${shown(dateOut)} &nbsp; Date in: ${escape(dateIn || "—")}<br/>
+Mileage at delivery: ${shown(view.hireMileage)} &nbsp; Fuel level at delivery: ${shown(view.hireFuelLevel)}</p>
 <h3>Charges</h3>
 <table>${chargeRows}</table>
 <p>All charges are subject to VAT at the current rate.</p>
@@ -232,9 +235,9 @@ ${storageGap}
 <p>Make: ${shown(view.clientMake)} &nbsp; Model: ${shown(view.clientModel)} &nbsp; Vehicle reg: ${shown(view.clientRegistration)}<br/>
 GTA group: ${escape(gtaGroupLabel(view.clientGroup))}</p>
 <p>Storage daily rate: ${escape(moneyOrNotEntered(view.storageDailyPence))} &nbsp; Recovery: ${escape(moneyOrNotEntered(view.recoveryPence))}</p>
-<p>Mileage: ${escape(blank(view.ownMileage) || "not entered")} &nbsp; Fuel: ${escape(blank(view.ownFuel) || "not entered")}</p>
-<p>Tyre depths NSF / OSF / NSR / OSR: ${escape(blank(view.ownTyres) || "not entered")}</p>
-<p>Damage: ${escape(blank(view.ownDamage) || "not entered")}</p>
+<p>Mileage: ${escape(blank(view.ownMileage) || "—")} &nbsp; Fuel: ${escape(blank(view.ownFuel) || "—")}</p>
+<p>Tyre depths NSF / OSF / NSR / OSR: ${escape(blank(view.ownTyres) || "—")}</p>
+<p>Damage: ${escape(blank(view.ownDamage) || "—")}</p>
 <p>I hereby confirm that the damage to the vehicle is marked above and may be supported by digital images taken at the time of collection by Complete Accident Solutions Ltd.</p>
 <p>This STORAGE &amp; RECOVERY agreement is bound by the terms outlined in full in the accompanying Terms and Conditions and incur the charges as outlined above upon signing.</p>
 <p>Complete Accident Solutions LTD will not accept responsibility for any valuables left in the vehicle at point of collection including removable car stereo and satellite navigation equipment.</p>
@@ -372,13 +375,16 @@ export function buildHireAgreementView(
   const s = pack.stored;
   const hire = pack.hire;
   const clientReg = String(pack.ctx.clientVehicleRegistration || "");
+  const claimId = String(pack.claim.id);
+  const before = beforeSigningFor(claimId);
+  const outFuel = FUEL_LEVELS.find((level) => level.value === before.fuelLevel)?.label || "";
   return {
     agreementNumber,
     hirerName: String(pack.ctx.hirerName || ""),
     hirerAddress: String(pack.ctx.hirerAddress || ""),
     hirerDob: String(pack.ctx.hirerDob || ""),
     licenceNumber: String(pack.ctx.licenceNumber || ""),
-    licenceIssuedOn: String(s.licence_issued_on || ""),
+    licenceIssuedOn: String(s.licence_issued_on || before.licenceIssuedOn || ""),
     licenceExpiresOn: String(s.licence_expires_on || ""),
     additionalName: String(s.additional_name || ""),
     additionalAddress: String(s.additional_address || ""),
@@ -390,16 +396,20 @@ export function buildHireAgreementView(
     hireMake: String(hire?.hire_make || ""),
     hireModel: String(hire?.hire_model || ""),
     hireRegistration: String(hire?.hire_reg || ""),
-    hireTransmission: String(hire?.hire_transmission || ""),
+    hireTransmission: String(hire?.hire_transmission || before.transmission || ""),
     hireFuel: String(s.hire_fuel || hire?.hire_fuel || ""),
     suppliedGroup: normaliseGtaGroup(String(hire?.supplied_gta_group || "")),
     clientGroup: normaliseGtaGroup(String(pack.claim.client_gta_group || "")),
     groupCharged: normaliseGtaGroup(String(s.group_charged || pack.claim.client_gta_group || "")),
-    dateOut: String(s.date_out || hire?.started_at || ""),
+    dateOut: String(s.date_out || hire?.started_at || plannedHandoverAt(claimId) || ""),
     dateIn: hire?.billing_end_at ? String(hire.billing_end_at) : HIRE_CONTINUING,
     dailyRatePence,
-    hireMileage: pack.handoverReadings?.hireDelivery ? formatHandoverMileage(pack.handoverReadings.hireDelivery.mileage) : "",
-    hireFuelLevel: pack.handoverReadings?.hireDelivery?.fuelLabel || "",
+    hireMileage: pack.handoverReadings?.hireDelivery
+      ? formatHandoverMileage(pack.handoverReadings.hireDelivery.mileage)
+      : before.mileage != null
+        ? formatHandoverMileage(before.mileage)
+        : "",
+    hireFuelLevel: pack.handoverReadings?.hireDelivery?.fuelLabel || outFuel,
     extras: {
       sat_nav: pack.packSaved ? optionalPence(s.sat_nav_pence) : null,
       additional_driver: pack.packSaved ? optionalPence(s.additional_driver_pence) : null,

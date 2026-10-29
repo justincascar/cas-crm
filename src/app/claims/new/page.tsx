@@ -1,7 +1,7 @@
 import { IntakeForm } from "@/components/IntakeForm";
 import { PageHeader } from "@/components/ClaimTable";
 import { requireStaff } from "@/lib/auth/session";
-import { listStaff, listKnownInsurers, listKnownAgents, nextReference } from "@/lib/db/queries";
+import { listClaimHandlers, listKnownInsurers, listKnownAgents, nextReference } from "@/lib/db/queries";
 import { draftPayload, getClaimDraft } from "@/lib/db/claim-drafts";
 import { recoveryFeeSchedule } from "@/lib/db/recovery-fee-settings";
 
@@ -14,7 +14,7 @@ export default async function NewClaimPage({
   const { error, field, draft } = await searchParams;
   const draftRow = draft ? getClaimDraft(draft) : undefined;
   const openDraft = draftRow && !draftRow.discarded_at && !draftRow.claim_id ? draftRow : undefined;
-  const staff = listStaff().map((s) => ({ id: String(s.id), name: String(s.name) }));
+  const staff = listClaimHandlers().map((s) => ({ id: String(s.id), name: String(s.name) }));
   const previewRef = nextReference();
 
   return (

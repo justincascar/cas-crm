@@ -88,3 +88,58 @@ export function ensureDemoDayJobs(db: DatabaseSync) {
     ).run(id("job"), mechanic.id, claim.id, workDate, at);
   }
 }
+
+/**
+ * A delivery job whose hire has already started is done. Close any left open, with a history note, so it does not
+ * show as overdue. TEST-0004's fictional September collection, booked for a car that was never collected, is
+ * cancelled with a note.
+ */
+export function closeDeliveriesForStartedHires(db: DatabaseSync) {
+  let open: Array<{ id: string; claim_id: string; started_at: string; assignee_id: string | null }> = [];
+  try {
+    open = db
+      .prepare(
+        `SELECT a.id, a.claim_id, he.started_at, a.assignee_id
+         FROM day_assignments a JOIN hire_episodes he ON he.id = a.hire_episode_id
+         WHERE a.job_kind = 'hire_delivery' AND a.completed_at IS NULL AND a.cancelled_at IS NULL AND he.started_at IS NOT NULL`,
+      )
+      .all() as typeof open;
+  } catch {
+    return;
+  }
+  const now = new Date().toISOString();
+  for (const job of open) {
+    db.prepare(
+      `UPDATE day_assignments SET completed_at = ?, actual_occurred_at = COALESCE(actual_occurred_at, ?), actual_driver_id = COALESCE(actual_driver_id, assignee_id)
+       WHERE id = ? AND completed_at IS NULL`,
+    ).run(now, job.started_at, job.id);
+    db.prepare(
+      `INSERT INTO claim_events(id, claim_id, event_type, title, details, occurred_at, recorded_at, actor_id, source)
+       VALUES (?, ?, 'other', 'Delivery job closed', ?, ?, ?, NULL, 'system')`,
+    ).run(
+      `ev-close-${job.id}`,
+      job.claim_id,
+      "Data repair: the hire had already started, so the delivery job was closed. It was left open by mistake.",
+      now,
+      now,
+    );
+  }
+  try {
+    const stale = db
+      .prepare(
+        `SELECT a.id FROM day_assignments a JOIN hire_episodes he ON he.id = a.hire_episode_id
+         WHERE a.claim_id = 'c4' AND a.job_kind = 'hire_collection' AND a.completed_at IS NULL AND a.cancelled_at IS NULL
+           AND a.work_date < '2026-10-15' AND he.collection_at IS NULL`,
+      )
+      .all() as Array<{ id: string }>;
+    for (const job of stale) {
+      db.prepare(`UPDATE day_assignments SET cancelled_at = ? WHERE id = ?`).run(now, job.id);
+      db.prepare(
+        `INSERT INTO claim_events(id, claim_id, event_type, title, details, occurred_at, recorded_at, actor_id, source)
+         VALUES (?, 'c4', 'other', 'Collection job cancelled', ?, ?, ?, NULL, 'system')`,
+      ).run(`ev-cancel-${job.id}`, "Demonstration data tidied: an old collection booking for a car still on hire was cancelled.", now, now);
+    }
+  } catch {
+    /* Older databases without these columns have nothing to tidy. */
+  }
+}

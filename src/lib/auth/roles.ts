@@ -88,6 +88,12 @@ export function canAcceptPaymentSettlement(account: {
 export const APPROVE_SETTLEMENT = "approveSettlement";
 
 /**
+ * Stored on staff_permissions. Approving a rebuttal or impecuniosity response (and any letter before action or court
+ * document) before it is marked as sent or emailed. Granted to Justin.
+ */
+export const APPROVE_LEGAL_CORRESPONDENCE = "approveLegalCorrespondence";
+
+/**
  * Stored on staff_permissions. Changing the bank details in Settings.
  * Not implied by the administrator role, and not read from the username.
  */
@@ -161,7 +167,7 @@ export function pathAllowedForRole(role: string | null | undefined, pathname: st
   if (role === DRIVER_ROLE) {
     return (
       /^\/claims\/[^/]+\/handover(\/(photo|start|finish))?$/.test(path) ||
-      /^\/claims\/[^/]+\/sign(\/submit)?$/.test(path) ||
+      /^\/claims\/[^/]+\/sign(\/submit|\/readings)?$/.test(path) ||
       /^\/documents\/[^/]+(\/file|\/preview|\/preview\/\d+)?$/.test(path)
     );
   }

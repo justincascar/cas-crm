@@ -22,6 +22,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       conditionNote: String(form.get("conditionNote") || ""),
       signedCopy,
       overrideReason: String(form.get("overrideReason") || ""),
+      timingReason: String(form.get("timingReason") || ""),
     });
   });
 }

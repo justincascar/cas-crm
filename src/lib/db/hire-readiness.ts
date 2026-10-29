@@ -11,6 +11,7 @@ import { insertStoredDocument } from "./documents-store";
 import { latestMitigationForPack } from "./impecuniosity";
 import { listStaffPermissions } from "./permissions";
 import { hireAgreementPrehireBlock } from "./prehire-checks";
+import { beforeSigningFor } from "./hire-out-readings";
 
 export const SIGNED_HIRE_AGREEMENT_TYPE = "signed_hire_agreement";
 export const SIGNED_AGREEMENT_OVERRIDE = "signed_agreement";
@@ -140,6 +141,13 @@ export function agreementMandatoryGaps(claimId: string): HireGapLink[] {
   if (!(Number(episode?.rate_pence_per_day) > 0)) add("daily-rate", "Daily rate", `${base}/hire#rate`);
   if (!groupChargedFor(claimId)) add("group-charged", "Group charged", `${base}/hire#rate`);
   if (!needReasonFor(claimId)) add("need-reason", "Why a hire car is needed", `${base}/hire#need`);
+  // These print on the agreement the client signs, so they are needed before it is produced.
+  const before = beforeSigningFor(claimId);
+  if (before.vehicleId && !before.started) {
+    if (!before.transmission) add("transmission", "Hire car transmission", `${base}/hire#before-signing`);
+    if (before.mileage == null || !before.fuelLevel) add("readings-out", "Mileage and fuel out", `${base}/hire#before-signing`);
+  }
+  if (!before.licenceIssuedOn) add("licence-issued", "Licence date of issue", `${base}/hire#before-signing`);
   return gaps;
 }
 

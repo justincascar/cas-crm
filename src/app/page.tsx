@@ -55,7 +55,7 @@ function ScopeSwitch({ scope }: { scope: DashboardScope }) {
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ scope?: string; undo?: string; prepare?: string; workError?: string; clash?: string }>;
+  searchParams: Promise<{ scope?: string; undo?: string; prepare?: string; workError?: string; clash?: string; work?: string }>;
 }) {
   const staff = await requireStaff();
   const query = await searchParams;
@@ -86,15 +86,26 @@ export default async function DashboardPage({
   const drafts = listOpenClaimDrafts();
 
   // One next step per claim. The claim's other items are on the claim itself.
-  const todaysWork = data.todaysWork.map((row) => ({ ...row, rest: [] }));
-  const actionToday = todaysWork.filter((row) => row.lead.tone === "today" || row.lead.tone === "overdue").length;
-  const overdue = todaysWork.filter((row) => row.lead.tone === "overdue").length;
+  const allOpen = data.todaysWork.map((row) => ({ ...row, rest: [] }));
+  const dueToday = allOpen.filter((row) => row.lead.tone === "today" || row.lead.tone === "overdue");
+  const overdueRows = allOpen.filter((row) => row.lead.tone === "overdue");
+  const actionToday = dueToday.length;
+  const overdue = overdueRows.length;
+  // The counts open the matching list, so a count always equals the rows shown under it.
+  const work = query.work === "today" || query.work === "overdue" ? query.work : "all";
+  const todaysWork = work === "today" ? dueToday : work === "overdue" ? overdueRows : allOpen;
+  const workLink = (value: string) => {
+    const params = new URLSearchParams();
+    if (value !== "all") params.set("work", value);
+    const text = params.toString();
+    return `/${text ? `?${text}` : ""}#todays-work`;
+  };
   const creditHire = countClaims("active_hire_credit", handlerId);
   const courtesy = countClaims("active_hire_courtesy", handlerId);
   const owed = Object.values(listAgedDebt(undefined, handlerId).totals).reduce((sum, pence) => sum + pence, 0);
   const counts: Count[] = [
-    { key: "action_today", label: "Need action today", value: String(actionToday), href: "#todays-work", tone: "warn" },
-    { key: "overdue", label: "Overdue", value: String(overdue), href: "#todays-work", tone: "bad" },
+    { key: "action_today", label: "Need action today", value: String(actionToday), href: workLink("today"), tone: "warn" },
+    { key: "overdue", label: "Overdue", value: String(overdue), href: workLink("overdue"), tone: "bad" },
     {
       key: "on_hire",
       label: "Cars on hire",
@@ -170,11 +181,27 @@ export default async function DashboardPage({
       ) : null}
 
       <section id="todays-work" className="mt-8 scroll-mt-24 rounded-xl border border-line bg-card p-5">
-        <h2 className="font-serif text-xl text-navy-deep">Today&apos;s work</h2>
+        <h2 className="font-serif text-xl text-navy-deep">Open claims by next step</h2>
+        <nav className="mt-2 mb-3 flex flex-wrap gap-2 text-sm" aria-label="Show" data-work-filter={work}>
+          {[
+            ["all", `All open (${allOpen.length})`],
+            ["today", `Need action today (${actionToday})`],
+            ["overdue", `Overdue (${overdue})`],
+          ].map(([value, label]) => (
+            <Link
+              key={value}
+              href={workLink(value)}
+              aria-current={work === value ? "true" : undefined}
+              className={`rounded-md px-3 py-1.5 font-semibold ${work === value ? "bg-navy text-white" : "border border-line bg-white text-navy"}`}
+            >
+              {label}
+            </Link>
+          ))}
+        </nav>
         {query.workError ? <p className="mb-3 rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{query.workError}</p> : null}
         <SaveClashNotice clash={clash} reloadHref="/" />
         {todaysWork.length === 0 ? (
-          <p className="mt-2 text-sm text-slate">Nothing needs doing today.</p>
+          <p className="mt-2 text-sm text-slate">{work === "all" ? "No open claims need a step." : "Nothing in this list."}</p>
         ) : (
           <TodaysWork
             rows={todaysWork}

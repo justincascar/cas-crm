@@ -37,6 +37,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       photos: [],
       actualDriverId: String(form.get("actualDriverId") || ""),
       actualOccurredAt: String(form.get("actualOccurredAt") || ""),
+      timingReason: String(form.get("timingReason") || ""),
       signature: (() => {
         const skipped = form.get("signatureSkipped") === "yes";
         return {

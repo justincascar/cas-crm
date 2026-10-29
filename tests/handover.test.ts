@@ -649,7 +649,7 @@ describe("vehicle handover records", () => {
       const noted = db
         .prepare(`SELECT details FROM claim_events WHERE claim_id = ? AND event_type = 'vehicle_handover_recorded' ORDER BY recorded_at DESC LIMIT 1`)
         .get("c4") as { details: string };
-      assert.match(noted.details, /Signed by Dafydd Jones \(Hirer\)/);
+      assert.match(noted.details, /Handover sheet signed by Dafydd Jones \(Hirer\)/);
       assert.match(noted.details, new RegExp(SIGNATURE_HONESTY.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 
       const skipped = recordVehicleHandover({

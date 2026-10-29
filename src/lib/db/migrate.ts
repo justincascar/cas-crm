@@ -1,7 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import { ensureGtaTables } from "./gta-rates";
 import { ensureEsignTable } from "./esign";
-import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_SETTLEMENT, EXTENDED_WAIT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS, RELEASE_WITHOUT_EXCESS } from "../auth/roles";
+import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_LEGAL_CORRESPONDENCE, APPROVE_SETTLEMENT, EXTENDED_WAIT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS, RELEASE_WITHOUT_EXCESS } from "../auth/roles";
 
 const TABLES: Record<string, Array<[string, string]>> = {
   correspondence: [
@@ -57,12 +57,17 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["byte_size", "INTEGER"],
     ["created_by", "TEXT"],
     ["statement_period", "TEXT"],
+    ["legal_approved_by", "TEXT"],
+    ["legal_approved_at", "TEXT"],
+    ["legal_sent_at", "TEXT"],
   ],
   hire_episodes: [
     ["hire_end_review_on", "TEXT"],
     ["hire_end_proposed_on", "TEXT"],
     ["rate_taken_on", "TEXT"],
     ["rate_group", "TEXT"],
+    ["out_mileage", "INTEGER"],
+    ["out_fuel_level", "TEXT"],
   ],
   agreements: [["rate_pence_per_day", "INTEGER"]],
   total_loss_reports: [
@@ -751,6 +756,11 @@ export function migrate(db: DatabaseSync) {
      SELECT ?, ?
      WHERE EXISTS (SELECT 1 FROM staff WHERE id = ?)`,
   ).run("staff-justin", MANAGE_BANK_DETAILS, "staff-justin");
+  db.prepare(
+    `INSERT OR IGNORE INTO staff_permissions(staff_id, permission)
+     SELECT ?, ?
+     WHERE EXISTS (SELECT 1 FROM staff WHERE id = ?)`,
+  ).run("staff-justin", APPROVE_LEGAL_CORRESPONDENCE, "staff-justin");
   db.exec(`
     CREATE TABLE IF NOT EXISTS repair_gap_explanations (
       id TEXT PRIMARY KEY,

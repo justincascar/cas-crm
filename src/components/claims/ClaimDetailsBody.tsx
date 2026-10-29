@@ -37,7 +37,7 @@ import { liveEmailSending } from "@/lib/email/send-mode";
 import { STORAGE_START_MISSING_REVIEW } from "@/lib/constants";
 import { BANK_DETAILS_MISSING_SETTINGS, paymentDetailsComplete } from "@/lib/domain/payment-details";
 import { getInsurerPaymentDetails } from "@/lib/db/payment-details";
-import { claimOutstandingSummary, getClaim, listStaff } from "@/lib/db/queries";
+import { claimOutstandingSummary, getClaim, listClaimHandlers, listStaff } from "@/lib/db/queries";
 import { listOpenPaymentReviews, listPayableHeads, listPaymentsAfterSettlement } from "@/lib/db/payment-review";
 import { PaymentReviewPanel } from "@/components/claims/PaymentReviewPanel";
 import { AwaitingDecisionList } from "@/components/claims/AwaitingDecisionList";
@@ -90,6 +90,7 @@ export async function ClaimDetailsBody({
   if (!data) notFound();
   const { claim } = data;
   const staff = listStaff();
+  const handlers = listClaimHandlers();
   const chases = listChasesForClaim(String(claim.id));
   const hireAgreements = listHireAgreements(String(claim.id));
   const claimId = String(claim.id);
@@ -267,7 +268,7 @@ export async function ClaimDetailsBody({
             <label className="block text-sm">
               Handler
               <select name="handler_id" className={field} defaultValue={String(claim.handler_id || "")}>
-                {staff.map((s) => (
+                {handlers.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
                   </option>

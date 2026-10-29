@@ -150,6 +150,10 @@ export function HandoverStartForm({
         Date and time this happened
         <input name="actualOccurredAt" type="datetime-local" required className={field} defaultValue={defaultWhen} />
       </label>
+      <label className="block text-sm">
+        Reason, only if the car went out before the agreement was signed
+        <input name="timingReason" className={field} />
+      </label>
       <p className="text-sm text-slate">
         These are the driver and the time it happened. They stay as you enter them when someone else types this up later. They are not taken from the sign-in, and they are not the moment you press save.
       </p>

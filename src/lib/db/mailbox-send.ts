@@ -29,6 +29,7 @@ import { markTotalLossNoticeSent, TOTAL_LOSS_NOTICE_TEMPLATE } from "./total-los
 import { sendBlockedForUnapproved } from "../documents/template-approval";
 import { emailSendMode } from "../email/send-mode";
 import { chaseSendRefusal } from "./sending-hours";
+import { unapprovedLegalAttachment } from "./legal-approval";
 
 const ENGINEER_INSTRUCTION_TEMPLATE = "engineer_instruction";
 
@@ -70,6 +71,8 @@ export async function sendPreparedCorrespondence(input: {
   if (unapproved) throw new Error(unapproved);
   const notNow = chaseSendRefusal({ claimId: input.claimId, templateKey: row.template_key, live: emailSendMode() === "live" });
   if (notNow) throw new Error(notNow);
+  const legal = unapprovedLegalAttachment(input.claimId, input.attachmentIds || []);
+  if (legal) throw new Error(legal);
   const loaded = loadClaimEmailAttachments(input.claimId, input.attachmentIds || []);
   if (!loaded.ok) throw new Error(loaded.error);
   const paymentTemplate = CHASE_KINDS.find((kind) => {

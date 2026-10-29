@@ -13,7 +13,7 @@ import { formatGbp, grossFromNet } from "../money";
 import { whatsappGateway } from "../whatsapp/gateway";
 import { readFormText } from "../text";
 import { nextReference } from "./queries";
-import { newId, run } from "./connection";
+import { get, newId, run } from "./connection";
 import { recordClaimEvent, requestScenePhotosWhatsApp } from "./chronology";
 import {
   liabilityStatusLabel,
@@ -383,6 +383,12 @@ export async function createClaimFromIntake(input: IntakeInput) {
   }
   const dateError = intakeDateErrors(input);
   if (dateError) throw new Error(dateError);
+  if (input.handlerId) {
+    const handler = get<{ role: string }>(`SELECT role FROM staff WHERE id = ? AND active = 1`, [input.handlerId]);
+    if (handler && handler.role !== "staff" && handler.role !== "administrator") {
+      throw new Error("Choose a member of office staff as the claim handler. Drivers and mechanics cannot handle claims.");
+    }
+  }
 
   const id = newId("claim");
   const now = nowUtcIso();

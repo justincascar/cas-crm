@@ -29,7 +29,7 @@ describe("notification letters from seeded TEST claims", () => {
       const letter = letterPreview("c4", "fault_own_insurer", "2026-09-19");
       assert.match(letter.text, /Aviva/);
       assert.match(letter.text, /Our Reference: TEST-0004\/MP\/Megan Price/);
-      assert.match(letter.text, /Policy Number – AV-10028/);
+      assert.match(letter.text, /Policy Number: AV-10028/);
       assert.match(letter.text, /Our Client: Dafydd Jones/);
       assert.match(letter.text, /Insured Vehicle: Vauxhall Astra CF31 DJO/);
       assert.match(letter.text, /Accident Location: A48, Bridgend/);
@@ -56,7 +56,9 @@ describe("notification letters from seeded TEST claims", () => {
       assert.match(letter.text, /vehicle repair charges and credit hire charges/);
       assert.doesNotMatch(letter.text, /courtesy vehicle/);
       assert.doesNotMatch(letter.text, /c\/o /);
-      assert.ok(letter.missing.includes("Third-party policy number"));
+      // The insurer's reference is held, so it is shown and not asked for again (R5).
+      assert.match(letter.text, /Your Reference: ZU-TP-4410/);
+      assert.doesNotMatch(letter.text, /your claim reference/);
       assert.ok(letter.missing.includes("Third-party registration"));
       assert.match(letter.text, /\[not yet on file\]/);
     });

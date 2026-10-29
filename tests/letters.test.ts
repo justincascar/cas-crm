@@ -54,7 +54,7 @@ describe("letters from file dates", () => {
     assert.doesNotMatch(letter.text, /Our Client's Driver:/);
     assert.doesNotMatch(letter.text, /c\/o /);
     assert.ok(letter.missing.includes("Third-party insurer"));
-    assert.ok(letter.missing.includes("Third-party policy number"));
+    assert.ok(letter.missing.includes("Insurer's claim reference or policy number"));
     assert.ok(letter.missing.includes("Third-party registration"));
     assert.match(letter.text, /\[not yet on file\]/);
     assert.doesNotMatch(letter.text, /Policy Number -\s*$/m);
@@ -99,7 +99,7 @@ describe("letters from file dates", () => {
     assert.match(withoutCourtesy.text, /Our Reference: TEST-0004\/MP\/Megan Price/);
     assert.match(withoutCourtesy.text, /Aviva/);
     assert.match(withoutCourtesy.text, /1 Surrey Street, Norwich, NR1 3NG/);
-    assert.match(withoutCourtesy.text, /Policy Number – AV-10028/);
+    assert.match(withoutCourtesy.text, /Policy Number: AV-10028/);
     assert.match(withoutCourtesy.text, /We act on behalf of your policyholder, Dafydd Jones/);
     assert.match(withoutCourtesy.text, /Circumstances: Fault claim/);
     assert.match(withoutCourtesy.text, /We have been instructed to manage the repair of the insured vehicle on our client's behalf\./);

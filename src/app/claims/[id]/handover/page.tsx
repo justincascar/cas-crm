@@ -183,9 +183,7 @@ export async function HandoverScreen({
   const defaultDriverId = fromCompletedJob ? focus?.actualDriverId || "" : staffUser.role === "driver" ? staffUser.id : "";
   const defaultWhen = fromCompletedJob && focus?.actualOccurredAt
     ? toLondonDateTimeLocal(focus.actualOccurredAt)
-    : staffUser.role === "driver"
-      ? londonDateTimeLocal()
-      : "";
+    : londonDateTimeLocal();
   const bookings = listHireBookings(id).filter((booking) => !assignedEpisodes || assignedEpisodes.has(booking.id));
   const records = listVehicleHandovers(id).filter(
     (record) => !assignedEpisodes || !record.hireEpisodeId || assignedEpisodes.has(record.hireEpisodeId),

@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { loadClaimSteps } from "@/lib/claims/load-claim-steps";
+import { currentClaimStep } from "@/lib/domain/claim-steps";
 import { notFound, redirect } from "next/navigation";
 import { CommsDesk } from "@/components/claim-file/CommsDesk";
 import { FileHistory } from "@/components/FileHistory";
@@ -226,6 +228,7 @@ export async function ClaimWorkScreen({
           hireAgreements={hireAgreements}
           preparedByKind={preparedByKind}
           mailboxConnected={liveEmailSending()}
+          firstSection={commsFirstSection(String(data.claim.id), chases.some((chase) => chase.due))}
           impecuniosityBlockReason={impecuniosityGate(String(data.claim.id)).generationBlock}
           engineerVersion={sectionVersion("claim-engineer", String(data.claim.id))}
           insurerPositionVersion={sectionVersion(SHARED_INSURER_POSITION, String(data.claim.id))}
@@ -313,6 +316,15 @@ function NavigationScreen({ claimId }: { claimId: string }) {
       <p className="sm:col-span-2 text-xs text-slate">{CLAIM_SCREENS.length} screens on this file, matching the current CRM viewing pane.</p>
     </div>
   );
+}
+
+/** The Messages section to open first: the letter for step 4, the engineer for step 5, a chase that is due, or email. */
+function commsFirstSection(claimId: string, chaseDue: boolean): "documents" | "engineer" | "chases" | "email" {
+  const step = currentClaimStep(loadClaimSteps(claimId) || []);
+  if (step?.key === "initial_letter" || step?.key === "own_insurer") return "documents";
+  if (step?.key === "engineer") return "engineer";
+  if (chaseDue) return "chases";
+  return "email";
 }
 
 export default async function Page({ params }: { params: Promise<{ id: string; screen: string }> }) {

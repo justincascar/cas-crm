@@ -242,7 +242,9 @@ CREATE TABLE IF NOT EXISTS hire_episodes (
   exception_reason TEXT,
   hire_end_proposed_on TEXT,
   rate_taken_on TEXT,
-  rate_group TEXT
+  rate_group TEXT,
+  out_mileage INTEGER,
+  out_fuel_level TEXT
 );
 
 CREATE TABLE IF NOT EXISTS agreements (
