@@ -3,7 +3,7 @@ import { get, run } from "./connection";
 export const SETTING_LICENCE_CHECK_WINDOW_DAYS = "licence_check_window_days";
 export const LICENCE_CHECK_WINDOW_DAYS_DEFAULT = 21;
 
-/** Needs Justin's confirmation. Default 21 matches a GOV.UK check code. */
+/** Justin confirmed 21 days on 29/10/2026. It matches a GOV.UK check code. */
 export function licenceCheckWindowDays(): number {
   const row = get<{ value: string }>(`SELECT value FROM settings WHERE key = ?`, [SETTING_LICENCE_CHECK_WINDOW_DAYS]);
   const n = Number(row?.value);

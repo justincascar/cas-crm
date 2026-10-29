@@ -1,17 +1,21 @@
 # Questions for Justin
 
-Each open question has a reversible default already in the CRM. Nothing here is guessed as final.
+Each open question has a reversible default already in the CRM. Nothing here is guessed as final. Numbers are kept when a question is answered, so earlier references still match.
 
 ## Open
 
 1. **Uplift % on the GTA rate.** Daily rate = the GTA figure for the group charged + an uplift %, kept in Settings. The uplift is 30% until you confirm the figure. Please confirm it.
 2. **Check the GTA table in Settings.** The table in force (from 01/07/2026) is the supplied 2026–27 table that was already in the CRM. Please check its figures against the published GTA table. A new year's table is added in Settings with its own date; earlier hires keep their rate.
 3. **Courtesy-car agreement.** You will supply an approved template later. Until then a fault courtesy car has no agreement.
-4. **21-day licence window.** A licence check older than 21 days blocks the agreement and the handover. Still to be confirmed.
 5. **Recovery mileage.** Still undecided how mileage is charged. The mileage box stays off the new-claim form.
 6. **Card fee on recovery.** The new Record the recovery form (step 2) has the standard fee, the four extras, the typed extras and a manual charge, as J3 asked. The 4.5% card fee was only on the older recovery screen, which is now hidden on step 2 (its saved figures are kept). Default: no card fee on the new form. Should it be added there?
 7. **Invoice template.** J6 asks for invoices from CAS templates. No CAS invoice template, invoice numbering or VAT number has been supplied. Default: the Money tab produces a plain draft invoice per head from the figures on the file (quantity × rate, net, VAT, gross, received, balance), marked draft and not sent. Please send the template, how invoices are numbered, and the VAT number to show.
 8. **Chaser sending hours.** Default: Monday to Friday, 09:00 to 17:00 UK time, in Settings. Applied to real sends once the mailbox is live. Please confirm the days and hours.
+9. **Repair authorisation chase.** After the report is sent to the third-party insurer (step 7), step 8 waits on the insurer, but the 3-day repair authorisation chase only starts when a repair authorisation request is recorded separately. Default: unchanged. Should sending the report start that chase?
+
+## Answered (29 October 2026)
+
+- **21-day licence window (was question 4).** Confirmed. A licence check older than 21 days blocks the hire agreement and the handover. The figure stays in Settings.
 
 ## Answered (28 October 2026)
 

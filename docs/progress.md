@@ -1098,3 +1098,7 @@ Finish on 28 October 2026: 595 tests passed, 0 failed. Type check: 0 errors. Pro
 **Also.** A fault file's Messages no longer offers the engineer instruction or the impecuniosity response (known issue 46). The page check and journey check now stop every browser they started on Windows; 282 leftover test browsers had built up and were holding the debugging ports.
 
 Finish on 28 October 2026: 599 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 70 passed, 0 failed, database unchanged. Journey checks passed. `EMAIL_SEND_MODE` stays `simulate`.
+
+## Licence window confirmed (29 October 2026)
+
+Justin confirmed the 21-day licence window: a licence check older than 21 days blocks the hire agreement and the handover. Settings now says so, and the question is marked answered. The Settings Environment panel now reads the same agreement figures as the agreement day limits form (known issue 38). Sending the report to the insurer and the repair authorisation chase is question 9.

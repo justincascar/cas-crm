@@ -131,8 +131,8 @@ Five stages. Each later stage extends the same three journeys one step further: 
 40. **Open.** WhatsApp for the signing link. Email only for now (J9 covers WhatsApp Business).
 41. **Open.** The driver's doorstep signing was checked by tests and on a phone-sized screen, but not end to end as the driver in the browser pane, because the pane cannot take the handover photographs.
 37. **Open.** Courtesy-car agreement. Justin will supply an approved template. Fault files have no agreement until then.
-38. **Open.** The Settings "Environment" panel still lists agreement maximum 88, amber 70 and red 80. Those are old figures. The confirmed rule is 89 days with alerts from day 80 and overdue on day 88. Not changed in this job.
-45. **Open.** After step 7 (report sent to the third-party insurer), step 8 waits on the insurer but no repair-authorisation chase starts. That chase starts only when a repair authorisation request is recorded. J6 (chasing) should decide whether sending the report starts it.
+38. **Closed 29 October 2026.** The Settings "Environment" panel listed old agreement figures from stored rows. It now shows the same figures as the agreement day limits form above it.
+45. **Open.** After step 7 (report sent to the third-party insurer), step 8 waits on the insurer but no repair-authorisation chase starts. That chase starts only when a repair authorisation request is recorded. Question 9 for Justin.
 46. **Closed 28 October 2026 (J8).** On a fault file, Messages offered the engineer instruction and the impecuniosity disclosure response. The impecuniosity response has its own approval and cannot be produced without it. Left for J8.
 47. **Open.** The initial insurer email shows Unknown for a missing field in the email text, where the letter shows [not yet on file]. The missing fields are listed above the email. Left for J8.
 48. **Open.** The hire end and storage end confirmations on step 9 were checked by the tests and the journey check on a file with hire and storage, but not by hand in the browser pane. The new file walked by hand (TEST-0022) had no hire or storage.

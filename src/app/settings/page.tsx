@@ -138,8 +138,8 @@ export default async function SettingsPage({
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Licence check window</h2>
         <p className="mt-2 text-sm">
-          Needs Justin&apos;s confirmation. A licence check older than this blocks the agreement and the handover. The
-          default is 21 days, the same period as a GOV.UK check code.
+          A licence check older than this blocks the agreement and the handover. Justin confirmed 21 days on 29/10/2026,
+          the same period as a GOV.UK check code.
         </p>
         <form method="post" action="/settings/licence-window" className="mt-4 flex flex-wrap items-end gap-3">
           <RecordVersionField version={versionFor("settings-licence-window")} />
@@ -335,9 +335,9 @@ export default async function SettingsPage({
         <dl className="mt-3 grid gap-2 text-sm">
           <Row label="Status" value={settings.environment || "prototype"} />
           <Row label="File prefix" value={settings.file_prefix} />
-          <Row label="Agreement maximum days" value={settings.agreement_max_days} />
-          <Row label="Renewal approaching (amber) day" value={settings.agreement_renewal_approaching_day} />
-          <Row label="Renewal due (red) day" value={settings.agreement_renewal_alert_day} />
+          <Row label="Agreement maximum days" value={String(agreementMaxDays)} />
+          <Row label="Renewal approaching (amber) day" value={String(agreementRenewalApproachingDay)} />
+          <Row label="Renewal due (red) day" value={String(agreementRenewalAlertDay)} />
           <Row
             label="Email sending"
             value={emailSendBanner().text}
