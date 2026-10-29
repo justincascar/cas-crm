@@ -11,6 +11,10 @@ import { HeadOfLossScreen } from "@/components/claims/HeadOfLossScreen";
 import { PaymentReviewPanel } from "@/components/claims/PaymentReviewPanel";
 import { SeparateRecordConfirm } from "@/components/SeparateRecordConfirm";
 import { StorageDateReview } from "@/components/claims/StorageDateReview";
+import { StorageChronology } from "@/components/claims/StorageChronology";
+import { VehicleMovements } from "@/components/claims/VehicleMovements";
+import { listStorageChronology } from "@/lib/db/storage-chronology";
+import { listVehicleMovements } from "@/lib/db/vehicle-movements";
 import { StorageEndDateReview } from "@/components/claims/StorageEndDateReview";
 import { ChargeableStorageNote, StorageAuthorisationEndPanel } from "@/components/claims/StorageAuthorisationEnd";
 import { requireStaff } from "@/lib/auth/session";
@@ -116,6 +120,11 @@ export async function StorageHeadScreen({
       {query.saved ? (
         <p className="rounded-md border border-ok/40 bg-[#eef6ef] px-4 py-3 text-sm">Saved. Payments already recorded were not changed.</p>
       ) : null}
+
+      <StorageChronology claimId={id} entries={listStorageChronology(id)} returnTo={headScreenPath(id, "storage")} />
+      <div id="movements" className="scroll-mt-16">
+        <VehicleMovements claimId={id} movements={listVehicleMovements(id)} returnTo={headScreenPath(id, "storage")} />
+      </div>
 
       <section className="space-y-4 rounded-xl border border-line bg-card p-5" aria-label="Storage details">
         <h2 className="font-serif text-xl text-navy-deep">Storage details</h2>

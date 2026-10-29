@@ -784,7 +784,12 @@ async function recordRecoveryJourney(session: BrowserSession, origin: string, db
     return `The recovery form did not offer the standard £395 to confirm (${JSON.stringify(offered)}).`;
   }
   const sent = followed(
-    await submitForm(session, 'form[action$="/recovery/record"]', { arrivedDate: HIRE_DAY, arrivedTime: "00:05" }),
+    await submitForm(session, 'form[action$="/recovery/record"]', {
+      arrivedDate: HIRE_DAY,
+      arrivedTime: "00:05",
+      carCondition: "Front end crushed, coolant leaking.",
+      notDriveable: "unsafe",
+    }),
     "Record recovery",
   );
   if (sent) return sent;

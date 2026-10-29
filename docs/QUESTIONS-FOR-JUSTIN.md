@@ -12,6 +12,9 @@ Each open question has a reversible default already in the CRM. Nothing here is 
 7. **Invoice template.** J6 asks for invoices from CAS templates. No CAS invoice template, invoice numbering or VAT number has been supplied. Default: the Money tab produces a plain draft invoice per head from the figures on the file (quantity × rate, net, VAT, gross, received, balance), marked draft and not sent. Please send the template, how invoices are numbered, and the VAT number to show.
 8. **Chaser sending hours.** Default: Monday to Friday, 09:00 to 17:00 UK time, in Settings. Applied to real sends once the mailbox is live. Please confirm the days and hours.
 9. **Repair authorisation chase.** After the report is sent to the third-party insurer (step 7), step 8 waits on the insurer, but the 3-day repair authorisation chase only starts when a repair authorisation request is recorded separately. Default: unchanged. Should sending the report start that chase?
+10. **Recovery and storage terms the customer signs.** J10 asks that these terms make the customer liable for recovery and storage charges. That needs your CAS recovery and storage agreement wording; nothing has been written in its place. Default: the customer invoice for recovery and storage is produced as a draft and says the liability depends on the signed terms. Please send the wording.
+11. **Not a GTA subscriber.** J10 lists an optional letter paragraph saying CAS is not a GTA subscriber and does not accept GTA rates, discounts or ADR terms, once you confirm. Default: not added. Please confirm, and confirm the wording.
+12. **Northern Ireland evidence.** Files now carry a jurisdiction (England & Wales, Scotland or Northern Ireland). A Northern Ireland file shows a short reminder that the court expects extra evidence and to check with you. Default: that reminder only. Please send the checklist of what a Northern Ireland file needs, so the reminder can list it.
 
 ## Answered (29 October 2026)
 

@@ -13,6 +13,8 @@ export const INVOICE_HEADS: Record<string, { label: string; ledger: string[] }> 
   storage: { label: "Storage", ledger: ["storage"] },
   hire: { label: "Hire", ledger: ["hire", "credit_hire"] },
   vehicle: { label: "Vehicle damage", ledger: ["repairs", "vehicle_damage"] },
+  /** Addressed to the customer, for the recovery and storage charges. */
+  customer: { label: "Recovery and storage", ledger: ["recovery", "storage"] },
 };
 
 type Line = {
@@ -35,8 +37,9 @@ type Line = {
 export function produceDraftInvoice(input: { claimId: string; head: string; actorId: string }) {
   const head = INVOICE_HEADS[input.head];
   if (!head) throw new Error("Choose recovery, storage, hire or vehicle damage.");
-  const claim = get<{ file_reference: string; client_name: string | null; registration: string | null }>(
-    `SELECT c.file_reference, p.full_name AS client_name, v.registration
+  const toCustomer = input.head === "customer";
+  const claim = get<{ file_reference: string; client_name: string | null; registration: string | null; address_line1: string | null; town: string | null; postcode: string | null }>(
+    `SELECT c.file_reference, p.full_name AS client_name, v.registration, p.address_line1, p.town, p.postcode
      FROM claims c LEFT JOIN people p ON p.id = c.client_person_id LEFT JOIN vehicles v ON v.id = c.client_vehicle_id
      WHERE c.id = ?`,
     [input.claimId],
@@ -79,9 +82,11 @@ export function produceDraftInvoice(input: { claimId: string; head: string; acto
     .join("");
   const today = londonTodayIso();
   const html = `<div class="letter">
-<p class="internal-note"><strong>Draft invoice.</strong> CAS's invoice template, invoice number and VAT number have not been supplied yet. Not sent.</p>
+<p class="internal-note"><strong>Draft invoice.</strong> CAS's invoice template, invoice number and VAT number have not been supplied yet. Not sent.${toCustomer ? " Whether the customer is liable for these charges depends on the recovery and storage terms they signed. CAS's agreed wording for those terms has not been supplied yet." : ""}</p>
 <p>${escapeHtml(CAS_COMPANY.name)}<br>${escapeHtml(CAS_COMPANY.address)}<br>${escapeHtml(CAS_COMPANY.phone)} · ${escapeHtml(CAS_COMPANY.email)}</p>
-<p>To: ${gap(insurer?.insurer_name, "Third-party insurer")}<br>Your reference: ${gap(insurer?.insurer_ref, "Insurer reference")}</p>
+${toCustomer
+    ? `<p>To: ${gap(claim.client_name, "Client name")}<br>${gap([claim.address_line1, claim.town, claim.postcode].filter((part) => part && !/^unknown$/i.test(String(part))).join(", "), "Client's address")}</p>`
+    : `<p>To: ${gap(insurer?.insurer_name, "Third-party insurer")}<br>Your reference: ${gap(insurer?.insurer_ref, "Insurer reference")}</p>`}
 <p>Our reference: ${escapeHtml(claim.file_reference)}<br>Our client: ${gap(claim.client_name, "Client name")}<br>Vehicle: ${gap(claim.registration, "Client registration")}<br>Date: ${formatUkDate(today)}</p>
 <h2>Invoice — ${escapeHtml(head.label)}</h2>
 <table><thead><tr><th>Item</th><th>Quantity × rate</th><th>Net</th><th>VAT</th><th>Gross</th></tr></thead><tbody>${rows}</tbody>
@@ -96,7 +101,7 @@ export function produceDraftInvoice(input: { claimId: string; head: string; acto
   ) + 1;
   const documentId = newId("doc");
   const at = nowUtcIso();
-  const title = `Draft invoice — ${head.label}`;
+  const title = toCustomer ? "Draft customer invoice — Recovery and storage" : `Draft invoice — ${head.label}`;
   run(
     `INSERT INTO documents(id, claim_id, title, kind, version, signed, simulated, body_html, template_key, missing_json, created_at)
      VALUES (?, ?, ?, 'letter', ?, 0, 1, ?, ?, ?, ?)`,

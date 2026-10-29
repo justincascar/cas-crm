@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { NORTHERN_IRELAND_REMINDER } from "@/lib/domain/jurisdiction";
 import { notFound, redirect } from "next/navigation";
 import { SaveClashNotice } from "@/components/SaveClashNotice";
 import { ClaimMoneyTable } from "@/components/claims/ClaimMoneyTable";
@@ -59,6 +60,11 @@ export default async function ClaimDetailPage({
       />
       {query.error ? <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{query.error}</p> : null}
       <EmailSendModeBanner />
+      {String(data.claim.jurisdiction || "") === "northern_ireland" ? (
+        <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm" data-ni-reminder>
+          {NORTHERN_IRELAND_REMINDER}
+        </p>
+      ) : null}
       <AwaitingDecisionList claimId={claimId} reviews={reviews} settled={settledPayments} />
       {bankDetailsMissing ? (
         <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm font-semibold">{BANK_DETAILS_MISSING_SETTINGS}</p>

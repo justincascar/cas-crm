@@ -7,6 +7,7 @@ import { confirmTypedVehicleDamageAgreed } from "@/lib/db/total-loss";
 import { optionalPoundsToPence } from "@/lib/domain/total-loss";
 import {
   markVehicleOffer,
+  recordSplitOffer,
   recordVehicleOffer,
   requireCalendarDate,
   vehicleOfferHead,
@@ -38,6 +39,25 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       const amount = optionalPoundsToPence(String(form.get("amount") || ""));
       if (amount == null || amount <= 0) {
         throw new Error("Enter the amount the insurer offered. It is not taken from the claimed or agreed figure.");
+      }
+      if (form.get("multiHead") === "yes") {
+        const vehicle = vehicleOfferHead(id);
+        const part = (name: string) => optionalPoundsToPence(String(form.get(name) || "")) || 0;
+        recordSplitOffer({
+          claimId: id,
+          actorId: staff.id,
+          totalPence: amount,
+          offeredOn: String(form.get("offeredOn") || ""),
+          note: String(form.get("note") || ""),
+          parts: [
+            { head: vehicle, pence: part("split_vehicle") },
+            { head: "recovery", pence: part("split_recovery") },
+            { head: "storage", pence: part("split_storage") },
+            { head: "hire", pence: part("split_hire") },
+          ],
+          submitKey: formSubmitKey(form),
+        });
+        return back();
       }
       const offeredDays = optionalWholeNumber(String(form.get("offeredDays") || ""), "offered days");
       const offeredDailyRatePence = optionalPoundsToPence(String(form.get("offeredDailyRate") || ""));

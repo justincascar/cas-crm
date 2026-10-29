@@ -1,4 +1,5 @@
 import { INDICATIVE_DEFAULTS } from "../constants";
+import { normaliseJurisdiction } from "../domain/jurisdiction";
 import { accidentDateError, nowUtcIso, occurredFromForm, londonDateIso } from "../dates";
 import { phoneFieldError } from "../phone-number";
 import { JOURNEY_OPTIONS, LIGHTING_OPTIONS, ROAD_SURFACE_OPTIONS, WEATHER_OPTIONS, storedChoice } from "../domain/intake-choices";
@@ -141,6 +142,8 @@ export type IntakeInput = {
   };
   thirdParties: IntakeThirdParty[];
   claimType?: string;
+  /** England & Wales, Scotland or Northern Ireland. */
+  jurisdiction?: string;
   roadworthiness?: string;
   needsReplacement?: boolean;
   hire?: {
@@ -499,6 +502,7 @@ export async function createClaimFromIntake(input: IntakeInput) {
   if (hire?.gtaGroup) {
     run(`UPDATE vehicles SET gta_group = ? WHERE id = ?`, [hire.gtaGroup, vehicleId]);
   }
+  run(`UPDATE claims SET jurisdiction = ? WHERE id = ?`, [normaliseJurisdiction(input.jurisdiction), id]);
 
   run(`INSERT INTO claim_parties(id, claim_id, person_id, role, is_primary) VALUES (?, ?, ?, 'client', 1)`, [
     newId("party"),
@@ -1164,6 +1168,7 @@ export function intakeFromFormData(formData: FormData): IntakeInput {
       thirdPartyFromForm(formData, "tp3_", includeTp3),
     ],
     claimType: normalizeLiabilityStatus(String(formData.get("claimType") || "")),
+    jurisdiction: String(formData.get("jurisdiction") || ""),
     roadworthiness: normalizeRoadworthiness(String(formData.get("roadworthiness") || "")),
   };
 }

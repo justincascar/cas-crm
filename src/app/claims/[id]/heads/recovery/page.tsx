@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { VehicleMovements } from "@/components/claims/VehicleMovements";
+import { listVehicleMovements, NOT_DRIVEABLE_REASONS, notDriveableLabel } from "@/lib/db/vehicle-movements";
 import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/ClaimTable";
 import { ScreenForm } from "@/components/claim-file/ScreenForm";
@@ -94,9 +96,32 @@ export async function RecoveryHeadScreen({
     <ValidatedForm action={`/claims/${id}/recovery/record`} method="post" className="space-y-4" initialError={query.error} initialErrorField={query.field}>
       <SubmitKeyInput />
       <label className="block text-sm">
-        Recovered from
-        <input name="recoveryLocation" defaultValue={from} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" />
+        Where the car was
+        <input name="recoveryLocation" required defaultValue={from} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" />
       </label>
+      <label className="block text-sm">
+        Its condition
+        <textarea name="carCondition" required rows={2} defaultValue={String(job?.car_condition || "")} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" />
+      </label>
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="block text-sm">
+          Why it could not be driven safely
+          <select name="notDriveable" required defaultValue={String(job?.not_driveable_reason || "")} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm">
+            <option value="" disabled>
+              Choose
+            </option>
+            {NOT_DRIVEABLE_REASONS.map((reason) => (
+              <option key={reason.value} value={reason.value}>
+                {reason.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="block text-sm">
+          Details (optional)
+          <input name="notDriveableDetail" defaultValue={String(job?.not_driveable_detail || "")} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" />
+        </label>
+      </div>
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-sm">
           Arrived at the yard (date)
@@ -172,6 +197,10 @@ export async function RecoveryHeadScreen({
         )}
       </section>
 
+      <div id="movements" className="scroll-mt-16">
+        <VehicleMovements claimId={id} movements={listVehicleMovements(id)} returnTo={headScreenPath(id, "recovery")} />
+      </div>
+
       <section className="space-y-3 rounded-xl border border-line bg-card p-5" aria-label="Recovery details">
         <h2 className="font-serif text-xl text-navy-deep">Recovery details</h2>
         <p className="text-sm text-slate">Taken from the recovery job and the recovery screen. Saving the charges below does not change a storage date.</p>
@@ -195,6 +224,21 @@ export async function RecoveryHeadScreen({
             <dt className="text-slate">Who carried it out</dt>
             <dd>{who || "Not recorded"}</dd>
           </div>
+          {job?.car_condition ? (
+            <div>
+              <dt className="text-slate">Condition</dt>
+              <dd>{String(job.car_condition)}</dd>
+            </div>
+          ) : null}
+          {job?.not_driveable_reason ? (
+            <div>
+              <dt className="text-slate">Could not be driven</dt>
+              <dd>
+                {notDriveableLabel(String(job.not_driveable_reason))}
+                {job.not_driveable_detail ? ` – ${String(job.not_driveable_detail)}` : ""}
+              </dd>
+            </div>
+          ) : null}
         </dl>
         {recoveryFlags.length ? (
           <ul className="space-y-2">

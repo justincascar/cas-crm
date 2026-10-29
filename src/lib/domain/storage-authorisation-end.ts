@@ -3,7 +3,7 @@ export type RepairAuthorisationState = {
   withdrawn: boolean;
 };
 
-export type StorageEndBasis = "authorisation" | "repairs_started";
+export type StorageEndBasis = "authorisation" | "repairs_started" | "earliest_move";
 
 /** Shown when a stored end is later than repairs started. The stored date is not changed. */
 export const STORAGE_END_AFTER_REPAIRS_STARTED = "Storage end is after repairs started, review";
@@ -23,7 +23,16 @@ export type StorageAuthorisationEnd =
 export function repairStorageEndProposal(
   authorisationDay: string | null,
   repairsStartedDay: string | null,
+  earliestMoveDay: string | null = null,
 ): { date: string; basis: StorageEndBasis; earlierThanAuthorisation: boolean } | null {
+  // The storage chronology's earliest date the car could reasonably have been moved comes first when it is earlier.
+  if (earliestMoveDay) {
+    const repair = repairStorageEndProposal(authorisationDay, repairsStartedDay);
+    if (!repair || earliestMoveDay < repair.date) {
+      return { date: earliestMoveDay, basis: "earliest_move", earlierThanAuthorisation: Boolean(authorisationDay && earliestMoveDay < authorisationDay) };
+    }
+    return repair;
+  }
   if (authorisationDay && repairsStartedDay) {
     if (repairsStartedDay < authorisationDay) {
       return { date: repairsStartedDay, basis: "repairs_started", earlierThanAuthorisation: true };
@@ -42,6 +51,7 @@ export function proposedStorageEndSentence(basis: StorageEndBasis, earlierThanAu
     return `This is the date repairs started, which is earlier than the repair authorisation. ${tail}`;
   }
   if (basis === "repairs_started") return `This is the date repairs started. ${tail}`;
+  if (basis === "earliest_move") return `This is the earliest date the car could reasonably have been moved, from the storage chronology. ${tail}`;
   return `This is the date repair authorisation was recorded. ${tail}`;
 }
 
@@ -94,9 +104,16 @@ export function storageAuthorisationEndDecision(input: {
   withdrawn: boolean;
   existingEndDay: string | null;
   keptSuggestionDay: string | null;
+  /** From the storage chronology. */
+  earliestMoveDay?: string | null;
 }): StorageAuthorisationEnd {
   const repairsStartedDay = input.repairsStartedDay || null;
-  const proposal = repairStorageEndProposal(input.authorisationDay, repairsStartedDay);
+  const earliestMoveDay = input.earliestMoveDay || null;
+  const proposal = input.totalLoss
+    ? earliestMoveDay
+      ? { date: earliestMoveDay, basis: "earliest_move" as const, earlierThanAuthorisation: false }
+      : null
+    : repairStorageEndProposal(input.authorisationDay, repairsStartedDay, earliestMoveDay);
   const reasons: string[] = [];
   if (input.totalLossReview) {
     reasons.push(
@@ -119,7 +136,6 @@ export function storageAuthorisationEndDecision(input: {
       suggestedDate: proposal?.date ?? null,
     };
   }
-  if (input.totalLoss) return { kind: "open" };
   if (!proposal) return { kind: "open" };
   if (!input.existingEndDay) {
     return {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState, type FormEvent } from "react";
+import { JURISDICTIONS } from "@/lib/domain/jurisdiction";
 import {
   actionCreateClaim,
   actionLookupCompliance,
@@ -768,6 +769,16 @@ export function IntakeForm({
               <option value="non_fault">Non-fault</option>
               <option value="fault">Fault</option>
               <option value="disputed">Disputed / unclear</option>
+            </select>
+          </label>
+          <label className="block text-sm">
+            Jurisdiction
+            <select name="jurisdiction" className={field} defaultValue={defaults.jurisdiction || "england_wales"}>
+              {JURISDICTIONS.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {item.label}
+                </option>
+              ))}
             </select>
           </label>
           <label className="block text-sm">

@@ -38,6 +38,13 @@ export default async function ClaimMoneyPage({
           </li>
         ))}
       </ul>
+      <form method="post" action={`/claims/${id}/invoice`}>
+        <SubmitKeyInput />
+        <input type="hidden" name="head" value="customer" />
+        <button type="submit" className="rounded-md border border-line bg-white px-3 py-1 text-sm text-navy">
+          Draft customer invoice – recovery and storage
+        </button>
+      </form>
     </div>
   );
 }

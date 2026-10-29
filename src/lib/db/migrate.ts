@@ -1,4 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
+import { ensureVehicleMovements } from "./vehicle-movements";
+import { ensureStorageChronology } from "./storage-chronology";
 import { ensureGtaTables } from "./gta-rates";
 import { ensureEsignTable } from "./esign";
 import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_LEGAL_CORRESPONDENCE, APPROVE_SETTLEMENT, EXTENDED_WAIT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS, RELEASE_WITHOUT_EXCESS } from "../auth/roles";
@@ -78,6 +80,7 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["disputed_shortfall_note", "TEXT"],
   ],
   claims: [
+    ["jurisdiction", "TEXT"],
     ["client_role", "TEXT"],
     ["damage_description", "TEXT"],
     ["police_attended", "TEXT"],
@@ -113,6 +116,9 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["hire_gta_group", "TEXT"],
   ],
   recovery_jobs: [
+    ["car_condition", "TEXT"],
+    ["not_driveable_reason", "TEXT"],
+    ["not_driveable_detail", "TEXT"],
     ["charge_lines_json", "TEXT"],
     ["inherited_company", "TEXT"],
     ["inherited_net_pence", "INTEGER"],
@@ -273,6 +279,8 @@ function allowUnassignedJobs(db: DatabaseSync) {
 }
 
 export function migrate(db: DatabaseSync) {
+  ensureVehicleMovements(db);
+  ensureStorageChronology(db);
   rebuildDocumentsTable(db);
   db.exec(`
     CREATE TABLE IF NOT EXISTS vehicle_handovers (

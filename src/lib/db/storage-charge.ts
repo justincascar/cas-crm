@@ -240,6 +240,9 @@ export function setClaimStorageRate(input: { claimId: string; actorId: string; r
 
 type RecoveryJob = {
   location: string | null;
+  car_condition: string | null;
+  not_driveable_reason: string | null;
+  not_driveable_detail: string | null;
   recovered_at: string | null;
   charge_pence: number | null;
   ooh_pence: number | null;
@@ -265,7 +268,8 @@ export function recoveryJobForClaim(claimId: string) {
   return get<RecoveryJob>(
     `SELECT location, recovered_at, charge_pence, ooh_pence, environmental_pence, winch_pence, forklift_pence, mileage_pence, manual_pence,
             specialist_winch_pence, skates_pence, waiting_pence, second_operator_pence, charge_lines_json,
-            inherited, inherited_note, inherited_company, inherited_net_pence, inherited_vat_pence, manual_description
+            inherited, inherited_note, inherited_company, inherited_net_pence, inherited_vat_pence, manual_description,
+            car_condition, not_driveable_reason, not_driveable_detail
      FROM recovery_jobs WHERE claim_id = ? ORDER BY id LIMIT 1`,
     [claimId],
   );

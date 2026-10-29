@@ -213,6 +213,27 @@ export function VehicleOffers({
               </label>
             </>
           ) : null}
+          <details className="text-sm sm:col-span-2" data-multi-head>
+            <summary className="cursor-pointer text-teal-dark underline">This offer covers more than one head of loss</summary>
+            <p className="mt-2 text-slate">Split it by head before it is recorded. The parts must add up to the amount above. Each part is then accepted or rejected on its own head.</p>
+            <label className="mt-2 flex items-center gap-2">
+              <input type="checkbox" name="multiHead" value="yes" />
+              Split this offer
+            </label>
+            <div className="mt-2 grid gap-3 sm:grid-cols-4">
+              {[
+                ["split_vehicle", totalLoss ? "Vehicle damage (£)" : "Repairs (£)"],
+                ["split_recovery", "Recovery (£)"],
+                ["split_storage", "Storage (£)"],
+                ["split_hire", "Hire (£)"],
+              ].map(([name, label]) => (
+                <label key={name} className="block">
+                  {label}
+                  <input name={name} inputMode="decimal" className={field} />
+                </label>
+              ))}
+            </div>
+          </details>
           <label className="block text-sm sm:col-span-2">
             Note
             <input name="note" className={field} placeholder="For example, subject to the engineer’s report" />

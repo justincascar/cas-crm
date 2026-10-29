@@ -1,4 +1,5 @@
 import { formatUkDate, londonTodayIso, nowUtcIso } from "../dates";
+import { earliestMoveDayFor } from "./storage-chronology";
 import {
   hireReturnGap,
   manualStorageEndRefusal,
@@ -84,10 +85,12 @@ export function storageAuthorisationEndForClaim(claimId: string): StorageAuthori
     withdrawn: authorisation.withdrawn,
     existingEndDay: calendarDay(claim.storage_billing_end_on),
     keptSuggestionDay: keptSuggestionDay(claimId),
+    earliestMoveDay: earliestMoveDayFor(claimId),
   });
 }
 
 function proposalPhrase(basis: StorageEndBasis, earlierThanAuthorisation: boolean): string {
+  if (basis === "earliest_move") return "the earliest date the car could reasonably have been moved, from the storage chronology";
   if (basis === "repairs_started" && earlierThanAuthorisation) {
     return "the date repairs started, which is earlier than the repair authorisation";
   }

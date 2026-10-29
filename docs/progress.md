@@ -1115,3 +1115,23 @@ All twelve of the reviewer's notes from the TEST-0026 run are fixed in 69cec49 (
 Walked through as Sian on new claim TEST-0027: reserved real fleet car CP26 EER, licence check, no bank account, rate S3 (£66.53), before-signing readings, agreement TEST-HA-000007, doorstep readings change (version 2), on-screen signature, a handover at 15:00 refused, then completed at 16:20. Driver jobs, the insurer letter on TEST-0026, Messages, Recovery, the dashboard filters and a rebuttal draft were checked as well. CP26 EER's transmission was set back to blank afterwards, because the walk-through had entered "Manual" for a car whose name says AUTO. TEST-0027 still has CP26 EER on hire in the demonstration database, and its signed test agreement shows "Manual".
 
 Finish on 29 October 2026: 607 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 70 passed, 0 failed. Journey checks passed. `EMAIL_SEND_MODE` stays `simulate`.
+
+## Recovery and storage evidence (J10, 29 October 2026)
+
+**Recovery (step 2).** Record the recovery now asks where the car was, its condition, and why it could not be driven safely (unsafe, obstructing the road, or at risk of further damage), with optional details. They are on the history and in the Recovery details.
+
+**Car movements.** Each movement of the client's car is its own record: date, from, to, purpose, and whether the accident required it or it was for convenience (workshop or business). Recording the recovery adds the first movement, scene to yard, once. More can be added on the Recovery and Storage pages.
+
+**Storage chronology.** The Storage page has dated entries for inspection access, repair authorised, total-loss decision, uplift requests, salvage instructions, and the earliest date the car could reasonably have been moved (which needs a reason). Repair authorisation and salvage collection already on the file are listed too. When the earliest-move date is before the repair dates, it is proposed as the storage end with that reason; on a total loss it is the proposal. Nothing changes until a handler confirms.
+
+**Customer invoice.** The Money tab has "Draft customer invoice – recovery and storage", addressed to the client. It says the customer's liability depends on the recovery and storage terms they signed; CAS's wording for those terms is question 10, and none is written in its place.
+
+**Offers covering more than one head.** An offer that covers several heads must be split by head before it is recorded. The parts must add up to the offer. Each part is then accepted or rejected on its own head, with a note of the combined offer.
+
+**Jurisdiction.** The new-claim form records England & Wales, Scotland or Northern Ireland (England & Wales unless chosen). Scotland and Northern Ireland show in the claim's status line. A Northern Ireland file shows a reminder to check with Justin what extra evidence the court expects (question 12 asks for the checklist).
+
+**Not done, waiting for Justin.** The "not a GTA subscriber" letter paragraph (question 11), and the recovery and storage terms wording (question 10).
+
+Walked through as Sian on new claim TEST-0028 (Northern Ireland): the reminder and status line, recovery with condition and reason, the automatic first movement and a workshop movement, an earliest-move chronology entry giving a proposed storage end of 28/10/2026 with the reason, a combined £500 offer refused when split £400/£50 and recorded when split £400 recovery / £100 storage, and the draft customer invoice.
+
+Finish on 29 October 2026: 612 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 70 passed, 0 failed. Journey checks passed. `EMAIL_SEND_MODE` stays `simulate`.

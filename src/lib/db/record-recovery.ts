@@ -1,4 +1,7 @@
 import { formatUkDateTime, londonDateIso, nowUtcIso } from "../dates";
+import { NOT_DRIVEABLE_REASONS, notDriveableLabel, recordRecoveryMovement } from "./vehicle-movements";
+import { getDefaultVehicleLocation } from "./vehicle-location";
+import { getScreenData } from "./screens";
 import { sumRecoveryLines, type RecoveryMoneyLine } from "../domain/recovery-fees";
 import { FieldValidationError } from "../form-validation";
 import { formatGbp } from "../money";
@@ -54,6 +57,15 @@ export function recordRecoveryDone(input: { claimId: string; actorId: string; fo
     throw new Error("The recovery charge already has an agreed figure or a payment. Change the charges on the recovery money screen instead.");
   }
   const location = String(form.get("recoveryLocation") || "").trim();
+  // Evidence that recovery was necessary, captured as the recovery is recorded.
+  if (!location) throw new FieldValidationError("recoveryLocation", "Enter where the car was.");
+  const condition = String(form.get("carCondition") || "").trim();
+  if (!condition) throw new FieldValidationError("carCondition", "Describe the car's condition when it was recovered.");
+  const notDriveable = String(form.get("notDriveable") || "").trim();
+  if (!NOT_DRIVEABLE_REASONS.some((item) => item.value === notDriveable)) {
+    throw new FieldValidationError("notDriveable", "Choose why the car could not be driven safely.");
+  }
+  const notDriveableDetail = String(form.get("notDriveableDetail") || "").trim();
   const amounts: Record<string, number> = {};
   for (const line of lines) amounts[line.key] = line.netPence;
   const jobValues = [
@@ -71,12 +83,16 @@ export function recordRecoveryDone(input: { claimId: string; actorId: string; fo
     amounts.skates || 0,
     amounts.waiting || 0,
     amounts.secondOperator || 0,
+    condition,
+    notDriveable,
+    notDriveableDetail || null,
   ];
   if (job) {
     run(
       `UPDATE recovery_jobs SET location = COALESCE(?, location), recovered_at = ?, charge_pence = ?, winch_pence = ?, ooh_pence = ?,
          environmental_pence = ?, forklift_pence = ?, manual_pence = ?, charge_lines_json = ?, manual_description = ?,
-         specialist_winch_pence = ?, skates_pence = ?, waiting_pence = ?, second_operator_pence = ?
+         specialist_winch_pence = ?, skates_pence = ?, waiting_pence = ?, second_operator_pence = ?,
+         car_condition = ?, not_driveable_reason = ?, not_driveable_detail = ?
        WHERE id = ?`,
       [...jobValues, job.id],
     );
@@ -84,8 +100,8 @@ export function recordRecoveryDone(input: { claimId: string; actorId: string; fo
     run(
       `INSERT INTO recovery_jobs(id, claim_id, location, recovered_at, charge_pence, winch_pence, ooh_pence, environmental_pence,
          forklift_pence, manual_pence, charge_lines_json, manual_description, specialist_winch_pence, skates_pence, waiting_pence,
-         second_operator_pence, mileage_pence, inherited)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
+         second_operator_pence, car_condition, not_driveable_reason, not_driveable_detail, mileage_pence, inherited)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`,
       [newId("rec"), input.claimId, ...jobValues],
     );
   }
@@ -135,8 +151,22 @@ export function recordRecoveryDone(input: { claimId: string; actorId: string; fo
     eventType: already ? "other" : "recovery_completed",
     occurredAt: already ? nowUtcIso() : arrivedAt,
     actorId: input.actorId,
-    details: `${already ? "Recovery charges changed. " : ""}Car recovered${location ? ` from ${location}` : ""} and arrived at the yard ${formatUkDateTime(arrivedAt)}. Charges: ${charged}. Total ${formatGbp(totals.netPence)} + VAT ${formatGbp(totals.vatPence)} = ${formatGbp(totals.grossPence)}.${storageWords}`,
+    details: `${already ? "Recovery charges changed. " : ""}Car recovered${location ? ` from ${location}` : ""} and arrived at the yard ${formatUkDateTime(arrivedAt)}. Condition: ${condition}. Could not be driven: ${notDriveableLabel(notDriveable).toLowerCase()}${notDriveableDetail ? ` (${notDriveableDetail})` : ""}. Charges: ${charged}. Total ${formatGbp(totals.netPence)} + VAT ${formatGbp(totals.vatPence)} = ${formatGbp(totals.grossPence)}.${storageWords}`,
     source: "staff",
   });
+  recordRecoveryMovement({
+    claimId: input.claimId,
+    actorId: input.actorId,
+    movedOn: arrivedDay,
+    from: location,
+    to: storedYard(input.claimId),
+  });
   return { arrivedAt, ...totals };
+}
+
+/** Where the car went: the storage address saved on the file, or CAS's own premises. */
+function storedYard(claimId: string): string {
+  const storage = getScreenData(claimId, "storage");
+  const stored = [storage.name, storage.address, storage.postcode].map((part) => String(part || "").trim()).filter(Boolean).join(", ");
+  return stored || getDefaultVehicleLocation();
 }

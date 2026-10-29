@@ -270,3 +270,38 @@ function syncCurrentOffer(claimId: string, head: VehicleOfferHead, before: Money
     throw new Error("The offer could not be saved without changing claimed, agreed or received.");
   }
 }
+
+/**
+ * An insurer offer that covers more than one head of loss is split by head before it is recorded, so each part can
+ * be accepted, rejected or chased on its own head. The parts must add up to the whole offer.
+ */
+export function recordSplitOffer(input: {
+  claimId: string;
+  actorId: string;
+  totalPence: number;
+  offeredOn: string;
+  note: string;
+  parts: Array<{ head: VehicleOfferHead; pence: number }>;
+  submitKey: string;
+}) {
+  const parts = input.parts.filter((part) => part.pence > 0);
+  if (parts.length < 2) throw new Error("Split the offer across at least two heads of loss, or record it on one head.");
+  const sum = parts.reduce((total, part) => total + part.pence, 0);
+  if (sum !== input.totalPence) {
+    throw new Error(`The split adds up to ${formatGbp(sum)}, not the offer of ${formatGbp(input.totalPence)}. Nothing was recorded.`);
+  }
+  const offeredOn = requireCalendarDate(input.offeredOn, "the date of the offer");
+  const whole = `Part of a combined offer of ${formatGbp(input.totalPence)} on ${offeredOn.split("-").reverse().join("/")}, split by head by staff.`;
+  for (const part of parts) {
+    recordVehicleOffer({
+      claimId: input.claimId,
+      actorId: input.actorId,
+      head: part.head,
+      amountPence: part.pence,
+      offeredOn,
+      note: [whole, input.note.trim()].filter(Boolean).join(" "),
+      submitKey: `${input.submitKey}-${part.head}`,
+      confirmDuplicate: true,
+    });
+  }
+}

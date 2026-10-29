@@ -51,6 +51,8 @@ function recordForm(fields: Record<string, string>) {
   form.set("arrivedDate", isoDateFromNow(-1));
   form.set("arrivedTime", "11:15");
   form.set("recoveryLocation", "A470, Pontypridd");
+  form.set("carCondition", "Front end crushed, coolant leaking.");
+  form.set("notDriveable", "unsafe");
   for (const [key, value] of Object.entries(fields)) form.set(key, value);
   return form;
 }
