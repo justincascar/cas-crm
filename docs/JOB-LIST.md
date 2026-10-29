@@ -134,6 +134,7 @@ DONE — 359c73a.
 - The weather and journey-purpose dropdowns.
 
 ### J10 — Recovery and storage evidence (do after the review notes)
+DONE — 3cbeaa2. The GTA paragraph, the terms wording and the Northern Ireland checklist wait for Justin (questions 10–12).
 Insurers are increasingly testing whether recovery and storage were necessary. The file must hold the evidence, and staff should capture it as they go, not afterwards.
 
 **Recovery (step 2)** — record:
@@ -185,3 +186,7 @@ The proposed storage end uses these dates and shows the reason.
 ## Where I stopped (28 October 2026)
 
 J1 to J8 are done and pushed. J9 is not started: it needs Justin's approval and the costs first. Known issues still open are listed in CLAIM-JOURNEY-AUDIT.md (35, 37, 39–41, 45, 47–51). Questions 1–3 and 5–9 are open; 4 was answered on 29 October 2026.
+
+## Where I stopped (29 October 2026)
+
+Review notes R1–R12 are fixed (69cec49) and J10 is done (3cbeaa2). Everything on the list is done except J9, which needs Justin's approval and costs. Open questions: 1–3 and 5–12 in QUESTIONS-FOR-JUSTIN.md.
