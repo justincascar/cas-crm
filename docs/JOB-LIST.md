@@ -146,4 +146,4 @@ DONE — 359c73a.
 
 ## Where I stopped (28 October 2026)
 
-J1 to J8 are done and pushed. J9 is not started: it needs Justin's approval and the costs first. Open questions are 1 to 8 in QUESTIONS-FOR-JUSTIN.md. Known issues still open are listed in CLAIM-JOURNEY-AUDIT.md (35, 37–41, 45, 47–51).
+J1 to J8 are done and pushed. J9 is not started: it needs Justin's approval and the costs first. Known issues still open are listed in CLAIM-JOURNEY-AUDIT.md (35, 37, 39–41, 45, 47–51). Questions 1–3 and 5–9 are open; 4 was answered on 29 October 2026.
