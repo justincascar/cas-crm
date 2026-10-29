@@ -1102,3 +1102,16 @@ Finish on 28 October 2026: 599 tests passed, 0 failed. Type check: 0 errors. Pro
 ## Licence window confirmed (29 October 2026)
 
 Justin confirmed the 21-day licence window: a licence check older than 21 days blocks the hire agreement and the handover. Settings now says so, and the question is marked answered. The Settings Environment panel now reads the same agreement figures as the agreement day limits form (known issue 38). Sending the report to the insurer and the repair authorisation chase is question 9.
+
+## Review notes R1–R12 (29 October 2026)
+
+All twelve of the reviewer's notes from the TEST-0026 run are fixed in 69cec49 (details in REVIEW-NOTES.md). The ones that change how staff work:
+
+- **Before the client signs** is a box on the hire agreement step: mileage and fuel out, and the hire car's transmission and the client's licence date of issue when the file lacks them. The agreement cannot be produced until they are in. At the doorstep the driver enters mileage and fuel first; if they change, a new version of the unsigned agreement is produced before the client signs. Readings cannot change after signing.
+- **Handover time** starts at now. A time before an electronic signature is refused unless a reason is given (to the minute, so the same minute is fine).
+- **Hire car collection, delivery jobs**: a delivery job closes as soon as the hire starts.
+- **Legal letters**: rebuttals and the impecuniosity response are drafts until Justin approves them on the document page (new permission approveLegalCorrespondence, on Justin's staff row only). Then any office user can mark one as sent. Emailing one is refused until approved.
+
+Walked through as Sian on new claim TEST-0027: reserved real fleet car CP26 EER, licence check, no bank account, rate S3 (£66.53), before-signing readings, agreement TEST-HA-000007, doorstep readings change (version 2), on-screen signature, a handover at 15:00 refused, then completed at 16:20. Driver jobs, the insurer letter on TEST-0026, Messages, Recovery, the dashboard filters and a rebuttal draft were checked as well. CP26 EER's transmission was set back to blank afterwards, because the walk-through had entered "Manual" for a car whose name says AUTO. TEST-0027 still has CP26 EER on hire in the demonstration database, and its signed test agreement shows "Manual".
+
+Finish on 29 October 2026: 607 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 70 passed, 0 failed. Journey checks passed. `EMAIL_SEND_MODE` stays `simulate`.

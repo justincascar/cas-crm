@@ -4,6 +4,25 @@ Written by the reviewer, Claude (Cowork), after testing the app in the browser a
 
 ## Open
 
+(No open notes.)
+
+## Fixed
+
+- **R1** fixed in 69cec49: mileage and fuel out, transmission (saved to the fleet record), licence date of issue and date out (booked date and time) are needed before the agreement is produced; the doorstep screen takes mileage and fuel first and re-produces the agreement; the agreement shows a dash, never "Missing — not guessed" or "not entered".
+- **R2** fixed in 69cec49: handover time defaults to now with the booked slot as a hint; a time before the electronic signature is refused unless a reason is given.
+- **R3** fixed in 69cec49: the handover record says how and when the agreement was signed (electronically, paper copy, or authorised override); the handover sheet signature is worded separately.
+- **R4** fixed in 69cec49: a delivery job closes when the hire starts; Driver jobs has a Done today group; open deliveries for started hires were closed with a history note (TEST-0004, TEST-0015); TEST-0004's old collection was cancelled with a note.
+- **R5** fixed in 69cec49: insurer letters and the insurer email show the insurer's claim reference and policy number, whichever are held; they do not ask for a reference already held; the date prints once.
+- **R6** fixed in 69cec49: no code word; one line "Email: simulated – nothing leaves the CRM"; Messages folds into sections with the likely next action first (the letter for step 4).
+- **R7** fixed in 69cec49: step 10 says Not started until a charge is recorded (recovery, hire and storage).
+- **R8** fixed in 69cec49: Recovery shows charges only once the recovery is recorded; recoverer details under More; offer, agreed, payment and dispute under one Money section, closed until there is something to do.
+- **R9** fixed in 69cec49: the list is "Open claims by next step" with All / Need action today / Overdue filters; each count opens its matching list.
+- **R10** fixed in 69cec49: group charged is suggested from the client's own car with the reason (or says why not); the header names the actual next hire item: Pre-hire checks, Hire agreement – sign, Handover.
+- **R11** fixed in 69cec49: only office staff are offered or accepted as claim handlers.
+- **R12** fixed in 69cec49: rebuttals and the impecuniosity response show "Needs Justin's approval"; a new approveLegalCorrespondence permission (Justin) approves; marking sent or emailing is refused until approved. No letter-before-action or court template exists yet; any added later goes on the same list.
+
+<details><summary>Reviewer's original notes (29 October 2026)</summary>
+
 **Test of 29 October 2026.** The reviewer created TEST-0026 (non-fault, unroadworthy) through the new-claim form, then took it through:
 - recovery (standard fee plus winching)
 - the hire steps: real-fleet car CN16 AYS reserved for Demo Driver, rate S3, licence check, "no bank account", hire reason
@@ -97,6 +116,5 @@ The Handler dropdown offers Demo Driver and the mechanic. Only office staff can 
 - Marking one as sent, or emailing it, must require Justin's approval (the approveSettlement-level permission, or a new approveLegalCorrespondence permission on Justin's staff row), with a clear "Needs Justin's approval" state.
 - Check the same applies to any letter-before-action or court template.
 
-## Fixed
+</details>
 
-(none yet)
