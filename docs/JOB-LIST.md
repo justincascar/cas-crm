@@ -206,7 +206,7 @@ DONE — cc61aae. Export and audit (Settings, Justin only), `npm run backup` / `
 - **Speed:** generate 1,000 fictional claims in a separate test database. Confirm the dashboard, claims list and a claim page each open in under 2 seconds. Fix any slow page.
 
 ### J13 — Litigation and disputes, the basics
-DONE — commit to follow. Each claim has a litigation file (History → Litigation file, or the Litigation list).
+DONE — d8333df. Each claim has a litigation file (History → Litigation file, or the Litigation list).
 Check what the Litigation section does today, then make it useful without inventing anything:
 - **Parties and representatives**, with their legal capacity. Never assume CAS is the claimant or the insurer is the defendant.
 - **Court references, hearings, orders and deadlines.** Every deadline records its source and how it was calculated, and is marked "needs verification" until a person confirms it. The CRM never calculates court deadlines on its own authority.
@@ -315,4 +315,4 @@ Review notes R1–R12 are fixed (69cec49) and J10 is done (3cbeaa2). Everything 
 
 ## Where I stopped (30 October 2026)
 
-R22 (eb9b355), J11 (461e878) and J12 (cc61aae) are done and pushed. Next: J13, then J14. J9a and J9 wait for Justin. Open questions: 1–3, 5, 7, 10, 12 and 16–18 in QUESTIONS-FOR-JUSTIN.md.
+R22 (eb9b355), J11 (461e878) and J12 (cc61aae) and J13 (d8333df) are done and pushed. Next: J14. J9a and J9 wait for Justin. Open questions: 1–3, 5, 7, 10, 12 and 16–19 in QUESTIONS-FOR-JUSTIN.md.
