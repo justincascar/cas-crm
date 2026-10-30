@@ -218,6 +218,7 @@ Check what the Litigation section does today, then make it useful without invent
 - **No legal document is sent or filed without Justin's approval:** letters before action, claim forms, court documents. Mark anything needing qualified legal review.
 
 ### J14 — Client form on a phone
+DONE — 628302e. Documents tab → Client form sends the link; the client's page is /c/… (no CAS login).
 - Check the secure client link on a phone-sized screen.
 - The client can save and come back, and upload photos and documents.
 - They can only ever see their own submission.
@@ -315,4 +316,4 @@ Review notes R1–R12 are fixed (69cec49) and J10 is done (3cbeaa2). Everything 
 
 ## Where I stopped (30 October 2026)
 
-R22 (eb9b355), J11 (461e878) and J12 (cc61aae) and J13 (d8333df) are done and pushed. Next: J14. J9a and J9 wait for Justin. Open questions: 1–3, 5, 7, 10, 12 and 16–19 in QUESTIONS-FOR-JUSTIN.md.
+R22 (eb9b355), J11 (461e878), J12 (cc61aae), J13 (d8333df) and J14 (628302e) are done and pushed. Everything on the list is done except J9a and J9, which wait for Justin. Open questions: 1–3, 5, 7, 10, 12 and 16–21 in QUESTIONS-FOR-JUSTIN.md.
