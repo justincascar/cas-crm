@@ -226,6 +226,7 @@ DONE — 628302e. Documents tab → Client form sends the link; the client's pag
 - Fix anything awkward on a small screen.
 
 ### J15 — Security and GDPR features that can be built now (fictional data; no decisions needed)
+DONE — 9d1fbdc. Settings → Data protection (Justin): Retention and deletion, This person's data, Breach log. Sign-in security on Manage staff logins. `npm run data-map` writes docs/DATA-MAP.md; `npm run check:pages` now runs the security checks too.
 These are the parts of J9b that don't need hosting or Justin's decisions. Where a period or a wording is still undecided, use the default given here, mark it "awaiting adviser", and make it editable in Settings.
 
 1. **Data map.** Write `docs/DATA-MAP.md`, generated from the actual schema. It lists every personal-data field and covers:
@@ -383,4 +384,4 @@ Review notes R1–R12 are fixed (69cec49) and J10 is done (3cbeaa2). Everything 
 
 ## Where I stopped (30 October 2026)
 
-R22 (eb9b355), J11 (461e878), J12 (cc61aae), J13 (d8333df) and J14 (628302e) are done and pushed. Everything on the list is done except J9a and J9, which wait for Justin. Open questions: 1–3, 5, 7, 10, 12 and 16–21 in QUESTIONS-FOR-JUSTIN.md.
+R22 (eb9b355), J11 (461e878), J12 (cc61aae), J13 (d8333df), J14 (628302e), R23–R26 (2731113) and J15 (9d1fbdc) are done and pushed. Everything on the list is done except J9a and J9, which wait for Justin. Open questions: 1–3, 5, 7, 10, 12, 18, 20, 22 and 23 in QUESTIONS-FOR-JUSTIN.md.
