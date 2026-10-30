@@ -16,6 +16,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { totpCode } from "../src/lib/auth/totp.ts";
 import { CLAIM_JOURNEYS, JOURNEY_PHONE_WARNING, type ClaimJourney, type JourneyId } from "../tests/journeys/claim-journeys.ts";
 
 const ACCIDENT_DATE = "2026-10-20";
@@ -135,13 +136,46 @@ export async function waitUntilReady(origin: string, child: ChildProcess): Promi
   throw new Error(`The journey server did not answer on ${origin} (${last}).`);
 }
 
-export async function signIn(origin: string, username = "sian", password = sianPassword()): Promise<string> {
+/**
+ * Signs in. An administrator (and anyone who switched it on) has the authenticator step (J15): on a fresh test
+ * database the app shows a new key to set up, which is read from the page; afterwards the key is read from the test
+ * database given. The code is worked out the way an authenticator app does.
+ */
+export async function signIn(origin: string, username = "sian", password = sianPassword(), databasePath?: string): Promise<string> {
   const response = await fetch(`${origin}/login/submit`, {
     method: "POST",
     redirect: "manual",
     headers: { "content-type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ username, password, next: "/" }),
   });
+  const location = response.headers.get("location") || "";
+  if (location && ["/login/setup", "/login/code"].includes(new URL(location, origin).pathname)) {
+    const step = location.endsWith("/login/setup") ? "setup" : "code";
+    const set = typeof response.headers.getSetCookie === "function" ? response.headers.getSetCookie() : [];
+    const challenge = (set.find((item) => item.startsWith("cas_challenge=")) || "").split(";")[0];
+    let secret = "";
+    if (step === "setup") {
+      const page = await fetch(`${origin}/login/setup`, { headers: { cookie: challenge } }).then((r) => r.text());
+      secret = /data-totp-secret="([A-Z2-7]+)"/.exec(page)?.[1] || "";
+    } else if (databasePath) {
+      const db = new DatabaseSync(databasePath, { readOnly: true });
+      try {
+        secret = String((db.prepare(`SELECT totp_secret FROM staff WHERE lower(username) = ?`).get(username.toLowerCase()) as { totp_secret?: string } | undefined)?.totp_secret || "");
+      } finally {
+        db.close();
+      }
+    }
+    if (!secret) throw new Error(`Sign-in as ${username} needs the authenticator step and no key was found.`);
+    const done = await fetch(`${origin}/login/code/submit`, {
+      method: "POST",
+      redirect: "manual",
+      headers: { "content-type": "application/x-www-form-urlencoded", cookie: challenge },
+      body: new URLSearchParams({ code: totpCode(secret), step }),
+    });
+    const cookie = sessionCookie(done);
+    if (!cookie || done.status !== 303) throw new Error(`Sign-in as ${username} did not pass the authenticator step.`);
+    return cookie;
+  }
   const cookie = sessionCookie(response);
   if (!cookie || response.status !== 303) throw new Error(`Sign-in as ${username} did not return a session.`);
   return cookie;

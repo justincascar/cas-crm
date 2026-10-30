@@ -5,6 +5,7 @@ import Link from "next/link";
 import { actionSaveAgreementLimits, actionSaveChaseIntervals, actionSaveDefaultVehicleLocation, actionSaveGtaMarkup, actionSaveStorageDailyRate, actionTestMailboxConnection } from "@/app/settings-actions";
 import { isAdministrator } from "@/lib/auth/roles";
 import { requireStaff } from "@/lib/auth/session";
+import { twoStepEnabled, twoStepRequired } from "@/lib/auth/login-security";
 import { dbLocation, getSettings, listStaff } from "@/lib/db/queries";
 import { getDefaultVehicleLocation } from "@/lib/db/vehicle-location";
 import { getStorageDailyRatePence } from "@/lib/db/storage-charge";
@@ -73,6 +74,21 @@ export default async function SettingsPage({
         subtitle="Prototype configuration. Administrator and staff can open every file. Driver and bodyshop / mechanic can open only the jobs assigned to them today."
       />
       <EmailSendModeBanner />
+      <section id="my-sign-in" className="rounded-xl border border-line bg-card p-5" data-my-sign-in>
+        <h2 className="font-serif text-xl text-navy-deep">Your sign-in</h2>
+        <p className="mt-1 text-sm">
+          Authenticator app: {twoStepEnabled(staffUser.id) ? "on" : "off"}
+          {twoStepRequired(staffUser.role) ? " (required for an administrator)" : ""}.
+        </p>
+        {twoStepRequired(staffUser.role) && twoStepEnabled(staffUser.id) ? null : (
+          <form method="post" action="/settings/my-sign-in" className="mt-2">
+            <input type="hidden" name="intent" value={twoStepEnabled(staffUser.id) ? "off" : "on"} />
+            <button type="submit" className="rounded-md border border-line bg-white px-3 py-2 text-sm">
+              {twoStepEnabled(staffUser.id) ? "Switch it off" : "Set up an authenticator app"}
+            </button>
+          </form>
+        )}
+      </section>
       <SaveClashNotice clash={clash} reloadHref="/settings" />
       {error ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
@@ -185,6 +201,23 @@ export default async function SettingsPage({
             </a>
             <Link href="/audit" className="rounded-md border border-line bg-white px-4 py-2 text-sm font-semibold text-navy">
               Open the audit view
+            </Link>
+          </div>
+        </section>
+      ) : null}
+      {canAudit ? (
+        <section className="rounded-xl border border-line bg-card p-5" data-data-protection>
+          <h2 className="font-serif text-xl text-navy-deep">Data protection</h2>
+          <p className="mt-2 text-sm">The retention schedule and what is due for deletion, a person&apos;s data, and the breach log. Only you can use these.</p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <Link href="/settings/retention" className="rounded-md border border-line bg-white px-4 py-2 text-sm font-semibold text-navy">
+              Retention and deletion
+            </Link>
+            <Link href="/settings/person-data" className="rounded-md border border-line bg-white px-4 py-2 text-sm font-semibold text-navy">
+              This person&apos;s data
+            </Link>
+            <Link href="/settings/breaches" className="rounded-md border border-line bg-white px-4 py-2 text-sm font-semibold text-navy">
+              Breach log
             </Link>
           </div>
         </section>

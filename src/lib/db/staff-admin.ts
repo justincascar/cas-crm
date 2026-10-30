@@ -1,3 +1,4 @@
+import { clearLoginLock, passwordProblem } from "../auth/login-security";
 import { hashPasswordSync } from "../auth/passwords";
 import { ADMINISTRATOR_ROLE, normaliseStaffRole, parseStaffRole } from "../auth/roles";
 import { nowUtcIso } from "../dates";
@@ -10,11 +11,12 @@ export type StaffRecord = {
   username: string;
   role: string;
   active: number;
+  totp_enabled_at: string | null;
 };
 
 export function listAllStaff(): StaffRecord[] {
   return all<StaffRecord>(
-    "SELECT id, name, email, username, role, active FROM staff ORDER BY active DESC, name",
+    "SELECT id, name, email, username, role, active, totp_enabled_at FROM staff ORDER BY active DESC, name",
   );
 }
 
@@ -48,7 +50,8 @@ export function createStaffAccount(input: {
   if (!name) return { ok: false, error: "Enter the person's name." };
   if (usernameError) return { ok: false, error: usernameError };
   if (!email.includes("@")) return { ok: false, error: "Enter a valid email address." };
-  if (input.password.trim().length < 8) return { ok: false, error: "Password must be at least 8 characters." };
+  const weak = passwordProblem(input.password, input.username);
+  if (weak) return { ok: false, error: `Password not strong enough. ${weak}` };
   const username = input.username.trim().toLowerCase();
   const taken = get<{ id: string }>("SELECT id FROM staff WHERE lower(username) = ? OR lower(email) = ?", [
     username,
@@ -93,9 +96,11 @@ export function resetStaffPassword(
   password: string,
   actorId: string,
 ): { ok: true } | { ok: false; error: string } {
-  if (password.trim().length < 8) return { ok: false, error: "Password must be at least 8 characters." };
   const row = get<{ id: string; username: string }>("SELECT id, username FROM staff WHERE id = ?", [id]);
   if (!row) return { ok: false, error: "That staff record was not found." };
+  const weak = passwordProblem(password, row.username);
+  if (weak) return { ok: false, error: `Password not strong enough. ${weak}` };
+  clearLoginLock(row.username);
   run("UPDATE staff SET password_hash = ? WHERE id = ?", [hashPasswordSync(password.trim()), id]);
   run("DELETE FROM sessions WHERE staff_id = ?", [id]);
   run(

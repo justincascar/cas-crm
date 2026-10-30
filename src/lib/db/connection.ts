@@ -19,6 +19,7 @@ import { ensureChaseSettings, ensureDemoChases } from "./chase";
 import { ensureRealFleet } from "./fleet";
 import { ensureDemoDayJobs } from "./demo-jobs";
 import { migrate } from "./migrate";
+import { minimiseConvictionText } from "./minimisation";
 
 type GlobalDb = typeof globalThis & { __casDb?: DatabaseSync };
 
@@ -55,6 +56,7 @@ function openDatabase(): DatabaseSync {
   clearFalseDemonstrationHireCollection(db);
   closeDeliveriesForStartedHires(db);
   noteKeptRecoveryCardFees(db);
+  minimiseConvictionText(db);
   ensureTest0005StorageDemonstration(db, { financialLines: true });
   ensureTest0008HireDemonstration(db);
   ensureChargeFigureDemonstration(db);
@@ -80,6 +82,7 @@ function prepareExistingDatabase(db: DatabaseSync) {
   clearFalseDemonstrationHireCollection(db);
   closeDeliveriesForStartedHires(db);
   noteKeptRecoveryCardFees(db);
+  minimiseConvictionText(db);
   ensureTest0005StorageDemonstration(db);
   ensureTest0008HireDemonstration(db);
   ensureChargeFigureDemonstration(db);

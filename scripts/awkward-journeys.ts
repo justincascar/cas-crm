@@ -601,6 +601,9 @@ const CASES: Case[] = [
       if (!task) return "No task asked the handler to read the uncertain reply.";
       const decision = await fileIncomingEmail(ctx, claimId, "Re: TEST claim repairs", "We have reviewed the estimate and authorise the repairs as quoted.");
       if (decision) return decision;
+      // The email is filed first and the chase paused a moment later in the same request, so allow for that.
+      const pausedBy = Date.now() + 5_000;
+      while (Date.now() < pausedBy && repairChase(ctx, claimId)?.status !== "paused") await new Promise((resolve) => setTimeout(resolve, 200));
       const chase = repairChase(ctx, claimId);
       if (chase?.status !== "paused") return `A substantive reply left the chase ${chase?.status}.`;
       if (events(ctx, claimId, "chase_reply_substantive").length !== 1) return "The substantive reply was not recorded.";

@@ -141,7 +141,7 @@ describe("storage charged from the actual recovery date", () => {
         name: "Night Driver",
         username: "nightdriver",
         email: "night.driver@example.test",
-        password: "password1",
+        password: "Fictional-Harbour-42",
         role: "driver",
         actorId: "staff-justin",
       });
@@ -285,7 +285,7 @@ describe("returning the client's vehicle does not set the chargeable storage end
         name: "Return Driver",
         username: "returndriver",
         email: "return.driver@example.test",
-        password: "password1",
+        password: "Fictional-Harbour-42",
         role: "driver",
         actorId: "staff-justin",
       });

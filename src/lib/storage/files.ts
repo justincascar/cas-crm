@@ -80,3 +80,11 @@ function resolveStoredPath(relpath: string): string {
   }
   return abs;
 }
+
+/** Removes a stored file for good (retention or erasure, J15). A file already gone is not an error. */
+export function deleteStoredFile(relpath: string): boolean {
+  const abs = resolveStoredPath(relpath);
+  if (!fs.existsSync(abs)) return false;
+  fs.rmSync(abs, { force: true });
+  return true;
+}

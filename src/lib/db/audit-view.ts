@@ -19,7 +19,7 @@ export type AuditFilters = { claim?: string; staffId?: string; from?: string; to
 export type AuditRow = {
   at: string;
   who: string;
-  kind: "history" | "save" | "other";
+  kind: "history" | "save" | "viewed" | "other";
   what: string;
   detail: string;
   claimId: string | null;
@@ -56,6 +56,7 @@ function savedDetail(scope: string, details: string): string {
 function otherWhat(action: string, entity: string | null): string {
   if (action === "create" && entity === "claim") return "Opened the file";
   if (action === "export") return "Full export downloaded";
+  if (action === "view") return entity === "person-data" ? "Person's data screen" : "Viewed a sensitive record";
   if (entity === "staff") return `Staff sign-in: ${action.replaceAll("_", " ")}`;
   return `${action.replaceAll("_", " ")}${entity ? ` (${entity})` : ""}`;
 }
@@ -72,7 +73,7 @@ export function listAudit(filters: AuditFilters, limit = 500): AuditRow[] {
   const from = /^\d{4}-\d{2}-\d{2}$/.test(String(filters.from || "")) ? `${filters.from}T00:00:00.000Z` : null;
   const to = /^\d{4}-\d{2}-\d{2}$/.test(String(filters.to || "")) ? `${filters.to}T23:59:59.999Z` : null;
   const staffId = String(filters.staffId || "").trim() || null;
-  const kind = filters.kind === "history" || filters.kind === "save" || filters.kind === "other" ? filters.kind : null;
+  const kind = filters.kind === "history" || filters.kind === "save" || filters.kind === "viewed" || filters.kind === "other" ? filters.kind : null;
   const rows: AuditRow[] = [];
 
   if (!kind || kind === "history") {
@@ -112,11 +113,12 @@ export function listAudit(filters: AuditFilters, limit = 500): AuditRow[] {
     }
   }
 
-  if (!kind || kind === "save" || kind === "other") {
+  if (!kind || kind === "save" || kind === "viewed" || kind === "other") {
     const where = ["1 = 1"];
     const params: unknown[] = [];
     if (kind === "save") where.push("a.action = 'save'");
-    if (kind === "other") where.push("a.action != 'save'");
+    if (kind === "viewed") where.push("a.action IN ('view', 'export')");
+    if (kind === "other") where.push("a.action NOT IN ('save', 'view', 'export')");
     if (claimId) {
       where.push("(a.entity_id = ? OR a.entity_id LIKE ? OR a.entity_id IN (SELECT id FROM hire_episodes WHERE claim_id = ?))");
       params.push(claimId, `${claimId}:%`, claimId);
@@ -146,7 +148,7 @@ export function listAudit(filters: AuditFilters, limit = 500): AuditRow[] {
       rows.push({
         at: String(row.at),
         who: row.who ? String(row.who) : "The CRM",
-        kind: row.action === "save" ? "save" : "other",
+        kind: row.action === "save" ? "save" : row.action === "view" || row.action === "export" ? "viewed" : "other",
         what: row.action === "save" ? savedWhat(String(row.entity || "")) : otherWhat(String(row.action), row.entity),
         detail: row.action === "save" ? savedDetail(String(row.entity || ""), String(row.details || "")) : String(row.details || ""),
         claimId: linked ? String(linked.id) : null,

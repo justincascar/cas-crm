@@ -86,7 +86,7 @@ describe("administrator role", () => {
         name: "Nia Williams",
         username: "nia",
         email: "nia@completeaccidentsolutions.example",
-        password: "CasDemo.NiaExtra",
+        password: "CasDemo.Harbour42",
         role: "staff",
         actorId: "staff-justin",
       });

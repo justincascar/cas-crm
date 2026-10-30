@@ -147,6 +147,11 @@ export default async function ClientFormPage({
           </button>
           {view.savedAt ? <p className="text-sm text-slate">Last saved {formatUkDateTime(view.savedAt)}.</p> : null}
           <p className="text-sm text-slate">This page only shows what you have entered. Complete Accident Solutions checks everything before it changes your claim.</p>
+          <p className="text-sm">
+            <a href="/privacy" className="text-teal-dark underline" data-privacy-link>
+              Privacy notice
+            </a>
+          </p>
         </div>
       </form>
     </main>

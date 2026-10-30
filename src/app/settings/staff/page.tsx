@@ -2,6 +2,8 @@ import Link from "next/link";
 import {
   actionCreateStaff,
   actionResetStaffPassword,
+  actionResetTwoStep,
+  actionSetIdleMinutes,
   actionSetStaffActive,
   actionSetStaffRole,
 } from "@/app/staff-actions";
@@ -11,6 +13,7 @@ import { ValidatedForm } from "@/components/ValidatedForm";
 import { requireAdministrator } from "@/lib/auth/session";
 import { ADMINISTRATOR_ROLE, DRIVER_ROLE, MECHANIC_ROLE, STAFF_ROLE, roleLabel } from "@/lib/auth/roles";
 import { listAllStaff } from "@/lib/db/staff-admin";
+import { idleMinutes, LOCK_AFTER_FAILURES, LOCK_MINUTES, twoStepRequired } from "@/lib/auth/login-security";
 import { loadClash, sectionVersion } from "@/lib/db/record-version";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
@@ -45,6 +48,22 @@ export default async function StaffAdminPage({
         <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm text-ok">Saved.</p>
       ) : null}
 
+      <section className="rounded-xl border border-line bg-card p-5" data-sign-in-security>
+        <h2 className="font-serif text-xl text-navy-deep">Sign-in security</h2>
+        <p className="mt-1 text-sm text-slate">
+          After {LOCK_AFTER_FAILURES} failed attempts a username is locked for {LOCK_MINUTES} minutes; resetting the password unlocks it. New passwords need at least 12 characters using three of: lower case, capitals, numbers, symbols. Administrators must use an authenticator app; staff can switch one on in Settings.
+        </p>
+        <form action={actionSetIdleMinutes} className="mt-3 flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            Sign out after this many minutes without use
+            <input name="minutes" inputMode="numeric" defaultValue={idleMinutes()} className={field} />
+          </label>
+          <button type="submit" className="rounded-md border border-line px-3 py-2 text-sm">
+            Save
+          </button>
+        </form>
+      </section>
+
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Add a staff login</h2>
         <ValidatedForm action={actionCreateStaff} className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -62,7 +81,7 @@ export default async function StaffAdminPage({
           </label>
           <label className="text-sm">
             Temporary password
-            <input name="password" type="password" required minLength={8} className={field} autoComplete="new-password" />
+            <input name="password" type="password" required minLength={12} className={field} autoComplete="new-password" />
           </label>
           <label className="text-sm">
             Role
@@ -115,12 +134,23 @@ export default async function StaffAdminPage({
                 <RecordVersionField version={sectionVersion("staff", person.id)} />
                 <label className="block text-sm">
                   Reset password
-                  <input name="password" type="password" required minLength={8} className={field} autoComplete="new-password" />
+                  <input name="password" type="password" required minLength={12} className={field} autoComplete="new-password" />
                 </label>
                 <button type="submit" className="rounded-md border border-line px-3 py-2 text-sm">
                   Reset and sign them out
                 </button>
               </ValidatedForm>
+              <form action={actionResetTwoStep} className="space-y-2" data-two-step={person.totp_enabled_at ? "on" : "off"}>
+                <input type="hidden" name="staffId" value={person.id} />
+                <p className="text-sm text-slate">
+                  Authenticator app: {person.totp_enabled_at ? "on" : twoStepRequired(person.role) ? "required, set up at next sign-in" : "off"}
+                </p>
+                {person.totp_enabled_at ? (
+                  <button type="submit" className="rounded-md border border-line px-3 py-2 text-sm">
+                    Reset (lost phone)
+                  </button>
+                ) : null}
+              </form>
               <form action={actionSetStaffActive} className="space-y-2">
                 <input type="hidden" name="staffId" value={person.id} />
                 <RecordVersionField version={sectionVersion("staff", person.id)} />

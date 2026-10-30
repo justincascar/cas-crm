@@ -413,7 +413,9 @@ Kind regards,
 {{sender_name}}
 {{sender_title}}
 {{company_name}}
-{{company_phone}} · {{company_email}}`,
+{{company_phone}} · {{company_email}}
+
+{{privacy_notice}}`,
   },
   {
     key: "payment_chase_1",

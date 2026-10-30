@@ -2,30 +2,9 @@
 
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { pathAllowedForRole } from "@/lib/auth/roles";
-import {
-  clearSessionCookie,
-  createSession,
-  destroySession,
-  getRequestStaff,
-  safeNextPath,
-  SESSION_COOKIE,
-  setSessionCookie,
-  verifyStaffLogin,
-} from "@/lib/auth/session";
+import { clearSessionCookie, destroySession, getRequestStaff, SESSION_COOKIE } from "@/lib/auth/session";
 
-export async function actionLogin(formData: FormData) {
-  const username = String(formData.get("username") || "");
-  const password = String(formData.get("password") || "");
-  const next = safeNextPath(String(formData.get("next") || "/"));
-  const staff = verifyStaffLogin(username, password);
-  if (!staff) {
-    return { error: "Username or password is not right." };
-  }
-  const token = createSession(staff.id);
-  await setSessionCookie(token);
-  redirect(pathAllowedForRole(staff.role, next) ? next : "/jobs");
-}
+// Signing in is only through /login/submit, which applies the lockout and the authenticator step (J15).
 
 export async function actionLogout() {
   const token = (await cookies()).get(SESSION_COOKIE)?.value;

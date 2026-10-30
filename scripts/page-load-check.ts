@@ -16,6 +16,7 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { SESSION_COOKIE } from "../src/lib/auth/constants.ts";
+import { signIn as journeySignIn } from "./journey-check.ts";
 import { CLAIM_SCREENS } from "../src/lib/claim-screens.ts";
 import { dbPath, get, withDatabase } from "../src/lib/db/connection.ts";
 import { databaseFingerprint, fingerprintChanges } from "../src/lib/db/database-fingerprint.ts";
@@ -79,6 +80,11 @@ const PAGES: Array<{ name: string; path: string }> = [
   { name: "Litigation", path: "/litigation" },
   { name: "Settings", path: "/settings" },
   { name: "Client form, unknown link", path: "/c/not-a-real-link" },
+  { name: "Privacy notice", path: "/privacy" },
+  { name: "Retention and deletion", path: "/settings/retention" },
+  { name: "This person's data", path: "/settings/person-data" },
+  { name: "Breach log", path: "/settings/breaches" },
+  { name: "Staff logins", path: "/settings/staff" },
   ...CLAIM_TAB_PAGES,
 ];
 
@@ -384,6 +390,17 @@ function warmDatabase() {
   }
 }
 
+function readViewAuditIds(): string[] {
+  const db = new DatabaseSync(dbPath());
+  try {
+    return (db.prepare(`SELECT id FROM audit_log WHERE action = 'view'`).all() as Array<{ id: string }>).map((row) => String(row.id));
+  } catch {
+    return [];
+  } finally {
+    db.close();
+  }
+}
+
 function readFingerprint() {
   const db = new DatabaseSync(dbPath());
   try {
@@ -394,18 +411,13 @@ function readFingerprint() {
   }
 }
 
+/** As Justin, through the authenticator step (J15), reading the key from this PC's demonstration database. */
 async function signIn(origin: string): Promise<string> {
-  const response = await fetch(`${origin}/login/submit`, {
-    method: "POST",
-    redirect: "manual",
-    headers: { "content-type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({ username: "justin", password: justinPassword(), next: "/" }),
-  });
-  const cookie = sessionCookie(response);
-  if (!cookie || response.status !== 303) {
+  try {
+    return await journeySignIn(origin, "justin", justinPassword(), dbPath());
+  } catch {
     throw new Error("Sign-in did not return a session. No claim page was opened.");
   }
-  return cookie;
 }
 
 async function main() {
@@ -421,7 +433,28 @@ async function main() {
     return;
   }
 
+  // J15: the check runs on a copy of this PC's demonstration database, so signing in as Justin through the
+  // authenticator step never sets up or changes Justin's own authenticator on the real one.
+  const realDb = dbPath();
+  const copyDir = fs.mkdtempSync(path.join(os.tmpdir(), "cas-page-check-"));
+  const copy = path.join(copyDir, "cas-crm.sqlite");
   warmDatabase();
+  const source = new DatabaseSync(realDb);
+  try {
+    source.exec(`VACUUM INTO '${copy.replaceAll("'", "''")}'`);
+  } finally {
+    source.close();
+  }
+  process.env.DATABASE_PATH = copy;
+  // A fresh copy for each run: Justin's key on the copy is set up from the page and removed with the copy.
+  const reset = new DatabaseSync(copy);
+  try {
+    reset.exec(`UPDATE staff SET totp_secret = NULL, totp_enabled_at = NULL WHERE id = 'staff-justin'`);
+  } catch {
+    /* An older database without the columns: nothing to reset. */
+  } finally {
+    reset.close();
+  }
   const port = await freePort();
   const origin = `http://127.0.0.1:${port}`;
   const nextBin = path.join(process.cwd(), "node_modules", "next", "dist", "bin", "next");
@@ -473,7 +506,11 @@ async function main() {
         console.log(`PASS  ${page.path}  ${page.name} no sideways scroll at 1280px or 1024px`);
       }
     }
-    const databaseChanges = fingerprintChanges(beforePages, readFingerprint());
+    // Keeping a session alive and recording who viewed what are expected writes; anything else is a change.
+    const viewIds = new Set(readViewAuditIds());
+    const databaseChanges = fingerprintChanges(beforePages, readFingerprint()).filter(
+      (change) => !change.includes(" sessions:") && ![...viewIds].some((id) => change.includes(id)),
+    );
     if (databaseChanges.length > 0) {
       console.log(`FAIL  database changed while pages were opened: ${databaseChanges.join("; ")}`);
     } else {
@@ -488,6 +525,11 @@ async function main() {
     }
   } finally {
     stop();
+    try {
+      fs.rmSync(copyDir, { recursive: true, force: true });
+    } catch {
+      /* The copy can still be open for a moment. */
+    }
   }
 }
 

@@ -7,6 +7,7 @@ import { StoredFilePreview } from "@/components/StoredFilePreview";
 import { formatUkDateTime } from "@/lib/dates";
 import { requireSignedIn } from "@/lib/auth/session";
 import { canReadDocument } from "@/lib/db/jobs";
+import { recordDocumentView } from "@/lib/db/view-audit";
 import { getDocument } from "@/lib/db/chronology";
 import { claimDocumentTypeLabel } from "@/lib/domain/claim-documents";
 import { specForTemplate } from "@/lib/documents/catalog";
@@ -24,6 +25,7 @@ export default async function DocumentPage({
   const { id } = await params;
   const { error: actionError } = await searchParams;
   if (!canReadDocument(staff, id)) redirect("/jobs?notice=office");
+  recordDocumentView({ actorId: staff.id, documentId: id, how: "opened" });
   const doc = getDocument(id);
   if (!doc) notFound();
   const missing = doc.missing_json ? (JSON.parse(String(doc.missing_json)) as string[]) : [];

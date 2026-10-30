@@ -61,7 +61,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         category: String(form.get("category") || ""),
         penaltyPoints: String(form.get("penaltyPoints") || "0"),
         checkedOn,
-        notes: String(form.get("notes") || ""),
+        endorsementCodes: String(form.get("endorsementCodes") || ""),
       },
       write: () => {
         const row = recordLicenceCheck({
@@ -74,7 +74,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
           licenceExpiresOn: String(form.get("licenceExpiresOn") || ""),
           checkedOn,
           result: String(form.get("result") || ""),
-          notes: String(form.get("notes") || ""),
+          endorsementCodes: String(form.get("endorsementCodes") || ""),
           licenceNumber: String(form.get("licenceNumber") || ""),
         });
         if (file) {

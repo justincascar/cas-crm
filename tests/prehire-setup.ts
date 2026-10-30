@@ -16,7 +16,7 @@ export function recordPassingPrehireChecks(claimId: string, actorId = "staff-sia
       driverKey: driver.key,
       checkCode: "test-check-code",
       category: "B",
-      pointsEndorsements: "None shown",
+      endorsementCodes: "",
       licenceExpiresOn: "2032-01-01",
       checkedOn,
       licenceNumber: driver.licenceNumber ? undefined : TEST_LICENCE_NUMBER,

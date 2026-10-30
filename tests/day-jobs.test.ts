@@ -29,7 +29,7 @@ function driver(name: string, username: string) {
     name,
     username,
     email: `${username}@example.test`,
-    password: "password1",
+    password: "Fictional-Harbour-42",
     role: "driver",
     actorId: "staff-justin",
   });
@@ -350,7 +350,7 @@ describe("assigning a driver and a date", () => {
         name: "Bay Mechanic",
         username: "baymechhandover",
         email: "baymechhandover@example.test",
-        password: "password1",
+        password: "Fictional-Harbour-42",
         role: "mechanic",
         actorId: "staff-justin",
       });
@@ -443,7 +443,7 @@ describe("assigning a driver and a date", () => {
         name: "Bay Mechanic",
         username: "baymechanic",
         email: "baymechanic@example.test",
-        password: "password1",
+        password: "Fictional-Harbour-42",
         role: "mechanic",
         actorId: "staff-justin",
       });

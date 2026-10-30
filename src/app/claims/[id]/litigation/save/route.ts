@@ -12,6 +12,7 @@ import {
   startLitigation,
   verifyCourtDate,
 } from "@/lib/db/litigation";
+import { liftLegalHold, setLegalHold } from "@/lib/db/retention";
 import { browserOrigin } from "@/lib/http/browser-origin";
 
 /** Every change on a claim's litigation file (J13). Each records who did it. Nothing is sent or filed from here. */
@@ -28,6 +29,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const intent = text("intent");
     const base = { claimId: id, actorId: staff.id };
     if (intent === "start") startLitigation(base);
+    else if (intent === "hold") setLegalHold({ ...base, reason: text("reason") });
+    else if (intent === "unhold") liftLegalHold(base);
     else if (intent === "solicitor") setInstructedSolicitor({ ...base, staffId: text("staffId") });
     else if (intent === "court") saveCourtDetails({ ...base, courtName: text("courtName"), courtReference: text("courtReference") });
     else if (intent === "party") {

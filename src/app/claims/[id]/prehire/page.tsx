@@ -102,8 +102,9 @@ export async function PrehireChecksScreen({
               <input name="checkCode" autoComplete="off" className={field} />
             </label>
             <label className="text-sm sm:col-span-2">
-              Notes
-              <textarea name="notes" rows={2} className={field} />
+              Endorsement codes relevant to the hire (if any)
+              <input name="endorsementCodes" autoComplete="off" placeholder="For example SP30" className={field} />
+              <span className="text-xs text-slate">Codes only, as the check shows them. No other details of convictions are kept.</span>
             </label>
             <label className="text-sm sm:col-span-2">
               Screenshot or PDF of the check

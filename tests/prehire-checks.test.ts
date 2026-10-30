@@ -47,7 +47,7 @@ function licenceFor(claimId: string, driverKey: string, checkedOn = londonTodayI
     driverKey,
     checkCode: "test-check-code",
     category: "B",
-    pointsEndorsements: "None shown",
+    endorsementCodes: "",
     licenceExpiresOn: "2032-01-01",
     checkedOn,
     licenceNumber: TEST_LICENCE_NUMBER,
@@ -246,7 +246,7 @@ describe("pre-hire check overrides", () => {
         name: "Second Admin",
         username: "secondadmin",
         email: "second.admin@example.test",
-        password: "password1",
+        password: "Fictional-Harbour-42",
         role: "administrator",
         actorId: "staff-justin",
       });

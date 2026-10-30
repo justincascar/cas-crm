@@ -69,7 +69,7 @@ describe("driver and mechanic access", () => {
         name: "Temp Driver",
         username: "tempdriver",
         email: "temp.driver@example.test",
-        password: "password1",
+        password: "Fictional-Harbour-42",
         role: "driver",
         actorId: "staff-justin",
       });
@@ -110,7 +110,7 @@ describe("driver and mechanic access", () => {
           name: "Temp Mechanic",
           username: "tempmechanic",
           email: "temp.mechanic@example.test",
-          password: "password1",
+          password: "Fictional-Harbour-42",
           role: "mechanic",
           actorId: "staff-justin",
         });

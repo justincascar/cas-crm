@@ -3,4 +3,6 @@ export async function register() {
   if (process.env.CAS_PAGE_CHECK === "1") return;
   const { startWaitReleaseSchedule } = await import("./lib/db/wait-release-schedule");
   startWaitReleaseSchedule();
+  const { startRetentionSchedule } = await import("./lib/db/retention-schedule");
+  startRetentionSchedule();
 }

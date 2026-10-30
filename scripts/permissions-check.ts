@@ -47,7 +47,7 @@ async function opens(origin: string, cookie: string, address: string, justinOnly
   const body = response.headers.get("content-type")?.includes("zip") ? "" : await response.text();
   if (response.status === 403) return { opened: false, how: "403" };
   if (finalPath !== address.split("?")[0]) return { opened: false, how: `redirected to ${finalPath}` };
-  if (justinOnly && /Only Justin can (open the audit view|download the full export)/.test(body)) return { opened: false, how: "Only Justin message" };
+  if (justinOnly && /Only Justin can (open the audit view|download the full export|open the retention schedule|open a person|use the breach log)/.test(body)) return { opened: false, how: "Only Justin message" };
   return { opened: response.status === 200, how: String(response.status) };
 }
 

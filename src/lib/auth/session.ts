@@ -5,6 +5,7 @@ import { nowUtcIso } from "../dates";
 import { get, newId, run } from "../db/connection";
 import { SESSION_COOKIE, SESSION_DAYS } from "./constants";
 import { passwordMatches } from "./passwords";
+import { idleMinutes, loginLockedUntil, recordLoginAttempt } from "./login-security";
 import { isAdministrator, isOfficeRole } from "./roles";
 
 export { SESSION_COOKIE, SESSION_DAYS };
@@ -33,26 +34,34 @@ export function findStaffByUsername(username: string): StaffRow | undefined {
   );
 }
 
+/** A session ends after the Settings period without use (J15), as well as at its expiry. Use keeps it alive. */
 export function findValidSession(token: string | undefined | null): StaffUser | undefined {
   if (!token || !/^[a-f0-9]{64}$/.test(token)) return undefined;
-  return get<StaffUser>(
-    `SELECT st.id, st.name, st.username, st.email, st.role
+  const now = Date.now();
+  const idleCutoff = new Date(now - idleMinutes() * 60_000).toISOString();
+  const row = get<StaffUser & { last_seen: string }>(
+    `SELECT st.id, st.name, st.username, st.email, st.role, COALESCE(s.last_seen_at, s.created_at) AS last_seen
      FROM sessions s
      JOIN staff st ON st.id = s.staff_id
-     WHERE s.id = ? AND s.expires_at > ? AND st.active = 1`,
-    [token, nowUtcIso()],
+     WHERE s.id = ? AND s.expires_at > ? AND COALESCE(s.last_seen_at, s.created_at) > ? AND st.active = 1`,
+    [token, new Date(now).toISOString(), idleCutoff],
   );
+  if (!row) return undefined;
+  // Written at most once a minute, so opening pages does not write on every request.
+  if (String(row.last_seen) < new Date(now - 60_000).toISOString()) run(`UPDATE sessions SET last_seen_at = ? WHERE id = ?`, [new Date(now).toISOString(), token]);
+  return { id: row.id, name: row.name, username: row.username, email: row.email, role: row.role };
 }
 
 export function createSession(staffId: string): string {
   const token = randomBytes(32).toString("hex");
   const now = nowUtcIso();
   run(`DELETE FROM sessions WHERE expires_at <= ?`, [now]);
-  run(`INSERT INTO sessions(id, staff_id, created_at, expires_at) VALUES (?, ?, ?, ?)`, [
+  run(`INSERT INTO sessions(id, staff_id, created_at, expires_at, last_seen_at) VALUES (?, ?, ?, ?, ?)`, [
     token,
     staffId,
     now,
     sessionExpiryIso(),
+    now,
   ]);
   run(
     `INSERT INTO audit_log(id, at, actor_id, action, entity, entity_id, details)
@@ -71,6 +80,22 @@ export function destroySession(token: string | undefined | null, staffId?: strin
      VALUES (?, ?, ?, 'logout', 'staff', ?, 'Signed out')`,
     [newId("audit"), nowUtcIso(), staffId || null, staffId || null],
   );
+}
+
+export type LoginCheck = { ok: true; staff: StaffUser } | { ok: false; lockedUntil: string | null };
+
+/** Username and password, with the lockout after repeated failures (J15). Every attempt is recorded. */
+export function checkStaffLogin(username: string, password: string): LoginCheck {
+  const lockedUntil = loginLockedUntil(username);
+  const row = findStaffByUsername(username);
+  if (lockedUntil) {
+    passwordMatches(password, row?.password_hash); // same time taken whether or not locked
+    recordLoginAttempt({ username, ok: false, staffId: row?.id, reason: "locked" });
+    return { ok: false, lockedUntil };
+  }
+  const staff = verifyStaffLogin(username, password);
+  recordLoginAttempt({ username, ok: Boolean(staff), staffId: row?.id, reason: staff ? undefined : "wrong username or password" });
+  return staff ? { ok: true, staff } : { ok: false, lockedUntil: loginLockedUntil(username) };
 }
 
 export function verifyStaffLogin(username: string, password: string): StaffUser | null {

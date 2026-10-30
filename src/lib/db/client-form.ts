@@ -4,6 +4,8 @@ import { formatUkDate, nowUtcIso } from "../dates";
 import { claimDocumentMime } from "../domain/claim-documents";
 import { CAS_CLAIMS_MAILBOX } from "../constants";
 import { sendOutboundEmail } from "../email/gateway";
+import { liveEmailSending } from "../email/send-mode";
+import { PRIVACY_NOTICE_APPROVED, privacyNoticeLine } from "../documents/privacy-notice";
 import { readStoredFile, storeFileCopy } from "../storage/files";
 import { recordClaimEvent } from "./chronology";
 import { all, get, getDb, newId, run } from "./connection";
@@ -128,6 +130,8 @@ export async function sendClientLink(input: { claimId: string; actorId: string; 
   ready();
   const to = input.to.trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) throw new Error("Enter the client's email address.");
+  // J15: the client form cannot go to a real client while the privacy notice is a placeholder.
+  if (liveEmailSending() && !PRIVACY_NOTICE_APPROVED) throw new Error("The client form cannot be sent to a real client until the privacy notice wording is approved (J9a).");
   const claim = get<{ file_reference: string; full_name: string | null }>(
     `SELECT c.file_reference, p.full_name FROM claims c LEFT JOIN people p ON p.id = c.client_person_id WHERE c.id = ?`,
     [input.claimId],
@@ -147,6 +151,8 @@ export async function sendClientLink(input: { claimId: string; actorId: string; 
     `You can save and come back to it. The link works for ${CLIENT_LINK_DAYS} days and only shows what you enter.`,
     "",
     "Complete Accident Solutions Ltd",
+    "",
+    privacyNoticeLine(input.origin),
   ].join("\n");
   const sent = await sendOutboundEmail({ to, subject, body });
   if (!sent.ok) throw new Error(`The client form link was not sent. ${sent.error}`);

@@ -153,6 +153,9 @@ Five stages. Each later stage extends the same three journeys one step further: 
 63. **Fixed (R26).** Swapping the hire car changed the car straight away with no new agreement. It now needs a new signed hire agreement for the replacement car (or Justin's override), records both cars' readings, keeps one continuous hire, and moves the renewal alerts to the new agreement.
 64. **Fixed (R24).** Any second member of staff could verify a court date. Only Justin or the recorded instructed solicitor can now.
 65. **Fixed (R25).** The card fee was worked out on the net. It is now on the gross amount paid, with the basis shown on every invoice line.
+66. **Fixed (J15).** Free-text conviction details could be kept on the Client screen and in licence-check notes. Only a yes/no, the points and endorsement codes are kept now; existing free text was removed with a history note.
+67. **Fixed (J15).** npm audit found 1 critical and 4 high vulnerabilities (Next.js, sharp, source-map-js, undici, zod). All were fixed by non-breaking updates (Next.js 16.3.5 to 16.4.3); the finish routine now fails on any high or critical one.
+68. **Fixed (J15).** An unused sign-in action could have signed someone in without the new lockout or authenticator step. It was removed.
 
 ## How to try hire on a demonstration file
 

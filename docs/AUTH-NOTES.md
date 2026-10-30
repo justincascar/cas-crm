@@ -45,6 +45,16 @@ CAS_DEMO_PASSWORD_MECHANIC=...
 
 Then delete the SQLite file (or clear `password_hash` on staff) so the new hashes can be written. Existing hashes are not overwritten on every start.
 
+## Login security (J15, 30 October 2026)
+
+- **Lockout.** After 5 failed attempts a username is locked for 15 minutes, even with the right password. An administrator resetting the password unlocks it. Every attempt is in the audit view.
+- **Sign-out after inactivity.** A session ends after 30 minutes without use (Settings → Manage staff logins → Sign-in security; 5 to 480 minutes). Using any page keeps it alive.
+- **Strong passwords.** A new or reset password needs at least 12 characters using three of: lower case, capitals, numbers, symbols; not the username or a common word. The demonstration passwords above are unchanged.
+- **Authenticator app.** Required for an administrator (Justin): at his next sign-in the CRM shows a key to add to Microsoft Authenticator, Google Authenticator or similar, then asks for a six-digit code each time. Staff can switch one on in Settings → Your sign-in. A lost phone: Settings → Manage staff logins → Reset (lost phone); the person sets it up again at their next sign-in. Justin's was reset after the J15 walk-through, so he sets it up with his own phone.
+- **Microsoft 365 single sign-on** is shown as "not connected yet". Sign-in goes through a provider list and staff rows carry the provider and an external id, so it can be added beside the local login without a rewrite. Connecting it needs CAS's Microsoft admin set-up.
+- **Cross-site posts** are refused: a form post must come from the CRM's own pages.
+- The page check runs on a copy of this PC's database, so its sign-in as Justin never touches Justin's own authenticator.
+
 ## What this stage does not do
 
 - **Still one PC only.** This is not a shared office server. Another computer cannot sign in to this database.

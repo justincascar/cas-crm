@@ -18,6 +18,7 @@ import {
   scheduleOfLoss,
 } from "@/lib/db/litigation";
 import { formatGbp } from "@/lib/money";
+import { legalHold } from "@/lib/db/retention";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 const box = "space-y-3 rounded-xl border border-line bg-card p-5";
@@ -41,6 +42,31 @@ export default async function ClaimLitigationPage({
   const reference = String(data.claim.file_reference);
   const justin = canApproveLegal(staff.id);
   const canVerify = canVerifyCourtDates(id, staff.id);
+  const hold = legalHold(id);
+  const holdBox = (
+    <section className={box} data-legal-hold={hold ? "on" : "off"}>
+      <h3 className="font-serif text-lg text-navy-deep">Legal hold</h3>
+      <p className="text-sm">
+        {hold
+          ? `On since ${formatUkDateTime(hold.at)}: nothing on this claim can be deleted under the retention schedule. Reason: ${hold.reason}`
+          : "Not on legal hold. A hold stops anything on this claim being deleted under the retention schedule."}
+      </p>
+      {justin ? (
+        <form method="post" action={action} className="flex flex-wrap items-end gap-2">
+          <input type="hidden" name="intent" value={hold ? "unhold" : "hold"} />
+          {hold ? null : (
+            <label className="min-w-64 flex-1 text-sm">
+              Reason
+              <input name="reason" required className={field} />
+            </label>
+          )}
+          <button type="submit" className={button}>
+            {hold ? "Lift the legal hold" : "Place a legal hold"}
+          </button>
+        </form>
+      ) : null}
+    </section>
+  );
 
   if (!view.open) {
     return (
@@ -53,6 +79,7 @@ export default async function ClaimLitigationPage({
             Open a litigation file
           </button>
         </form>
+        {holdBox}
       </div>
     );
   }
@@ -71,6 +98,7 @@ export default async function ClaimLitigationPage({
       </p>
       {error ? <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue" data-form-error>{error}</p> : null}
       {saved && !error ? <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm text-ok">Saved.</p> : null}
+      {holdBox}
 
       <section className={box}>
         <h3 className="font-serif text-lg text-navy-deep">Court</h3>

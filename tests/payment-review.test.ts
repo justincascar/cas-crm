@@ -380,7 +380,7 @@ describe("payment review — accept and dispute", () => {
         name: "Second Admin",
         username: "secondadmin",
         email: "second.admin@example.test",
-        password: "password1",
+        password: "Fictional-Harbour-42",
         role: "administrator",
         actorId: "staff-justin",
       });

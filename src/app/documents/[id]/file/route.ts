@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireSignedIn } from "@/lib/auth/session";
 import { canReadDocument } from "@/lib/db/jobs";
+import { recordDocumentView } from "@/lib/db/view-audit";
 import { getDocument } from "@/lib/db/chronology";
 import { readStoredFile } from "@/lib/storage/files";
 
@@ -16,13 +17,15 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   }
   try {
     const { buffer } = readStoredFile(String(doc.stored_relpath));
+    recordDocumentView({ actorId: staff.id, documentId: id, how: "downloaded" });
     const filename = String(doc.original_filename || "document.pdf").replace(/"/g, "");
     return new NextResponse(new Uint8Array(buffer), {
       headers: {
         "Content-Type": String(doc.mime_type || "application/pdf"),
         "Content-Disposition": `attachment; filename="${filename}"`,
         "X-Frame-Options": "DENY",
-        "Content-Security-Policy": "frame-ancestors 'none'",
+        "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "sandbox; frame-ancestors 'none'",
       },
     });
   } catch {

@@ -262,6 +262,15 @@ export function saveDriverLicenceNumber(claimId: string, driver: HireDriver, lic
   run(`UPDATE hire_pack_data SET additional_licence = ? WHERE claim_id = ? AND lower(trim(additional_name)) = ?`, [number, claimId, norm]);
 }
 
+/** Endorsement codes such as SP30 or CU80, as the check showed them. Anything else is refused (J15). */
+export function endorsementCodeList(raw: string): string[] {
+  const parts = String(raw || "").toUpperCase().split(/[\s,;]+/).filter(Boolean);
+  if (parts.length > 10) throw new Error("Enter at most 10 endorsement codes.");
+  const bad = parts.find((part) => !/^[A-Z]{2}\d{2}$/.test(part));
+  if (bad) throw new Error(`"${bad.slice(0, 20)}" is not an endorsement code. Enter codes only, such as SP30, as the check shows them.`);
+  return [...new Set(parts)];
+}
+
 export function listLicenceChecks(claimId: string): LicenceCheckRow[] {
   ensureLicenceTable();
   return all<LicenceCheckRow>(
@@ -288,7 +297,8 @@ export function recordLicenceCheck(input: {
   licenceExpiresOn: string;
   checkedOn: string;
   result?: string;
-  notes?: string;
+  /** Endorsement codes relevant to the hire, for example "SP30, CU80". No free text (J15). */
+  endorsementCodes?: string;
   documentId?: string | null;
   /** Typed on the check card when the person's record has none. Saved to that record. */
   licenceNumber?: string;
@@ -313,14 +323,13 @@ export function recordLicenceCheck(input: {
       driver.key.slice("person:".length),
     ]);
   }
-  const points =
-    input.pointsEndorsements != null && input.pointsEndorsements.trim()
-      ? requireText(input.pointsEndorsements, "Enter the penalty points.")
-      : String(normalPoints(input.penaltyPoints));
+  // J15 minimisation: only the points and the endorsement codes the check showed. No free-text history.
+  const codes = endorsementCodeList(input.endorsementCodes ?? input.pointsEndorsements ?? "");
+  const pointCount = normalPoints(input.penaltyPoints ?? 0);
+  const points = pointCount === 0 && codes.length === 0 ? "No points" : [`${pointCount} point${pointCount === 1 ? "" : "s"}`, ...codes].join("; ");
   const code = String(input.checkCode || "").trim();
   if (code.length > 200) throw new Error("That entry is too long. Keep it to what the check showed.");
-  const notes = (input.notes || "").trim();
-  if (notes.length > 1000) throw new Error("Keep the notes short.");
+  const notes = "";
   const id = newId("lic");
   run(
     `INSERT INTO licence_checks(
@@ -341,7 +350,7 @@ export function recordLicenceCheck(input: {
       nowUtcIso(),
       result,
       notes,
-      normalPoints(input.penaltyPoints ?? (Number(points) || 0)),
+      pointCount,
       input.documentId || null,
     ],
   );

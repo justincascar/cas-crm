@@ -61,7 +61,8 @@ export default async function AuditPage({
             <option value="">Everything</option>
             <option value="history">Steps on the history</option>
             <option value="save">Saved screens and sections</option>
-            <option value="other">Sign-ins, exports and other</option>
+            <option value="viewed">Viewed or downloaded (bank statements, licence checks, signed agreements, exports, person's data)</option>
+            <option value="other">Sign-ins and other</option>
           </select>
         </label>
         <div className="flex gap-3 sm:col-span-5">

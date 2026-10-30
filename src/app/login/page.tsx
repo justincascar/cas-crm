@@ -27,7 +27,7 @@ export default async function LoginPage({
             <span className="ref">docs/AUTH-NOTES.md</span> on this PC.
           </p>
           <div className="mt-6">
-            <LoginForm nextPath={nextPath} failed={error === "1"} />
+            <LoginForm nextPath={nextPath} failed={error === "1"} locked={error === "locked"} />
           </div>
         </div>
       </div>

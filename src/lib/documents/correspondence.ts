@@ -1,4 +1,5 @@
 import { formatUkDate } from "../dates";
+import { privacyNoticeLine } from "./privacy-notice";
 import { CAS_CLAIMS_MAILBOX } from "../constants";
 import { HIRE_CONTINUING, chargeableHireEndLabel } from "../domain/rules";
 import { resolveVehicleLocation } from "../domain/vehicle-location";
@@ -363,6 +364,7 @@ export function correspondenceVars(ctx: CorrespondenceContext): Record<string, s
     company_address: CAS_COMPANY.address,
     company_email: CAS_CLAIMS_MAILBOX,
     company_phone: CAS_COMPANY.phone,
+    privacy_notice: privacyNoticeLine(),
     claim_ref: ctx.fileReference,
     client_name: textOrUnknown(ctx.clientName),
     client_email: textOrUnknown(ctx.clientEmail),

@@ -10,12 +10,14 @@
     "lint": "eslint",
     "test": "tsx --test tests/*.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.tests.json",
-    "check:pages": "tsx scripts/page-load-check.ts",
+    "check:pages": "tsx scripts/page-load-check.ts && tsx scripts/security-check.ts",
     "check:speed": "tsx scripts/speed-check.ts",
     "backup": "tsx scripts/backup.ts",
     "restore": "tsx scripts/restore.ts",
-    "test:journeys": "tsx scripts/journey-check.ts && tsx scripts/awkward-journeys.ts && tsx scripts/permissions-check.ts",
-    "seed": "tsx scripts/seed.ts"
+    "test:journeys": "tsx scripts/journey-check.ts && tsx scripts/awkward-journeys.ts && tsx scripts/permissions-check.ts && tsx scripts/security-journeys.ts",
+    "seed": "tsx scripts/seed.ts",
+    "data-map": "tsx scripts/data-map.ts",
+    "check:security": "tsx scripts/security-check.ts"
   },
   "dependencies": {
     "@napi-rs/canvas": "^1.0.9",

@@ -32,6 +32,9 @@ export const ROLE_ACCESS: AccessArea[] = [
   { key: "jobs", label: "My jobs today", path: "/jobs", open: { administrator: true, staff: true, driver: true, mechanic: true } },
   { key: "audit", label: "Audit view", path: "/audit", open: { administrator: true, staff: false, driver: false, mechanic: false }, justinOnly: true },
   { key: "export", label: "Full export", path: "/settings/export", open: { administrator: true, staff: false, driver: false, mechanic: false }, justinOnly: true },
+  { key: "retention", label: "Retention and deletion", path: "/settings/retention", open: { administrator: true, staff: false, driver: false, mechanic: false }, justinOnly: true },
+  { key: "personData", label: "This person's data", path: "/settings/person-data", open: { administrator: true, staff: false, driver: false, mechanic: false }, justinOnly: true },
+  { key: "breaches", label: "Breach log", path: "/settings/breaches", open: { administrator: true, staff: false, driver: false, mechanic: false }, justinOnly: true },
 ];
 
 /** What each role can do, in plain words, for the Settings page. */

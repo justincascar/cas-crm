@@ -10,6 +10,7 @@ import {
   setStaffRole,
 } from "@/lib/db/staff-admin";
 import { formVersion, withSectionSave } from "@/lib/db/record-version";
+import { resetTwoStep, setIdleMinutes } from "@/lib/auth/login-security";
 import { redirectClash } from "@/lib/http/version-clash";
 
 function bounce(error?: string) {
@@ -67,6 +68,25 @@ export async function actionResetStaffPassword(formData: FormData) {
   saveStaffRow(formData, admin.id, { password: "entered" }, () =>
     resetStaffPassword(String(formData.get("staffId") || ""), String(formData.get("password") || ""), admin.id),
   );
+  revalidatePath("/settings/staff");
+  bounce();
+}
+
+/** A lost phone: the person sets up their authenticator again at their next sign-in. */
+export async function actionResetTwoStep(formData: FormData) {
+  const admin = await requireAdministrator();
+  resetTwoStep({ staffId: String(formData.get("staffId") || ""), actorId: admin.id });
+  revalidatePath("/settings/staff");
+  bounce();
+}
+
+export async function actionSetIdleMinutes(formData: FormData) {
+  await requireAdministrator();
+  try {
+    setIdleMinutes(String(formData.get("minutes") || ""));
+  } catch (error) {
+    bounce(error instanceof Error ? error.message : "Not saved.");
+  }
   revalidatePath("/settings/staff");
   bounce();
 }

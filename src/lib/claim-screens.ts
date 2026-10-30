@@ -135,7 +135,8 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
           { name: "issuingCountry", label: "Issuing country" },
           { name: "drivingTestDate", label: "Date of driving test", type: "date" },
           { name: "salutation", label: "Salutation for letters", hint: "Example: Dear Sirs" },
-          { name: "convictions", label: "Motor/criminal convictions in last 5 years", type: "textarea", span: 2 },
+          // J15: a yes or no only. Details of points and endorsements are kept on the licence check, as codes.
+          { name: "convictionsDeclared", label: "Motoring convictions in the last 5 years?", type: "select", options: yesNo, hint: "Points and endorsement codes go on the licence check. No other details are kept." },
           { name: "correspondenceByEmail", label: "All correspondence to be sent by email", type: "checkbox", span: 2 },
         ],
       },
