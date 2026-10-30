@@ -191,7 +191,7 @@ CAS's real claims don't follow the happy path. Build a browser journey test for 
     - invoice to the client's own insurer = the authorised amount minus the excess
 
 ### J12 — Foundations you can test before going live
-DONE — commit to follow. Export and audit (Settings, Justin only), `npm run backup` / `npm run restore` (docs/BACKUP-AND-RESTORE.md), Who can do what with `scripts/permissions-check.ts`, `npm run check:speed`.
+DONE — cc61aae. Export and audit (Settings, Justin only), `npm run backup` / `npm run restore` (docs/BACKUP-AND-RESTORE.md), Who can do what with `scripts/permissions-check.ts`, `npm run check:speed`.
 - **Full export:**
   - one button (Justin only) exports all claims, people, money, history and documents as a zip
   - a CSV per table, plus the document files
@@ -314,4 +314,4 @@ Review notes R1–R12 are fixed (69cec49) and J10 is done (3cbeaa2). Everything 
 
 ## Where I stopped (30 October 2026)
 
-R22 (eb9b355) and J11 (461e878) are done and pushed. Next: J12, then J13 and J14. J9a and J9 wait for Justin. Open questions: 1–3, 5, 7, 10, 12 and 16–18 in QUESTIONS-FOR-JUSTIN.md.
+R22 (eb9b355), J11 (461e878) and J12 (cc61aae) are done and pushed. Next: J13, then J14. J9a and J9 wait for Justin. Open questions: 1–3, 5, 7, 10, 12 and 16–18 in QUESTIONS-FOR-JUSTIN.md.
