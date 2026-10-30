@@ -4,24 +4,12 @@ Written by the reviewer, Claude (Cowork), after testing the app in the browser a
 
 ## Open
 
-**R17 — Use the recovery and storage wording CAS already supplied (answers question 10).**
-The supplied Hire Pack terms (`src/lib/documents/cas-hire-terms.ts`, taken from Hire Pack.doc) already define "Storage & Recovery Charges" as part of the "Total Charges" the customer must pay (definitions, and clauses 1.1, 1.5, 2.2 and 2.17).
-
-What to do:
-- Use that existing wording. Do not write new terms.
-- Make sure a client who has recovery or storage but NO hire car still signs the Storage & Recovery Agreement, with the relevant definitions and clauses from the same supplied terms attached, before charges are claimed. Use the same signing routes as the hire agreement: on screen or paper upload.
-- The customer invoice for recovery and storage refers to that signed agreement.
-- Update question 10 in `QUESTIONS-FOR-JUSTIN.md` to say the wording comes from the supplied Hire Pack. Justin only needs to send a newer version if one exists.
-
-**R18 — Flag for legal review only; do not change the wording.**
-Add to `QUESTIONS-FOR-JUSTIN.md`, under "for your solicitor":
-- Clause 5.3 cites the Consumer Credit (Exempt Agreements) Order 1989. The reviewer understands that Order was replaced in 2014, when consumer credit moved to the FCA, so the citation may need updating.
-- Doorstep signing and the client's cancellation rights.
-
-Do not edit the terms. This note is for Justin's solicitor to confirm.
+Nothing open.
 
 ## Fixed
 
+- **R17** fixed in 2967ad7: the standalone Storage & Recovery Agreement is the supplied Hire Pack Storage & Recovery page, the relevant supplied definitions and clauses (copied line by line) and the supplied notice of the right to cancel; signed on screen or by paper upload from the Recovery page; recovery and storage payment requests are refused until it is signed (or a signed hire agreement included the page); the customer invoice names the signed agreement; question 10 updated.
+- **R18** fixed in 2967ad7: the clause 5.3 citation and doorstep signing and cancellation rights are under "For your solicitor" in QUESTIONS-FOR-JUSTIN.md. The terms were not edited.
 - **R13** fixed in 37b2895: recording step 7 (report sent to the insurer) starts the 3-day chase, worded for repair payment, the total-loss payment (pre-accident value less salvage) or the insurer's decision; when the outcome is not set the handler gets a task to set it. Existing chase rules unchanged.
 - **R14** fixed in 37b2895: Settings shows the sending hours (Monday to Friday, 09:00 to 17:00 UK time) as confirmed by Justin.
 - **R15** fixed in 37b2895: Card fee tick on the Record the recovery and new-claim forms, off by default, worked out on the ticked charges, VAT on the fee as the old screen, its own line; percentage in Settings. VAT on the card fee is question 13.
@@ -38,6 +26,26 @@ Do not edit the terms. This note is for Justin's solicitor to confirm.
 - **R10** fixed in 69cec49: group charged is suggested from the client's own car with the reason (or says why not); the header names the actual next hire item: Pre-hire checks, Hire agreement – sign, Handover.
 - **R11** fixed in 69cec49: only office staff are offered or accepted as claim handlers.
 - **R12** fixed in 69cec49: rebuttals and the impecuniosity response show "Needs Justin's approval"; a new approveLegalCorrespondence permission (Justin) approves; marking sent or emailing is refused until approved. No letter-before-action or court template exists yet; any added later goes on the same list.
+
+<details><summary>Reviewer's notes R17–R18 (29 October 2026, evening)</summary>
+
+**R17 — Use the recovery and storage wording CAS already supplied (answers question 10).**
+The supplied Hire Pack terms (`src/lib/documents/cas-hire-terms.ts`, taken from Hire Pack.doc) already define "Storage & Recovery Charges" as part of the "Total Charges" the customer must pay (definitions, and clauses 1.1, 1.5, 2.2 and 2.17).
+
+What to do:
+- Use that existing wording. Do not write new terms.
+- Make sure a client who has recovery or storage but NO hire car still signs the Storage & Recovery Agreement, with the relevant definitions and clauses from the same supplied terms attached, before charges are claimed. Use the same signing routes as the hire agreement: on screen or paper upload.
+- The customer invoice for recovery and storage refers to that signed agreement.
+- Update question 10 in `QUESTIONS-FOR-JUSTIN.md` to say the wording comes from the supplied Hire Pack. Justin only needs to send a newer version if one exists.
+
+**R18 — Flag for legal review only; do not change the wording.**
+Add to `QUESTIONS-FOR-JUSTIN.md`, under "for your solicitor":
+- Clause 5.3 cites the Consumer Credit (Exempt Agreements) Order 1989. The reviewer understands that Order was replaced in 2014, when consumer credit moved to the FCA, so the citation may need updating.
+- Doorstep signing and the client's cancellation rights.
+
+Do not edit the terms. This note is for Justin's solicitor to confirm.
+
+</details>
 
 <details><summary>Reviewer's notes R13–R16 (29 October 2026, evening)</summary>
 
