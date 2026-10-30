@@ -6,9 +6,16 @@ import { requireStaff } from "@/lib/auth/session";
 import { gapsForClaim } from "@/lib/db/repair-progress";
 import { getClaim } from "@/lib/db/queries";
 
-export default async function ClaimHistoryPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function ClaimHistoryPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ stepError?: string }>;
+}) {
   await requireStaff();
   const { id } = await params;
+  const { stepError } = await searchParams;
   const data = getClaim(id);
   if (!data) notFound();
   const claim = data.claim;
@@ -36,6 +43,7 @@ export default async function ClaimHistoryPage({ params }: { params: Promise<{ i
         correspondence={data.correspondence}
         documents={data.documents}
         liabilityStatus={String(claim.claim_type || "")}
+        stepError={stepError}
       />
     </div>
   );

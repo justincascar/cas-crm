@@ -1,5 +1,8 @@
 import Link from "next/link";
 import { VehicleMovements } from "@/components/claims/VehicleMovements";
+import { StorageRecoveryAgreementPanel } from "@/components/claims/StorageRecoveryAgreementPanel";
+import { storageRecoveryState } from "@/lib/db/storage-recovery-signing";
+import { currentHireEpisode } from "@/lib/db/hire-readiness";
 import { listVehicleMovements, NOT_DRIVEABLE_REASONS, notDriveableLabel } from "@/lib/db/vehicle-movements";
 import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/ClaimTable";
@@ -173,6 +176,12 @@ export async function RecoveryHeadScreen({
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{query.error}</p>
       ) : null}
 
+      {query.saved === "sr-produced" && !query.error ? (
+        <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm text-ok">Storage &amp; Recovery Agreement produced for signature. Nothing was sent.</p>
+      ) : null}
+      {query.saved === "sr-signed" && !query.error ? (
+        <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm text-ok">Signed Storage &amp; Recovery Agreement filed.</p>
+      ) : null}
       {query.saved === "recovery" && !query.error ? (
         <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm text-ok">Recovery recorded.</p>
       ) : null}
@@ -196,6 +205,8 @@ export async function RecoveryHeadScreen({
           </>
         )}
       </section>
+
+      <StorageRecoveryAgreementPanel claimId={id} state={storageRecoveryState(id)} clientName={String(data.claim.client_name || "")} hasHireCar={Boolean(currentHireEpisode(id)?.fleet_vehicle_id)} />
 
       <div id="movements" className="scroll-mt-16">
         <VehicleMovements claimId={id} movements={listVehicleMovements(id)} returnTo={headScreenPath(id, "recovery")} />

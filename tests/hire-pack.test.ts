@@ -107,6 +107,8 @@ describe("CAS hire pack fields", () => {
     assert.match(sr, /does not require a Hire Agreement/);
     assert.match(sr, /SA12 CWA/);
     assert.match(sr, /42110/);
-    assert.match(sr, /solicitor-reviewed standalone legal wording is still to come/i);
+    assert.doesNotMatch(sr, /DRAFT – wording not approved/);
+    assert.match(sr, /Notice of the Right to Cancel/);
+    assert.match(sr, /1.5 For the duration of the Storage Period/);
   });
 });

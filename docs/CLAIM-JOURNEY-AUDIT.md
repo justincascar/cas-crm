@@ -139,6 +139,7 @@ Five stages. Each later stage extends the same three journeys one step further: 
 49. **Open.** If a storage end already on the file matches the proposed one but was never confirmed, step 9 offers no Confirm storage end button and waits. Use the storage screen, or mark the part not needed with a reason.
 50. **Open.** Some demonstration ledger lines do not add up: TEST-0001 recovery shows 1 job at £474.00 against a net of £395.00, and TEST-0003 storage has a claimed figure equal to its net, not its gross. These are seed figures. The Financials list now shows them side by side. Not changed in J6.
 51. **Open.** No demonstration file has a payment request recorded as sent, so every aged-debt row on the demonstration data is Not requested yet. The age bands are covered by tests.
+52. **Open.** Older demonstration files that already have recovery or storage charges were set up before the Storage & Recovery Agreement had to be signed. They have no signed agreement, so a new recovery or storage payment request on them is refused until one is signed or uploaded. Requests already on the file are not changed (R17).
 
 ## How to try hire on a demonstration file
 

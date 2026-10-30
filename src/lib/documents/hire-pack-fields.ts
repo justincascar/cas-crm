@@ -39,7 +39,7 @@ export const HIRE_PACK_SECTIONS = [
     id: "storage_recovery",
     title: "Storage & Recovery Agreement (standalone)",
     audience: "client",
-    note: "Separate from the hire agreement. Can be produced when there is recovery/storage but no hire. Solicitor-reviewed standalone wording is still to come.",
+    note: "Separate from the hire agreement. Can be produced when there is recovery/storage but no hire. Built from the supplied Hire Pack wording; the client signs it on screen or on paper.",
   },
   {
     id: "collection_sheet",
@@ -119,7 +119,7 @@ export const STORAGE_RECOVERY_MANDATORY = ["clientName", "clientVehicleRegistrat
 export const OWN_VEHICLE_DETAILS_HEADING = "Your Own Vehicle Details";
 
 export const STORAGE_RECOVERY_STANDALONE_BANNER =
-  "This Storage & Recovery Agreement is a standalone document. It is not a page of the Hire Agreement and can be produced when there is recovery or storage but no hire. Solicitor-reviewed standalone legal wording is still to come. Facts below are taken from the file. Signatures are not fabricated.";
+  "This Storage & Recovery Agreement is a standalone document. It is not a page of the Hire Agreement and can be produced when there is recovery or storage but no hire. It uses the supplied Hire Pack Storage & Recovery page, the relevant supplied definitions and clauses, and the supplied notice of the right to cancel. Facts are taken from the file. Signatures are not fabricated.";
 
 export const RENTAL_PERIOD_DECISION = {
   packDays: 89,

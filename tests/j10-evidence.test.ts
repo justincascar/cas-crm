@@ -132,7 +132,7 @@ describe("J10 — recovery and storage evidence", () => {
       const doc = get<{ title: string; body_html: string }>(`SELECT title, body_html FROM documents WHERE id = ?`, [made.documentId]);
       assert.equal(doc?.title, "Draft customer invoice — Recovery and storage");
       assert.match(String(doc?.body_html), /To: Gethin Evidence/);
-      assert.match(String(doc?.body_html), /depends on the recovery and storage terms they signed/);
+      assert.match(String(doc?.body_html), /No signed Storage &amp; Recovery Agreement is on the file yet/);
     });
     db.close();
   });

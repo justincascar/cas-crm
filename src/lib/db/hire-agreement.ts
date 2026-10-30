@@ -1,5 +1,5 @@
-import { CAS_COMPANY, CAS_HIRE_AGREEMENT_BANNER, CAS_HIRE_TERMS_HTML } from "../documents/cas-hire-terms";
-import { OWN_VEHICLE_DETAILS_HEADING } from "../documents/hire-pack-fields";
+import { CAS_HIRE_AGREEMENT_BANNER, CAS_HIRE_TERMS_HTML } from "../documents/cas-hire-terms";
+import { cancelNoticeHtml, storageRecoveryPageHtml } from "../documents/storage-recovery-agreement";
 import { describeHireAgreementParts, type AgreementPart, type HireAgreementParts } from "../documents/hire-agreement-parts";
 import {
   GTA_MARKUP_PERCENT_DEFAULT,
@@ -223,58 +223,31 @@ ${CAS_HIRE_TERMS_HTML}
 <p>Signed by Hirer: ______________________</p>
 <p>Date of Agreement: ______________</p>
 </section>
-${view.includeStorageRecovery ? `<section>
-<h2>Hire Agreement — ${pageLabel(storagePage)}</h2>
-<p>${CAS_HIRE_AGREEMENT_BANNER}</p>
-<p>Agreement number: <strong>${agreement}</strong></p>
-<h2>Storage &amp; Recovery Agreement</h2>
-${storageGap}
-<p>Name: ${shown(view.hirerName)}<br/>Address: ${shown(view.hirerAddress)}</p>
-<h3>${OWN_VEHICLE_DETAILS_HEADING}</h3>
-<p>This is the client's own vehicle being recovered and stored, not the hire vehicle.</p>
-<p>Make: ${shown(view.clientMake)} &nbsp; Model: ${shown(view.clientModel)} &nbsp; Vehicle reg: ${shown(view.clientRegistration)}<br/>
-GTA group: ${escape(gtaGroupLabel(view.clientGroup))}</p>
-<p>Storage daily rate: ${escape(moneyOrNotEntered(view.storageDailyPence))} &nbsp; Recovery: ${escape(moneyOrNotEntered(view.recoveryPence))}</p>
-<p>Mileage: ${escape(blank(view.ownMileage) || "—")} &nbsp; Fuel: ${escape(blank(view.ownFuel) || "—")}</p>
-<p>Tyre depths NSF / OSF / NSR / OSR: ${escape(blank(view.ownTyres) || "—")}</p>
-<p>Damage: ${escape(blank(view.ownDamage) || "—")}</p>
-<p>I hereby confirm that the damage to the vehicle is marked above and may be supported by digital images taken at the time of collection by Complete Accident Solutions Ltd.</p>
-<p>This STORAGE &amp; RECOVERY agreement is bound by the terms outlined in full in the accompanying Terms and Conditions and incur the charges as outlined above upon signing.</p>
-<p>Complete Accident Solutions LTD will not accept responsibility for any valuables left in the vehicle at point of collection including removable car stereo and satellite navigation equipment.</p>
-<p>Complete Accident Solutions LTD will not accept responsibility for any mechanical defects with the above vehicle whilst in their possession.</p>
-<p>Complete Accident Solutions LTD accept responsibility for any PCNs corresponding to the above vehicle incurred between the DATE COLLECTED and DATE RETURNED as recorded above.</p>
-<p>In the event that allegations are made against Complete Accident Solutions LTD with regards to damage being incurred to the above vehicle whilst in their possession the damage recorded on this form, digital images taken at the point of collection and return and possible engineering evidence will be used to refute or substantiate the allegations and copies of all paperwork provided to the client.</p>
-<p>Signed by Hirer: ______________________</p>
-<p>Signed for and on behalf of Complete Accident Solutions Ltd: ______________________</p>
-</section>` : ""}
-<section>
-<h2>Hire Agreement — ${pageLabel(cancelPage)}</h2>
-<p>${CAS_HIRE_AGREEMENT_BANNER}</p>
-<h2>Notice of the Right to Cancel</h2>
-<p>Date: ${shown(dateOut)}</p>
-<p>"The Cancellation of Contracts made in a Consumer's Home or Place of Work etc. Regulations 2008"</p>
-<p>Name: ${shown(view.hirerName)}</p>
-<p>Address: ${shown(view.hirerAddress)}</p>
-<p>In accordance with the "The Cancellation of Contracts made in a Consumer's Home or Place of Work etc. Regulations 2008" you have the right to cancel the Contract within 14 days from the date as presented on the contract by completing the section below and returning to Complete Accident Solutions Ltd. The 14 day period is determined from the date outlined on the Contract till the date of serving notice of cancellation.</p>
-<p>The notice of cancellation will be deemed to be served as soon as it is posted or sent to Complete Accident Solutions Ltd or in the case of an electronic communication from the day it is sent to Complete Accident Solutions Ltd.</p>
-<p>Upon safe receipt of the "Notice of the Right to Cancel" document a member of staff from Complete Accident Solutions Ltd will contact you by telephone within 2 hours in order to discuss any provisions already provided by Complete Accident Solutions Ltd which may include a replacement vehicle and or repairs to your vehicle. Cancellation of the contract will then be confirmed in writing and will be provided by hand or post within 24 hours.</p>
-<p>Due to factors out of Complete Accident Solutions Ltd and your control with regards to the "Notice of the Right to Cancel" document not being received or received illegible if sent by Post, or Electronic Mail it remains your responsibility to ensure that Complete Accident Solutions Ltd are aware of your instruction to cancel the contract and therefore if you have not received a telephone call from Complete Accident Solutions Ltd within 24 hours if sent by Post or 2 hours if sent by Electronic Mail you are required to contact Complete Accident Solutions Ltd without any delay on (01792) 341069.</p>
-<p>If you cancel the Contract within the cancellation period you will immediately become liable to pay for all goods and services that were supplied with the Contract before cancellation.</p>
-<p>If the Contract includes the provision for repairs to your vehicle which have either commenced or parts ordered in anticipation of repairs being undertaken you will be responsible to meet any incurred costs and the nominated repairing garage are entitled to exercise Lien on your vehicle until any outstanding charges have been settled by you.</p>
-<p>If further explanation or clarification of this document is required please either contact the HIRE ADMINISTRATION department as detailed below or seek independent legal advice.</p>
-<p>You are not under any obligation to use the section below but it is your duty to ensure that the notice of cancellation that you send to us conveys your name, address, agreement number, signature and date of signing in order to ensure that it can administered without delay.</p>
-<p>Acceptable methods of notifying Complete Accident Solutions Ltd of your intention to cancel the contract are by:</p>
-<p>Post: Hire Administration, ${CAS_COMPANY.name}, 171 Cwmgarw Road, Brynamman, Ammanford, SA18 1DG</p>
-<p>Electronic mail: ${CAS_COMPANY.email}</p>
-<p>If you wish to cancel the contract you MUST DO SO IN WRITING and deliver personally or send (which may be by electronic mail) this to the address below. You may use this form if you want to but you do not have to.</p>
-<p>(Complete, detach and return this form ONLY IF YOU WISH TO CANCEL THE CONTRACT.)</p>
-<p>TO THE: HIRE ADMINISTRATION DEPARTMENT, COMPLETE ACCIDENT SOLUTIONS LTD, ${CAS_COMPANY.address}</p>
-<p>Agreement number: <strong>${agreement}</strong></p>
-<p>Name: ${shown(view.hirerName)}</p>
-<p>Address: ${shown(view.hirerAddress)}</p>
-<p>Signature: ______________________ Date: ______________</p>
-<p>Generated ${escape(formatUkDateTime(nowUtcIso()))}. Signatures are not fabricated.</p>
-</section>
+${view.includeStorageRecovery ? storageRecoveryPageHtml({
+  heading: `Hire Agreement — ${pageLabel(storagePage)}`,
+  agreementNumber: agreement,
+  storageGap,
+  name: shown(view.hirerName),
+  address: shown(view.hirerAddress),
+  clientMake: shown(view.clientMake),
+  clientModel: shown(view.clientModel),
+  clientRegistration: shown(view.clientRegistration),
+  clientGroup: escape(gtaGroupLabel(view.clientGroup)),
+  storageRate: escape(moneyOrNotEntered(view.storageDailyPence)),
+  recovery: escape(moneyOrNotEntered(view.recoveryPence)),
+  mileage: escape(blank(view.ownMileage) || "—"),
+  fuel: escape(blank(view.ownFuel) || "—"),
+  tyres: escape(blank(view.ownTyres) || "—"),
+  damage: escape(blank(view.ownDamage) || "—"),
+}) : ""}
+${cancelNoticeHtml({
+  heading: `Hire Agreement — ${pageLabel(cancelPage)}`,
+  date: shown(dateOut),
+  name: shown(view.hirerName),
+  address: shown(view.hirerAddress),
+  agreementNumber: agreement,
+  generated: escape(formatUkDateTime(nowUtcIso())),
+})}
 </article>`;
 }
 

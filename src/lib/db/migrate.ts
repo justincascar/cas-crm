@@ -3,6 +3,7 @@ import { ensureVehicleMovements } from "./vehicle-movements";
 import { ensureStorageChronology } from "./storage-chronology";
 import { ensureGtaTables } from "./gta-rates";
 import { ensureEsignTable } from "./esign";
+import { ensureStorageRecoverySignatureTable } from "./storage-recovery-signing";
 import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_LEGAL_CORRESPONDENCE, APPROVE_SETTLEMENT, EXTENDED_WAIT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS, RELEASE_WITHOUT_EXCESS } from "../auth/roles";
 
 const TABLES: Record<string, Array<[string, string]>> = {
@@ -376,6 +377,7 @@ export function migrate(db: DatabaseSync) {
   `);
   ensureGtaTables(db);
   ensureEsignTable(db);
+  ensureStorageRecoverySignatureTable(db);
   db.exec(`
     CREATE TABLE IF NOT EXISTS repair_evidence (
       id TEXT PRIMARY KEY,

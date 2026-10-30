@@ -2,10 +2,8 @@ import { CAS_COMPANY, CAS_HIRE_AGREEMENT_BANNER, CAS_HIRE_TERMS_HTML } from "../
 import {
   HIRE_PACK_MANDATORY,
   plainPackFields,
-  OWN_VEHICLE_DETAILS_HEADING,
   RENTAL_PERIOD_DECISION,
   STORAGE_RECOVERY_MANDATORY,
-  STORAGE_RECOVERY_STANDALONE_BANNER,
 } from "../documents/hire-pack-fields";
 import { formatUkDate, formatUkDateTime, nowUtcIso } from "../dates";
 import { describeHireAgreementParts } from "../documents/hire-agreement-parts";
@@ -19,8 +17,8 @@ import { all, get, newId, run } from "./connection";
 import { MITIGATION_QUESTIONNAIRE } from "../domain/impecuniosity";
 import { impecuniosityGate, latestMitigationForPack, type ImpecuniosityGate } from "./impecuniosity";
 import { recordClaimEvent } from "./chronology";
-import { DRAFT_WORDING_NOT_APPROVED } from "../documents/template-approval";
-import { recoveryLinesPlain } from "./recovery-display";
+import { recoveryDisplayLines, recoveryLinesPlain } from "./recovery-display";
+import { cancelNoticeHtml, storageRecoveryPageHtml, storageRecoveryTermsHtml } from "../documents/storage-recovery-agreement";
 
 export type HirePackData = Record<string, string | number | null>;
 
@@ -183,7 +181,7 @@ export function getHirePack(claimId: string) {
   };
   const srMissing = STORAGE_RECOVERY_MANDATORY.filter((key) => {
     const value = srCtx[key];
-    return value === "" || value === null || value === undefined || value === "unknown";
+    return value === "" || value === null || value === undefined || String(value).trim().toLowerCase() === "unknown";
   });
   return {
     claim,
@@ -323,7 +321,7 @@ export function generateStorageRecoveryDocument(claimId: string, actorId: string
     claimId,
     eventType: "document_generated",
     occurredAt: nowUtcIso(),
-    details: `Storage & Recovery Agreement version ${version} generated as a draft. ${DRAFT_WORDING_NOT_APPROVED}. It was not sent.${pack.srMissing.length ? ` Not on the file yet: ${plainPackFields(pack.srMissing)}.` : ""}`,
+    details: `Storage & Recovery Agreement version ${version} produced for signature from the supplied Hire Pack wording. It is unsigned until the client signs it on screen or the signed paper copy is uploaded.${pack.srMissing.length ? ` Not on the file yet: ${plainPackFields(pack.srMissing)}.` : ""}`,
     actorId,
     channel: "letter",
     documentId,
@@ -521,11 +519,17 @@ Telephone: ${CAS_COMPANY.phone}</p>
 </article>`;
 }
 
+/**
+ * The standalone Storage & Recovery Agreement, for a client whose own car CAS recovers or stores. It is the supplied
+ * Hire Pack Storage & Recovery page, the relevant supplied definitions and clauses, and the supplied notice of the
+ * right to cancel (review note R17). The client signs it on screen or on paper before recovery or storage is claimed.
+ */
 export function renderStorageRecovery(pack: NonNullable<ReturnType<typeof getHirePack>>) {
   const s = pack.stored;
-  const name = pack.ctx.hirerName || "Unknown";
-  const address = pack.ctx.hirerAddress || "Unknown";
-  const clientVehicle = `${v(pack.clientMake)} ${v(pack.clientModel)}`.replace("Unknown Unknown", "Unknown");
+  const shown = (value: string | number | null | undefined) => escape(v(value));
+  const number = escape(String(pack.srNumber));
+  const name = shown(pack.ctx.hirerName);
+  const address = shown(pack.ctx.hirerAddress);
   const missingBanner =
     pack.srMissing.length > 0
       ? `<p class="missing">Not on the file yet (shown as Unknown): ${plainPackFields(pack.srMissing)}</p>`
@@ -533,29 +537,50 @@ export function renderStorageRecovery(pack: NonNullable<ReturnType<typeof getHir
   const recoveredOn = pack.claim.storage_started_on
     ? formatUkDate(String(pack.claim.storage_started_on))
     : "Unknown";
-  return `<article class="letter hire-pack">
+  const claimId = String(pack.claim.id || "");
+  const lines = recoveryDisplayLines(claimId);
+  const recoveryNet = lines.length ? lines.reduce((total, line) => total + line.netPence, 0) : Number(s.recovery_pence || 0);
+  const chargeLinesHtml = recoveryLinesPlain(claimId)
+    .map((line) => `<p>${escape(line)}</p>`)
+    .join("\n");
+  const total = 3;
+  return `<article class="letter hire-pack storage-recovery">
 ${missingBanner}
+<p class="internal-note">Document number ${number}. File ${escape(pack.ctx.agreementNumber)}. Recovered on: ${escape(recoveredOn)}. This document does not use a hire agreement number and does not require a Hire Agreement on the file.</p>
 <p><strong>${CAS_COMPANY.name}</strong></p>
-<h2>Storage &amp; Recovery Agreement</h2>
-<p><strong>${DRAFT_WORDING_NOT_APPROVED}</strong></p>
-<p>${STORAGE_RECOVERY_STANDALONE_BANNER}</p>
-<p>Document number: <strong>${escape(String(pack.srNumber))}</strong> &nbsp; File: ${escape(pack.ctx.agreementNumber)}</p>
-<p>This document does not use a hire agreement number and does not require a Hire Agreement on the file.</p>
-<p>Name: ${escape(name)}<br/>Address: ${escape(address)}</p>
-<h3>${OWN_VEHICLE_DETAILS_HEADING}</h3>
-<p>This is the client's own damaged vehicle being recovered and stored — not a hire vehicle.</p>
-<p>Make: ${escape(v(pack.clientMake))} &nbsp; Model: ${escape(v(pack.clientModel))} &nbsp; Reg: ${escape(v(pack.ctx.clientVehicleRegistration))}</p>
-<p>Mileage: ${escape(shownReading(pack.handoverReadings?.clientRecovery, s.own_vehicle_mileage))} &nbsp; Fuel: ${escape(shownFuel(pack.handoverReadings?.clientRecovery, s.own_vehicle_fuel))}</p>
-<p>Tyre depths NSF / OSF / NSR / OSR: ${escape(v(s.own_vehicle_tyres))}</p>
-<p>Damage: ${escape(v(s.own_vehicle_damage))}</p>
-<p>Recovered on: ${escape(recoveredOn)}</p>
-<p>Storage daily rate: ${money(s.storage_daily_pence || pack.claim.storage_rate_pence)} &nbsp; Recovery: ${money(s.recovery_pence)}</p>
-${recoveryLinesPlain(String(pack.claim.id || ""))
-  .map((line) => `<p>${escape(line)}</p>`)
-  .join("")}
-<p>${CAS_COMPANY.name} will not accept responsibility for any valuables left in the vehicle at point of collection including removable car stereo and satellite navigation equipment.</p>
-<p>Signed by the client: ______________________ (upload signed copy — not fabricated)</p>
-<p>Signed for and on behalf of ${CAS_COMPANY.name}: ______________________</p>
+${storageRecoveryPageHtml({
+  heading: `Storage &amp; Recovery Agreement — 1 of ${total}`,
+  agreementNumber: number,
+  storageGap: pack.srMissing.includes("clientVehicleRegistration") ? `<p class="missing">No client's own vehicle is recorded on this file. Details are not guessed.</p>` : "",
+  name,
+  address,
+  clientMake: shown(pack.clientMake),
+  clientModel: shown(pack.clientModel),
+  clientRegistration: shown(pack.ctx.clientVehicleRegistration),
+  storageRate: escape(money(s.storage_daily_pence || pack.claim.storage_rate_pence)),
+  recovery: escape(money(recoveryNet)),
+  chargeLinesHtml,
+  mileage: escape(shownReading(pack.handoverReadings?.clientRecovery, s.own_vehicle_mileage)),
+  fuel: escape(shownFuel(pack.handoverReadings?.clientRecovery, s.own_vehicle_fuel)),
+  tyres: shown(s.own_vehicle_tyres),
+  damage: shown(s.own_vehicle_damage),
+})}
+<section>
+<h2>Storage &amp; Recovery Agreement — 2 of ${total}</h2>
+<p>${CAS_HIRE_AGREEMENT_BANNER}</p>
+<p>Agreement number: <strong>${number}</strong></p>
+${storageRecoveryTermsHtml()}
+<p>Signed by Hirer: ______________________</p>
+<p>Date of Agreement: ______________</p>
+</section>
+${cancelNoticeHtml({
+  heading: `Storage &amp; Recovery Agreement — 3 of ${total}`,
+  date: escape(formatUkDate(nowUtcIso())),
+  name,
+  address,
+  agreementNumber: number,
+  generated: escape(formatUkDateTime(nowUtcIso())),
+})}
 </article>`;
 }
 

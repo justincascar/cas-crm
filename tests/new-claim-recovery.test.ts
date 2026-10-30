@@ -287,7 +287,7 @@ describe("new claim drafts, hire and recovery fees", () => {
       await withDatabaseAsync(db, async () => {
         assert.equal(emailSendMode(), "simulate");
         assert.equal(casTemplateApproved("recovery_storage_agreement"), false);
-        assert.equal(casTemplateApproved("storage_recovery"), false);
+        assert.equal(casTemplateApproved("storage_recovery"), true, "the standalone agreement uses the supplied Hire Pack wording");
         assert.equal(casTemplateApproved("engineer_instruction"), true);
         const form = baseForm();
         form.set("needsRecovery", "yes");

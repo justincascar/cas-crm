@@ -1,5 +1,6 @@
 import { formatUkDate, londonTodayIso, nowUtcIso } from "../dates";
 import { CAS_COMPANY } from "../documents/cas-hire-terms";
+import { storageRecoverySignedLine, storageRecoveryState } from "./storage-recovery-signing";
 import { escapeHtml } from "../documents/correspondence";
 import { formatGbp } from "../money";
 import { recordClaimEvent } from "./chronology";
@@ -81,8 +82,10 @@ export function produceDraftInvoice(input: { claimId: string; head: string; acto
     })
     .join("");
   const today = londonTodayIso();
+  // The customer is liable under the Storage & Recovery terms they signed (R17).
+  const agreement = storageRecoveryState(input.claimId);
   const html = `<div class="letter">
-<p class="internal-note"><strong>Draft invoice.</strong> CAS's invoice template, invoice number and VAT number have not been supplied yet. Not sent.${toCustomer ? " Whether the customer is liable for these charges depends on the recovery and storage terms they signed. CAS's agreed wording for those terms has not been supplied yet." : ""}</p>
+<p class="internal-note"><strong>Draft invoice.</strong> CAS's invoice template, invoice number and VAT number have not been supplied yet. Not sent.${toCustomer && agreement.status === "not_signed" ? " No signed Storage & Recovery Agreement is on the file yet. Get it signed on the Recovery page before this invoice is used." : ""}</p>
 <p>${escapeHtml(CAS_COMPANY.name)}<br>${escapeHtml(CAS_COMPANY.address)}<br>${escapeHtml(CAS_COMPANY.phone)} · ${escapeHtml(CAS_COMPANY.email)}</p>
 ${toCustomer
     ? `<p>To: ${gap(claim.client_name, "Client name")}<br>${gap([claim.address_line1, claim.town, claim.postcode].filter((part) => part && !/^unknown$/i.test(String(part))).join(", "), "Client's address")}</p>`
@@ -92,6 +95,7 @@ ${toCustomer
 <table><thead><tr><th>Item</th><th>Quantity × rate</th><th>Net</th><th>VAT</th><th>Gross</th></tr></thead><tbody>${rows}</tbody>
 <tfoot><tr><td colspan="2">Total</td><td>${formatGbp(net)}</td><td>${formatGbp(vat)}</td><td>${formatGbp(gross)}</td></tr></tfoot></table>
 <p>Received to date: ${formatGbp(received)}. Balance: ${formatGbp(Math.max(0, gross - received))}.</p>
+${toCustomer ? `<p data-sr-reference>${escapeHtml(storageRecoverySignedLine(agreement))}${agreement.status === "not_signed" ? "" : " These charges are due under that agreement."}</p>` : ""}
 </div>`;
   const version = Number(
     get<{ v: number }>(`SELECT COALESCE(MAX(version), 0) AS v FROM documents WHERE claim_id = ? AND template_key = ?`, [

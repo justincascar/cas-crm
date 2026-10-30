@@ -1149,3 +1149,19 @@ Finish on 29 October 2026: 612 tests passed, 0 failed. Type check: 0 errors. Pro
 Walked through as Sian on new claim TEST-0029: card fee ticked at intake (£17.78 + VAT £3.56 as its own line), recovery recorded with no figure warning, Engineer route, engineer instructed, report received, report sent to the insurer: step 8 showed "chasing every 3 days" and the handler task appeared; a hire-rate rebuttal with the GTA tick showed the paragraph and the draft note; Settings showed the card fee percentage and the confirmed sending hours.
 
 Finish on 30 October 2026: 616 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 70 passed, 0 failed. Journey checks passed. `EMAIL_SEND_MODE` stays `simulate`.
+
+## Storage & Recovery Agreement from the supplied Hire Pack; legal-review flags (R17–R18, 30 October 2026)
+
+**The agreement (R17).** The standalone Storage & Recovery Agreement is now made only from CAS's supplied Hire Pack wording: the Hire Pack's Storage & Recovery page (with the client's own car, the storage rate and each recovery charge from the file), the relevant definitions and clauses from the same terms, and the Hire Pack's Notice of the Right to Cancel. The terms are taken line by line from the supplied text in their original order; nothing is reworded. The page and the notice now come from one shared module that the hire agreement also uses; a before-and-after check showed the hire agreement output is unchanged, character for character. The old "draft, wording not approved" mark is gone from this agreement. The selection of clauses is in question 10 for Justin to check.
+
+**Signing.** The Recovery page has a Storage & Recovery Agreement panel: produce it for signature, the client signs on screen (driver's phone or office, witnessed by the signed-in member of staff, filed as a signed PDF with its fingerprint), or upload the signed paper copy (the signed date is the upload, never earlier). A version produced with details missing (for example no registration) cannot be signed. A client whose signed hire agreement already included the Storage & Recovery page has nothing more to sign. A missing registration stored as "Unknown" is now caught as missing.
+
+**Before charges are claimed.** Recording a recovery or storage payment request as sent is refused until the agreement is signed, with the reason shown on the form in plain words (no override for now: question 15).
+
+**Customer invoice.** The draft customer invoice for recovery and storage now names the signed agreement ("signed by … on …"). These charges are due under that agreement. Without one it says no signed agreement is on the file yet.
+
+**Legal review (R18).** QUESTIONS-FOR-JUSTIN.md has a "For your solicitor" section: the clause 5.3 citation of the Consumer Credit (Exempt Agreements) Order 1989, and doorstep signing and the client's cancellation rights. The terms were not edited.
+
+Walked through as Sian on new claim TEST-0030 (recovery only, no hire car): recorded the recovery; claiming recovery was refused with the reason on the form; produced the agreement (supplied page with the £395 charge and CP20 SRW, 26 clauses, cancellation notice, no draft mark, CRM notes hidden from the client); the client signed on screen; the signed copy opened; the recovery payment request was then accepted; the draft customer invoice named the signed agreement. The paper upload route is covered by the tests only (the browser pane cannot pick a file).
+
+Finish on 30 October 2026: 620 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 70 passed, 0 failed. Journey checks passed. `EMAIL_SEND_MODE` stays `simulate`.

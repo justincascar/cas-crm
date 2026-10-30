@@ -34,6 +34,7 @@ export function FileHistory({
   correspondence,
   documents,
   liabilityStatus,
+  stepError,
 }: {
   claimId: string;
   handlerId: string;
@@ -42,6 +43,8 @@ export function FileHistory({
   correspondence: Array<Record<string, string | number | null>>;
   documents: Array<Record<string, string | number | null>>;
   liabilityStatus: string;
+  /** Why the last dated step was refused, shown on the form. */
+  stepError?: string;
 }) {
   return (
     <section className="space-y-4 rounded-xl border border-line bg-card p-5">
@@ -90,6 +93,11 @@ export function FileHistory({
       <div className="grid gap-4 lg:grid-cols-3">
         <ValidatedForm action={actionRecordEvent} className="space-y-2 rounded-lg border border-line p-4">
           <h3 className="font-serif text-lg text-navy-deep">Record a dated step</h3>
+          {stepError ? (
+            <p data-form-error className="rounded-md border border-overdue/40 bg-[#f8ecec] px-3 py-2 text-sm text-overdue">
+              {stepError}
+            </p>
+          ) : null}
           <input type="hidden" name="claimId" value={claimId} />
           <input type="hidden" name="actorId" value={handlerId} />
           <label className="block text-sm">

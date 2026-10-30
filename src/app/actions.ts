@@ -31,6 +31,7 @@ import {
   sendClaimWhatsApp,
 } from "@/lib/db/chronology";
 import { guardGenericHistoryRepairStep } from "@/lib/db/repair-progress";
+import { guardStorageRecoveryClaim } from "@/lib/db/storage-recovery-signing";
 import { generateHirePackDocument, generateStorageRecoveryDocument, getHirePack, saveHirePack } from "@/lib/db/hire-pack";
 import { generateHireAgreementDocument, prepareHireRating } from "@/lib/db/hire-agreement";
 import { currentHireEpisode } from "@/lib/db/hire-readiness";
@@ -395,6 +396,13 @@ export async function actionRecordEvent(formData: FormData) {
   const claimId = String(formData.get("claimId"));
   const eventType = String(formData.get("eventType") || "other");
   guardGenericHistoryRepairStep(claimId, eventType);
+  let refused = "";
+  try {
+    guardStorageRecoveryClaim(claimId, eventType);
+  } catch (error) {
+    refused = error instanceof Error ? error.message : "This step was not saved.";
+  }
+  if (refused) redirect(`/claims/${claimId}/history?${new URLSearchParams({ stepError: refused }).toString()}`);
   recordClaimEvent({
     claimId,
     eventType,
