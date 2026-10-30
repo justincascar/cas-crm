@@ -209,8 +209,8 @@ describe("ledger signposts", () => {
     const afterEvents = after.events as Array<{ id: string; event_type: string }>;
     const added = afterEvents.filter((event) => !beforeEvents.some((prior) => prior.id === event.id));
     assert.deepEqual(
-      added.map((event) => event.event_type),
-      ["storage_end_date_review"],
+      added.map((event) => event.event_type).sort(),
+      ["repair_steps_closed_total_loss", "storage_end_date_review"],
     );
     assert.equal(
       (db.prepare(`SELECT storage_billing_end_on FROM claims WHERE id = 'c5'`).get() as { storage_billing_end_on: string | null })

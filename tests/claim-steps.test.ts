@@ -297,7 +297,7 @@ describe("claim steps from history", () => {
     assert.equal(claimTabFromPath("/claims/c5/work/client", "c5"), "details");
     assert.equal(claimTabFromPath("/claims/c5/heads/storage", "c5"), "money");
     assert.equal(claimTabFromPath("/claims/c8", "c8"), "steps");
-    assert.match(read("src/app/claims/[id]/work/[screen]/page.tsx"), /redirect\(workScreenTabPath/);
+    assert.match(read("src/app/claims/[id]/work/[screen]/page.tsx"), /redirect\(`\$\{workScreenTabPath\(id, screen\)\}/);
     assert.match(read("src/app/claims/[id]/heads/recovery/page.tsx"), /\/money\/recovery/);
     assert.match(read("src/app/claims/[id]/heads/storage/page.tsx"), /\/money\/storage/);
     assert.match(read("src/app/claims/[id]/heads/hire/page.tsx"), /\/money\/hire/);

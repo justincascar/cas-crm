@@ -64,6 +64,7 @@ export const TOTAL_LOSS_PAYMENT_CHASE_SENT_EVENT = "total_loss_payment_chase_sen
 
 export const DOCUMENT_CHASE_DUE_LABELS = DOCUMENT_CHASES.map((item) => item.label);
 export const TOTAL_LOSS_PAYMENT_CHASE_DUE_LABEL = "Total-loss payment chase due";
+export const TOTAL_LOSS_SHORTFALL_CHASE_DUE_LABEL = "Total-loss shortfall chase due";
 
 const DOCUMENT_CHASE_MS = DOCUMENT_CHASE_HOURS * 60 * 60 * 1000;
 
@@ -122,16 +123,35 @@ export function totalLossPaymentChaseDecision(input: {
   paymentReceived: boolean;
   lastChaseSentAt: string | null;
   asAt: string;
+  /**
+   * When a part-payment arrived and the agreed settlement is not yet paid in full. The shortfall is then chased
+   * separately, every 3 days: on the clock already running, or from that payment when no chase was running (J11).
+   */
+  partPaidAt?: string | null;
 }): {
   started: boolean;
   due: boolean;
   dueAt: string | null;
-  stage: "not_started" | "awaiting_response" | "awaiting_arrival" | "received";
+  stage: "not_started" | "awaiting_response" | "awaiting_arrival" | "received" | "shortfall";
   label: string;
 } {
   const label = TOTAL_LOSS_PAYMENT_CHASE_DUE_LABEL;
   if (input.paymentReceived) {
-    return { started: Boolean(input.noticeSentAt), due: false, dueAt: null, stage: "received", label };
+    return { started: Boolean(input.noticeSentAt || input.partPaidAt), due: false, dueAt: null, stage: "received", label };
+  }
+  if (input.partPaidAt && Date.parse(input.partPaidAt)) {
+    // A chase already running keeps its clock; with none running, the shortfall clock starts at the part-payment.
+    const running = input.insurerPromisedAt || input.noticeSentAt;
+    const base = running && Date.parse(running) ? running : input.partPaidAt;
+    const sentMs = input.lastChaseSentAt ? Date.parse(input.lastChaseSentAt) : Number.NaN;
+    const anchor = Number.isFinite(sentMs) && sentMs > Date.parse(base) ? input.lastChaseSentAt! : base;
+    return {
+      started: true,
+      due: daysBetweenLondon(anchor, input.asAt) >= TOTAL_LOSS_PAYMENT_RESPONSE_DAYS,
+      dueAt: addCalendarDaysIso(anchor, TOTAL_LOSS_PAYMENT_RESPONSE_DAYS),
+      stage: "shortfall",
+      label: TOTAL_LOSS_SHORTFALL_CHASE_DUE_LABEL,
+    };
   }
   if (!input.noticeSentAt) {
     return { started: false, due: false, dueAt: null, stage: "not_started", label };

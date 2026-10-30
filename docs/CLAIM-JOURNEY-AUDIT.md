@@ -140,6 +140,13 @@ Five stages. Each later stage extends the same three journeys one step further: 
 50. **Open.** Some demonstration ledger lines do not add up: TEST-0001 recovery shows 1 job at £474.00 against a net of £395.00, and TEST-0003 storage has a claimed figure equal to its net, not its gross. These are seed figures. The Financials list now shows them side by side. Not changed in J6.
 51. **Open.** No demonstration file has a payment request recorded as sent, so every aged-debt row on the demonstration data is Not requested yet. The age bands are covered by tests.
 52. **Open.** Older demonstration files that already have recovery or storage charges were set up before the Storage & Recovery Agreement had to be signed. They have no signed agreement, so a new recovery or storage payment request on them is refused until one is signed or uploaded. Requests already on the file are not changed (R17).
+53. **Fixed (J11).** A save on a details screen came back without its message: the old screen address redirected to the tab and dropped ?clash, ?saved and ?error, so a second person saving the same claim saw nothing. The message is now carried to the tab.
+54. **Fixed (J11).** "Log agreement renewed" marked the new agreement signed, dated on the start date typed in. A logged renewal is now unsigned until the signed renewal is uploaded on the Hire tab, dated the upload.
+55. **Fixed (J11).** The day-80 renewal alert for a new hire only appeared after the CRM was restarted. It now starts when the first signed agreement is recorded.
+56. **Fixed (J11).** A reply to a liability or repair-authorisation chase was ignored. It now pauses the chase (decision, offer or dispute), changes nothing (acknowledgement or out-of-office), or goes to the handler as a task (unclear). An out-of-office never pauses a chase, even when it quotes our email.
+57. **Fixed (J11).** A repairable file changed to a total loss kept its repair chase running and gave no reason for the repair steps disappearing. The repair steps are now closed with a reason on the history, and the repair chases stop.
+58. **Fixed (J11).** A part-paid total loss was chased only as the original payment. The shortfall is now chased separately, with any disputed amount named, and starts even if the total-loss notice was not recorded.
+59. **Fixed (J11).** One payment covering several heads could only be put on one head. The Money tab now splits it by head first; the parts must add up and none can be more than its head's balance. An overpayment on one head was refused outright; it can now be recorded after a confirmation, shown as overpaid on that head and never set against another.
 
 ## How to try hire on a demonstration file
 

@@ -321,6 +321,8 @@ export function recordHeadPayment(input: {
   confirmSeparate?: boolean;
   /** The payer is paying by card: a separate card fee is recorded with this payment (R19). */
   payingByCard?: boolean;
+  /** Staff confirmed that more than the outstanding balance arrived. It is recorded as an overpayment on this head (J11). */
+  confirmOverpayment?: boolean;
 }) {
   const submitKey = requireSubmitKey(input.submitKey);
   const already = replaySubmit<Record<string, unknown>>(submitKey);
@@ -404,14 +406,22 @@ export function recordHeadPayment(input: {
     throw new Error("There is no figure on this head to compare the payment with. It was not recorded.");
   }
   const outstanding = Math.max(0, target - received);
-  if (!input.correction && input.amountPence > outstanding) {
-    flagReview(
-      input.claimId,
-      input.actorId,
-      input.head,
-      `${formatGbp(input.amountPence)} is higher than the outstanding ${formatGbp(outstanding)}. It was not added.`,
-    );
-    throw new Error("That amount is higher than the outstanding balance on this head. It was not recorded.");
+  const overpaying = !input.correction && input.amountPence > outstanding;
+  if (overpaying && !input.confirmOverpayment) {
+    // The money did arrive, so it is not refused: staff confirm it, and the excess is shown separately on this head.
+    return {
+      allocated: false as const,
+      reconciliation: false as const,
+      settledReview: false as const,
+      needsConfirm: true as const,
+      confirmField: "confirmOverpayment",
+      warning: `${formatGbp(input.amountPence)} is ${formatGbp(input.amountPence - outstanding)} more than the ${formatGbp(outstanding)} outstanding on ${headLabel(input.head)}. Record it as an overpayment? The extra is shown separately on this head and is not set against any other head.`,
+      receivedPence: received,
+      outstandingPence: outstanding,
+      paused: false,
+      paidInFull: false,
+      replacedPrevious: false,
+    };
   }
   return withImmediateTransaction(() => {
   const replay = replaySubmit<Record<string, unknown>>(submitKey);
@@ -449,7 +459,7 @@ export function recordHeadPayment(input: {
     flagReview(input.claimId, input.actorId, input.head, applied.reviewReason || "The balance was not changed.");
     throw new Error(applied.reviewReason || "The balance was not changed.");
   }
-  if (applied.receivedPence > target) {
+  if (applied.receivedPence > target && !overpaying) {
     flagReview(
       input.claimId,
       input.actorId,
@@ -493,6 +503,19 @@ export function recordHeadPayment(input: {
     source: "staff",
     channel: "file",
   });
+  if (overpaying && applied.receivedPence > target) {
+    const extra = applied.receivedPence - Math.max(target, received);
+    recordClaimEvent({
+      claimId: input.claimId,
+      eventType: "payment_overpaid",
+      occurredAt: when,
+      actorId: input.actorId,
+      details: `head=${input.head} overpaid_pence=${applied.receivedPence - target} ${formatGbp(Math.min(extra, applied.receivedPence - target))} more than was outstanding arrived on ${headLabel(input.head)}. It is shown separately as an overpayment on this head and is not set against any other head.`,
+      source: "staff",
+      channel: "file",
+    });
+    flagReview(input.claimId, input.actorId, input.head, `Overpayment of ${formatGbp(applied.receivedPence - target)} on ${headLabel(input.head)}. Decide whether to refund it or hold it. It is not set against any other head.`);
+  }
   if (input.payingByCard && !applied.replacedPrevious) {
     recordCardFeeOnPayment({ claimId: input.claimId, head: input.head, amountPence: input.amountPence, actorId: input.actorId });
   }
@@ -598,3 +621,77 @@ function recentSameAmount(claimId: string, head: string, amountPence: number): {
 }
 
 export { PAYMENT_CORRECTION_WINDOW_MS };
+
+/** What is still to pay on one head: the agreed figure, or the claimed figure until one is agreed, less what arrived. */
+function outstandingFor(claimId: string, head: string): number | null {
+  const line = moneyLine(claimId, head);
+  if (!line) return null;
+  const comparison = comparisonForHead(claimId, head, {
+    agreedPence: Number(line.agreed_pence) || 0,
+    claimedPence: Number(line.claimed_pence) || 0,
+    receivedPence: Number(line.received_pence) || 0,
+  });
+  if (comparison.targetPence == null || comparison.targetPence <= 0) return null;
+  return Math.max(0, comparison.targetPence - (Number(line.received_pence) || 0));
+}
+
+/**
+ * One payment that covers several heads of loss (J11). It is split by head before anything is recorded: the parts
+ * must add up to the payment, and no part may be more than is outstanding on its head. Each part is then added to its
+ * own head only, so nothing is counted twice and nothing is marked paid until it is allocated.
+ */
+export function recordSplitPayment(input: {
+  claimId: string;
+  actorId: string;
+  totalPence: number;
+  parts: Array<{ head: string; pence: number }>;
+  submitKey: string;
+  payingByCard?: boolean;
+}) {
+  const submitKey = requireSubmitKey(input.submitKey);
+  const already = replaySubmit<{ heads: string[] }>(submitKey);
+  if (already) return { ...already, replayed: true as const };
+  if (!Number.isInteger(input.totalPence) || input.totalPence <= 0) throw new Error("Enter the amount of the payment.");
+  const parts = input.parts.filter((part) => part.pence > 0);
+  if (parts.length < 2) throw new Error("Split the payment across at least two heads of loss, or record it on one head.");
+  const sum = parts.reduce((total, part) => total + part.pence, 0);
+  if (sum !== input.totalPence) {
+    throw new Error(`The split adds up to ${formatGbp(sum)}, not the payment of ${formatGbp(input.totalPence)}. Nothing was recorded.`);
+  }
+  for (const part of parts) {
+    if (!isPaymentReviewHead(part.head)) throw new Error(`${part.head} is not a head of loss. Nothing was recorded.`);
+    const outstanding = outstandingFor(input.claimId, part.head);
+    if (outstanding == null) throw new Error(`There is no figure on ${headLabel(part.head)} to set a payment against. Nothing was recorded.`);
+    if (part.pence > outstanding) {
+      throw new Error(
+        `${formatGbp(part.pence)} on ${headLabel(part.head)} is more than the ${formatGbp(outstanding)} outstanding there. Nothing was recorded. Record an overpayment on that head on its own.`,
+      );
+    }
+  }
+  for (const part of parts) {
+    recordHeadPayment({
+      claimId: input.claimId,
+      actorId: input.actorId,
+      head: part.head,
+      amountPence: part.pence,
+      correction: false,
+      submitKey: `${submitKey}-${part.head}`,
+      confirmSeparate: true,
+      payingByCard: input.payingByCard,
+    });
+  }
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "payment_split_by_head",
+    occurredAt: nowUtcIso(),
+    actorId: input.actorId,
+    details: `One payment of ${formatGbp(input.totalPence)} split by head before it was recorded: ${parts
+      .map((part) => `${headLabel(part.head)} ${formatGbp(part.pence)}`)
+      .join(", ")}. Each part was added to its own head only.`,
+    source: "staff",
+    channel: "file",
+  });
+  const saved = { heads: parts.map((part) => part.head) };
+  storeSubmit(submitKey, saved);
+  return { ...saved, replayed: false as const };
+}

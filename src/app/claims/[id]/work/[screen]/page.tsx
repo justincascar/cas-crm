@@ -327,7 +327,19 @@ function commsFirstSection(claimId: string, chaseDue: boolean): "documents" | "e
   return "email";
 }
 
-export default async function Page({ params }: { params: Promise<{ id: string; screen: string }> }) {
+export default async function Page({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string; screen: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { id, screen } = await params;
-  redirect(workScreenTabPath(id, screen));
+  // A save comes back here with ?saved, ?error or ?clash. They are carried to the tab, so a clash message is not lost.
+  const query = new URLSearchParams();
+  for (const [name, value] of Object.entries(await searchParams)) {
+    for (const item of Array.isArray(value) ? value : value === undefined ? [] : [value]) query.append(name, item);
+  }
+  const text = query.toString();
+  redirect(`${workScreenTabPath(id, screen)}${text ? `?${text}` : ""}`);
 }

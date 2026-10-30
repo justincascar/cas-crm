@@ -566,6 +566,17 @@ export function HireJourney({
             {area.chosen ? `${area.chosen.label} · ` : ""}
             {area.renewal || `Started ${formatUkDateTime(area.startedAt)}.`}
           </p>
+          {area.creditHire && area.unsignedRenewal ? (
+            <form method="post" action={`/claims/${id}/hire/renewal-signed`} encType="multipart/form-data" className="mt-4 space-y-2" data-unsigned-renewal>
+              <p className="text-sm font-semibold">Renewal {area.unsignedRenewal} is logged but not signed. The renewal alert stays until it is.</p>
+              <SubmitKeyInput />
+              <input type="hidden" name="returnHash" value="#on-hire" />
+              <input name="signedRenewal" type="file" required accept={fileAccept} className={field} />
+              <button className={button} type="submit">
+                Upload signed renewal
+              </button>
+            </form>
+          ) : null}
           {area.creditHire && !area.signed ? (
             <form method="post" action={`/claims/${id}/hire/signed`} encType="multipart/form-data" className="mt-4 space-y-2" data-signed-after>
               <p className="text-sm font-semibold">Signed hire agreement not on file</p>

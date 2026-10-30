@@ -30,7 +30,7 @@ type CdpMessage = {
   error?: { message: string };
 };
 
-class BrowserSession {
+export class BrowserSession {
   private nextId = 0;
   private waiters = new Map<number, (message: CdpMessage) => void>();
 
@@ -68,7 +68,7 @@ class BrowserSession {
   }
 }
 
-function passwordFor(name: string, username: string): string {
+export function passwordFor(name: string, username: string): string {
   const notes = fs.readFileSync(path.join(process.cwd(), "docs", "AUTH-NOTES.md"), "utf8");
   const line = notes.split(/\r?\n/).find((row) => row.includes(`| ${name} |`));
   const cells = line?.split("|").map((cell) => cell.trim().replaceAll("`", "")) ?? [];
@@ -78,11 +78,11 @@ function passwordFor(name: string, username: string): string {
   return cells[3];
 }
 
-function sianPassword(): string {
+export function sianPassword(): string {
   return passwordFor("Sian Evans", "sian");
 }
 
-function freePort(start = 3200): Promise<number> {
+export function freePort(start = 3200): Promise<number> {
   return new Promise((resolve, reject) => {
     const attempt = (port: number) => {
       if (port > start + 30) {
@@ -118,7 +118,7 @@ function sessionCookie(response: Response): string | null {
   return found ? found.split(";")[0] : null;
 }
 
-async function waitUntilReady(origin: string, child: ChildProcess): Promise<void> {
+export async function waitUntilReady(origin: string, child: ChildProcess): Promise<void> {
   const deadline = Date.now() + 40_000;
   let last = "not started";
   while (Date.now() < deadline) {
@@ -135,7 +135,7 @@ async function waitUntilReady(origin: string, child: ChildProcess): Promise<void
   throw new Error(`The journey server did not answer on ${origin} (${last}).`);
 }
 
-async function signIn(origin: string, username = "sian", password = sianPassword()): Promise<string> {
+export async function signIn(origin: string, username = "sian", password = sianPassword()): Promise<string> {
   const response = await fetch(`${origin}/login/submit`, {
     method: "POST",
     redirect: "manual",
@@ -147,7 +147,7 @@ async function signIn(origin: string, username = "sian", password = sianPassword
   return cookie;
 }
 
-async function openBrowser(): Promise<{ session: BrowserSession; stop: () => void }> {
+export async function openBrowser(): Promise<{ session: BrowserSession; stop: () => void }> {
   const debugPort = await freePort(9222);
   const userData = fs.mkdtempSync(path.join(os.tmpdir(), "cas-journey-"));
   const browser = spawn(
@@ -325,7 +325,7 @@ async function readPage(session: BrowserSession): Promise<PageState> {
   })`);
 }
 
-async function createJourney(session: BrowserSession, origin: string, journey: ClaimJourney): Promise<{ reference: string } | string> {
+export async function createJourney(session: BrowserSession, origin: string, journey: ClaimJourney): Promise<{ reference: string } | string> {
   await session.send("Page.navigate", { url: `${origin}/claims/new` });
   const opened = Date.now() + 15_000;
   let ready = false;
@@ -371,7 +371,7 @@ async function createJourney(session: BrowserSession, origin: string, journey: C
   return { reference: last.reference };
 }
 
-function storedJourney(dbPath: string, reference: string) {
+export function storedJourney(dbPath: string, reference: string) {
   const db = new DatabaseSync(dbPath);
   try {
     db.exec("PRAGMA query_only = ON;");
@@ -402,7 +402,7 @@ function storedJourney(dbPath: string, reference: string) {
 
 type MadeClaim = { id: JourneyId; reference: string; claimId: string };
 
-async function gotoPath(session: BrowserSession, origin: string, path: string) {
+export async function gotoPath(session: BrowserSession, origin: string, path: string) {
   await session.send("Page.navigate", { url: `${origin}${path}` });
   const deadline = Date.now() + 20_000;
   while (Date.now() < deadline) {
@@ -416,7 +416,7 @@ async function gotoPath(session: BrowserSession, origin: string, path: string) {
   throw new Error(`The page did not open: ${path}`);
 }
 
-async function postFields(session: BrowserSession, path: string, fields: Record<string, string>) {
+export async function postFields(session: BrowserSession, path: string, fields: Record<string, string>) {
   const spec = JSON.stringify({ path, fields });
   return session.evaluate<{ status: number; location: string }>(`(() => {
     const spec = ${spec};
@@ -429,7 +429,7 @@ async function postFields(session: BrowserSession, path: string, fields: Record<
   })()`);
 }
 
-function readDb<T>(dbPath: string, work: (db: DatabaseSync) => T): T {
+export function readDb<T>(dbPath: string, work: (db: DatabaseSync) => T): T {
   const db = new DatabaseSync(dbPath);
   try {
     return work(db);
@@ -451,22 +451,22 @@ function prepareFleet(dbPath: string) {
   });
 }
 
-function londonToday(): string {
+export function londonToday(): string {
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(new Date());
   const get = (type: string) => parts.find((part) => part.type === type)?.value || "";
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
-const HIRE_DAY = londonToday();
+export const HIRE_DAY = londonToday();
 const HIRE_DAY_UK = HIRE_DAY.split("-").reverse().join("/");
 
-type Submitted = { status: number; location: string; problem?: string };
+export type Submitted = { status: number; location: string; problem?: string };
 
 /**
  * Fills a form on the page by its field names and submits it the way the button would.
  * A file is attached as a small fictional PDF.
  */
-async function submitForm(
+export async function submitForm(
   session: BrowserSession,
   selector: string,
   values: Record<string, string>,
@@ -501,14 +501,14 @@ async function submitForm(
   })()`);
 }
 
-function followed(result: Submitted, label: string): string | null {
+export function followed(result: Submitted, label: string): string | null {
   if (result.problem) return `${label}: ${result.problem}`;
   const location = decodeURIComponent(result.location.replaceAll("+", " "));
   if (result.status >= 400 || result.status === 0 || location.includes("error=")) return `${label} ${result.status} ${location}`;
   return null;
 }
 
-function refusedWith(result: Submitted, words: RegExp, label: string): string | null {
+export function refusedWith(result: Submitted, words: RegExp, label: string): string | null {
   if (result.problem) return `${label}: ${result.problem}`;
   const location = decodeURIComponent(result.location.replaceAll("+", " "));
   if (!location.includes("error=")) return `${label} was not refused. ${location}`;
@@ -516,7 +516,7 @@ function refusedWith(result: Submitted, words: RegExp, label: string): string | 
   return null;
 }
 
-async function saveClientDetails(session: BrowserSession, origin: string, dbPath: string, claimId: string) {
+export async function saveClientDetails(session: BrowserSession, origin: string, dbPath: string, claimId: string) {
   await gotoPath(session, origin, `/claims/${claimId}/details/client`);
   const filled = await session.evaluate<string>(`(() => {
     ${FILL}
@@ -565,7 +565,7 @@ function claimFiles(dbPath: string, claimId: string, documentType: string) {
   );
 }
 
-async function saveLicenceCheck(session: BrowserSession, origin: string, claimId: string, licenceNumber: string) {
+export async function saveLicenceCheck(session: BrowserSession, origin: string, claimId: string, licenceNumber: string) {
   await gotoPath(session, origin, `/claims/${claimId}/hire`);
   const box = await session.evaluate<boolean>(`Boolean(document.querySelector('form[action$="/prehire/save"] [data-licence-number-box] input[name="licenceNumber"]'))`);
   if (!box) return "The licence card did not ask for the missing licence number.";
@@ -594,7 +594,7 @@ async function uploadBankStatement(session: BrowserSession, origin: string, clai
   );
 }
 
-async function saveNoBank(session: BrowserSession, origin: string, claimId: string) {
+export async function saveNoBank(session: BrowserSession, origin: string, claimId: string) {
   await gotoPath(session, origin, `/claims/${claimId}/hire`);
   return followed(
     await submitForm(session, 'form[action$="/hire/no-bank"]', { noBank: "yes", explanation: "The client has no bank account." }),
@@ -602,7 +602,7 @@ async function saveNoBank(session: BrowserSession, origin: string, claimId: stri
   );
 }
 
-async function setDailyRate(session: BrowserSession, origin: string, claimId: string, group: string) {
+export async function setDailyRate(session: BrowserSession, origin: string, claimId: string, group: string) {
   await gotoPath(session, origin, `/claims/${claimId}/hire`);
   const missing = await session.evaluate<string>(`document.querySelector("[data-rate]")?.getAttribute("data-rate") || ""`);
   if (missing !== "missing") return `The Hire tab did not say the daily rate is missing (${missing || "no rate box"}).`;
@@ -613,7 +613,7 @@ function countOnHire(dbPath: string) {
   return readDb(dbPath, (db) => Number((db.prepare(`SELECT COUNT(*) AS n FROM fleet_vehicles WHERE status = 'on_hire'`).get() as { n: number }).n));
 }
 
-function hireFacts(dbPath: string, claimId: string) {
+export function hireFacts(dbPath: string, claimId: string) {
   return readDb(dbPath, (db) => {
     const episode = db
       .prepare(
@@ -652,7 +652,7 @@ async function offeredCars(session: BrowserSession) {
   })()`);
 }
 
-async function chooseFirstCar(session: BrowserSession, origin: string, claimId: string, driverId: string) {
+export async function chooseFirstCar(session: BrowserSession, origin: string, claimId: string, driverId: string) {
   await gotoPath(session, origin, `/claims/${claimId}/hire?date=${HIRE_DAY}`);
   const options = await offeredCars(session);
   if (!options.length) return { problem: "No free car was offered." };
@@ -675,7 +675,7 @@ async function chooseFirstCar(session: BrowserSession, origin: string, claimId: 
   return { fleetId: picked, registration: chosen.registration, summary: chosen.summary, options };
 }
 
-function londonTimeNow(): string {
+export function londonTimeNow(): string {
   return new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date());
 }
 
@@ -721,7 +721,7 @@ function fleetCarRecord(dbPath: string, fleetVehicleId: string) {
   );
 }
 
-async function completeHandover(session: BrowserSession, origin: string, claimId: string, signed: boolean) {
+export async function completeHandover(session: BrowserSession, origin: string, claimId: string, signed: boolean) {
   await gotoPath(session, origin, `/claims/${claimId}/hire`);
   const sent = await submitForm(
     session,
@@ -1100,12 +1100,12 @@ async function runHireJourneys(session: BrowserSession, origin: string, dbPath: 
   return null;
 }
 
-async function stepState(session: BrowserSession, key: string) {
+export async function stepState(session: BrowserSession, key: string) {
   return session.evaluate<string>(`document.querySelector('[data-step="${key}"]')?.getAttribute("data-state") || ""`);
 }
 
 /** Submits the step form for one intent with the date already filled in, as one click would. */
-async function oneClick(session: BrowserSession, intent: string, extra: Record<string, string> = {}) {
+export async function oneClick(session: BrowserSession, intent: string, extra: Record<string, string> = {}) {
   const spec = JSON.stringify({ intent, extra });
   const result = await session.evaluate<Submitted>(`(() => {
     const spec = ${spec};
@@ -1368,7 +1368,7 @@ async function main() {
 }
 
 /** On Windows the browser and the server start child processes. Stop the whole tree so the check can finish. */
-function stopTree(child: ChildProcess) {
+export function stopTree(child: ChildProcess) {
   if (process.platform === "win32" && child.pid) {
     spawnSync("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
   } else {
@@ -1376,4 +1376,5 @@ function stopTree(child: ChildProcess) {
   }
 }
 
-main().then(() => process.exit(process.exitCode ?? 0));
+// Run only when started as the script, so the awkward-case journeys can reuse these helpers.
+if (/journey-check\.ts$/.test(process.argv[1] || "")) main().then(() => process.exit(process.exitCode ?? 0));

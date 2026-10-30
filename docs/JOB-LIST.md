@@ -249,6 +249,44 @@ Any gaps are marked clearly.
 - removes anything marked draft
 - confirms every client and insurer document uses only approved wording
 
+### J9b — Security and GDPR gate (MUST pass before any real client data)
+CAS holds personal data, including some that is sensitive:
+- bank statements
+- driving licence details, and penalty points, which count as criminal offence data
+- addresses, dates of birth and phone numbers
+
+Security must be high. Nothing real goes in until every item below is done and evidenced. Items marked **(adviser)** need Justin's data protection adviser or solicitor; the CRM only supports them.
+
+**Hosting (decision to be confirmed with costs before purchase):**
+- Preferred: Microsoft Azure UK South.
+- Staff sign in with their existing Microsoft 365 work accounts, with MFA (Entra ID single sign-on). Disabling a Microsoft account removes CRM access.
+- A managed database with encrypted automatic backups and point-in-time restore. This means moving from SQLite to a managed database, done with fictional data and fully tested.
+- Documents in UK encrypted storage.
+- Fallback: Fly.io London.
+- CAS owns every account. Secrets live only in secure settings: never in code, chat or git.
+
+**Security controls (Claude Code builds and tests):**
+- MFA for everyone, enforced. No demo logins. Strong session handling, with automatic sign-out after inactivity.
+- Least privilege by role, enforced on the server. Re-test the permissions page from J12 on the live setup.
+- Encryption in transit (HTTPS only) and at rest (database, documents and backups).
+- An audit log of who viewed AND changed sensitive records, especially bank statements, licence checks and exports.
+- Backups kept separately from the live system, with a restore tested before go-live and then monthly, written up in `docs/BACKUP-AND-RESTORE.md`.
+- Dependency and security checks run in the finish routine. Rate-limit and lock out repeated failed logins.
+- An independent security test (penetration test) before go-live **(Justin to approve the cost)**.
+- Cyber Essentials certification for CAS is recommended **(Justin)**.
+
+**GDPR (the CRM supports these; the items marked adviser need checking):**
+- **DPIA.** A Data Protection Impact Assessment, drafted for the adviser to review **(adviser)**.
+- **Criminal offence data.** Licence points and endorsements need a lawful condition and an appropriate policy document **(adviser)**.
+- **Privacy notice** for clients, shown on the client form and in the welcome email. Wording is part of J9a **(adviser)**.
+- **Retention.** A retention schedule in Settings, for example bank statements deleted X months after the claim closes. Automatic deletion or anonymising, with a log. Justin and the adviser set the periods.
+- **Subject requests.** A "person's data" screen to export everything held about one person (subject access), and to erase or restrict where the law allows. Legal holds block deletion during disputes or litigation.
+- **Data minimisation.** Only collect what the claim needs. Bank statements are visible to office staff only.
+- **Processors.** A data processing agreement in place with each supplier: hosting, email, WhatsApp, lookups and any AI service that will see real data **(Justin)**.
+- **Breach plan.** A short written procedure, including the ICO 72-hour reporting rule **(adviser)**.
+- **ICO registration** covers this processing **(Justin)**.
+- **Development and testing** always use fictional data. The live and test systems are kept fully separate.
+
 ### J9 — Before live use (needs Justin's approval and costs first)
 - Hosting with tested backups and a restore.
 - Real logins in place of the demo ones.
@@ -271,3 +309,7 @@ J1 to J8 are done and pushed. J9 is not started: it needs Justin's approval and 
 ## Where I stopped (29 October 2026)
 
 Review notes R1–R12 are fixed (69cec49) and J10 is done (3cbeaa2). Everything on the list is done except J9, which needs Justin's approval and costs. Open questions: 1–3 and 5–12 in QUESTIONS-FOR-JUSTIN.md.
+
+## Where I stopped (30 October 2026, J11 in progress)
+
+R22 is committed and pushed (eb9b355). J11 is in progress and not committed: `scripts/awkward-journeys.ts` drives each awkward case in a browser (`npx tsx scripts/awkward-journeys.ts 1 2` runs chosen cases after `npm run build`). Cases 1–6 pass. Fixed on the way: a part-paid total loss has its own shortfall chase; changing a repairable file to a total loss closes the repair steps with a reason and stops the repair chases; a car swap says why no new agreement page is needed; a logged renewal stays unsigned until the signed renewal is uploaded (it was being marked signed); the day-80 renewal alert now starts with the first signed agreement (it needed a restart before); replies to liability and repair-authorisation chases now pause, leave alone, or go to review like payment replies, and an out-of-office never pauses. Still to do: cases 7–10, adding the awkward cases to `npm run test:journeys`, unit tests for the fixes, the full routine, the walk-through and the docs.

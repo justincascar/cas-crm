@@ -27,6 +27,8 @@ import {
   signedAgreementOverride,
   signedHireAgreementOnFile,
   storeSignedHireAgreement,
+  storeSignedRenewal,
+  unsignedRenewal,
   type HireGapLink,
   type HireRateView,
   type SignedAgreementFile,
@@ -93,6 +95,8 @@ export type HireArea = {
   startedAt: string | null;
   dayCount: number | null;
   renewal: string | null;
+  /** A renewal logged and not yet signed, waiting for the signed copy. */
+  unsignedRenewal: number | null;
   ratePence: number | null;
   rate: HireRateView;
   rateMissing: boolean;
@@ -533,7 +537,7 @@ export function chooseHireCar(input: {
       occurredAt: nowUtcIso(),
       actorId: input.actorId,
       details: openEpisode?.started_at
-        ? `Hire car changed to ${label}. The hire start date was not changed. Charges follow the original handover.`
+        ? `Hire car changed to ${label}. The hire start date was not changed. Charges follow the original handover. One continuous hire. No new agreement page was produced: the CAS terms define the Hire Vehicle as including any vehicle CAS replaces it with during the Rental Period.`
         : `Reserved ${label} for ${how} on ${formatUkDateTime(clock.at)}. A reservation does not start hire charges.${rateWords}${
             car.missing.length ? ` Not on the fleet record yet: ${missingWords(car.missing)}.` : ""
           }`,
@@ -703,6 +707,15 @@ export function uploadSignedHireAgreement(input: {
     if (!currentHireEpisode(input.claimId)?.fleet_vehicle_id) throw new Error("Choose a car first.");
     return storeSignedHireAgreement({ claimId: input.claimId, actorId: input.actorId, file: input.file });
   });
+}
+
+export function uploadSignedRenewal(input: {
+  claimId: string;
+  actorId: string;
+  submitKey: string;
+  file: { buffer: Buffer; filename: string; mimeType: string };
+}) {
+  return once(input.submitKey, () => storeSignedRenewal({ claimId: input.claimId, actorId: input.actorId, file: input.file }));
 }
 
 export function arrangeHireCollection(input: {
@@ -912,6 +925,7 @@ export function loadHireArea(
     startedAt,
     dayCount: count.dayCount,
     renewal: count.renewal,
+    unsignedRenewal: unsignedRenewal(claimId)?.sequence ?? null,
     ratePence: rate.ratePence,
     rate,
     rateMissing,

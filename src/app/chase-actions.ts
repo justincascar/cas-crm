@@ -239,9 +239,16 @@ export async function actionLogHeadPayment(formData: FormData) {
       submitKey: formSubmitKey(formData),
       confirmSeparate: String(formData.get("confirmSeparate") || "") === "yes",
       payingByCard: String(formData.get("payingByCard") || "") === "yes",
+      confirmOverpayment: String(formData.get("confirmOverpayment") || "") === "yes",
     });
     if ("needsConfirm" in result && result.needsConfirm) {
-      return { ok: false as const, needsConfirm: true as const, warning: String(result.warning || ""), error: undefined };
+      return {
+        ok: false as const,
+        needsConfirm: true as const,
+        warning: String(result.warning || ""),
+        confirmField: "confirmField" in result ? String(result.confirmField) : "confirmSeparate",
+        error: undefined,
+      };
     }
     refreshClaim(claimId);
     const message = result.reconciliation

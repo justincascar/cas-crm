@@ -6,6 +6,7 @@ import { formatGbp } from "../money";
 import { storeFileCopy } from "../storage/files";
 import { AGREEMENT_LENGTH_DAYS, AGREEMENT_ALERT_FROM_DAY } from "../constants";
 import { recordClaimEvent } from "./chronology";
+import { chaseRow, startChase } from "./chase";
 import { all, get, newId, run } from "./connection";
 import { insertStoredDocument } from "./documents-store";
 import { latestMitigationForPack } from "./impecuniosity";
@@ -295,6 +296,67 @@ export function recordSignedAgreementOnHire(claimId: string, startDay: string) {
       Number(episode.rate_pence_per_day) > 0 ? Number(episode.rate_pence_per_day) : null,
     ],
   );
+  // The day-80 renewal alert follows this agreement from now on, without waiting for a restart (J11).
+  if (!chaseRow(claimId, "hire_agreement_renewal")) startChase("hire_agreement_renewal", claimId, String(episode.started_at));
+}
+
+/** The latest renewal logged on the running hire and not yet signed, if any. */
+export function unsignedRenewal(claimId: string): { id: string; sequence: number; startOn: string } | null {
+  const episode = currentHireEpisode(claimId);
+  if (!episode?.started_at) return null;
+  const row = get<{ id: string; sequence: number; start_on: string }>(
+    `SELECT id, sequence, start_on FROM agreements WHERE hire_episode_id = ? AND sequence > 1 AND signed = 0
+       AND COALESCE(signature_status, '') = 'awaiting_signature' ORDER BY sequence DESC LIMIT 1`,
+    [episode.id],
+  );
+  return row ? { id: String(row.id), sequence: Number(row.sequence), startOn: String(row.start_on) } : null;
+}
+
+/**
+ * Files the signed renewal and marks that renewal signed. The signed date is the upload, never earlier (J11).
+ * The renewal alert then counts from that renewal. The hire and its day count carry on unchanged.
+ */
+export function storeSignedRenewal(input: { claimId: string; actorId: string; file: { buffer: Buffer; filename: string; mimeType: string } }) {
+  const renewal = unsignedRenewal(input.claimId);
+  if (!renewal) throw new Error("There is no unsigned renewal on this hire. Log the renewal first.");
+  const file = readSignedUpload(input.file);
+  const episode = currentHireEpisode(input.claimId);
+  const stored = storeFileCopy({
+    relDir: `claims/${input.claimId}/documents`,
+    originalFilename: `${newId("file")}-${file.filename}`,
+    buffer: file.buffer,
+  });
+  const documentId = insertStoredDocument({
+    title: `Signed hire agreement renewal ${renewal.sequence}`,
+    documentType: SIGNED_HIRE_AGREEMENT_TYPE,
+    kind: "file",
+    claimId: input.claimId,
+    vehicleId: null,
+    fleetVehicleId: episode?.fleet_vehicle_id || null,
+    originalFilename: file.filename,
+    storedRelpath: stored.storedRelpath,
+    mimeType: file.mimeType,
+    byteSize: stored.byteSize,
+    createdBy: input.actorId,
+    simulated: 0,
+  });
+  run(`UPDATE documents SET signed = 1 WHERE id = ?`, [documentId]);
+  const now = nowUtcIso();
+  run(`UPDATE agreements SET signed = 1, signed_at = ?, signature_status = 'signed', template_note = ? WHERE id = ?`, [
+    now,
+    "Signed renewal uploaded. Signed date is when it was filed.",
+    renewal.id,
+  ]);
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "document_filed",
+    occurredAt: now,
+    actorId: input.actorId,
+    documentId,
+    details: `Signed hire agreement renewal ${renewal.sequence} uploaded and filed. Signed date ${formatUkDate(now)}, the day it was filed. The hire and its day count carry on.`,
+    source: "staff",
+  });
+  return { documentId };
 }
 
 /** An authorised user lets the handover go ahead without the signed copy. Kept on the file with the reason. */

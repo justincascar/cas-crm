@@ -1,5 +1,6 @@
 import { CAS_CLAIMS_MAILBOX } from "../constants";
 import { nowUtcIso } from "../dates";
+import { formatGbp } from "../money";
 import { buildMailtoHref } from "../email/mailto";
 import { mailboxSentDetails } from "../email/sent-wording";
 import {
@@ -9,6 +10,7 @@ import {
   TOTAL_LOSS_NOTICE_SENT_EVENT,
   TOTAL_LOSS_PAYMENT_CHASE_KIND,
   TOTAL_LOSS_PAYMENT_CHASE_SENT_EVENT,
+  TOTAL_LOSS_PAYMENT_RECEIVED_EVENT,
   documentChaseByKind,
   documentChaseDecision,
   isDocumentChaseKind,
@@ -225,6 +227,7 @@ export function listFollowUpChases(asAt: string = nowUtcIso(), claimId?: string)
   );
   const promised = new Map(promisedRows.map((row) => [row.claim_id, String(row.insurer_payment_promised_at)]));
   const settled = new Set<string>();
+  const partPaid = new Map<string, { agreed: number; received: number }>();
   const seenDamage = new Set<string>();
   for (const row of all<{ claim_id: string; agreed_pence: number; received_pence: number }>(
     `SELECT claim_id, agreed_pence, received_pence FROM financial_lines
@@ -235,7 +238,22 @@ export function listFollowUpChases(asAt: string = nowUtcIso(), claimId?: string)
     if (seenDamage.has(row.claim_id)) continue;
     seenDamage.add(row.claim_id);
     if (vehicleDamageSettledInFull(row.agreed_pence || 0, row.received_pence || 0)) settled.add(row.claim_id);
+    else if ((row.agreed_pence || 0) > 0 && (row.received_pence || 0) > 0 && (row.received_pence || 0) < (row.agreed_pence || 0)) {
+      partPaid.set(row.claim_id, { agreed: row.agreed_pence || 0, received: row.received_pence || 0 });
+    }
   }
+  const lastPayment = latestByKey(
+    all<{ key: string; at: string }>(
+      `SELECT claim_id AS key, occurred_at AS at FROM claim_events WHERE event_type = ?${eventClaim.sql}`,
+      [TOTAL_LOSS_PAYMENT_RECEIVED_EVENT, ...eventClaim.params],
+    ),
+  );
+  const disputed = new Map(
+    all<{ claim_id: string; disputed_shortfall_pence: number | null; disputed_shortfall_note: string | null }>(
+      `SELECT claim_id, disputed_shortfall_pence, disputed_shortfall_note FROM total_loss_reports WHERE disputed_shortfall_pence IS NOT NULL${docClaim.sql}`,
+      docClaim.params,
+    ).map((row) => [row.claim_id, row]),
+  );
   const paymentSent = latestAfter(
     all<{ key: string; at: string }>(
       `SELECT claim_id AS key, occurred_at AS at FROM claim_events WHERE event_type = ?${eventClaim.sql}`,
@@ -243,15 +261,25 @@ export function listFollowUpChases(asAt: string = nowUtcIso(), claimId?: string)
     ),
   );
 
-  for (const [id, noticeSentAt] of notices) {
+  const chaseIds = new Set<string>([...notices.keys(), ...partPaid.keys()]);
+  for (const id of chaseIds) {
+    const noticeSentAt = notices.get(id) || null;
     const paymentReceived = settled.has(id);
+    const part = partPaid.get(id);
     const decision = totalLossPaymentChaseDecision({
       noticeSentAt,
       insurerPromisedAt: promised.get(id) || null,
       paymentReceived,
       lastChaseSentAt: paymentSent.get(id) || null,
       asAt,
+      partPaidAt: part ? lastPayment.get(id) || null : null,
     });
+    const dispute = disputed.get(id);
+    const shortfallReason = part
+      ? `Part-paid: ${formatGbp(part.received)} received of ${formatGbp(part.agreed)} agreed. The shortfall of ${formatGbp(part.agreed - part.received)} is chased separately${
+          dispute ? `; ${formatGbp(Number(dispute.disputed_shortfall_pence))} is disputed: ${dispute.disputed_shortfall_note || "no reason given"}` : ""
+        }.`
+      : "";
     if (!decision.started) continue;
     views.push(
       blankView({
@@ -261,12 +289,14 @@ export function listFollowUpChases(asAt: string = nowUtcIso(), claimId?: string)
         label: decision.label,
         due: decision.due,
         dueAt: decision.dueAt,
-        clockAt: promised.get(id) || noticeSentAt,
+        clockAt: decision.stage === "shortfall" ? lastPayment.get(id) || noticeSentAt || asAt : promised.get(id) || noticeSentAt || asAt,
         outcomeOnFile: decision.stage === "received",
         reason:
           decision.stage === "received"
             ? "Payment has been received."
-            : decision.stage === "awaiting_arrival"
+            : decision.stage === "shortfall"
+              ? shortfallReason
+              : decision.stage === "awaiting_arrival"
               ? "The insurer has confirmed they are sending payment."
               : "The total-loss notification has been sent. No confirmation and no payment yet.",
         intervalDays: decision.stage === "awaiting_arrival" ? 7 : 3,
@@ -345,6 +375,7 @@ export function prepareTotalLossPaymentChaseEmail(input: { claimId: string; acto
   if (!to) throw new Error("No insurer email on file. Add it on Third party 1. Nothing was prepared.");
   const chase = listFollowUpChases(input.asAt || nowUtcIso(), input.claimId).find((row) => row.kind === TOTAL_LOSS_PAYMENT_CHASE_KIND);
   const waitingForArrival = chase?.reason.includes("confirmed they are sending");
+  const shortfall = chase?.reason.startsWith("Part-paid:") ? chase.reason : "";
   const details = getInsurerPaymentDetails();
   const subject = `Our ref: ${claim.file_reference} — total loss payment`;
   const body = [
@@ -352,9 +383,11 @@ export function prepareTotalLossPaymentChaseEmail(input: { claimId: string; acto
     "",
     `Our ref: ${claim.file_reference}`,
     "",
-    waitingForArrival
-      ? "You confirmed that payment of the total-loss figure was being sent. It has not arrived."
-      : "We have not yet heard whether the total-loss payment is being sent.",
+    shortfall
+      ? `${shortfall.replace(/^Part-paid: /, "We have received ").replace(" is chased separately", " is still outstanding")} Please pay the shortfall, or explain the deduction.`
+      : waitingForArrival
+        ? "You confirmed that payment of the total-loss figure was being sent. It has not arrived."
+        : "We have not yet heard whether the total-loss payment is being sent.",
     paymentDetailsLetterLine(details),
     "",
     "This is a reminder only. It has not been sent automatically.",

@@ -121,11 +121,33 @@ const SUBSTANTIVE =
 const ACKNOWLEDGEMENT =
   /\b(acknowledgement|acknowledge|acknowledged|thank you for your email|thanks for your email|out of office|automatic reply|auto-reply|we have received your email)\b/i;
 
+/** An automatic reply is never read as substantive, even when it quotes words from our email. */
+const AUTOMATIC_REPLY = /\b(out of (the )?office|automatic reply|auto-reply|autoreply)\b/i;
+
 /** An acknowledgement does not resolve the chase. Uncertain text is not guessed. */
 export function classifyPaymentReply(text: string): PaymentReplyClass {
   const body = String(text || "").trim();
   if (!body) return "uncertain";
+  if (AUTOMATIC_REPLY.test(body)) return "acknowledgement";
   if (SUBSTANTIVE.test(body)) return "substantive";
+  if (ACKNOWLEDGEMENT.test(body)) return "acknowledgement";
+  return "uncertain";
+}
+
+/** Words that answer a liability or repair-authorisation chase: a decision, an offer or a dispute. */
+const DECISION =
+  /\b(liability|accept|accepted|admit|admitted|deny|denied|decline|declined|repudiat\w*|authoris\w*|authoriz\w*|approve|approved|settle|settlement|offer|valuation|total loss|will pay|will be paying)\b/i;
+
+/**
+ * A reply to an insurer chase that is not a payment chase (liability, repair authorisation). The same rules as a
+ * payment reply: an automatic reply or acknowledgement changes nothing, a decision or dispute is substantive, and
+ * anything else is uncertain and goes to a person (J11).
+ */
+export function classifyInsurerReply(text: string): PaymentReplyClass {
+  const body = String(text || "").trim();
+  if (!body) return "uncertain";
+  if (AUTOMATIC_REPLY.test(body)) return "acknowledgement";
+  if (SUBSTANTIVE.test(body) || DECISION.test(body)) return "substantive";
   if (ACKNOWLEDGEMENT.test(body)) return "acknowledgement";
   return "uncertain";
 }

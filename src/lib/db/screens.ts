@@ -1,4 +1,5 @@
 import { accidentDateError, nowUtcIso, londonDateIso, occurredFromForm, utcFromLondonDateTime } from "../dates";
+import { closeRepairStepsForTotalLoss } from "./total-loss-switch";
 import { recordRecoveryCompletedOnce, recordStorageEndedOnce } from "./claim-step-record";
 import { FieldValidationError } from "../form-validation";
 import { CLAIM_SCREENS, getClaimScreen } from "../claim-screens";
@@ -601,7 +602,10 @@ function applySideEffects(claimId: string, screenKey: string, values: ScreenValu
   if (screenKey === "assessed-damage" && values.totalLoss === "yes") {
     const before = get<{ total_loss: number | null }>(`SELECT total_loss FROM claims WHERE id = ?`, [claimId]);
     run(`UPDATE claims SET total_loss = 1 WHERE id = ?`, [claimId]);
-    if (Number(before?.total_loss) !== 1) flagStorageEndOnTotalLoss(claimId, actorId);
+    if (Number(before?.total_loss) !== 1) {
+      flagStorageEndOnTotalLoss(claimId, actorId);
+      closeRepairStepsForTotalLoss(claimId, actorId);
+    }
   }
 }
 

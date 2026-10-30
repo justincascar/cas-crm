@@ -18,6 +18,11 @@ import {
 } from "../src/lib/db/chase.ts";
 import { withDatabase } from "../src/lib/db/connection.ts";
 import { listHireAgreements, logChaseOutcome } from "../src/lib/db/chronology.ts";
+import { storeSignedRenewal } from "../src/lib/db/hire-readiness.ts";
+import os from "node:os";
+
+process.env.CAS_FILES_DIR ||= fs.mkdtempSync(path.join(os.tmpdir(), "cas-renewal-"));
+const signedCopy = { buffer: Buffer.from("%PDF-1.4 signed renewal"), filename: "renewal.pdf", mimeType: "application/pdf" };
 import { ensureEngineers } from "../src/lib/db/engineers.ts";
 import { getDashboard } from "../src/lib/db/queries.ts";
 import { seed } from "../src/lib/db/seed.ts";
@@ -220,7 +225,10 @@ describe("hire agreement renewal on TEST files", () => {
         assert.equal(afterFirst.length, 2);
         assert.equal(afterFirst[0].id, "ag-c3");
         assert.equal(Number(afterFirst[0].signed), 1);
-        assert.equal(Number(afterFirst[1].signed), 1);
+        assert.equal(Number(afterFirst[1].signed), 0, "a logged renewal stays unsigned");
+        assert.equal(chaseForClaim("hire_agreement_renewal", "c3")?.due, true, "the alert stays until the renewal is signed");
+        storeSignedRenewal({ claimId: "c3", actorId: "staff-tom", file: signedCopy });
+        assert.equal(Number(listHireAgreements("c3")[1].signed), 1);
         assert.equal(chaseForClaim("hire_agreement_renewal", "c3")?.due, false);
         logChaseOutcome({
           claimId: "c3",
@@ -234,7 +242,7 @@ describe("hire agreement renewal on TEST files", () => {
           afterSecond.map((row) => Number(row.sequence)),
           [1, 2, 3],
         );
-        assert.ok(afterSecond.every((row) => Number(row.signed) === 1));
+        assert.deepEqual(afterSecond.map((row) => Number(row.signed)), [1, 1, 0]);
         assert.equal(chaseForClaim("hire_agreement_renewal", "c3")?.due, false);
         db.prepare(`DELETE FROM agreements WHERE hire_episode_id = 'h-c3' AND id != 'ag-c3'`).run();
         db.prepare(`UPDATE agreements SET start_on = ?, sequence = 1 WHERE id = 'ag-c3'`).run(isoDateFromNow(-6));

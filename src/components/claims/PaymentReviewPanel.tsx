@@ -27,6 +27,7 @@ export function PaymentReviewPanel({
   const paymentKey = useRef("");
   if (!paymentKey.current) paymentKey.current = crypto.randomUUID();
   const pending = useRef<FormData | null>(null);
+  const confirmField = useRef("confirmSeparate");
   const [selectedHead, setSelectedHead] = useState<string>(payableHeads[0]?.head || "");
   const selected = payableHeads.find((head) => head.head === selectedHead) || payableHeads[0];
   const comparison = lockedHead
@@ -47,11 +48,12 @@ export function PaymentReviewPanel({
     form.set("claimId", claimId);
     form.set("payingByCard", form.get("payingByCard") ? "yes" : "");
     form.set("submitKey", confirm ? crypto.randomUUID() : paymentKey.current);
-    if (confirm) form.set("confirmSeparate", "yes");
+    if (confirm) form.set(confirmField.current, "yes");
     const result = await actionLogHeadPayment(form);
     setBusy(false);
     if ("needsConfirm" in result && result.needsConfirm) {
       setWarning(String(result.warning || ""));
+      confirmField.current = "confirmField" in result && result.confirmField ? String(result.confirmField) : "confirmSeparate";
       pending.current = form;
       return;
     }

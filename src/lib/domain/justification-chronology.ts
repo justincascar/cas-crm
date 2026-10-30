@@ -28,6 +28,7 @@ const MILESTONE_TYPES = [
   "hire_ended",
   "storage_ended",
   "storage_recovery_agreement_override",
+  "repair_steps_closed_total_loss",
 ] as const;
 
 /**

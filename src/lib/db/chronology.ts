@@ -60,7 +60,7 @@ import {
   REPAIR_OUTCOMES,
   type ChaseKind,
 } from "../domain/chase";
-import { classifyPaymentReply, paymentRequestCopy } from "../domain/payment-chase";
+import { classifyInsurerReply, classifyPaymentReply, paymentRequestCopy } from "../domain/payment-chase";
 import { BANK_DETAILS_MISSING_SETTINGS, paymentDetailsComplete } from "../domain/payment-details";
 import { getInsurerPaymentDetails } from "./payment-details";
 import { findPreparedChase, getChaseIntervalDays, pauseChase, restartChaseClock, startChase, chaseForClaim, chaseRow } from "./chase";
@@ -740,7 +740,63 @@ export function logIncomingEmail(input: {
     source: "staff",
   });
   applyPaymentReply({ claimId: input.claimId, actorId: input.actorId, subject: input.subject, body: input.body, occurredAt: when });
+  applyInsurerChaseReply({ claimId: input.claimId, actorId: input.actorId, subject: input.subject, body: input.body, occurredAt: when });
   return correspondenceId;
+}
+
+const REPLY_CHASES: ChaseKind[] = ["liability_response", "repair_authorisation"];
+
+/**
+ * A reply that arrives while a liability or repair-authorisation chase is running (J11). A substantive reply pauses
+ * that chase, so no chaser is prepared or sent until a person looks. An automatic reply or acknowledgement leaves it
+ * running. An uncertain reply is put to the handler as a task and the chase is not changed.
+ */
+function applyInsurerChaseReply(input: { claimId: string; actorId: string; subject: string; body: string; occurredAt: string }) {
+  const klass = classifyInsurerReply(`${input.subject}\n${input.body}`);
+  if (klass === "acknowledgement") return;
+  for (const kind of REPLY_CHASES) {
+    const row = chaseRow(input.claimId, kind);
+    if (!row || row.status === "cancelled" || row.status === "paused") continue;
+    const view = chaseForClaim(kind, input.claimId, input.occurredAt);
+    if (!view?.clockAt || view.outcomeOnFile) continue;
+    const title = chaseDefinition(kind).title.toLowerCase();
+    if (klass === "substantive") {
+      pauseChase(kind, input.claimId, "Paused for review. The insurer replied with a decision, offer or dispute. No chaser is sent until a person looks.");
+      recordClaimEvent({
+        claimId: input.claimId,
+        eventType: "chase_reply_substantive",
+        occurredAt: input.occurredAt,
+        actorId: input.actorId,
+        details: `The insurer replied to the ${title} chase with a decision, offer or dispute. The chase is paused for review. Nothing was sent. Record the outcome, or resume the chase.`,
+        source: "staff",
+        channel: "email",
+      });
+    } else {
+      recordClaimEvent({
+        claimId: input.claimId,
+        eventType: "chase_reply_uncertain",
+        occurredAt: input.occurredAt,
+        actorId: input.actorId,
+        details: `A reply arrived during the ${title} chase and could not be classified. It was not treated as an acknowledgement or as a decision. The chase was not changed. A task asks the handler to read it.`,
+        source: "staff",
+        channel: "email",
+      });
+      const handler = get<{ handler_id: string | null }>(`SELECT handler_id FROM claims WHERE id = ?`, [input.claimId]);
+      run(
+        `INSERT INTO tasks(id, claim_id, handler_id, title, details, type, due_at, status, created_at)
+         VALUES (?, ?, ?, ?, ?, 'other', ?, 'open', ?)`,
+        [
+          newId("task"),
+          input.claimId,
+          handler?.handler_id || null,
+          "Read the insurer's reply",
+          `A reply arrived during the ${title} chase and could not be classified. Decide whether it answers the chase.`,
+          nowUtcIso(),
+          nowUtcIso(),
+        ],
+      );
+    }
+  }
 }
 
 function applyPaymentReply(input: { claimId: string; actorId: string; subject: string; body: string; occurredAt: string }) {
@@ -1766,8 +1822,9 @@ export function logHireAgreementRenewal(input: { claimId: string; actorId: strin
   const plannedEndOn = londonDateIso(new Date(addCalendarDaysIso(when, length - 1)));
   const id = newId("ag");
   run(
+    // A logged renewal is unsigned (J11). It is signed only when the signed renewal is uploaded, dated the upload.
     `INSERT INTO agreements(id, hire_episode_id, sequence, start_on, planned_end_on, max_days, renewal_alert_day, signed, signed_at, signature_status, template_note)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, 'signed', ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, 0, NULL, 'awaiting_signature', ?)`,
     [
       id,
       episode.id,
@@ -1776,15 +1833,14 @@ export function logHireAgreementRenewal(input: { claimId: string; actorId: strin
       plannedEndOn,
       length,
       alertDay,
-      when,
-      "Renewal logged by staff. Earlier agreements on this hire episode were kept.",
+      "Renewal logged by staff. Unsigned until the signed renewal is uploaded. Earlier agreements on this hire episode were kept.",
     ],
   );
   recordClaimEvent({
     claimId: input.claimId,
     eventType: "hire_agreement_renewed",
     occurredAt: when,
-    details: `Hire agreement ${sequence} logged by ${handlerName} from ${formatUkDate(when)}. Earlier agreement periods on this hire episode were kept and not overwritten.`,
+    details: `Hire agreement ${sequence} logged by ${handlerName} from ${formatUkDate(when)}. It is not signed yet: upload the signed renewal on the Hire tab. The renewal alert stays until it is signed. Earlier agreement periods on this hire episode were kept and not overwritten. The day count does not restart.`,
     actorId: input.actorId,
     channel: "file",
     source: "staff",
