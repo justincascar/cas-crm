@@ -206,6 +206,7 @@ DONE — cc61aae. Export and audit (Settings, Justin only), `npm run backup` / `
 - **Speed:** generate 1,000 fictional claims in a separate test database. Confirm the dashboard, claims list and a claim page each open in under 2 seconds. Fix any slow page.
 
 ### J13 — Litigation and disputes, the basics
+DONE — commit to follow. Each claim has a litigation file (History → Litigation file, or the Litigation list).
 Check what the Litigation section does today, then make it useful without inventing anything:
 - **Parties and representatives**, with their legal capacity. Never assume CAS is the claimant or the insurer is the defendant.
 - **Court references, hearings, orders and deadlines.** Every deadline records its source and how it was calculated, and is marked "needs verification" until a person confirms it. The CRM never calculates court deadlines on its own authority.

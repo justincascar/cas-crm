@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/ClaimTable";
 import { formatUkDate } from "@/lib/dates";
 import { requireStaff } from "@/lib/auth/session";
 import { listLitigation } from "@/lib/db/queries";
+import { nextCourtDate } from "@/lib/db/litigation";
 
 export default async function LitigationPage() {
   await requireStaff();
@@ -11,7 +12,7 @@ export default async function LitigationPage() {
     <div>
       <PageHeader
         title="Litigation"
-        subtitle="Deadlines identify their source. Court issue is not permitted without approval. CAS is not assumed to be claimant."
+        subtitle="Each court date records its source and needs checking by a second person. Legal documents are not sent or filed without Justin's approval. CAS is not assumed to be claimant."
       />
       <div className="overflow-x-auto rounded-xl border border-line bg-card">
         <table className="ledger-table">
@@ -23,6 +24,8 @@ export default async function LitigationPage() {
               <th>Deadline</th>
               <th>Issue approved</th>
               <th>Source</th>
+              <th>Next court date</th>
+              <th>Litigation file</th>
             </tr>
           </thead>
           <tbody>
@@ -38,6 +41,17 @@ export default async function LitigationPage() {
                 <td>{formatUkDate(r.deadline_on ? String(r.deadline_on) : null)}</td>
                 <td>{Number(r.approved_to_issue) ? "Yes" : "No"}</td>
                 <td className="max-w-xl text-sm">{String(r.deadline_source)}</td>
+                <td className="text-sm">
+                  {(() => {
+                    const next = nextCourtDate(String(r.claim_id));
+                    return next ? `${formatUkDate(next.dueOn)} · ${next.title} · ${next.verified ? "checked" : "needs verification"}` : "None recorded";
+                  })()}
+                </td>
+                <td>
+                  <Link className="text-teal-dark underline" href={`/claims/${r.claim_id}/litigation`}>
+                    Open
+                  </Link>
+                </td>
               </tr>
             ))}
           </tbody>

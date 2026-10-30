@@ -27,6 +27,9 @@ export default async function ClaimHistoryPage({
       <p className="print:hidden">
         <Link href={`/claims/${claimId}/history/print`} className="rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white">
           Print / save chronology
+        </Link>{" "}
+        <Link href={`/claims/${claimId}/litigation`} className="ml-2 rounded-md border border-line bg-white px-3 py-2 text-sm font-semibold text-navy">
+          Litigation file
         </Link>
       </p>
       <JustificationChronology

@@ -1226,3 +1226,18 @@ Finish on 30 October 2026: 639 tests passed, 0 failed (two runs earlier in the d
 Walked through live as Sian on new claim TEST-0034: saved the General screen and the audit log recorded who, when and each changed field; Who can do what showed the table and permissions in plain words; the audit view and the full export were refused to Sian with "Only Justin can …".
 
 Finish on 30 October 2026: 643 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 70 passed, 0 failed. Journey checks passed, including the ten awkward cases and the 48 permission checks. Speed check passed. `EMAIL_SEND_MODE` stays `simulate`.
+
+## Litigation and disputes, the basics (J13, 30 October 2026)
+
+**What it did before.** The Litigation list showed one stage, one deadline with its source, and an "issue approved" flag per file (seeded on TEST-0012). Nothing could be added from the CRM.
+
+**Now each claim can have a litigation file** (History → Litigation file, or Litigation → Open). Opening one assumes nothing.
+
+- **Parties and representatives.** Name, capacity (claimant, defendant, second defendant, Part 20 party, insurer not a party, witness, other), representative, firm, reference and contact. The capacity has no default: the CRM never assumes CAS is the claimant or the insurer the defendant.
+- **Court, hearings, orders and deadlines.** Court name and court reference. Each date records where it comes from (for example the order and paragraph) and, for a deadline, how it was worked out. The CRM does not calculate any court date. Each stays "needs verification" until someone other than the person who entered it confirms it against the source (question 19 asks who should do this). The Litigation list shows the next court date and whether it has been checked.
+- **Legal documents.** A letter before action, claim form or court document prepared outside the CRM is filed here, marked as needing qualified legal review. It cannot be recorded as sent or filed until Justin approves it, and only Justin can approve it, enforced on the server. The CRM sends and files nothing itself.
+- **Built from the file**, each marked as a working paper needing qualified legal review: a chronology (letters before action left out, as before), a schedule of loss by head with claimed, offered, agreed and paid in separate columns (never added together), an evidence checklist (what is on file and what is missing, with the reason), and a draft bundle index of every stored document, grouped and numbered.
+
+Walked through live as Sian on TEST-0034: opened the litigation file; added the insurer as "Insurer (not a party)" with its solicitors; a deadline with no "how it was worked out" was refused; with it, the deadline showed its source and "Needs verification"; Sian could not verify her own entry; a filed letter before action showed "Not approved by Justin", Sian was offered no approval, and posting "sent" or "approve" directly was refused on the server.
+
+Finish on 30 October 2026: 648 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 73 passed, 0 failed (the litigation file, an unopened litigation file and Who can do what were added). Journey checks passed, including the awkward cases and the permission checks. `EMAIL_SEND_MODE` stays `simulate`.
