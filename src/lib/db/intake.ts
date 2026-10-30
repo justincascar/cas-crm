@@ -25,6 +25,7 @@ import {
 import { getDb } from "./connection";
 import { FieldValidationError } from "../form-validation";
 import { rememberAgentOn, rememberInsurerOn } from "./insurers";
+import { markEnquiryConverted } from "./website-enquiries";
 
 export type IntakePerson = {
   title?: string;
@@ -979,6 +980,7 @@ export async function createClaimFromIntake(input: IntakeInput) {
       [newId("audit"), now, input.handlerId, id, `Phone saved anyway: ${field}`],
     );
   }
+  markEnquiryConverted({ draftId: input.draftId, claimId: id, actorId: input.handlerId });
   finishClaimDraft(input.draftId, id, input.handlerId);
 
   return { id, fileReference: ref, hireStatus: "none" as const, chargesStarted: false };

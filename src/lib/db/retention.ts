@@ -6,6 +6,7 @@ import { recordClaimEvent } from "./chronology";
 import { all, get, getDb, newId, run } from "./connection";
 import { listStaffPermissions } from "./permissions";
 import { deleteStoredFile } from "../storage/files";
+import { deleteEnquiry, enquiriesDueForDeletion, ensureWebsiteEnquiryTables } from "./website-enquiries";
 
 function deleteStoredFileQuietly(relpath: string) {
   try {
@@ -65,6 +66,7 @@ export function ensureRetentionTables(db: DatabaseSync) {
 
 function ready() {
   ensureRetentionTables(getDb());
+  ensureWebsiteEnquiryTables(getDb());
 }
 
 function canDecide(staffId: string): boolean {
@@ -197,6 +199,10 @@ export function computeDueList(asAtYmd = londonTodayIso()): DueItem[] {
       }
     }
   }
+  // Website enquiries (J16) that never became a claim follow the same enquiry period.
+  for (const enquiry of enquiriesDueForDeletion(retentionMonths("enquiry") ?? 12, asAtYmd)) {
+    push({ kind: "website_enquiry", claimId: null, targetId: enquiry.id, label: `${enquiry.reference}: website enquiry that never became a claim`, dueSince: enquiry.dueSince, action: "delete" });
+  }
   const auditCutoff = addMonths(asAtYmd, -(retentionMonths("audit") ?? 72));
   const oldAudit = Number(get<{ n: number }>(`SELECT COUNT(*) AS n FROM audit_log WHERE substr(at, 1, 10) < ?`, [auditCutoff])?.n || 0);
   if (oldAudit > 0) push({ kind: "audit", claimId: null, targetId: `audit-before-${auditCutoff}`, label: `${oldAudit} audit log entries written before ${formatUkDate(auditCutoff)}`, dueSince: auditCutoff, action: "delete" });
@@ -296,6 +302,8 @@ function anonymiseClaim(claimId: string): string {
   } catch {
     /* No licence checks table on an older database. */
   }
+  // The website enquiry the claim came from holds the same details, so it goes with the claim file.
+  getDb().prepare(`DELETE FROM website_enquiries WHERE claim_id = ?`).run(claimId);
   return `${people.length} people's details, ${docs} documents (${files.length} stored files), ${messages} messages, the screens and free text removed; money lines kept`;
 }
 
@@ -331,6 +339,10 @@ export function approveDeletionBatch(input: { actorId: string; itemIds: string[]
         what: `${totals?.n || 0} money lines removed. Totals kept for the accounts: claimed ${formatGbp(Number(totals?.claimed || 0))}, received ${formatGbp(Number(totals?.received || 0))}`,
         reason,
       });
+    } else if (item.kind === "website_enquiry") {
+      const label = item.label.split(":")[0];
+      deleteEnquiry(String(item.targetId));
+      logDeletion({ actorId: input.actorId, kind: "website_enquiry", fileReference: label, what: "One website enquiry removed", reason });
     } else if (item.kind === "audit") {
       const cutoff = String(item.targetId).replace("audit-before-", "");
       const removed = getDb().prepare(`DELETE FROM audit_log WHERE substr(at, 1, 10) < ?`).run(cutoff).changes;

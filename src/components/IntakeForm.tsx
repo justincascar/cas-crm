@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { restoreDraftBoxes } from "@/lib/form-restore";
 import { JURISDICTIONS } from "@/lib/domain/jurisdiction";
 import {
   actionCreateClaim,
@@ -678,6 +679,19 @@ export function IntakeForm({
   const versionRef = useRef(initialDraftVersion);
   const idRef = useRef(initialDraftId);
   const timerRef = useRef(0);
+  const anchorRef = useRef<HTMLInputElement>(null);
+  const restoredRef = useRef(false);
+
+  // A saved draft (or a website enquiry) fills every box it has a value for, including the client's name and mobile.
+  // A second pass catches boxes that only appear once an earlier choice has been put back.
+  useEffect(() => {
+    const form = anchorRef.current?.form;
+    if (restoredRef.current || !form || Object.keys(defaults).length === 0) return;
+    restoredRef.current = true;
+    restoreDraftBoxes(form, defaults);
+    const timer = window.setTimeout(() => restoreDraftBoxes(form, defaults), 0);
+    return () => window.clearTimeout(timer);
+  }, [defaults]);
 
   function scheduleDraftSave(event: FormEvent<HTMLFormElement>) {
     const form = event.currentTarget;
@@ -722,7 +736,7 @@ export function IntakeForm({
         Next demonstration reference: <strong>{nextRef}</strong>. Opening this file does not start hire charges. Lookups,
         WhatsApp and email are simulated until the live accounts are connected.
       </p>
-      <input type="hidden" name="draftId" value={draftId} />
+      <input ref={anchorRef} type="hidden" name="draftId" value={draftId} />
       <input type="hidden" name="draftVersion" value={draftVersion} />
       <input type="hidden" name="recoveryFormVersion" value="fees" />
       <input type="hidden" name="agreementChannel" value="none" />

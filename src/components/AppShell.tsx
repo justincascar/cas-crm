@@ -7,6 +7,7 @@ import { actionLogout } from "@/app/auth-actions";
 const NAV = [
   { href: "/jobs", label: "My jobs today" },
   { href: "/", label: "Dashboard" },
+  { href: "/enquiries", label: "Website enquiries" },
   { href: "/claims", label: "Claims" },
   { href: "/tasks", label: "Tasks" },
   { href: "/hire", label: "Hire / Fleet" },

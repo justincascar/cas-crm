@@ -121,6 +121,57 @@ async function main() {
           return /Exported everything held about one person/.test(audit) ? null : "The export is not in the audit view.";
         },
       },
+      {
+        name: "A website enquiry: refused from another site, rate limited, listed for staff and converted only by them (J16)",
+        async run() {
+          const website = "https://www.cas-website.test";
+          const enquiry = (from: string, address: string, fields: Record<string, string>) =>
+            fetch(`${origin}/website/enquiry`, { method: "POST", redirect: "manual", headers: { origin: from, "content-type": "application/json", "x-forwarded-for": address }, body: JSON.stringify(fields) });
+          const fields = {
+            name: "Rhys Bowen",
+            mobile: "07700 900789",
+            registration: "CY70 ABC",
+            accidentDate: new Date(Date.now() - 86_400_000).toISOString().slice(0, 10),
+            fault: "theirs",
+            driveable: "no",
+            whatHappened: "Fictional journey enquiry.",
+            privacyConsent: "yes",
+          };
+          if ((await enquiry(website, "192.0.2.50", fields)).status !== 403) return "An enquiry was accepted before the website address was saved.";
+          const sianSave = await post(sian, "/settings/website-address", { websiteOrigins: website });
+          if (!decodeURIComponent((sianSave.headers.get("location") || "").replaceAll("+", " ")).includes("Only an administrator")) return "Sian could change the website address.";
+          await post(justin, "/settings/website-address", { websiteOrigins: website });
+          if ((await enquiry("https://evil.example", "192.0.2.50", fields)).status !== 403) return "An enquiry from another site was accepted.";
+          const claimsBefore = readDb(dbPath, (db) => Number((db.prepare(`SELECT COUNT(*) AS n FROM claims`).get() as { n: number }).n));
+          const stored = await enquiry(website, "192.0.2.50", fields);
+          const body = (await stored.json()) as { ok?: boolean; reference?: string };
+          if (stored.status !== 201 || !body.ok || body.reference !== "WEB-0001") return `The website enquiry was not stored: ${stored.status} ${JSON.stringify(body)}`;
+          if (stored.headers.get("access-control-allow-origin") !== website) return "The website cannot read the answer.";
+          const trap = await enquiry(website, "192.0.2.51", { ...fields, website: "http://spam.example" });
+          if (trap.status !== 201) return `The spam trap answer changed: ${trap.status}`;
+          let limited = 0;
+          for (let i = 0; i < 9; i += 1) if ((await enquiry(website, "192.0.2.60", { ...fields, mobile: "bad" })).status === 429) limited += 1;
+          if (limited === 0) return "Nine posts from one address in a minute were not rate limited.";
+          const counts = readDb(dbPath, (db) => ({
+            claims: Number((db.prepare(`SELECT COUNT(*) AS n FROM claims`).get() as { n: number }).n),
+            enquiries: Number((db.prepare(`SELECT COUNT(*) AS n FROM website_enquiries`).get() as { n: number }).n),
+          }));
+          if (counts.claims !== claimsBefore) return "A website enquiry created a claim by itself.";
+          if (counts.enquiries !== 1) return `Expected one stored enquiry (spam and refused posts kept nothing), found ${counts.enquiries}.`;
+          const dashboard = await get(sian, "/").then((r) => r.text());
+          if (!/Website enquiries: needs a call/.test(dashboard) || !/1 · 1 urgent/.test(dashboard)) return "The dashboard does not count the urgent enquiry.";
+          const list = await get(sian, "/enquiries").then((r) => r.text());
+          if (!/Rhys Bowen/.test(list) || !/Urgent: the car can(&#x27;|')t be driven/.test(list)) return "The enquiry is not on the list as urgent.";
+          const enquiryId = readDb(dbPath, (db) => String((db.prepare(`SELECT id FROM website_enquiries`).get() as { id: string }).id));
+          const convert = await post(sian, "/enquiries/save", { intent: "convert", enquiryId });
+          const target = convert.headers.get("location") || "";
+          if (!/\/claims\/new\?draft=/.test(target)) return `Convert to claim did not open the new-claim form: ${target}`;
+          const form = await get(sian, new URL(target, origin).pathname + new URL(target, origin).search).then((r) => r.text());
+          if (!/Filled from website enquiry WEB-0001/.test(form)) return "The new-claim form does not say it came from the enquiry.";
+          const after = readDb(dbPath, (db) => Number((db.prepare(`SELECT COUNT(*) AS n FROM claims`).get() as { n: number }).n));
+          return after === claimsBefore ? null : "Converting made a claim before staff saved the form.";
+        },
+      },
     ];
     for (const check of checks) {
       let problem: string | null;

@@ -12,6 +12,7 @@ import { ensureLoginSecurityTables } from "../auth/login-security";
 import { ensureRetentionTables } from "./retention";
 import { ensurePersonDataColumns } from "./person-data";
 import { ensureBreachTable } from "./breaches";
+import { ensureWebsiteEnquiryTables } from "./website-enquiries";
 import { ensureFleetGtaRulesTable } from "./fleet-details";
 import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_LEGAL_CORRESPONDENCE, APPROVE_SETTLEMENT, OVERRIDE_UNSIGNED_STORAGE_RECOVERY, OVERRIDE_UNSIGNED_SWAP, EXPORT_AND_AUDIT, EXTENDED_WAIT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS, RELEASE_WITHOUT_EXCESS } from "../auth/roles";
 
@@ -806,6 +807,7 @@ export function migrate(db: DatabaseSync) {
   ensureRetentionTables(db);
   ensurePersonDataColumns(db);
   ensureBreachTable(db);
+  ensureWebsiteEnquiryTables(db);
   db.exec(`
     CREATE TABLE IF NOT EXISTS repair_gap_explanations (
       id TEXT PRIMARY KEY,

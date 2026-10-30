@@ -23,9 +23,12 @@ function crossSitePost(request: NextRequest): boolean {
   }
 }
 
+/** The public website's enquiry form (J16). The route allows only the website address saved in Settings. */
+const WEBSITE_ENQUIRY_PATH = "/website/enquiry";
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  if (crossSitePost(request)) {
+  if (pathname !== WEBSITE_ENQUIRY_PATH && crossSitePost(request)) {
     return new NextResponse("Refused: this was not sent from a CAS CRM page.", { status: 403 });
   }
   // The client signing page and the client form are reached from a link and have no CAS login.
@@ -36,6 +39,7 @@ export function proxy(request: NextRequest) {
     pathname === "/login/code/submit" ||
     pathname === "/login/setup" ||
     pathname === "/privacy" ||
+    pathname === WEBSITE_ENQUIRY_PATH ||
     /^\/sign\/[A-Za-z0-9_-]+(\/submit)?$/.test(pathname) ||
     /^\/c\/[A-Za-z0-9_-]+(\/save)?$/.test(pathname);
   const requestHeaders = new Headers(request.headers);

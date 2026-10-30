@@ -78,6 +78,7 @@ const PAGES: Array<{ name: string; path: string }> = [
   { name: "Aged debt", path: "/financials/aged-debt" },
   { name: "Automations", path: "/automations" },
   { name: "Litigation", path: "/litigation" },
+  { name: "Website enquiries", path: "/enquiries" },
   { name: "Settings", path: "/settings" },
   { name: "Client form, unknown link", path: "/c/not-a-real-link" },
   { name: "Privacy notice", path: "/privacy" },

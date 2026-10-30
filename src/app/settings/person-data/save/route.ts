@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getRequestStaff } from "@/lib/auth/session";
-import { erasePerson, restrictPerson } from "@/lib/db/person-data";
+import { erasePerson, eraseWebsiteEnquiry, restrictPerson } from "@/lib/db/person-data";
 import { browserOrigin } from "@/lib/http/browser-origin";
 
 export async function POST(request: Request) {
@@ -18,6 +18,7 @@ export async function POST(request: Request) {
     if (intent === "restrict") restrictPerson({ actorId: staff.id, personId, reason });
     else if (intent === "unrestrict") restrictPerson({ actorId: staff.id, personId, reason: "", lift: true });
     else if (intent === "erase") erasePerson({ actorId: staff.id, personId, reason });
+    else if (intent === "erase-enquiry") eraseWebsiteEnquiry({ actorId: staff.id, enquiryId: String(form.get("enquiryId") || ""), reason });
     else throw new Error("Nothing was changed.");
     back.searchParams.set("saved", "1");
   } catch (error) {

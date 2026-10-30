@@ -9,6 +9,7 @@ import { all, get, getDb, newId, run } from "./connection";
 import { listStaffPermissions } from "./permissions";
 import { anonymisePerson, legalHold, retentionMonths } from "./retention";
 import { recordView } from "./view-audit";
+import { deleteEnquiry, ensureWebsiteEnquiryTables, enquiryExportText, getEnquiry, searchEnquiries, type EnquiryView } from "./website-enquiries";
 
 /**
  * "This person's data" (J15). Justin finds a person across every claim and role, exports everything held about them
@@ -24,6 +25,7 @@ export function ensurePersonDataColumns(db: DatabaseSync) {
 
 function ready() {
   ensurePersonDataColumns(getDb());
+  ensureWebsiteEnquiryTables(getDb());
 }
 
 export function canUsePersonData(staffId: string): boolean {
@@ -149,6 +151,12 @@ export function exportPersonData(input: { actorId: string; personId: string }): 
   entries.push({ name: "claims.csv", data: Buffer.from(toCsv(["file_reference", "role", "created_at", "accident_at", "accident_location", "circumstances", "claim_type", "current_position"], claims)) });
   entries.push({ name: "messages.csv", data: Buffer.from(toCsv(["claim_id", "created_at", "direction", "channel", "subject", "body", "to_address", "from_address"], messages)) });
   entries.push({ name: "history.csv", data: Buffer.from(toCsv(["claim_id", "occurred_at", "event_type", "title", "details"], history)) });
+  // The website enquiry each of the person's client claims came from (J16), with the privacy notice tick.
+  for (const claimId of clientClaims) {
+    const row = get<{ id: string }>(`SELECT id FROM website_enquiries WHERE claim_id = ?`, [claimId]);
+    const enquiry = row ? getEnquiry(String(row.id)) : undefined;
+    if (enquiry) entries.push({ name: `website-enquiry-${enquiry.reference}.txt`, data: Buffer.from(enquiryExportText(enquiry).replaceAll("\n", "\r\n")) });
+  }
   for (const doc of docs) {
     try {
       const { buffer } = readStoredFile(String(doc.stored_relpath));
@@ -228,5 +236,36 @@ export function erasePerson(input: { actorId: string; personId: string; reason: 
     nowUtcIso(),
     input.actorId,
     `One person's details erased. Reason: ${reason}`,
+  ]);
+}
+
+/** Website enquiries (J16) matching the search. They are not on a claim until converted, so they are listed apart. */
+export function searchPersonEnquiries(input: { actorId: string; query: string }): EnquiryView[] {
+  guard(input.actorId);
+  return searchEnquiries(input.query);
+}
+
+/** Erases a website enquiry that never became a claim. A converted one is erased with its claim file. */
+export function eraseWebsiteEnquiry(input: { actorId: string; enquiryId: string; reason: string }) {
+  guard(input.actorId);
+  const reason = input.reason.trim();
+  if (!reason) throw new Error("Enter the reason for the erasure.");
+  const enquiry = getEnquiry(input.enquiryId);
+  if (!enquiry) throw new Error("That enquiry was not found.");
+  if (enquiry.claim_id) throw new Error(`This enquiry became ${enquiry.file_reference || "a claim"}. It is kept and erased with that claim file.`);
+  deleteEnquiry(enquiry.id);
+  run(`INSERT INTO deletion_log(id, at, actor_id, kind, file_reference, what, reason) VALUES (?, ?, ?, 'erasure', ?, ?, ?)`, [
+    newId("del"),
+    nowUtcIso(),
+    input.actorId,
+    enquiry.reference,
+    "One website enquiry removed",
+    reason.slice(0, 500),
+  ]);
+  run(`INSERT INTO audit_log(id, at, actor_id, action, entity, entity_id, details) VALUES (?, ?, ?, 'erased', 'person-data', NULL, ?)`, [
+    newId("audit"),
+    nowUtcIso(),
+    input.actorId,
+    `Website enquiry ${enquiry.reference} erased. Reason: ${reason}`,
   ]);
 }

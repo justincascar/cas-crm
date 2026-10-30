@@ -110,7 +110,7 @@ async function liveChecks() {
     const missing = wanted.filter(([name, value]) => !value.test(page.headers.get(name) || "")).map(([name]) => name);
     record("Headers", missing.length === 0, missing.length ? `Missing or wrong: ${missing.join(", ")}` : "nosniff, frame protection, content security policy, referrer and permissions policies are sent");
     const refused: string[] = [];
-    for (const target of ["/login/submit", "/claims/c1/hire/swap", "/c/some-link/save", "/settings/breaches/save"]) {
+    for (const target of ["/login/submit", "/claims/c1/hire/swap", "/c/some-link/save", "/settings/breaches/save", "/website/enquiry"]) {
       const response = await fetch(`${origin}${target}`, {
         method: "POST",
         redirect: "manual",
@@ -122,7 +122,7 @@ async function liveChecks() {
     // A sandboxed frame on another site sends Origin "null"; only the browser's own same-origin mark lets that through.
     const sandboxed = await fetch(`${origin}/login/submit`, { method: "POST", redirect: "manual", headers: { origin: "null", "content-type": "application/x-www-form-urlencoded" }, body: "username=sian" });
     if (sandboxed.status !== 403) refused.push(`a "null" origin answered ${sandboxed.status}`);
-    record("Cross-site posts", refused.length === 0, refused.length ? refused.join("; ") : "posts from another site are refused on the sign-in, staff, client-form and Justin-only forms");
+    record("Cross-site posts", refused.length === 0, refused.length ? refused.join("; ") : "posts from another site are refused on the sign-in, staff, client-form, Justin-only and website-enquiry forms");
   } finally {
     if (child.exitCode === null && !child.killed) stopTree(child);
     try {

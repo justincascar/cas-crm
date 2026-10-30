@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { PageHeader } from "@/components/ClaimTable";
 import { requireStaff } from "@/lib/auth/session";
-import { canUsePersonData, erasureBlock, searchPeople } from "@/lib/db/person-data";
+import { canUsePersonData, erasureBlock, searchPeople, searchPersonEnquiries } from "@/lib/db/person-data";
+import { enquiryExportText } from "@/lib/db/website-enquiries";
 import { recordView } from "@/lib/db/view-audit";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
@@ -20,6 +21,7 @@ export default async function PersonDataPage({ searchParams }: { searchParams: P
   const { q, error, saved } = await searchParams;
   if (!q) recordView({ actorId: staff.id, entity: "person-data", what: "Opened the person's data screen" });
   const matches = q ? searchPeople({ actorId: staff.id, query: q }) : [];
+  const enquiries = q ? searchPersonEnquiries({ actorId: staff.id, query: q }) : [];
   const action = "/settings/person-data/save";
   return (
     <div className="max-w-4xl space-y-6" data-person-data>
@@ -36,14 +38,38 @@ export default async function PersonDataPage({ searchParams }: { searchParams: P
       {saved ? <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm text-ok">Done. It is on the history of each claim and in the audit view.</p> : null}
       <form method="get" className="flex flex-wrap items-end gap-3 rounded-xl border border-line bg-card p-4">
         <label className="min-w-64 flex-1 text-sm">
-          Name, email, phone or postcode
+          Name, email, phone, postcode or registration
           <input name="q" defaultValue={q || ""} className={field} />
         </label>
         <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
           Search
         </button>
       </form>
-      {q && matches.length === 0 ? <p className="text-sm">No one matches.</p> : null}
+      {q && matches.length === 0 && enquiries.length === 0 ? <p className="text-sm">No one matches.</p> : null}
+      {enquiries.map((enquiry) => (
+        <section key={enquiry.id} className="space-y-3 rounded-xl border border-line bg-card p-5" data-person-enquiry={enquiry.id}>
+          <h2 className="font-serif text-lg text-navy-deep">
+            {enquiry.full_name} · website enquiry {enquiry.reference}
+          </h2>
+          <pre className="whitespace-pre-wrap font-sans text-sm">{enquiryExportText(enquiry)}</pre>
+          {enquiry.claim_id ? (
+            <p className="text-sm text-slate">It became {enquiry.file_reference}. It is exported and erased with that person and claim.</p>
+          ) : (
+            <form method="post" action={action} className="flex flex-wrap items-end gap-2 text-sm">
+              <input type="hidden" name="enquiryId" value={enquiry.id} />
+              <input type="hidden" name="q" value={q || ""} />
+              <input type="hidden" name="intent" value="erase-enquiry" />
+              <label className="min-w-64 flex-1">
+                Reason for erasing
+                <input name="reason" className={field} />
+              </label>
+              <button type="submit" className="rounded-md bg-overdue px-3 py-2 font-semibold text-white">
+                Erase this enquiry
+              </button>
+            </form>
+          )}
+        </section>
+      ))}
       {matches.map((person) => {
         const block = erasureBlock(person.id);
         return (

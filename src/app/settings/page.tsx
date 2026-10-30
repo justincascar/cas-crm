@@ -33,6 +33,7 @@ import { formatGbp } from "@/lib/money";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import { currentCasInsuranceDocument } from "@/lib/db/company-insurance";
 import { PAYMENT_REQUEST_PACK_MISSING } from "@/lib/email/payment-request-pack";
+import { DEV_WEBSITE_ORIGINS, isDevelopment, savedWebsiteOrigins } from "@/lib/db/website-enquiries";
 
 export default async function SettingsPage({
   searchParams,
@@ -67,6 +68,8 @@ export default async function SettingsPage({
   const fleetGroups = fleetGroupChoices();
   const paymentDetails = getInsurerPaymentDetails();
   const casInsurance = currentCasInsuranceDocument();
+  const websiteOrigins = savedWebsiteOrigins();
+  const websiteDev = isDevelopment();
   return (
     <div className="max-w-3xl space-y-6">
       <PageHeader
@@ -222,6 +225,33 @@ export default async function SettingsPage({
           </div>
         </section>
       ) : null}
+      <section id="website-address" className="scroll-mt-24 rounded-xl border border-line bg-card p-5" data-website-address>
+        <h2 className="font-serif text-xl text-navy-deep">Website enquiries</h2>
+        <p className="mt-2 text-sm">
+          Only the CAS website may send Start your claim enquiries to the CRM.
+          {websiteDev
+            ? ` While the CRM runs on this computer for testing, it accepts them from the local website only (${DEV_WEBSITE_ORIGINS[0]}).`
+            : websiteOrigins.length
+              ? ` Accepted from: ${websiteOrigins.join(", ")}.`
+              : " No website address is saved, so none are accepted yet."}
+        </p>
+        {admin ? (
+          <form method="post" action="/settings/website-address" className="mt-3 flex flex-wrap items-end gap-3">
+            <label className="min-w-64 flex-1 text-sm">
+              Live website address
+              <input
+                name="websiteOrigins"
+                defaultValue={websiteOrigins.join(" ")}
+                placeholder="https://www.example.co.uk"
+                className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
+              />
+            </label>
+            <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
+              Save
+            </button>
+          </form>
+        ) : null}
+      </section>
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Chaser sending hours</h2>
         <p className="mt-2 text-sm">

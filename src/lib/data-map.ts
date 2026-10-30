@@ -303,6 +303,22 @@ export const DATA_MAP: DataMapEntry[] = [
     retention: "6 years (awaiting adviser)",
   },
   {
+    table: "website_enquiries",
+    columns: ["full_name", "mobile", "registration", "accident_date", "fault", "driveable", "what_happened", "consent_at", "consent_notice", "closed_reason"],
+    about: ["client"],
+    why: "An enquiry from the website's Start your claim form, so office staff can call the person back; the privacy notice tick and its time",
+    roles: OFFICE,
+    retention: "12 months from the enquiry if it never becomes a claim (awaiting adviser); a converted enquiry follows the claim file",
+  },
+  {
+    table: "website_enquiry_hits",
+    columns: ["address_hash"],
+    about: ["client"],
+    why: "A salted fingerprint of the internet address that posted the website form, used only for the rate limit (never the address itself)",
+    roles: "Not shown on any screen",
+    retention: "24 hours",
+  },
+  {
     table: "deletion_log",
     columns: ["file_reference", "what", "reason"],
     about: ["client"],

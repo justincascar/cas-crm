@@ -9,6 +9,7 @@ import { countClaims, dbLocation, getDashboard } from "@/lib/db/queries";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import { listAgedDebt } from "@/lib/db/aged-debt";
 import { draftPayload, listOpenClaimDrafts } from "@/lib/db/claim-drafts";
+import { enquiryCounts } from "@/lib/db/website-enquiries";
 import { findPreparedChase } from "@/lib/db/chase";
 import { isChaseKind } from "@/lib/domain/chase";
 import { liveEmailSending } from "@/lib/email/send-mode";
@@ -103,7 +104,15 @@ export default async function DashboardPage({
   const creditHire = countClaims("active_hire_credit", handlerId);
   const courtesy = countClaims("active_hire_courtesy", handlerId);
   const owed = Object.values(listAgedDebt(undefined, handlerId).totals).reduce((sum, pence) => sum + pence, 0);
+  const enquiries = enquiryCounts();
   const counts: Count[] = [
+    {
+      key: "website_enquiries",
+      label: "Website enquiries: needs a call",
+      value: enquiries.urgent ? `${enquiries.needsCall} · ${enquiries.urgent} urgent` : String(enquiries.needsCall),
+      href: "/enquiries",
+      tone: enquiries.urgent ? "bad" : enquiries.needsCall ? "warn" : "ok",
+    },
     { key: "action_today", label: "Need action today", value: String(actionToday), href: workLink("today"), tone: "warn" },
     { key: "overdue", label: "Overdue", value: String(overdue), href: workLink("overdue"), tone: "bad" },
     {

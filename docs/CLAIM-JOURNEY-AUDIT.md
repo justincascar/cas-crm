@@ -156,6 +156,7 @@ Five stages. Each later stage extends the same three journeys one step further: 
 66. **Fixed (J15).** Free-text conviction details could be kept on the Client screen and in licence-check notes. Only a yes/no, the points and endorsement codes are kept now; existing free text was removed with a history note.
 67. **Fixed (J15).** npm audit found 1 critical and 4 high vulnerabilities (Next.js, sharp, source-map-js, undici, zod). All were fixed by non-breaking updates (Next.js 16.3.5 to 16.4.3); the finish routine now fails on any high or critical one.
 68. **Fixed (J15).** An unused sign-in action could have signed someone in without the new lockout or authenticator step. It was removed.
+69. **Fixed (J16).** Continuing a saved new-claim draft put back only some boxes: the client's name, mobile, registration and accident date came back empty. Every saved box is put back now, which the website enquiry pre-fill relies on.
 
 ## How to try hire on a demonstration file
 

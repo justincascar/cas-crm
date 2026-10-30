@@ -340,12 +340,12 @@ describe("dashboard desk", () => {
     }
   });
 
-  it("shows six counts and one Today's work list with a single next step per claim (J7)", () => {
+  it("shows seven counts (J7, plus website enquiries from J16) and one Today's work list with a single next step per claim", () => {
     const page = fs.readFileSync(path.join(process.cwd(), "src/app/page.tsx"), "utf8");
     assert.equal(page.includes("None due."), false);
     assert.match(page, /Gaps to explain/);
     const keys = [...page.matchAll(/key: "([a-z_]+)",\s+label:/g)].map((match) => match[1]);
-    assert.deepEqual(keys, ["action_today", "overdue", "on_hire", "storage", "money", "fleet"]);
+    assert.deepEqual(keys, ["website_enquiries", "action_today", "overdue", "on_hire", "storage", "money", "fleet"]);
     assert.match(page, /credit · \$\{courtesy\} courtesy/);
     assert.match(page, /rest: \[\]/);
     assert.equal((page.match(/<h2/g) || []).length <= 2, true, "only the enquiries and Today's work headings");

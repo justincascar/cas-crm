@@ -291,6 +291,62 @@ These are the parts of J9b that don't need hosting or Justin's decisions. Where 
     - A journey test: a person's data export, a legal hold blocking deletion, the deletion list after the period, viewing a bank statement appearing in the audit, a lockout after failed logins.
     - The usual browser walk-through as `sian` and as `justin`.
 
+### J16 — Website enquiries into the CRM (build in this CRM repo)
+The public website's "Start your claim" form must land in the CRM as an enquiry for staff to review. Nothing is typed twice.
+
+- **A public endpoint for the website form** (no staff login). It accepts:
+  - name, mobile, registration, accident date
+  - whose fault (theirs / mine / not sure)
+  - whether the car can be driven (yes / no / not sure)
+  - what happened (short text)
+  - privacy-notice consent: required, stored with its date and time
+- **Treat everything it receives as UNTRUSTED.**
+  - Strict size and format checks.
+  - Rate limiting per IP address and a hidden spam trap.
+  - No file uploads on this form.
+  - It must never create a claim, change existing data or trigger any send by itself.
+- **The enquiry appears on a "Website enquiries" list for office staff,** marked "Needs a call", with a count on the dashboard. "Car can't be driven" enquiries are flagged as urgent.
+- **"Convert to claim"** opens the new-claim form pre-filled from the enquiry, for staff to check and save. "Not proceeding" closes it with a reason.
+  - Enquiries that never become claims follow the 12-month retention rule.
+- **Allowed origins.** The website address is a Settings value. In development the CRM accepts posts from the local website only.
+- **Tests:**
+  - validation
+  - the spam trap
+  - the rate limit
+  - no claim created automatically
+  - converting to a claim pre-fills correctly
+  - retention applies
+  - the usual browser walk-through
+
+### J17 — Build the real CAS website (a SEPARATE project, not inside the CRM)
+**Design reference:** `docs/website-mockup/`. `homepage-preview.html` is the approved look; open it in a browser. The screenshots are `desktop-top.png` and `phone-top.png`, and the source is `homepage-design-source.dc.html`. Match it closely: layout, colours, fonts (Barlow Condensed and Inter), the original SVG illustrations, wording and placeholders.
+
+- **Create a new folder beside the CRM:** `C:\Users\JustinRoberts\OneDrive - Complete Accident Solutions\Code\CAS-Website`, with its own git repository.
+  - If GitHub access is set up, create a PRIVATE repo under CAS's account and push.
+  - If not, keep it local and say so. Never use a personal or third-party account.
+- **Keep it a simple, fast, static site that is easy to host,** and choose the tooling to match. Pages:
+  - Home (from the mock-up)
+  - Privacy notice
+  - Complaints
+  - Cookies
+  - Terms
+
+  The privacy, complaints, cookies and terms pages use placeholders marked "awaiting approved wording (J9a)". Never invent legal wording.
+- **The "Start your claim" form posts to the CRM endpoint from J16.** The address is configurable. Show clear success and failure messages, and never claim it was sent when it wasn't.
+  - Wording: "we'll send you a secure link", not "text you", until text messaging is actually connected.
+- **No tracking or analytics cookies by default.** If any are added later, they need a consent banner.
+- **Accessibility:** proper headings, labels and focus states, keyboard use, contrast 4.5:1 or better, and alt text on the illustrations.
+- **Mobile:** test at phone, tablet and desktop widths. No sideways scrolling, and the "Call us / Start your claim" bar shows on phones.
+- **SEO basics:** a page title and description, plus LocalBusiness structured data using ONLY true facts (name, address, phone, email). No ratings until real reviews exist.
+- **Placeholders stay visible as [brackets]** until Justin supplies the real values: logo, photos, opening hours, recovery hours, areas covered, company number, reviews.
+- **Tests:**
+  - an automated accessibility check
+  - a broken-link check
+  - screenshots at phone and desktop width compared against the mock-up
+  - a form-to-CRM test against the local CRM
+- **Report:** where it is, how to open it locally, and what's still placeholder.
+- **Hosting goes with the CRM at J9,** and needs Justin's approval and costs first.
+
 ### J9a — Template and wording review by Justin (MUST be done before going live)
 This is a gate. The CRM must not be used with real clients until it is complete.
 
@@ -346,6 +402,10 @@ Security must be high. Nothing real goes in until every item below is done and e
 - Cyber Essentials certification for CAS is recommended **(Justin)**.
 
 **GDPR (the CRM supports these; the items marked adviser need checking):**
+- **Data protection pack, DRAFTED 30 October 2026 — waiting for adviser review (MUST be approved before going live).**
+  - The draft contains: the DPIA, the Appropriate Policy Document for licence points (criminal offence data), the client privacy notice, and the retention periods and open points.
+  - Find it in the claude.ai project "CAS CRM" as "CAS CRM — Data protection pack (draft for adviser)": https://claude.ai/artifact/3967CMrKYhjrWBUYzHVL2D
+  - Justin sends it to his adviser. Once it's approved, Claude Code puts in the approved privacy notice wording and the retention periods, and removes the "awaiting adviser" marks.
 - **DPIA.** A Data Protection Impact Assessment, drafted for the adviser to review **(adviser)**.
 - **Criminal offence data.** Licence points and endorsements need a lawful condition and an appropriate policy document **(adviser)**.
 - **Privacy notice** for clients, shown on the client form and in the welcome email. Wording is part of J9a **(adviser)**.
@@ -366,6 +426,8 @@ Security must be high. Nothing real goes in until every item below is done and e
 - Postcode, registration (VRM) and MID lookups.
 
 ## Where I stopped
+
+**30 October 2026 (evening) — reviewer:** next are J16, then J17.
 
 **30 October 2026 (afternoon) — reviewer:** next is J15. Then stop and write where you stopped.
 

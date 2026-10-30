@@ -1291,3 +1291,39 @@ Found and fixed during the work: the client form page sends no referrer, so the 
 Walked through live. As Sian on new claim TEST-0037: her session had ended after 30 minutes idle and she signed in again; Microsoft 365 showed "not connected yet"; Settings offered an optional authenticator and no Data protection section; the person's data screen refused her; the conviction question was a yes/no; she uploaded and downloaded a fictional bank statement (sent as a download with nosniff and a sandbox policy). As Justin: the sign-in asked him to set up an authenticator app first; the audit view showed Sian downloading the bank statement; Retention showed the five periods awaiting adviser and an empty due list; a legal hold on TEST-0037 showed on its Litigation page and blocked erasing the client; the person's data search found the client in three roles and the export downloaded as a zip; a fictional breach showed "Report to the ICO by … · 70 hours left". Two small faults found and fixed: the erase refusal repeated the claim once per role, and "vehicle_owner" showed as a code word. Afterwards the hold was lifted and Justin's authenticator was reset, so he sets it up with his own phone.
 
 Finish on 30 October 2026: 676 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 79 passed, 0 failed; security checks passed. Journey checks passed, including the awkward cases, the 60 permission checks (Justin through his authenticator step) and the new security journeys (lockout, a viewed bank statement in the audit, the deletion list and a legal hold blocking deletion, a person's data export). `EMAIL_SEND_MODE` stays `simulate`.
+
+## Website enquiries into the CRM (J16, 30 October 2026)
+
+- **A public endpoint for the website form:** `POST /website/enquiry`, with no staff sign-in. It takes the name, mobile, registration, accident date, whose fault (theirs / mine / not sure), whether the car can be driven (yes / no / not sure), what happened (up to 1,000 characters) and the privacy notice tick. The tick is stored with its date and time and the state of the notice ("awaiting approved wording" until J9a). The website posts with JavaScript and gets JSON back (`{ ok: true, reference: "WEB-0001" }`, or `{ ok: false, message, errors }` with one message per box). A plain form without JavaScript is redirected back to the website's `/thank-you.html` or `/not-sent.html?reason=…`.
+- **Everything received is untrusted:**
+  - Strict format checks: a UK mobile, a registration of 2 to 8 letters and numbers, a real date that is not in the future and not more than six years ago, the fixed choices only, and control and invisible characters removed.
+  - The body is limited to 8 KB. Files are refused.
+  - A hidden spam trap: anything typed in it is answered as usual and nothing is kept.
+  - A rate limit of 8 posts an hour per internet address, and 120 an hour in all. Every post counts, accepted or not. The address is kept only as a salted fingerprint, for 24 hours.
+  - A post only ever adds an enquiry. It never creates a claim, a person, a message, a history entry or a draft, and never sends anything.
+- **Allowed website addresses.** Only the website may post. In development the CRM accepts the local website only (`http://localhost:4000`). Live, it accepts the address saved in Settings → Website enquiries (administrator only, https only), and none until one is saved. Other sites get a 403 with no permission for their page to read the answer. The sign-in check lets this one address through, and the route does its own address check.
+- **Website enquiries list** (menu, office staff), with a count on the dashboard ("Website enquiries: needs a call", red when any is urgent):
+  - Open enquiries show "Needs a call". Can't-be-driven ones are flagged "Urgent" and listed first; after that, the longest-waiting comes first.
+  - Each shows the mobile (tap to call), registration, accident date, whose fault, whether it can be driven, what happened and when the privacy notice was ticked.
+  - "Convert to claim" opens the new-claim form filled from the enquiry: forename and surname, mobile, registration, accident date, what happened, liability status (theirs → non-fault, mine → fault, not sure → not yet decided) and roadworthiness (can't be driven → unroadworthy). A banner says to check each box with the client. Nothing is a claim until staff save it.
+  - When saved, the enquiry is marked converted to that claim, and the claim's history records the enquiry and the privacy notice tick.
+  - "Not proceeding" needs a reason, puts away any half-made claim from the enquiry, and can be reopened.
+- **Retention and a person's data.** Enquiries that never became claims join the "Due for deletion" list 12 months after they arrived (the enquiry period in Settings). They are deleted only when Justin approves, and logged. A converted enquiry is removed with its claim file. The person's data screen also finds website enquiries by name, mobile or registration, shows what is held and erases one with a reason. A subject access export includes the enquiry a client's claim came from. Both tables are on the data map.
+
+Found and fixed: continuing a saved new-claim draft put back only some boxes. The client's name, mobile, the registration and the accident date came back empty. That would have defeated the pre-fill. The form now puts back every saved box.
+
+Walked through live as Sian, on two fictional enquiries posted as the local website would (a post claiming to be from another site was refused):
+- The dashboard showed "2 · 1 urgent". The list showed Carys Llewellyn's enquiry urgent at the top.
+- Closing Owen Pritchard's enquiry was blocked until a reason was given, then it moved to Closed.
+- Convert to claim opened the new-claim form with Carys's name, mobile, registration, accident date, what happened, non-fault and unroadworthy filled in.
+- She added the time and saved it as new claim TEST-0038, with no charges running. Its history records the website enquiry and the privacy notice tick.
+- The list then showed both enquiries closed, with who closed each and when. Sian sees the Settings box but cannot change the address.
+
+Finish on 30 October 2026:
+- 688 tests passed, 0 failed.
+- Type check: 0 errors.
+- Production build passed.
+- Page check: 80 passed, 0 failed.
+- Security checks passed, including a post from another site refused on the enquiry address.
+- Journey checks passed: the awkward cases, the permission checks (now including the enquiry list) and the security journeys. The new security journey covers a post refused before the address is saved, Sian unable to change it, another site refused, the spam trap, the rate limit, no claim created, the urgent count and list, and Convert opening the pre-filled form without making a claim.
+- `EMAIL_SEND_MODE` stays `simulate`.

@@ -15,6 +15,13 @@ Each open question has a reversible default already in the CRM. Nothing here is 
 20. **The client form.** Staff send the client a secure link by email from the claim's Documents tab (simulated in the prototype). It works for 30 days, and one link works at a time. The client gives their mobile, email, address, postcode, where the accident happened, what happened and the other driver's name, registration and insurer, and adds photos of the damage, their driving licence, insurance certificate and V5C. Default: those questions, 30 days, email only. Please say if you want other questions, a different length, or the link sent by text or WhatsApp once those are connected.
 22. **Retention periods (for CAS's adviser).** Settings → Retention and deletion holds the defaults, each marked "awaiting adviser": enquiries that never became a claim 12 months; claim file 6 years after it closes; invoices and financial records 6 years after the end of the financial year; bank statements at claim close unless used in a dispute or litigation; licence checks follow the claim file; audit log 6 years. The financial year is taken to end in March. Nothing is deleted automatically: you approve each batch. Please confirm each period and the financial year end with the adviser.
 23. **Privacy notice wording.** The client form and the welcome email show a "Privacy notice" link to a page that says the wording is awaited. While it is a placeholder the client form cannot be sent to a real client. Please supply the approved wording in the J9a review.
+24. **Website enquiries.** The website's Start your claim form lands in the CRM as an enquiry marked "Needs a call". Defaults:
+    - The CRM accepts enquiries only from the website address saved in Settings, and none until one is saved. Please confirm the website's address when it is hosted (J9).
+    - One internet connection may send at most 8 an hour, and everyone together at most 120 an hour.
+    - "Convert to claim" pre-fills liability as non-fault when the client says it was the other driver's fault, fault when they say it was theirs, and not yet decided when they are not sure. Can't be driven pre-fills unroadworthy and is flagged urgent.
+    - Staff check every box with the client before saving.
+
+    Please say if you want different limits, or a different rule for what is pre-filled.
 
 ## For your solicitor
 

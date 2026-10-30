@@ -21,6 +21,7 @@ const OFFICE = { administrator: true, staff: true, driver: false, mechanic: fals
 
 export const ROLE_ACCESS: AccessArea[] = [
   { key: "desk", label: "Claims desk (dashboard)", path: "/", open: OFFICE },
+  { key: "enquiries", label: "Website enquiries", path: "/enquiries", open: OFFICE },
   { key: "claims", label: "All claims", path: "/claims", open: OFFICE },
   { key: "claim", label: "A claim file", path: "/claims/:claim", open: OFFICE },
   { key: "money", label: "A claim's money", path: "/claims/:claim/money", open: OFFICE },
