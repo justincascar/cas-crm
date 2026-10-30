@@ -100,6 +100,12 @@ export const APPROVE_LEGAL_CORRESPONDENCE = "approveLegalCorrespondence";
 export const OVERRIDE_UNSIGNED_STORAGE_RECOVERY = "overrideUnsignedStorageRecovery";
 
 /**
+ * Stored on staff_permissions. Downloading the full export of every claim, person, money line, history entry and
+ * document, and opening the audit view of who changed what. Justin only (J12).
+ */
+export const EXPORT_AND_AUDIT = "exportAndAudit";
+
+/**
  * Stored on staff_permissions. Changing the bank details in Settings.
  * Not implied by the administrator role, and not read from the username.
  */

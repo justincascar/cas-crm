@@ -16,6 +16,7 @@ import { getSendingHours } from "@/lib/db/sending-hours";
 import { describeSendingHours } from "@/lib/domain/sending-hours";
 import { listInsurerPaymentTerms } from "@/lib/db/insurers";
 import { accountCanManageBankDetails } from "@/lib/db/permissions";
+import { canExportAndAudit } from "@/lib/db/audit-view";
 import { PAYMENT_DUE_ON_RECEIPT, PAYMENT_DUE_ON_RECEIPT_SENTENCE } from "@/lib/constants";
 import { getGtaMarkupPercent } from "@/lib/db/hire-agreement";
 import { licenceCheckWindowDays } from "@/lib/db/licence-window";
@@ -51,6 +52,7 @@ export default async function SettingsPage({
   const repairChaseIntervalDays = getChaseIntervalDays("repair_authorisation");
   const paymentChaseIntervalDays = getChaseIntervalDays("repair_payment");
   const canManageBank = accountCanManageBankDetails(staffUser.id, staffUser.role);
+  const canAudit = canExportAndAudit(staffUser.id);
   const insurerTerms = listInsurerPaymentTerms();
   const agreementRenewalAlertDay = getChaseIntervalDays("hire_agreement_renewal");
   const agreementRenewalApproachingDay = getAgreementApproachingDay();
@@ -164,6 +166,29 @@ export default async function SettingsPage({
           </button>
         </form>
       </section>
+      <p className="text-sm">
+        <Link href="/settings/roles" className="font-semibold text-teal-dark underline">
+          Who can do what
+        </Link>{" "}
+        — what each role can see and do, checked on the server.
+      </p>
+      {canAudit ? (
+        <section className="rounded-xl border border-line bg-card p-5" data-export-audit>
+          <h2 className="font-serif text-xl text-navy-deep">Full export and audit</h2>
+          <p className="mt-2 text-sm">
+            The full export is one zip: a CSV file for every table (claims, people, money, history and the rest) and every stored document. Passwords and
+            sign-in sessions are left out. The audit view shows who changed what and when, on any claim. Only you can use these.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-3">
+            <a href="/settings/export" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
+              Download the full export
+            </a>
+            <Link href="/audit" className="rounded-md border border-line bg-white px-4 py-2 text-sm font-semibold text-navy">
+              Open the audit view
+            </Link>
+          </div>
+        </section>
+      ) : null}
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Chaser sending hours</h2>
         <p className="mt-2 text-sm">

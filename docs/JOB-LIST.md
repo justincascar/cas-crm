@@ -191,6 +191,7 @@ CAS's real claims don't follow the happy path. Build a browser journey test for 
     - invoice to the client's own insurer = the authorised amount minus the excess
 
 ### J12 — Foundations you can test before going live
+DONE — commit to follow. Export and audit (Settings, Justin only), `npm run backup` / `npm run restore` (docs/BACKUP-AND-RESTORE.md), Who can do what with `scripts/permissions-check.ts`, `npm run check:speed`.
 - **Full export:**
   - one button (Justin only) exports all claims, people, money, history and documents as a zip
   - a CSV per table, plus the document files

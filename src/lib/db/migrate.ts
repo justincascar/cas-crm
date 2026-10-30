@@ -6,7 +6,7 @@ import { ensureEsignTable } from "./esign";
 import { ensureStorageRecoverySignatureTable } from "./storage-recovery-signing";
 import { ensureCardFeesTable } from "./card-fees";
 import { ensureFleetGtaRulesTable } from "./fleet-details";
-import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_LEGAL_CORRESPONDENCE, APPROVE_SETTLEMENT, OVERRIDE_UNSIGNED_STORAGE_RECOVERY, EXTENDED_WAIT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS, RELEASE_WITHOUT_EXCESS } from "../auth/roles";
+import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_LEGAL_CORRESPONDENCE, APPROVE_SETTLEMENT, OVERRIDE_UNSIGNED_STORAGE_RECOVERY, EXPORT_AND_AUDIT, EXTENDED_WAIT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS, RELEASE_WITHOUT_EXCESS } from "../auth/roles";
 
 const TABLES: Record<string, Array<[string, string]>> = {
   correspondence: [
@@ -782,6 +782,11 @@ export function migrate(db: DatabaseSync) {
      SELECT ?, ?
      WHERE EXISTS (SELECT 1 FROM staff WHERE id = ?)`,
   ).run("staff-justin", OVERRIDE_UNSIGNED_STORAGE_RECOVERY, "staff-justin");
+  db.prepare(
+    `INSERT OR IGNORE INTO staff_permissions(staff_id, permission)
+     SELECT ?, ?
+     WHERE EXISTS (SELECT 1 FROM staff WHERE id = ?)`,
+  ).run("staff-justin", EXPORT_AND_AUDIT, "staff-justin");
   db.exec(`
     CREATE TABLE IF NOT EXISTS repair_gap_explanations (
       id TEXT PRIMARY KEY,

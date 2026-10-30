@@ -299,6 +299,29 @@ function conflictFrom(input: {
 }
 
 /**
+ * Every saved section is written to the audit log: who, when, which record, and each field that changed with its old
+ * and new value (J12). Nothing is written when nothing changed.
+ */
+function auditSave(
+  input: { scope: string; recordKey: string; actorId: string; fields: Record<string, string>; labels?: Record<string, string> },
+  before: Record<string, string>,
+  at: string,
+) {
+  const changes = Object.keys(input.fields)
+    .filter((name) => String(before[name] ?? "") !== String(input.fields[name] ?? ""))
+    .map((name) => {
+      const label = input.labels?.[name] || name;
+      const was = String(before[name] ?? "").trim() || "blank";
+      const now = String(input.fields[name] ?? "").trim() || "blank";
+      return `${label}: ${was.slice(0, 120)} → ${now.slice(0, 120)}`;
+    });
+  if (changes.length === 0) return;
+  getDb()
+    .prepare(`INSERT INTO audit_log(id, at, actor_id, action, entity, entity_id, details) VALUES (?, ?, ?, 'save', ?, ?, ?)`)
+    .run(newId("audit"), at, input.actorId, input.scope, input.recordKey, changes.join("; "));
+}
+
+/**
  * Staff forms pass the version they loaded, including "" when the section had not been saved.
  * A missing or different version does not overwrite. Call this inside withImmediateTransaction.
  */
@@ -322,6 +345,7 @@ export function claimSectionForSave(input: {
       [input.scope, input.recordKey, now, input.actorId, json],
     );
     if (inserted !== 1) throw unmatched(input);
+    auditSave(input, {}, now);
     return;
   }
   if (row.updated_at !== input.expected) {
@@ -336,6 +360,7 @@ export function claimSectionForSave(input: {
     `UPDATE record_versions SET updated_at = ?, updated_by = ?, fields_json = ? WHERE scope = ? AND record_key = ? AND updated_at = ?`,
     [now, input.actorId, json, input.scope, input.recordKey, input.expected],
   );
+  if (updated === 1) auditSave(input, parseFields(row.fields_json), now);
   if (updated !== 1) {
     const latest = readSection(input.scope, input.recordKey);
     throw conflictFrom({
@@ -400,6 +425,7 @@ export function writeScreenIfCurrent(input: {
       [input.claimId, input.screenKey, json, now, input.actorId],
     );
     if (inserted !== 1) throw unmatched({ expected: input.expected, submitted: input.stored, scope, recordKey });
+    auditSave({ scope: `screen:${input.screenKey}`, recordKey: input.claimId, actorId: input.actorId, fields: input.stored, labels: input.labels }, previous, now);
     return { now, previous };
   }
   if ((row.updated_at || "") !== input.expected) {
@@ -433,6 +459,7 @@ export function writeScreenIfCurrent(input: {
       recordKey,
     });
   }
+  auditSave({ scope: `screen:${input.screenKey}`, recordKey: input.claimId, actorId: input.actorId, fields: input.stored, labels: input.labels }, previous, now);
   return { now, previous };
 }
 

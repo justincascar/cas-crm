@@ -1210,3 +1210,19 @@ Finish on 30 October 2026: 632 tests passed, 0 failed. Type check: 0 errors. Pro
 Walked through live as Sian on new claim TEST-0033: recovery recorded, storage charge recorded (£187.20), a £600.00 payment split £474.00 to recovery and £126.00 to storage from the Money tab, storage then showing £61.20 outstanding.
 
 Finish on 30 October 2026: 639 tests passed, 0 failed (two runs earlier in the day each had one different test fail that passes on its own and on rerun; three full runs after that passed). Type check: 0 errors. Production build passed. Page check: 70 passed, 0 failed. Journey checks passed, including all ten awkward cases. `EMAIL_SEND_MODE` stays `simulate`.
+
+## Foundations you can test before going live (J12, 30 October 2026)
+
+**Full export (Justin only).** Settings → Full export and audit → Download the full export gives one zip: a CSV file for every table (claims, people, money, history and the rest) and every stored document, with a README of row counts. Passwords and sign-in sessions are left out. The zip is made with Node's own zlib (no new package). Each download is written to the audit log. Tested by building an export, reading it back, and checking every table against the README counts and the stored document.
+
+**Backup and restore on this PC.** `npm run backup` makes a dated folder with a consistent copy of the database (safe while the CRM is running), every stored document, and a manifest of row counts and a fingerprint per table. `npm run restore -- "<backup folder>"` copies a backup into a separate test folder, never over the live CRM, and checks it against the manifest. Plain steps are in docs/BACKUP-AND-RESTORE.md. Tested: back up, change the live data, restore into a separate folder, and the restored copy matches the backup, not the later changes. Also run on the real demonstration data: the restored copy matched.
+
+**Audit view (Justin only).** /audit (Settings → Open the audit view) shows who changed what and when on any claim, newest first, with filters for file reference, person, dates and kind. It reads the claim history (every dated step, email, payment and decision) and the audit log. New: every saved screen and section is now written to the audit log with each field's old and new value (choices shown as staff saw them), so changes are kept even when they are not a dated step.
+
+**Who can do what.** Settings → Who can do what shows, by role (Justin, office staff, driver, mechanic), what each can see and do, and the extra permissions each person holds, in plain words. `scripts/permissions-check.ts` (run by `npm run test:journeys`) signs in as each role and opens 12 addresses directly on the server: drivers and mechanics are refused the claims desk, claims, a claim, its money, Financials, a client's bank statement file, Hire / Fleet, the driver jobs board and Settings; office staff are refused the audit view and the full export; all 48 checks pass.
+
+**Speed.** `npm run check:speed` builds a separate test database of 1,000 fictional claims (copies of the TEST files with their history and money), then times each page three times: the claims desk about 0.3 seconds, all claims about 0.3 seconds, a claim page about 0.14 seconds. Each is well under 2 seconds; no page needed fixing.
+
+Walked through live as Sian on new claim TEST-0034: saved the General screen and the audit log recorded who, when and each changed field; Who can do what showed the table and permissions in plain words; the audit view and the full export were refused to Sian with "Only Justin can …".
+
+Finish on 30 October 2026: 643 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 70 passed, 0 failed. Journey checks passed, including the ten awkward cases and the 48 permission checks. Speed check passed. `EMAIL_SEND_MODE` stays `simulate`.
