@@ -292,6 +292,7 @@ These are the parts of J9b that don't need hosting or Justin's decisions. Where 
     - The usual browser walk-through as `sian` and as `justin`.
 
 ### J16 — Website enquiries into the CRM (build in this CRM repo)
+DONE — 138a8c7. The website posts to `POST /website/enquiry` (JSON, or a plain form that is redirected back to the website's /thank-you.html or /not-sent.html). Staff work them from the Website enquiries menu item; the live website address goes in Settings → Website enquiries. In development only http://localhost:4000 is accepted.
 The public website's "Start your claim" form must land in the CRM as an enquiry for staff to review. Nothing is typed twice.
 
 - **A public endpoint for the website form** (no staff login). It accepts:
