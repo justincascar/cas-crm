@@ -147,7 +147,7 @@ export function PaymentReviewPanel({
         <label className="flex items-start gap-2 text-sm" data-paying-by-card>
           <input type="checkbox" name="payingByCard" value="yes" />
           <span>
-            Paying by card. Adds a separate card fee{cardFeePercent != null ? ` of ${cardFeePercent}%` : ""} of the net amount paid, plus VAT. It is kept apart from this
+            Paying by card. Adds a separate card fee{cardFeePercent != null ? ` of ${cardFeePercent}%` : ""} of the amount paid (VAT included), plus VAT on the fee. It is kept apart from this
             charge.
           </span>
         </label>

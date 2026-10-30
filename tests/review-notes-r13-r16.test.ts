@@ -11,7 +11,7 @@ import { createClaimFromIntake, intakeFromFormData } from "../src/lib/db/intake.
 import { unapprovedLegalAttachment } from "../src/lib/db/legal-approval.ts";
 import { migrate } from "../src/lib/db/migrate.ts";
 import { recordRecoveryDone } from "../src/lib/db/record-recovery.ts";
-import { cardFeeOnNet, recoveryCardFeePercent, setRecoveryCardFeePercent } from "../src/lib/db/recovery-fee-settings.ts";
+import { cardFeeOnAmount, recoveryCardFeePercent, setRecoveryCardFeePercent } from "../src/lib/db/recovery-fee-settings.ts";
 import { seed } from "../src/lib/db/seed.ts";
 import { recoveryClaimForClaim } from "../src/lib/db/storage-charge.ts";
 import { isoDateFromNow, nowUtcIso } from "../src/lib/dates.ts";
@@ -142,7 +142,7 @@ describe("Review notes R13–R16", () => {
       recordRecoveryDone({ claimId: card.id, actorId: "staff-sian", form: recoveryForm({ recoveryTick_cardFee: "yes" }) });
       assert.equal(lines(card.id).some((line) => line.key === "cardFee"), false, "an old tick in a posted form adds nothing");
       assert.equal(recoveryClaimForClaim(card.id).netPence, 39500);
-      assert.equal(cardFeeOnNet(39500, 4.5), 1778);
+      assert.equal(cardFeeOnAmount(47400, 4.5), 2133);
 
       setRecoveryCardFeePercent("3");
       assert.equal(recoveryCardFeePercent(), 3);

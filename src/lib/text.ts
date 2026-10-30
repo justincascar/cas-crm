@@ -19,6 +19,13 @@ function isRegistrationName(name: string): boolean {
   return n.includes("registration") || n.endsWith("reg") || n.endsWith("_vrm") || n.includes("vrm");
 }
 
+/** A name (person, firm, vehicle make, model or colour) or part of an address: the only typed text given capitals (R23). */
+function isNameOrAddressName(n: string): boolean {
+  if (/(file|user)name$/.test(n)) return false;
+  if (/(name|company|make|model|colour)$/.test(n)) return true;
+  return /(address|addressline|line1|line2|line3|street|town|city|county)/.test(n);
+}
+
 export function kindForField(name: string, type?: string): TextKind {
   if (type && SKIP_TYPES.has(type)) return "plain";
   if (type === "email") return "email";
@@ -31,7 +38,8 @@ export function kindForField(name: string, type?: string): TextKind {
   ) {
     return "plain";
   }
-  return "words";
+  // Descriptions, notes, reasons, condition notes, letters and emails keep exactly what was typed.
+  return isNameOrAddressName(n) ? "words" : "plain";
 }
 
 /** Vehicle registration: capitals only. */

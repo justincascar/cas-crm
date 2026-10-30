@@ -38,7 +38,7 @@ export default async function ClaimMoneyPage({
       ) : null}
       <p className="text-sm text-slate">
         A draft invoice is built from the figures on the file. It is filed here and not sent. Tick Paying by card when the payer will pay by card: a separate card fee
-        line ({recoveryCardFeePercent()}% of the net amount due, plus VAT) is added.
+        line ({recoveryCardFeePercent()}% of the amount due, VAT included, plus VAT on the fee) is added.
       </p>
       <ul className="space-y-2">
         {HEADS.map((head) => (

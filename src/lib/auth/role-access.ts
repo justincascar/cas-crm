@@ -63,6 +63,7 @@ export const PERMISSION_LABELS: Record<string, string> = {
   approveSettlement: "approve a settlement below the claimed figure",
   approveLegalCorrespondence: "approve legal letters before they are sent",
   overrideUnsignedStorageRecovery: "claim recovery or storage without a signed agreement, with a reason",
+  overrideUnsignedSwap: "complete a vehicle swap without the new signed hire agreement, with a reason",
   exportAndAudit: "download the full export and open the audit view",
   manageBankDetails: "change the bank details",
   extendedWait: "set a longer wait on a file",

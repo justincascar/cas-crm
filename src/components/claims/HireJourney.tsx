@@ -7,6 +7,8 @@ import { SubmitKeyInput } from "@/components/SubmitKeyInput";
 import { formatUkDate, formatUkDateTime, londonTodayIso } from "@/lib/dates";
 import type { HireArea, HireCarChoice } from "@/lib/db/hire-choice";
 import type { SaveClashView } from "@/lib/db/record-version";
+import type { SwapView } from "@/lib/db/vehicle-swap";
+import { SwapStartForm, SwapStatus } from "@/components/claims/VehicleSwap";
 import { FUEL_LEVELS } from "@/lib/db/handover";
 import { FleetDetailBox } from "@/components/FleetDetailBox";
 import { FLEET_DETAIL_LABELS, fleetDetailLine, formatMileage, type FleetCarDetails } from "@/lib/db/fleet-details";
@@ -70,7 +72,11 @@ export function HireJourney({
   handlers,
   mayOverride,
   showPack,
+  swap,
+  mayOverrideSwap,
 }: {
+  swap: SwapView;
+  mayOverrideSwap: boolean;
   area: HireArea;
   error?: string;
   saved?: string;
@@ -311,10 +317,21 @@ export function HireJourney({
                   </span>
                 </div>
                 {area.chosen.details ? <CarDetails claimId={id} car={area.chosen.details} groups={area.groupChoices} /> : null}
-                <details className="mt-2">
-                  <summary className="cursor-pointer text-sm text-teal-dark underline">Change car</summary>
-                  <div className="mt-4">{reserveForm}</div>
-                </details>
+                {started ? (
+                  swap.open ? null : (
+                    <details className="mt-2" data-swap-start>
+                      <summary className="cursor-pointer text-sm text-teal-dark underline">Swap the car</summary>
+                      <div className="mt-4">
+                        <SwapStartForm area={area} carOption={carOption} />
+                      </div>
+                    </details>
+                  )
+                ) : (
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-sm text-teal-dark underline">Change car</summary>
+                    <div className="mt-4">{reserveForm}</div>
+                  </details>
+                )}
                 {!started ? (
                   <form method="post" action={`/claims/${id}/hire/cancel`} className="mt-2">
                     <SubmitKeyInput />
@@ -566,6 +583,7 @@ export function HireJourney({
             {area.chosen ? `${area.chosen.label} · ` : ""}
             {area.renewal || `Started ${formatUkDateTime(area.startedAt)}.`}
           </p>
+          <SwapStatus claimId={id} swap={swap} mayOverride={mayOverrideSwap} />
           {area.creditHire && area.unsignedRenewal ? (
             <form method="post" action={`/claims/${id}/hire/renewal-signed`} encType="multipart/form-data" className="mt-4 space-y-2" data-unsigned-renewal>
               <p className="text-sm font-semibold">Renewal {area.unsignedRenewal} is logged but not signed. The renewal alert stays until it is.</p>

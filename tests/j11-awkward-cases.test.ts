@@ -152,8 +152,7 @@ describe("J11 — fixes found by the awkward-case journeys", () => {
     assert.match(page, /query\.append\(name, item\)/);
   });
 
-  it("says why a car swap needs no new agreement page, from the supplied terms", () => {
-    assert.match(read("src/lib/db/hire-choice.ts"), /the CAS terms define the Hire Vehicle as including any vehicle CAS replaces it with during the Rental Period/);
-    assert.match(read("src/lib/documents/cas-hire-terms.ts"), /or any vehicle with which We replace it during the Rental Period/);
+  it("sends a car change on a running hire to the vehicle swap, which needs a new signed agreement (R26)", () => {
+    assert.match(read("src/lib/db/hire-choice.ts"), /This hire is running\. Use Swap the car/);
   });
 });

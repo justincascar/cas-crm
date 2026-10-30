@@ -1,16 +1,17 @@
 import type { DatabaseSync } from "node:sqlite";
-import { HEAD_LABELS, INDICATIVE_DEFAULTS, type HeadOfLoss } from "../constants";
+import { HEAD_LABELS, type HeadOfLoss } from "../constants";
 import { nowUtcIso } from "../dates";
 import { lineFromNet } from "../domain/recovery-fees";
 import { formatGbp } from "../money";
 import { recordClaimEvent } from "./chronology";
 import { all, getDb, newId, run } from "./connection";
-import { cardFeeOnNet, recoveryCardFeePercent } from "./recovery-fee-settings";
+import { cardFeeOnAmount, recoveryCardFeePercent } from "./recovery-fee-settings";
 
 /**
  * Card fees (review note R19). CAS only learns that the payer is using a card when the invoice is paid, so the fee is
  * added then: "Paying by card" on a recorded payment, or on a draft invoice prepared for payment. The fee is the
- * Settings percentage of the net amount being paid, plus VAT. It is kept in its own ledger, never added into the
+ * Settings percentage of the gross amount being paid (VAT included, R25), plus VAT on the fee. Fees recorded before R25
+ * were worked out on the net and keep that basis (basis_kind 'net'). It is kept in its own ledger, never added into the
  * charge for the head of loss, so it cannot be counted twice.
  */
 
@@ -31,44 +32,38 @@ export function ensureCardFeesTable(db: DatabaseSync) {
     );
     CREATE INDEX IF NOT EXISTS idx_card_fees_claim ON card_fees(claim_id, head);
   `);
+  const columns = new Set((db.prepare(`PRAGMA table_info(card_fees)`).all() as Array<{ name: string }>).map((c) => c.name));
+  if (!columns.has("basis_kind")) db.exec(`ALTER TABLE card_fees ADD COLUMN basis_kind TEXT NOT NULL DEFAULT 'net'`);
 }
 
 function ready() {
   ensureCardFeesTable(getDb());
 }
 
-/** Heads charged with VAT. A total-loss settlement (vehicle damage) is paid without VAT. */
-const VAT_HEADS = new Set(["recovery", "storage", "hire", "repairs"]);
+export type CardFeeQuote = { percent: number; basisPence: number; netPence: number; vatPence: number; grossPence: number };
 
-/** The net part of an amount being paid on a head. */
-export function netOfPayment(head: string, amountPence: number, vatRate = INDICATIVE_DEFAULTS.vat_rate): number {
-  const amount = Math.max(0, Math.round(amountPence));
-  return VAT_HEADS.has(head) ? Math.round(amount / (1 + vatRate)) : amount;
+/** The card fee on an amount being paid: the Settings percentage of the gross amount, then VAT on the fee (R25). */
+export function quoteCardFee(amountPence: number, percent = recoveryCardFeePercent()): CardFeeQuote {
+  const basisPence = Math.max(0, Math.round(amountPence));
+  const line = lineFromNet("cardFee", "Card fee", cardFeeOnAmount(basisPence, percent));
+  return { percent, basisPence, netPence: line.netPence, vatPence: line.vatPence, grossPence: line.grossPence };
 }
 
-export type CardFeeQuote = { percent: number; basisNetPence: number; netPence: number; vatPence: number; grossPence: number };
-
-/** The card fee on an amount being paid: the Settings percentage of its net, plus VAT. */
-export function quoteCardFee(head: string, amountPence: number, percent = recoveryCardFeePercent()): CardFeeQuote {
-  const basisNetPence = netOfPayment(head, amountPence);
-  const line = lineFromNet("cardFee", "Card fee", cardFeeOnNet(basisNetPence, percent));
-  return { percent, basisNetPence, netPence: line.netPence, vatPence: line.vatPence, grossPence: line.grossPence };
-}
-
-export function cardFeeLabel(quote: Pick<CardFeeQuote, "percent" | "basisNetPence">): string {
-  return `Card fee (${quote.percent}% of ${formatGbp(quote.basisNetPence)} net, paid by card)`;
+/** "Card fee 4.5% of £X", as on the invoice line. A fee recorded before R25 says it was worked out on the net. */
+export function cardFeeLabel(fee: { percent: number; basisPence: number; basisKind?: string }): string {
+  return `Card fee ${fee.percent}% of ${formatGbp(fee.basisPence)}${fee.basisKind === "net" ? " net" : ""}`;
 }
 
 /** Recorded with the payment it belongs to. The payment on the head itself is not changed. */
 export function recordCardFeeOnPayment(input: { claimId: string; head: string; amountPence: number; actorId: string }) {
   ready();
-  const quote = quoteCardFee(input.head, input.amountPence);
+  const quote = quoteCardFee(input.amountPence);
   if (quote.netPence <= 0) return null;
   const at = nowUtcIso();
   run(
-    `INSERT INTO card_fees(id, claim_id, head, payment_pence, basis_net_pence, percent, net_pence, vat_pence, gross_pence, recorded_by, recorded_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [newId("cardfee"), input.claimId, input.head, input.amountPence, quote.basisNetPence, quote.percent, quote.netPence, quote.vatPence, quote.grossPence, input.actorId, at],
+    `INSERT INTO card_fees(id, claim_id, head, payment_pence, basis_net_pence, percent, net_pence, vat_pence, gross_pence, recorded_by, recorded_at, basis_kind)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'gross')`,
+    [newId("cardfee"), input.claimId, input.head, input.amountPence, quote.basisPence, quote.percent, quote.netPence, quote.vatPence, quote.grossPence, input.actorId, at],
   );
   const label = HEAD_LABELS[input.head as HeadOfLoss] || input.head;
   recordClaimEvent({
@@ -76,7 +71,7 @@ export function recordCardFeeOnPayment(input: { claimId: string; head: string; a
     eventType: "card_fee_recorded",
     occurredAt: at,
     actorId: input.actorId,
-    details: `head=${input.head} The ${label} payment of ${formatGbp(input.amountPence)} was made by card. Card fee ${quote.percent}% of ${formatGbp(quote.basisNetPence)} net = ${formatGbp(quote.netPence)} + VAT ${formatGbp(quote.vatPence)} = ${formatGbp(quote.grossPence)}. Kept separate from the ${label} charge.`,
+    details: `head=${input.head} The ${label} payment of ${formatGbp(input.amountPence)} was made by card. ${cardFeeLabel(quote)} = ${formatGbp(quote.netPence)} + VAT ${formatGbp(quote.vatPence)} = ${formatGbp(quote.grossPence)}. Kept separate from the ${label} charge.`,
     source: "staff",
     channel: "file",
   });
@@ -86,7 +81,8 @@ export function recordCardFeeOnPayment(input: { claimId: string; head: string; a
 export type CardFeeRow = {
   head: string;
   paymentPence: number;
-  basisNetPence: number;
+  basisPence: number;
+  basisKind: string;
   percent: number;
   netPence: number;
   vatPence: number;
@@ -100,20 +96,22 @@ export function listCardFees(claimId: string, head?: string): CardFeeRow[] {
     head: string;
     payment_pence: number;
     basis_net_pence: number;
+    basis_kind: string;
     percent: number;
     net_pence: number;
     vat_pence: number;
     gross_pence: number;
     recorded_at: string;
   }>(
-    `SELECT head, payment_pence, basis_net_pence, percent, net_pence, vat_pence, gross_pence, recorded_at FROM card_fees
+    `SELECT head, payment_pence, basis_net_pence, basis_kind, percent, net_pence, vat_pence, gross_pence, recorded_at FROM card_fees
      WHERE claim_id = ?${head ? " AND head = ?" : ""} ORDER BY recorded_at`,
     head ? [claimId, head] : [claimId],
   );
   return rows.map((row) => ({
     head: String(row.head),
     paymentPence: Number(row.payment_pence),
-    basisNetPence: Number(row.basis_net_pence),
+    basisPence: Number(row.basis_net_pence),
+    basisKind: String(row.basis_kind || "net"),
     percent: Number(row.percent),
     netPence: Number(row.net_pence),
     vatPence: Number(row.vat_pence),

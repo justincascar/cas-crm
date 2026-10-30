@@ -8,6 +8,7 @@ import { salvageRequestMismatch, salvageSaleVariance, type CasSalvageRequest, ty
 import { totalLossOffHireDecision } from "../domain/total-loss-off-hire";
 import { londonDateIso, londonTodayIso } from "../dates";
 import { all, get, run } from "./connection";
+import { completedSwapDays } from "./vehicle-swap";
 
 function calendarDay(value: string | null | undefined): string | null {
   const text = (value || "").trim();
@@ -191,7 +192,7 @@ export function hireChargeForClaim(claimId: string, today = londonTodayIso()): H
     agreements,
     generatedRatePence: signed ? pack?.daily_rate_pence : null,
     episodeRatePence: signed ? episodeRate : null,
-    swapDays: delivered.slice(1),
+    swapDays: [...delivered.slice(1), ...completedSwapDays(claimId)],
     extrasOnSignedAgreement: signed && Boolean(pack),
     cdwPence: pack?.cdw_pence,
     additionalDriverPence: pack?.additional_driver_pence,

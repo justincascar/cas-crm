@@ -17,6 +17,7 @@ import {
   saveHireNeed,
   setHireDailyRate,
 } from "../src/lib/db/hire-choice.ts";
+import { startVehicleSwap, storeSignedSwapAgreement } from "../src/lib/db/vehicle-swap.ts";
 import { recordPrehireOverride } from "../src/lib/db/prehire-checks.ts";
 import { hireDaysOverlap } from "../src/lib/domain/hire-availability.ts";
 import { agreementDayNumber } from "../src/lib/domain/rules.ts";
@@ -62,6 +63,7 @@ describe("joined-up hire", () => {
           `SELECT id, file_reference FROM claims
            WHERE claim_type = 'non_fault'
              AND file_reference NOT IN ('TEST-0005', 'TEST-0006', 'TEST-0007', 'TEST-0009')
+             AND NOT EXISTS (SELECT 1 FROM hire_episodes he WHERE he.claim_id = claims.id AND he.started_at IS NOT NULL)
            ORDER BY file_reference
            LIMIT 2`,
         )
@@ -202,16 +204,25 @@ describe("joined-up hire", () => {
       assert.equal(count(db, `SELECT COUNT(*) AS n FROM claim_events WHERE claim_id = ? AND event_type = 'hire_started'`, [firstId]), 1);
 
       const rateBefore = episode.rate_pence_per_day;
-      chooseHireCar({
+      // R26: a car change on a running hire is a swap, completed by a new signed agreement.
+      assert.throws(
+        () => chooseHireCar({ claimId: firstId, fleetVehicleId: other.id, method: "deliver", date: "2026-11-03", time: "11:00", address: "", actorId: "staff-sian", submitKey: "swap" }),
+        /Use Swap the car/,
+      );
+      startVehicleSwap({
         claimId: firstId,
-        fleetVehicleId: other.id,
-        method: "deliver",
+        actorId: "staff-sian",
+        newFleetVehicleId: other.id,
         date: "2026-11-03",
         time: "11:00",
-        address: "1 Test Street, Cardiff",
-        actorId: "staff-sian",
-        submitKey: "swap",
+        oldMileageIn: "1500",
+        oldFuelIn: "half",
+        oldCondition: "No new damage.",
+        newMileageOut: "800",
+        newFuelOut: "full",
+        newCondition: "No damage.",
       });
+      storeSignedSwapAgreement({ claimId: firstId, actorId: "staff-sian", file: { buffer: Buffer.from("%PDF-1.4"), filename: "signed-swap.pdf", mimeType: "application/pdf" } });
       const afterSwap = db.prepare(`SELECT started_at, fleet_vehicle_id, rate_pence_per_day FROM hire_episodes WHERE id = ?`).get(chosen.episodeId) as {
         started_at: string;
         fleet_vehicle_id: string;

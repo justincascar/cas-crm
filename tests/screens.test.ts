@@ -55,7 +55,7 @@ describe("claim file screens", () => {
     form.set("needReason", "Need a car for work.");
     const values = valuesFromForm(form, "hire-mitigation");
     assert.equal(values.tpOfferReceived, "yes");
-    assert.equal(values.needReason, "Need A Car For Work.");
+    assert.equal(values.needReason, "Need a car for work.", "a reason keeps what was typed (R23)");
     assert.equal(getClaimScreen("hire-mitigation")?.hint?.includes("does not start charges"), true);
   });
 
@@ -76,7 +76,7 @@ describe("claim file screens", () => {
     form.set("location", "newport road, cardiff");
     const values = valuesFromForm(form, "accident");
     assert.equal(values.photosAtScene, "yes");
-    assert.equal(values.location, "Newport Road, Cardiff");
+    assert.equal(values.location, "newport road, cardiff", "a description keeps what was typed (R23)");
     assert.ok(getClaimScreen("accident")?.sections[0]?.fields.some((field) => field.name === "photosAtScene"));
   });
 

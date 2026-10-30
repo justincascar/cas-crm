@@ -403,6 +403,12 @@ export function chooseHireCar(input: {
       [input.claimId],
     );
     if (parseHireNeed(decision?.details) !== "yes") throw new Error("Say that hire is needed before choosing a car.");
+    // R26: once the car is out, changing it is a vehicle swap with a new signed agreement, not a new choice.
+    const running = get<{ id: string }>(
+      `SELECT id FROM hire_episodes WHERE claim_id = ? AND started_at IS NOT NULL AND collection_at IS NULL AND billing_end_at IS NULL LIMIT 1`,
+      [input.claimId],
+    );
+    if (running) throw new Error("This hire is running. Use Swap the car: it records both cars and produces a new hire agreement for the client to sign.");
     const clock = deliveryClock(input.date, input.time);
     const endAt = requireLondonDateTime(`${clock.endDay}T23:59`);
     const assigneeId = input.method === "deliver" ? chosenDriver(input.driverId) : null;
@@ -533,14 +539,12 @@ export function chooseHireCar(input: {
         : "client collection";
     recordClaimEvent({
       claimId: input.claimId,
-      eventType: openEpisode?.started_at ? "hire_vehicle_changed" : "hire_vehicle_reserved",
+      eventType: "hire_vehicle_reserved",
       occurredAt: nowUtcIso(),
       actorId: input.actorId,
-      details: openEpisode?.started_at
-        ? `Hire car changed to ${label}. The hire start date was not changed. Charges follow the original handover. One continuous hire. No new agreement page was produced: the CAS terms define the Hire Vehicle as including any vehicle CAS replaces it with during the Rental Period.`
-        : `Reserved ${label} for ${how} on ${formatUkDateTime(clock.at)}. A reservation does not start hire charges.${rateWords}${
-            car.missing.length ? ` Not on the fleet record yet: ${missingWords(car.missing)}.` : ""
-          }`,
+      details: `Reserved ${label} for ${how} on ${formatUkDateTime(clock.at)}. A reservation does not start hire charges.${rateWords}${
+          car.missing.length ? ` Not on the fleet record yet: ${missingWords(car.missing)}.` : ""
+        }`,
       source: "staff",
     });
     return { reservationId, episodeId, jobId, missing: agreementMandatoryGaps(input.claimId).map((gap) => gap.label) };

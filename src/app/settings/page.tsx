@@ -540,7 +540,7 @@ export default async function SettingsPage({
           <li>Out of hours {formatGbp(INDICATIVE_DEFAULTS.ooh_net_pence)} + VAT</li>
           <li>Environmental {formatGbp(INDICATIVE_DEFAULTS.environmental_net_pence)} + VAT</li>
           <li>Winch {formatGbp(INDICATIVE_DEFAULTS.winch_net_pence)} + VAT</li>
-          <li>Card fee {(INDICATIVE_DEFAULTS.card_fee_rate * 100).toFixed(1)}% of the net charges, before VAT, then VAT on that fee</li>
+          <li>Card fee {(INDICATIVE_DEFAULTS.card_fee_rate * 100).toFixed(1)}% of the amount paid, VAT included, then VAT on that fee</li>
           <li>Gate fee {formatGbp(INDICATIVE_DEFAULTS.gate_fee_net_pence)} + VAT</li>
           <li>
             CDW {formatGbp(INDICATIVE_DEFAULTS.cdw_per_day_net_pence_range[0])}–

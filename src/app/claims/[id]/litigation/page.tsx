@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireStaff } from "@/lib/auth/session";
 import { formatUkDate, formatUkDateTime } from "@/lib/dates";
-import { getClaim } from "@/lib/db/queries";
+import { getClaim, listStaff } from "@/lib/db/queries";
 import {
   COURT_DATE_KINDS,
   LEGAL_DOCUMENT_KINDS,
@@ -10,6 +10,7 @@ import {
   PARTY_CAPACITIES,
   bundleIndex,
   canApproveLegal,
+  canVerifyCourtDates,
   evidenceChecklist,
   formatScheduleTotal,
   litigationChronology,
@@ -39,6 +40,7 @@ export default async function ClaimLitigationPage({
   const action = `/claims/${id}/litigation/save`;
   const reference = String(data.claim.file_reference);
   const justin = canApproveLegal(staff.id);
+  const canVerify = canVerifyCourtDates(id, staff.id);
 
   if (!view.open) {
     return (
@@ -64,7 +66,7 @@ export default async function ClaimLitigationPage({
       <h2 className="font-serif text-xl text-navy-deep">Litigation — {reference}</h2>
       <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">
         The CRM does not decide who is claimant or defendant, does not calculate court deadlines, and does not send or file legal documents. Every court date
-        needs checking against its source by a second person. A letter before action, claim form or court document cannot be recorded as sent or filed until
+        needs checking against its source by Justin or the instructed solicitor. A letter before action, claim form or court document cannot be recorded as sent or filed until
         Justin approves it.
       </p>
       {error ? <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue" data-form-error>{error}</p> : null}
@@ -86,6 +88,29 @@ export default async function ClaimLitigationPage({
             Save court details
           </button>
         </form>
+        {justin ? (
+          <form method="post" action={action} className="flex flex-wrap items-end gap-3" data-instructed-solicitor>
+            <input type="hidden" name="intent" value="solicitor" />
+            <label className="text-sm">
+              Instructed solicitor (their CRM sign-in)
+              <select name="staffId" defaultValue={view.instructedSolicitorId} className={field}>
+                <option value="">None recorded</option>
+                {listStaff().map((person) => (
+                  <option key={person.id} value={person.id}>
+                    {person.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="submit" className={button}>
+              Save
+            </button>
+          </form>
+        ) : (
+          <p className="text-sm" data-instructed-solicitor>
+            Instructed solicitor: {view.instructedSolicitor || "none recorded"}.
+          </p>
+        )}
       </section>
 
       <section className={box} data-parties>
@@ -163,12 +188,16 @@ export default async function ClaimLitigationPage({
                 ) : (
                   <form method="post" action={action} className="mt-1 flex flex-wrap items-center gap-2" data-needs-verification>
                     <span className="font-semibold text-overdue">Needs verification</span>
-                    <span className="text-slate">Entered by {date.addedBy}. Someone else checks it against its source.</span>
+                    <span className="text-slate">
+                      Entered by {date.addedBy}. {canVerify ? "Check it against its source." : "Justin or the instructed solicitor checks it against its source."}
+                    </span>
                     <input type="hidden" name="intent" value="verify" />
                     <input type="hidden" name="dateId" value={date.id} />
-                    <button type="submit" className="rounded-md border border-line bg-white px-3 py-1 text-sm">
-                      I have checked it against its source
-                    </button>
+                    {canVerify ? (
+                      <button type="submit" className="rounded-md border border-line bg-white px-3 py-1 text-sm">
+                        I have checked it against its source
+                      </button>
+                    ) : null}
                   </form>
                 )}
               </li>

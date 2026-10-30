@@ -461,26 +461,28 @@ const CASES: Case[] = [
       );
       if (!busy) return "No car on hire elsewhere to test the clash check.";
       await gotoPath(ctx.session, ctx.origin, `/claims/${claimId}/hire?date=${HIRE_DAY}`);
-      const clash = decoded(
-        await postFields(ctx.session, `/claims/${claimId}/hire/choose`, {
-          fleetVehicleId: busy.fleet_vehicle_id,
-          method: "collect",
-          date: HIRE_DAY,
-          time: "12:00",
-          address: "",
-        }),
+      // R26: Choose a car is refused on a running hire; a change of car is a swap with a new signed agreement.
+      const direct = decoded(
+        await postFields(ctx.session, `/claims/${claimId}/hire/choose`, { fleetVehicleId: busy.fleet_vehicle_id, method: "collect", date: HIRE_DAY, time: "12:00", address: "" }),
       );
-      if (!/This car has just been booked|not available/.test(clash)) return `Swapping to a car on hire elsewhere was not refused: ${clash}`;
-      const options = await ctx.session.evaluate<string[]>(
-        `[...document.querySelectorAll('form[action$="/hire/choose"] [name="fleetVehicleId"] option')].map((o) => o.value).filter(Boolean)`,
-      );
-      const next = options.find((id) => id !== before.fleet_vehicle_id);
+      if (!/Use Swap the car/.test(direct)) return `Choose a car on a running hire was not sent to the swap: ${direct}`;
+      const swapFields = { date: HIRE_DAY, time: "23:50", oldMileageIn: "15000", oldFuelIn: "half", oldCondition: "No new damage.", newMileageOut: "9000", newFuelOut: "full", newCondition: "No damage." };
+      const clash = decoded(await postFields(ctx.session, `/claims/${claimId}/hire/swap`, { ...swapFields, intent: "start", fleetVehicleId: busy.fleet_vehicle_id }));
+      if (!/This car has just been booked|not available|not on the fleet/.test(clash)) return `Swapping to a car on hire elsewhere was not refused: ${clash}`;
+      const options = await ctx.session.evaluate<string[]>(`[...document.querySelectorAll('[data-swap-form] [name="fleetVehicleId"] option')].map((o) => o.value).filter(Boolean)`);
+      const next = options.find((id) => id !== before.fleet_vehicle_id && id !== busy.fleet_vehicle_id);
       if (!next) return "No other free car was offered for the swap.";
-      const swapped = followed(
-        await submitForm(ctx.session, 'form[action$="/hire/choose"]', { fleetVehicleId: next, method: "collect", date: HIRE_DAY, time: "12:00" }),
-        "Swap the car",
-      );
-      if (swapped) return swapped;
+      const started = followed(await submitForm(ctx.session, "[data-swap-form]", { ...swapFields, fleetVehicleId: next }), "Start the swap");
+      if (started) return started;
+      const waiting = claimRow<Episode>(ctx, `SELECT id, started_at, fleet_vehicle_id FROM hire_episodes WHERE claim_id = ?`, claimId);
+      if (waiting?.fleet_vehicle_id !== before.fleet_vehicle_id) return "The car changed before the new agreement was signed.";
+      const agreementsAfter = claimRow<{ n: number }>(ctx, `SELECT COUNT(*) AS n FROM documents WHERE claim_id = ? AND template_key = 'hire_agreement'`, claimId)?.n;
+      if (Number(agreementsAfter) !== Number(agreementsBefore) + 1) return "No new hire agreement was produced for the replacement car.";
+      await gotoPath(ctx.session, ctx.origin, `/claims/${claimId}/hire`);
+      const panel = await ctx.session.evaluate<string>(`document.querySelector("[data-swap-waiting]")?.innerText || ""`);
+      if (!/waiting for the new signed hire agreement/.test(panel)) return `The Hire tab does not show the swap waiting for its signature: ${panel.slice(0, 200)}`;
+      const signed = followed(await submitForm(ctx.session, '[data-swap-waiting] form:has(input[value="signed"])', {}, ["signedAgreement"]), "Upload the signed swap agreement");
+      if (signed) return signed;
       const episodes = readDb(ctx.dbPath, (db) => db.prepare(`SELECT id, started_at, fleet_vehicle_id FROM hire_episodes WHERE claim_id = ?`).all(claimId) as Episode[]);
       if (episodes.length !== 1) return `The swap made ${episodes.length} hires, not one continuous hire.`;
       if (episodes[0].id !== before.id || episodes[0].started_at !== before.started_at) return "The swap changed the hire or its start date, so the day count would change.";
@@ -490,12 +492,15 @@ const CASES: Case[] = [
       );
       if (cars[before.fleet_vehicle_id] !== "available") return `The old car was left ${cars[before.fleet_vehicle_id]}, not freed.`;
       if (cars[next] !== "on_hire") return `The new car is ${cars[next]}, not on hire.`;
+      const latest = claimRow<{ sequence: number; signed: number }>(ctx, `SELECT a.sequence, a.signed FROM agreements a JOIN hire_episodes he ON he.id = a.hire_episode_id WHERE he.claim_id = ? ORDER BY a.sequence DESC LIMIT 1`, claimId);
+      if (!latest || Number(latest.sequence) < 2 || Number(latest.signed) !== 1) return "The new signed agreement did not become the latest agreement, so the renewal alerts would not follow it.";
+      const superseded = claimRow<{ n: number }>(ctx, `SELECT COUNT(*) AS n FROM documents WHERE claim_id = ? AND superseded_by_document_id IS NOT NULL`, claimId)?.n;
+      if (Number(superseded) !== 1) return "The earlier signed agreement was not marked superseded.";
       const changed = events(ctx, claimId, "hire_vehicle_changed");
-      if (changed.length !== 1 || !/start date was not changed/.test(String(changed[0].details)) || !/Hire Vehicle as including any vehicle/.test(String(changed[0].details))) {
-        return `The swap was not recorded with its reason: ${changed[0]?.details || "nothing recorded"}`;
-      }
-      const agreementsAfter = claimRow<{ n: number }>(ctx, `SELECT COUNT(*) AS n FROM documents WHERE claim_id = ? AND template_key = 'hire_agreement'`, claimId)?.n;
-      if (agreementsAfter !== agreementsBefore) return "A new agreement was produced with invented wording for the swap.";
+      if (changed.length !== 1 || !/One continuous hire/.test(String(changed[0].details))) return `The swap was not recorded: ${changed[0]?.details || "nothing recorded"}`;
+      await gotoPath(ctx.session, ctx.origin, `/claims/${claimId}/hire`);
+      const clock = await ctx.session.evaluate<string>(`document.querySelector("[data-agreement-clock]")?.innerText || ""`);
+      if (!/^Hire day \d+ · current agreement day 1 \(signed \d{2}\/\d{2}\/\d{4}\)$/.test(clock)) return `The Hire tab does not show both clocks: "${clock}"`;
       return null;
     },
   },

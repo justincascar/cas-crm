@@ -6,6 +6,8 @@ import { loadHireArea } from "@/lib/db/hire-choice";
 import { accountCanOverridePreHireChecks } from "@/lib/db/permissions";
 import { loadClash } from "@/lib/db/record-version";
 import { listStaff } from "@/lib/db/queries";
+import { canOverrideUnsignedSwap, swapView } from "@/lib/db/vehicle-swap";
+import { londonTodayIso } from "@/lib/dates";
 
 export default async function ClaimHirePage({
   params,
@@ -43,6 +45,8 @@ export default async function ClaimHirePage({
       handlers={handlers}
       mayOverride={accountCanOverridePreHireChecks(staff.id, staff.role)}
       showPack={query.pack === "all"}
+      swap={swapView(id, londonTodayIso())}
+      mayOverrideSwap={canOverrideUnsignedSwap(staff.id)}
     />
   );
 }

@@ -134,7 +134,7 @@ describe("new claim drafts, hire and recovery fees", () => {
         // The next action is read from the steps. The form no longer stores guidance as a note.
         assert.equal(claim.next_action, null);
         assert.equal(claim.hire_status, "none");
-        assert.equal(claim.hire_vehicle_type, "Medium Car");
+        assert.equal(claim.hire_vehicle_type, "Medium car", "a description keeps what was typed (R23)");
         assert.equal(claim.hire_gta_group, "S1");
         assert.equal(Number(claim.needs_replacement), 1);
         const bookings = Number((db.prepare(`SELECT COUNT(*) AS c FROM hire_episodes WHERE claim_id = ?`).get(created.id) as { c: number }).c);
@@ -202,7 +202,7 @@ describe("new claim drafts, hire and recovery fees", () => {
         override.set("recoveryReason_standard", "Agreed with the operator");
         const overridden = intakeFromFormData(override);
         assert.equal(overridden.recovery?.chargePence, 30000);
-        assert.equal(overridden.recovery?.lines?.find((line) => line.key === "standard")?.reason, "Agreed With The Operator");
+        assert.equal(overridden.recovery?.lines?.find((line) => line.key === "standard")?.reason, "Agreed with the operator");
       });
     } finally {
       db.close();

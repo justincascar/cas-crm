@@ -9,7 +9,14 @@ export function casingInputProps(name: string, type?: string, className = "") {
   const kind = kindForField(name, type);
   const extras = kind === "registration" || kind === "postcode" ? " uppercase" : "";
   return {
-    autoCapitalize: kind === "registration" || kind === "postcode" ? ("characters" as const) : ("words" as const),
+    autoCapitalize:
+      kind === "registration" || kind === "postcode"
+        ? ("characters" as const)
+        : kind === "words"
+          ? ("words" as const)
+          : kind === "email"
+            ? ("none" as const)
+            : ("sentences" as const),
     className: `${className}${extras}`,
     onChange: (event: ChangeEvent<FieldEl>) => {
       if (kind === "plain") return;

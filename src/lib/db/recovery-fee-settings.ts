@@ -58,6 +58,7 @@ export function setRecoveryCardFeePercent(value: string) {
 }
 
 /** Card fee on the ticked recovery charges (net), rounded to the penny. VAT is then added to the fee as for the old screen. */
-export function cardFeeOnNet(netPence: number, percent: number): number {
-  return Math.round((netPence * percent) / 100);
+/** The card fee before VAT: the Settings percentage of the gross amount being paid (R25). */
+export function cardFeeOnAmount(amountPence: number, percent: number): number {
+  return Math.round((amountPence * percent) / 100);
 }

@@ -1,8 +1,8 @@
 import { formatUkDate, londonTodayIso, nowUtcIso } from "../dates";
 import { CAS_COMPANY } from "../documents/cas-hire-terms";
 import { storageRecoverySignedLine, storageRecoveryState } from "./storage-recovery-signing";
-import { listCardFees } from "./card-fees";
-import { cardFeeOnNet, recoveryCardFeePercent } from "./recovery-fee-settings";
+import { cardFeeLabel, listCardFees } from "./card-fees";
+import { cardFeeOnAmount, recoveryCardFeePercent } from "./recovery-fee-settings";
 import { lineFromNet } from "../domain/recovery-fees";
 import { escapeHtml } from "../documents/correspondence";
 import { formatGbp } from "../money";
@@ -92,21 +92,20 @@ export function produceDraftInvoice(input: { claimId: string; head: string; acto
     gross += fee.grossPence;
     received += fee.grossPence;
     feeRows.push(
-      `<tr data-card-fee><td>${escapeHtml(`Card fee on the card payment of ${formatGbp(fee.paymentPence)} on ${formatUkDate(fee.recordedAt)} (${fee.percent}% of ${formatGbp(fee.basisNetPence)} net)`)}</td><td>—</td><td>${formatGbp(fee.netPence)}</td><td>${formatGbp(fee.vatPence)}</td><td>${formatGbp(fee.grossPence)}</td></tr>`,
+      `<tr data-card-fee><td>${escapeHtml(`Card fee on the card payment of ${formatGbp(fee.paymentPence)} on ${formatUkDate(fee.recordedAt)} — ${cardFeeLabel(fee)}`)}</td><td>—</td><td>${formatGbp(fee.netPence)}</td><td>${formatGbp(fee.vatPence)}</td><td>${formatGbp(fee.grossPence)}</td></tr>`,
     );
   }
   if (input.payingByCard) {
+    // R25: the fee is worked out on the gross amount being paid (the balance due, VAT included), then VAT is added to it.
     const balance = Math.max(0, gross - received);
-    const chargeGross = gross;
-    const basisNet = chargeGross > 0 ? Math.round((balance * net) / chargeGross) : 0;
     const percent = recoveryCardFeePercent();
-    const fee = lineFromNet("cardFee", "Card fee", cardFeeOnNet(basisNet, percent));
+    const fee = lineFromNet("cardFee", "Card fee", cardFeeOnAmount(balance, percent));
     if (fee.netPence > 0) {
       net += fee.netPence;
       vat += fee.vatPence;
       gross += fee.grossPence;
       feeRows.push(
-        `<tr data-card-fee><td>${escapeHtml(`Card fee, paying by card (${percent}% of ${formatGbp(basisNet)} net)`)}</td><td>—</td><td>${formatGbp(fee.netPence)}</td><td>${formatGbp(fee.vatPence)}</td><td>${formatGbp(fee.grossPence)}</td></tr>`,
+        `<tr data-card-fee><td>${escapeHtml(`${cardFeeLabel({ percent, basisPence: balance })}, paying by card`)}</td><td>—</td><td>${formatGbp(fee.netPence)}</td><td>${formatGbp(fee.vatPence)}</td><td>${formatGbp(fee.grossPence)}</td></tr>`,
       );
     }
   }

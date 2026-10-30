@@ -17,6 +17,7 @@ import {
   markLegalDocumentSentOrFiled,
   nextCourtDate,
   scheduleOfLoss,
+  setInstructedSolicitor,
   startLitigation,
   verifyCourtDate,
 } from "../src/lib/db/litigation.ts";
@@ -65,7 +66,7 @@ describe("J13 — litigation and disputes, the basics", () => {
     db.close();
   });
 
-  it("keeps each court date with its source and how it was worked out, needing verification by a second person", () => {
+  it("keeps each court date with its source and how it was worked out, needing verification by Justin or the instructed solicitor (R24)", () => {
     const db = prepared();
     withDatabase(db, () => {
       assert.throws(() => addCourtDate({ ...base, kind: "deadline", title: "Defence due", dueOn: "2026-12-01", source: "", calculation: "14 days" }), /where the date comes from/);
@@ -75,9 +76,16 @@ describe("J13 — litigation and disputes, the basics", () => {
       const [deadline] = litigationView("c2").dates;
       assert.equal(deadline.verifiedAt, null, "needs verification");
       assert.equal(nextCourtDate("c2")?.verified, false);
-      assert.throws(() => verifyCourtDate({ ...base, dateId: deadline.id }), /Someone other than the person who entered it/);
+      assert.throws(() => verifyCourtDate({ ...base, dateId: deadline.id }), /Only Justin or the instructed solicitor/);
+      assert.throws(() => verifyCourtDate({ claimId: "c2", actorId: "staff-tom", dateId: deadline.id }), /Only Justin or the instructed solicitor/);
+      assert.throws(() => setInstructedSolicitor({ ...base, staffId: "staff-tom" }), /Only Justin can record/);
+      setInstructedSolicitor({ claimId: "c2", actorId: "staff-justin", staffId: "staff-tom" });
+      assert.equal(litigationView("c2").instructedSolicitor, "Tom Hughes");
       verifyCourtDate({ claimId: "c2", actorId: "staff-tom", dateId: deadline.id });
       assert.equal(litigationView("c2").dates[0].verifiedBy, "Tom Hughes");
+      const hearing = litigationView("c2").dates[1];
+      verifyCourtDate({ claimId: "c2", actorId: "staff-justin", dateId: hearing.id });
+      assert.equal(litigationView("c2").dates[1].verifiedBy, "Justin Roberts");
     });
     db.close();
   });

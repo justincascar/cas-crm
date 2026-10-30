@@ -840,8 +840,7 @@ export function IntakeForm({
             <input
               name="location"
               value={location}
-              onChange={(e) => setLocation(toStartCaseLive(e.target.value))}
-              onBlur={() => setLocation(toStartCase(location))}
+              onChange={(e) => setLocation(e.target.value)}
               className={field + " !mt-0 flex-1"}
             />
             {maps ? (

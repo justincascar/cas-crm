@@ -43,6 +43,7 @@ export const CLAIM_EVENT_TYPES = [
   { key: "hire_started", label: "Hire started" },
   { key: "hire_vehicle_reserved", label: "Hire vehicle reserved" },
   { key: "hire_vehicle_changed", label: "Hire vehicle changed" },
+  { key: "hire_swap_started", label: "Vehicle swap started: new agreement to sign" },
   { key: "hire_vehicle_released", label: "Hire vehicle released" },
   { key: "hire_pack_draft", label: "Hire pack draft saved" },
   { key: "hire_collection_arranged", label: "Hire collection arranged" },

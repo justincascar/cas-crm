@@ -89,6 +89,7 @@ export function ensureLitigationTables(db: DatabaseSync) {
   const columns = new Set((db.prepare(`PRAGMA table_info(litigation)`).all() as Array<{ name: string }>).map((c) => c.name));
   if (!columns.has("court_name")) db.exec(`ALTER TABLE litigation ADD COLUMN court_name TEXT`);
   if (!columns.has("court_reference")) db.exec(`ALTER TABLE litigation ADD COLUMN court_reference TEXT`);
+  if (!columns.has("instructed_solicitor_id")) db.exec(`ALTER TABLE litigation ADD COLUMN instructed_solicitor_id TEXT`);
 }
 
 function ready() {
@@ -109,6 +110,33 @@ function day(value: string, what: string): string {
 
 export function canApproveLegal(staffId: string): boolean {
   return listStaffPermissions(staffId).includes(APPROVE_LEGAL_CORRESPONDENCE);
+}
+
+/** R24: only Justin, or the person recorded as the instructed solicitor on this file, can verify a court date. */
+export function canVerifyCourtDates(claimId: string, staffId: string): boolean {
+  if (canApproveLegal(staffId)) return true;
+  ready();
+  const lit = get<{ instructed_solicitor_id: string | null }>(`SELECT instructed_solicitor_id FROM litigation WHERE claim_id = ? LIMIT 1`, [claimId]);
+  return Boolean(lit?.instructed_solicitor_id) && lit?.instructed_solicitor_id === staffId;
+}
+
+/** Justin records which CRM sign-in belongs to the solicitor instructed on this file, or none. */
+export function setInstructedSolicitor(input: { claimId: string; actorId: string; staffId: string }) {
+  ready();
+  if (!canApproveLegal(input.actorId)) throw new Error("Only Justin can record the instructed solicitor.");
+  startLitigation(input);
+  const chosen = input.staffId.trim();
+  const person = chosen ? get<{ name: string }>(`SELECT name FROM staff WHERE id = ? AND active = 1`, [chosen]) : undefined;
+  if (chosen && !person) throw new Error("Choose a person who can sign in to the CRM.");
+  run(`UPDATE litigation SET instructed_solicitor_id = ? WHERE claim_id = ?`, [chosen || null, input.claimId]);
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: "other",
+    occurredAt: nowUtcIso(),
+    actorId: input.actorId,
+    details: person ? `Instructed solicitor on the litigation file recorded as ${person.name}. They can verify court dates.` : "No instructed solicitor recorded on the litigation file. Only Justin can verify court dates.",
+    source: "staff",
+  });
 }
 
 /** Opens a litigation file on a claim. Nothing about the parties or the court is assumed. */
@@ -214,7 +242,9 @@ export function verifyCourtDate(input: { claimId: string; actorId: string; dateI
   );
   if (!row) throw new Error("That court date is not on this file.");
   if (row.verified_at) return;
-  if (row.added_by === input.actorId) throw new Error("Someone other than the person who entered it must check it against its source.");
+  if (!canVerifyCourtDates(input.claimId, input.actorId)) {
+    throw new Error("Only Justin or the instructed solicitor on this file can verify a court date. It stays as needing verification.");
+  }
   run(`UPDATE litigation_dates SET verified_by = ?, verified_at = ? WHERE id = ?`, [input.actorId, nowUtcIso(), row.id]);
   recordClaimEvent({
     claimId: input.claimId,
@@ -439,6 +469,8 @@ export type LitigationView = {
   open: boolean;
   courtName: string;
   courtReference: string;
+  instructedSolicitorId: string;
+  instructedSolicitor: string;
   parties: Array<{ id: string; name: string; capacity: string; representative: string; contact: string }>;
   dates: Array<{ id: string; kind: string; title: string; dueOn: string; source: string; calculation: string; addedBy: string; verifiedBy: string | null; verifiedAt: string | null }>;
   documents: Array<{ id: string; kind: string; title: string; documentId: string; approvedBy: string | null; approvedAt: string | null; sentOrFiledAt: string | null; sentOrFiledHow: string | null }>;
@@ -446,13 +478,18 @@ export type LitigationView = {
 
 export function litigationView(claimId: string): LitigationView {
   ready();
-  const lit = get<{ court_name: string | null; court_reference: string | null }>(`SELECT court_name, court_reference FROM litigation WHERE claim_id = ? LIMIT 1`, [claimId]);
+  const lit = get<{ court_name: string | null; court_reference: string | null; instructed_solicitor_id: string | null; solicitor: string | null }>(
+    `SELECT l.court_name, l.court_reference, l.instructed_solicitor_id, s.name AS solicitor FROM litigation l LEFT JOIN staff s ON s.id = l.instructed_solicitor_id WHERE l.claim_id = ? LIMIT 1`,
+    [claimId],
+  );
   const capacity = (value: string) => PARTY_CAPACITIES.find((item) => item.value === value)?.label || value;
   const kind = (value: string) => COURT_DATE_KINDS.find((item) => item.value === value)?.label || LEGAL_DOCUMENT_KINDS.find((item) => item.value === value)?.label || value;
   return {
     open: Boolean(lit),
     courtName: String(lit?.court_name || ""),
     courtReference: String(lit?.court_reference || ""),
+    instructedSolicitorId: String(lit?.instructed_solicitor_id || ""),
+    instructedSolicitor: String(lit?.solicitor || ""),
     parties: all<{ id: string; name: string; capacity: string; representative_name: string | null; representative_firm: string | null; representative_ref: string | null; contact: string | null }>(
       `SELECT id, name, capacity, representative_name, representative_firm, representative_ref, contact FROM litigation_parties WHERE claim_id = ? ORDER BY added_at`,
       [claimId],

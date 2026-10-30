@@ -114,7 +114,7 @@ export function RecoveryCharges({ values }: { values: ScreenValues }) {
   return (
     <div className="space-y-4">
       <p className="text-sm text-slate">
-        Fees are net. VAT at {Math.round(INDICATIVE_DEFAULTS.vat_rate * 100)}% and the total follow the standard charge and whichever extras are ticked. The card fee is {cardPercent} of those net charges, and VAT applies to it as well.
+        Fees are net. VAT at {Math.round(INDICATIVE_DEFAULTS.vat_rate * 100)}% and the total follow the standard charge and whichever extras are ticked. A card fee ({cardPercent} of the amount paid, VAT included, plus VAT on the fee) is added when a card payment is recorded.
       </p>
       <label className="block max-w-xs text-sm">
         Standard recovery charge

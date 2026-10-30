@@ -100,6 +100,12 @@ export const APPROVE_LEGAL_CORRESPONDENCE = "approveLegalCorrespondence";
 export const OVERRIDE_UNSIGNED_STORAGE_RECOVERY = "overrideUnsignedStorageRecovery";
 
 /**
+ * Stored on staff_permissions. Completing a vehicle swap mid-hire without the new signed hire agreement, with a written
+ * reason. Justin only (review note R26).
+ */
+export const OVERRIDE_UNSIGNED_SWAP = "overrideUnsignedSwap";
+
+/**
  * Stored on staff_permissions. Downloading the full export of every claim, person, money line, history entry and
  * document, and opening the audit view of who changed what. Justin only (J12).
  */

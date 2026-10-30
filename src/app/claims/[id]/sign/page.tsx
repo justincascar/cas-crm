@@ -9,6 +9,7 @@ import { beforeSigningFor } from "@/lib/db/hire-out-readings";
 import { SubmitKeyInput } from "@/components/SubmitKeyInput";
 import { signedHireAgreementOnFile } from "@/lib/db/hire-readiness";
 import { getClaim } from "@/lib/db/queries";
+import { openSwap } from "@/lib/db/vehicle-swap";
 
 /** The client signs on this screen: the driver's phone at the doorstep, or an office screen. */
 export default async function DoorstepSigningPage({
@@ -23,9 +24,11 @@ export default async function DoorstepSigningPage({
   const { error, job, readings } = await searchParams;
   const data = getClaim(id);
   if (!data) notFound();
-  const back = isOfficeRole(staff.role) ? `/claims/${id}/hire#handover` : `/claims/${id}/handover${job ? `?job=${job}` : ""}`;
+  // R26: during a vehicle swap the client signs the new agreement for the replacement car; its readings are on the swap.
+  const swap = openSwap(id);
+  const back = swap ? `/claims/${id}/hire#on-hire` : isOfficeRole(staff.role) ? `/claims/${id}/hire#handover` : `/claims/${id}/handover${job ? `?job=${job}` : ""}`;
   const doc = latestAgreementDocument(id);
-  const signed = signedHireAgreementOnFile(id);
+  const signed = swap ? null : signedHireAgreementOnFile(id);
   const esign = latestEsign(id);
   const clientName = String(data.claim.client_name || "");
   const before = beforeSigningFor(id);
@@ -34,10 +37,10 @@ export default async function DoorstepSigningPage({
     <div className="mx-auto max-w-3xl space-y-5">
       <p className="text-sm">
         <Link href={back} className="text-teal-dark underline">
-          Back to the handover
+          {swap ? "Back to the Hire tab" : "Back to the handover"}
         </Link>
       </p>
-      <h1 className="font-serif text-2xl text-navy-deep">Client signs the hire agreement</h1>
+      <h1 className="font-serif text-2xl text-navy-deep">{swap ? "Client signs the new hire agreement for the replacement car" : "Client signs the hire agreement"}</h1>
       {signed ? (
         <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-base" data-signed-done>
           Signed{esign?.status === "signed" && esign.signerName ? ` by ${esign.signerName}` : ""}. The signed copy is on the file.
@@ -50,6 +53,7 @@ export default async function DoorstepSigningPage({
         </p>
       ) : (
         <>
+          {swap ? null : (
           <form method="post" action={`/claims/${id}/sign/readings`} className="grid gap-3 rounded-xl border border-line bg-card p-4 sm:grid-cols-3" data-doorstep-readings>
             <SubmitKeyInput />
             <input type="hidden" name="job" value={job || ""} />
@@ -74,7 +78,8 @@ export default async function DoorstepSigningPage({
             </button>
             {readings ? <p className="text-sm sm:col-span-3">Readings saved. The agreement below shows them.</p> : null}
           </form>
-          <p className="text-base font-semibold">2. Hand the phone to {clientName || "the client"}. They read the agreement, then sign at the bottom.</p>
+          )}
+          <p className="text-base font-semibold">{swap ? "" : "2. "}Hand the phone to {clientName || "the client"}. They read the agreement, then sign at the bottom.</p>
           {error ? (
             <p data-form-error className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-base text-overdue">
               {error}

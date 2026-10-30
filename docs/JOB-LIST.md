@@ -225,6 +225,71 @@ DONE — 628302e. Documents tab → Client form sends the link; the client's pag
 - Staff review proposed changes before anything updates the claim.
 - Fix anything awkward on a small screen.
 
+### J15 — Security and GDPR features that can be built now (fictional data; no decisions needed)
+These are the parts of J9b that don't need hosting or Justin's decisions. Where a period or a wording is still undecided, use the default given here, mark it "awaiting adviser", and make it editable in Settings.
+
+1. **Data map.** Write `docs/DATA-MAP.md`, generated from the actual schema. It lists every personal-data field and covers:
+   - who it's about: client, driver, third party, witness or staff
+   - why it's held
+   - which roles can see it
+   - where it's stored
+   - how long it's kept
+
+   Mark licence points and endorsement codes (and "no points") as **criminal offence data**, and bank statements as **financial data**. This feeds the DPIA.
+2. **Retention.** A retention schedule in Settings, with default periods marked "awaiting adviser":
+
+   | Data | Default |
+   |---|---|
+   | Enquiries that never became a claim | 12 months |
+   | Claim file | 6 years after the claim closes |
+   | Invoices and financial records | 6 years after the end of the financial year |
+   | Bank statements | Delete at claim close, unless used in a dispute or litigation (then follow the claim file) |
+   | Licence check | Follows the claim file |
+   | Audit log | 6 years |
+
+   - A daily job builds a **"Due for deletion" list**. Nothing is deleted automatically yet: Justin approves each batch.
+   - **Legal hold** on a claim blocks deletion.
+   - Deletion either removes the record or anonymises it (keeping the money totals for the accounts), and logs what was removed, when and by whom, without keeping the deleted data.
+3. **"This person's data" screen** (Justin only):
+   - Search for a person across all claims and roles.
+   - **Export everything held about them** as a zip, for a subject access request.
+   - **Restrict or erase** where allowed, blocked by legal hold and by the retention rules, with a reason recorded.
+   - Everything is logged.
+4. **Audit of viewing,** not just changes. Log who opened or downloaded:
+   - bank statements
+   - licence checks
+   - signed agreements
+   - exports
+   - the person's-data screen
+
+   Show these in the existing audit view, filterable.
+5. **Login security:**
+   - Lock the account or slow down attempts after repeated failed logins.
+   - Automatic sign-out after inactivity (Settings, default 30 minutes).
+   - Strong password rules.
+   - Optional authenticator-app two-step login for local logins, required for Justin.
+   - Structure sign-in so that **Microsoft 365 single sign-on** can be added later without a rewrite. Don't connect it yet; that needs Justin's Microsoft admin setup.
+6. **Security checks in the finish routine:**
+   - a dependency vulnerability check (fail on high or critical)
+   - a scan for secrets in the repo
+   - safe security headers
+   - CSRF protection confirmed on every form
+   - uploads restricted by type and size, never served as runnable content, and only through permission-checked addresses
+
+   Fix anything these checks find.
+7. **Licence check minimisation.** Store only the categories, expiry, the points and endorsement codes relevant to the hire, and the check date. No free-text criminal history. Office staff only.
+8. **Breach log.** A Justin-only page to record a suspected breach:
+   - when it was discovered
+   - what happened
+   - whose data
+   - the decision on whether to report it to the ICO, with a visible 72-hour clock from discovery
+   - actions taken
+9. **Privacy notice slot.** The client form and the welcome email show a "Privacy notice" link. The wording is a placeholder marked "awaiting approved wording (J9a)", and the client form can't go live while it's a placeholder.
+10. **Tests.**
+    - Server-side tests for each item above.
+    - A journey test: a person's data export, a legal hold blocking deletion, the deletion list after the period, viewing a bank statement appearing in the audit, a lockout after failed logins.
+    - The usual browser walk-through as `sian` and as `justin`.
+
 ### J9a — Template and wording review by Justin (MUST be done before going live)
 This is a gate. The CRM must not be used with real clients until it is complete.
 
@@ -300,6 +365,8 @@ Security must be high. Nothing real goes in until every item below is done and e
 - Postcode, registration (VRM) and MID lookups.
 
 ## Where I stopped
+
+**30 October 2026 (afternoon) — reviewer:** next is J15. Then stop and write where you stopped.
 
 **30 October 2026 — reviewer:** R22 committed and pushed in eb9b355. Then J11, J12, J13 and J14, in that order. J9a and J9 wait for Justin.
 (Claude Code writes here when it pauses.)

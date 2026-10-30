@@ -7,8 +7,9 @@ import { ensureStorageRecoverySignatureTable } from "./storage-recovery-signing"
 import { ensureCardFeesTable } from "./card-fees";
 import { ensureLitigationTables } from "./litigation";
 import { ensureClientFormTables } from "./client-form";
+import { ensureVehicleSwapTables } from "./vehicle-swap";
 import { ensureFleetGtaRulesTable } from "./fleet-details";
-import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_LEGAL_CORRESPONDENCE, APPROVE_SETTLEMENT, OVERRIDE_UNSIGNED_STORAGE_RECOVERY, EXPORT_AND_AUDIT, EXTENDED_WAIT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS, RELEASE_WITHOUT_EXCESS } from "../auth/roles";
+import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_LEGAL_CORRESPONDENCE, APPROVE_SETTLEMENT, OVERRIDE_UNSIGNED_STORAGE_RECOVERY, OVERRIDE_UNSIGNED_SWAP, EXPORT_AND_AUDIT, EXTENDED_WAIT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS, RELEASE_WITHOUT_EXCESS } from "../auth/roles";
 
 const TABLES: Record<string, Array<[string, string]>> = {
   correspondence: [
@@ -387,6 +388,7 @@ export function migrate(db: DatabaseSync) {
   ensureCardFeesTable(db);
   ensureLitigationTables(db);
   ensureClientFormTables(db);
+  ensureVehicleSwapTables(db);
   ensureFleetGtaRulesTable(db);
   db.exec(`
     CREATE TABLE IF NOT EXISTS repair_evidence (
@@ -786,6 +788,11 @@ export function migrate(db: DatabaseSync) {
      SELECT ?, ?
      WHERE EXISTS (SELECT 1 FROM staff WHERE id = ?)`,
   ).run("staff-justin", OVERRIDE_UNSIGNED_STORAGE_RECOVERY, "staff-justin");
+  db.prepare(
+    `INSERT OR IGNORE INTO staff_permissions(staff_id, permission)
+     SELECT ?, ?
+     WHERE EXISTS (SELECT 1 FROM staff WHERE id = ?)`,
+  ).run("staff-justin", OVERRIDE_UNSIGNED_SWAP, "staff-justin");
   db.prepare(
     `INSERT OR IGNORE INTO staff_permissions(staff_id, permission)
      SELECT ?, ?

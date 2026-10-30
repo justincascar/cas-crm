@@ -8,6 +8,7 @@ import {
   approveLegalDocument,
   markLegalDocumentSentOrFiled,
   saveCourtDetails,
+  setInstructedSolicitor,
   startLitigation,
   verifyCourtDate,
 } from "@/lib/db/litigation";
@@ -27,6 +28,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     const intent = text("intent");
     const base = { claimId: id, actorId: staff.id };
     if (intent === "start") startLitigation(base);
+    else if (intent === "solicitor") setInstructedSolicitor({ ...base, staffId: text("staffId") });
     else if (intent === "court") saveCourtDetails({ ...base, courtName: text("courtName"), courtReference: text("courtReference") });
     else if (intent === "party") {
       addLitigationParty({

@@ -149,7 +149,10 @@ Five stages. Each later stage extends the same three journeys one step further: 
 59. **Fixed (J11).** One payment covering several heads could only be put on one head. The Money tab now splits it by head first; the parts must add up and none can be more than its head's balance. An overpayment on one head was refused outright; it can now be recorded after a confirmation, shown as overpaid on that head and never set against another.
 60. **Fixed (J14).** There was no client form: only an empty status column. Staff can now send a secure link from the Documents tab. The client fills it in on a phone with no CAS login, saves and comes back, adds photos and papers, and sends it. They only ever see what they entered. Nothing changes the claim until staff tick the answers to apply or accept each upload.
 61. **Fixed (J14).** The server buffered at most 10 MB of each request, below the 12 MB upload limit, so a large photo or PDF would have been cut short. The limit is now 13 MB.
-62. **Open.** Long typed boxes (for example "What happened") are put into capitals at the start of every word, like names (question 21).
+62. **Fixed (R23).** Long typed boxes (for example "What happened") were put into capitals at the start of every word, like names. They now keep what was typed.
+63. **Fixed (R26).** Swapping the hire car changed the car straight away with no new agreement. It now needs a new signed hire agreement for the replacement car (or Justin's override), records both cars' readings, keeps one continuous hire, and moves the renewal alerts to the new agreement.
+64. **Fixed (R24).** Any second member of staff could verify a court date. Only Justin or the recorded instructed solicitor can now.
+65. **Fixed (R25).** The card fee was worked out on the net. It is now on the gross amount paid, with the basis shown on every invoice line.
 
 ## How to try hire on a demonstration file
 

@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { DatabaseSync } from "node:sqlite";
 import { describe, it } from "node:test";
-import { listCardFees, netOfPayment, noteKeptRecoveryCardFees, quoteCardFee } from "../src/lib/db/card-fees.ts";
+import { cardFeeLabel, listCardFees, noteKeptRecoveryCardFees, quoteCardFee } from "../src/lib/db/card-fees.ts";
 import { get, run, withDatabaseAsync } from "../src/lib/db/connection.ts";
 import { produceDraftInvoice } from "../src/lib/db/draft-invoice.ts";
 import { loadHeadSection } from "../src/lib/db/head-screen.ts";
@@ -64,15 +64,15 @@ async function recoveredClaim() {
 }
 
 describe("Review notes R19–R21", () => {
-  it("R19: the card fee is the Settings percentage of the net amount being paid, plus VAT, on any head", () => {
-    assert.equal(netOfPayment("recovery", 47400), 39500);
-    assert.equal(netOfPayment("vehicle_damage", 500000), 500000, "a total-loss settlement carries no VAT");
-    const quote = quoteCardFee("recovery", 47400, 4.5);
-    assert.equal(quote.basisNetPence, 39500);
-    assert.equal(quote.netPence, 1778);
-    assert.equal(quote.vatPence, 356);
-    assert.equal(quote.grossPence, 2134);
-    assert.equal(quoteCardFee("hire", 12000, 4.5).basisNetPence, 10000);
+  it("R25: the card fee is the Settings percentage of the GROSS amount being paid, then VAT is added to the fee", () => {
+    const quote = quoteCardFee(47400, 4.5);
+    assert.equal(quote.basisPence, 47400, "worked out on the gross, VAT included");
+    assert.equal(quote.netPence, 2133);
+    assert.equal(quote.vatPence, 427);
+    assert.equal(quote.grossPence, 2560);
+    assert.equal(quoteCardFee(500000, 4.5).netPence, 22500, "a total-loss settlement: the whole payment");
+    assert.equal(cardFeeLabel(quote), "Card fee 4.5% of £474.00");
+    assert.equal(cardFeeLabel({ percent: 4.5, basisPence: 39500, basisKind: "net" }), "Card fee 4.5% of £395.00 net", "a fee recorded before R25 keeps its basis");
   });
 
   it("R19: Paying by card records a separate card fee with the payment; the charge and received are not changed by it", async () => {
@@ -83,18 +83,18 @@ describe("Review notes R19–R21", () => {
       recordHeadPayment({ claimId: claim.id, actorId: "staff-sian", head: "recovery", amountPence: 47400, correction: false, submitKey: "card-1", payingByCard: true });
       const fees = listCardFees(claim.id, "recovery");
       assert.equal(fees.length, 1);
-      assert.equal(fees[0].netPence, 1778);
-      assert.equal(fees[0].grossPence, 2134);
+      assert.equal(fees[0].netPence, 2133);
+      assert.equal(fees[0].grossPence, 2560);
       const after = loadHeadSection(claim.id, "recovery");
       assert.equal(after.claimedPence, before.claimedPence, "the card fee is not added to the recovery charge");
       assert.equal(after.receivedPence, 47400, "received is the payment only");
-      assert.deepEqual(after.cardFees, { netPence: 1778, vatPence: 356, grossPence: 2134, count: 1 });
+      assert.deepEqual(after.cardFees, { netPence: 2133, vatPence: 427, grossPence: 2560, count: 1 });
       const event = get<{ details: string }>(`SELECT details FROM claim_events WHERE claim_id = ? AND event_type = 'card_fee_recorded'`, [claim.id]);
       assert.match(String(event?.details), /Kept separate from the Recovery charge/);
 
       const invoice = produceDraftInvoice({ claimId: claim.id, head: "recovery", actorId: "staff-sian" });
       const html = String(get<{ body_html: string }>(`SELECT body_html FROM documents WHERE id = ?`, [invoice.documentId])?.body_html);
-      assert.match(html, /Card fee on the card payment of £474\.00/);
+      assert.match(html, /Card fee on the card payment of £474\.00 on .* — Card fee 4\.5% of £474\.00</);
       assert.match(html, /Balance: £0\.00/, "the card fee already paid by card is shown as received");
 
       const other = await recoveredClaim();
@@ -105,7 +105,7 @@ describe("Review notes R19–R21", () => {
     assert.match(read("src/components/claims/PaymentReviewPanel.tsx"), /name="payingByCard"/);
   });
 
-  it("R19: a draft invoice prepared for a card payment adds a separate card-fee line on the net amount due", async () => {
+  it("R25: a draft invoice prepared for a card payment adds a separate card-fee line on the gross amount due", async () => {
     const db = prepared();
     await withDatabaseAsync(db, async () => {
       const claim = await recoveredClaim();
@@ -114,9 +114,9 @@ describe("Review notes R19–R21", () => {
       assert.doesNotMatch(plainHtml, /Card fee/);
       const card = produceDraftInvoice({ claimId: claim.id, head: "recovery", actorId: "staff-sian", payingByCard: true });
       const html = String(get<{ body_html: string }>(`SELECT body_html FROM documents WHERE id = ?`, [card.documentId])?.body_html);
-      assert.match(html, /Card fee, paying by card \(4\.5% of £395\.00 net\)/);
-      assert.match(html, /<td>£17\.78<\/td><td>£3\.56<\/td><td>£21\.34<\/td>/);
-      assert.match(html, /Balance: £495\.34/);
+      assert.match(html, /Card fee 4\.5% of £474\.00, paying by card/);
+      assert.match(html, /<td>£21\.33<\/td><td>£4\.27<\/td><td>£25\.60<\/td>/);
+      assert.match(html, /Balance: £499\.60/);
     });
     db.close();
   });

@@ -11,6 +11,7 @@ import { all, get, getDb, newId, run } from "./connection";
 import { insertStoredDocument } from "./documents-store";
 import { currentHireEpisode, recordSignedAgreementOnHire, SIGNED_HIRE_AGREEMENT_TYPE } from "./hire-readiness";
 import { assertCanRecordHandover } from "./jobs";
+import { completeSwapAfterSigning } from "./vehicle-swap";
 
 /**
  * Electronic signing of the credit-hire agreement. Two routes, both satisfying the handover rule:
@@ -366,6 +367,8 @@ function afterSigning(input: {
     }. The signed PDF is filed as Signed hire agreement.`,
     source: input.route === "link" ? "client" : "staff",
   });
+  // R26: signing the agreement for a replacement car completes the swap.
+  if (completeSwapAfterSigning({ claimId: input.claimId, agreementDocumentId: input.doc.id, signedDocumentId: input.documentId, actorId: input.actorId })) return;
   const episode = currentHireEpisode(input.claimId);
   if (episode?.started_at) recordSignedAgreementOnHire(input.claimId, new Date(episode.started_at).toISOString().slice(0, 10));
 }

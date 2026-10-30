@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { formatTypedValue, formatVehicleRegistration, toStartCase } from "../src/lib/text.ts";
+import { formatTypedValue, formatVehicleRegistration, kindForField, toStartCase } from "../src/lib/text.ts";
 import { clipMobileNumber, mobileNumberError } from "../src/lib/phone-number.ts";
 
 describe("field casing", () => {
@@ -20,6 +20,18 @@ describe("field casing", () => {
     assert.equal(formatTypedValue("client_surname", "lewis"), "Lewis");
     assert.equal(formatTypedValue("veh_make", "VOLKSWAGEN"), "Volkswagen");
     assert.equal(formatTypedValue("veh_colour", "BLACK"), "Black");
+  });
+
+  it("keeps descriptions, notes, reasons and letters exactly as typed (R23)", () => {
+    for (const name of ["details", "circumstances", "notes", "miscNotes", "endDateReason", "needReason", "conditionNotes", "description", "body", "accidentWhat", "location", "reasonForFee"]) {
+      assert.equal(formatTypedValue(name, "I was stopped at the lights by the BP garage.", "textarea"), "I was stopped at the lights by the BP garage.", name);
+      assert.equal(kindForField(name, "textarea"), "plain", name);
+    }
+    assert.equal(formatTypedValue("address", "2 fictional street", "textarea"), "2 Fictional Street");
+    assert.equal(formatTypedValue("insurerName", "fictional insurance"), "Fictional Insurance");
+    assert.equal(formatTypedValue("insCompany", "fictional insurance"), "Fictional Insurance");
+    assert.equal(formatTypedValue("collectionTown", "bridgend"), "Bridgend");
+    assert.equal(formatTypedValue("clientReg", "ab12 cde"), "AB12 CDE");
   });
 
   it("keeps postcodes in capitals and emails in lower case", () => {
