@@ -1,4 +1,5 @@
 import { HEAD_LABELS } from "../constants";
+import { cardFeeTotals, listCardFees } from "./card-fees";
 import { eventLabel } from "../domain/events";
 import { describeHeadStatus } from "../domain/head-screen";
 import type { PaymentReviewHead } from "../domain/payment-review";
@@ -63,6 +64,8 @@ export type HeadSectionModel = {
   outstandingPence: number | null;
   statusLabel: string;
   insurerReason: string | null;
+  /** Card fees on card payments on this head (R19). Separate from the charge: not in claimed, received or outstanding. */
+  cardFees: { netPence: number; vatPence: number; grossPence: number; count: number };
   review: PaymentReviewItem | null;
   afterSettlement: SettledPaymentFlag | null;
   history: HeadHistoryEntry[];
@@ -171,6 +174,7 @@ export function loadHeadSection(claimId: string, head: PaymentReviewHead): HeadS
       chase: chaseState(claimId, head),
     }),
     insurerReason: reason,
+    cardFees: { ...cardFeeTotals(listCardFees(claimId, head)), count: listCardFees(claimId, head).length },
     review,
     afterSettlement,
     history,

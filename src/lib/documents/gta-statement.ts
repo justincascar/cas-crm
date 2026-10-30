@@ -4,14 +4,14 @@ import { DRAFT_WORDING_NOT_APPROVED } from "./template-approval";
  * CAS is not a GTA subscriber (confirmed by Justin, 29/10/2026). Staff can choose to add this paragraph to the
  * rebuttal letters and the payment pack cover letter. It is off unless ticked.
  *
- * The wording is a draft for Justin to approve (QUESTIONS-FOR-JUSTIN.md). Until he does, the paragraph carries the
- * draft marker, so a letter or email containing it cannot be sent. Set GTA_STATEMENT_APPROVED to true only once he
- * has approved this exact wording.
+ * Justin approved this exact wording on 30/10/2026 (review note R20). If the wording is ever changed, set
+ * GTA_STATEMENT_APPROVED back to false until he approves the new text: the paragraph then carries the draft marker,
+ * so a letter or email containing it cannot be sent.
  */
 export const GTA_STATEMENT_TEXT =
   "Complete Accident Solutions Ltd is not a subscriber to the General Terms of Agreement (GTA). GTA rates, rate reductions, protocols and dispute-resolution procedures do not apply to this claim.";
 
-export const GTA_STATEMENT_APPROVED = false;
+export const GTA_STATEMENT_APPROVED = true;
 
 /** Survives HTML escaping, so a stored letter can be checked for it. */
 export const GTA_DRAFT_MARK = `${DRAFT_WORDING_NOT_APPROVED}: the GTA paragraph`;

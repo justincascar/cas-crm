@@ -9,6 +9,8 @@ import { get, getDb, newId, run } from "./connection";
 import { insertStoredDocument } from "./documents-store";
 import { clientAgreementHtml } from "./esign";
 import { signedHireAgreementOnFile } from "./hire-readiness";
+import { OVERRIDE_UNSIGNED_STORAGE_RECOVERY } from "../auth/roles";
+import { listStaffPermissions } from "./permissions";
 
 /**
  * Signing the standalone Storage & Recovery Agreement (review note R17). The same two routes as the hire agreement:
@@ -83,6 +85,7 @@ export function latestStorageRecoveryDocument(claimId: string): StorageRecoveryD
 export type StorageRecoveryState =
   | { status: "signed"; signedAt: string; signerName: string; route: "screen" | "paper"; documentId: string; number: string; version: number }
   | { status: "covered_by_hire"; documentId: string; signedAt: string }
+  | { status: "override"; reason: string; recordedAt: string; recordedByName: string | null; produced: StorageRecoveryDoc | null }
   | { status: "not_signed"; produced: StorageRecoveryDoc | null };
 
 /** Whether the client has signed the Storage & Recovery terms, and how. */
@@ -115,7 +118,49 @@ export function storageRecoveryState(claimId: string): StorageRecoveryState {
       return { status: "covered_by_hire", documentId: hireSigned.id, signedAt: hireSigned.createdAt };
     }
   }
+  const override = storageRecoveryOverride(claimId);
+  if (override) return { status: "override", ...override, produced: latestStorageRecoveryDocument(claimId) };
   return { status: "not_signed", produced: latestStorageRecoveryDocument(claimId) };
+}
+
+export const STORAGE_RECOVERY_OVERRIDE_EVENT = "storage_recovery_agreement_override";
+
+function storageRecoveryOverride(claimId: string): { reason: string; recordedAt: string; recordedByName: string | null } | null {
+  const row = get<{ details: string | null; occurred_at: string; name: string | null }>(
+    `SELECT e.details, e.occurred_at, s.name FROM claim_events e LEFT JOIN staff s ON s.id = e.actor_id
+     WHERE e.claim_id = ? AND e.event_type = ? ORDER BY e.occurred_at DESC, e.recorded_at DESC LIMIT 1`,
+    [claimId, STORAGE_RECOVERY_OVERRIDE_EVENT],
+  );
+  if (!row) return null;
+  const reason = String(row.details || "").match(/Reason: ([\s\S]*)$/)?.[1]?.trim() || "";
+  return { reason, recordedAt: String(row.occurred_at), recordedByName: row.name ? String(row.name) : null };
+}
+
+/** Justin only (review note R21). */
+export function canOverrideUnsignedStorageRecovery(staffId: string): boolean {
+  return listStaffPermissions(staffId).includes(OVERRIDE_UNSIGNED_STORAGE_RECOVERY);
+}
+
+/**
+ * Justin's authorised override: recovery or storage may be claimed without a signed Storage & Recovery Agreement.
+ * The written reason is kept on the file and shown in the history and the chronology. Nothing is signed by it.
+ */
+export function recordStorageRecoveryOverride(input: { claimId: string; actorId: string; reason: string }) {
+  if (!canOverrideUnsignedStorageRecovery(input.actorId)) {
+    throw new Error("Only Justin can authorise claiming recovery or storage without a signed Storage & Recovery Agreement.");
+  }
+  const reason = input.reason.trim().replace(/\s+/g, " ");
+  if (reason.length < 5) throw new Error("Write the reason for the override.");
+  if (storageRecoveryState(input.claimId).status !== "not_signed") throw new Error("No override is needed on this file.");
+  const actor = get<{ name: string }>(`SELECT name FROM staff WHERE id = ?`, [input.actorId]);
+  recordClaimEvent({
+    claimId: input.claimId,
+    eventType: STORAGE_RECOVERY_OVERRIDE_EVENT,
+    occurredAt: nowUtcIso(),
+    actorId: input.actorId,
+    details: `Recovery and storage may be claimed without a signed Storage & Recovery Agreement. Authorised override by ${actor?.name || "Justin"}. The client has not signed it. Reason: ${reason}`,
+    source: "staff",
+  });
 }
 
 /** One line for invoices and screens. */
@@ -124,6 +169,9 @@ export function storageRecoverySignedLine(state: StorageRecoveryState): string {
     return `Storage & Recovery Agreement ${state.number || ""} signed by ${state.signerName} on ${formatUkDate(state.signedAt)}${
       state.route === "paper" ? " (signed paper copy on the file)" : " (signed on screen)"
     }.`.replace("Agreement  signed", "Agreement signed");
+  }
+  if (state.status === "override") {
+    return `Not signed. Recovery and storage may be claimed under an authorised override by ${state.recordedByName || "Justin"} on ${formatUkDate(state.recordedAt)}. Reason: ${state.reason}`;
   }
   if (state.status === "covered_by_hire") {
     return `The Storage & Recovery terms are in the client's signed hire agreement (on the file from ${formatUkDate(state.signedAt)}).`;
@@ -138,7 +186,7 @@ export function guardStorageRecoveryClaim(claimId: string, eventType: string) {
   if (!CLAIM_EVENTS.has(eventType)) return;
   if (storageRecoveryState(claimId).status === "not_signed") {
     throw new Error(
-      "The client has not signed the Storage & Recovery Agreement. Get it signed on screen or upload the signed paper copy on the Recovery page before claiming recovery or storage.",
+      "The client has not signed the Storage & Recovery Agreement. Get it signed on screen or upload the signed paper copy on the Recovery page before claiming recovery or storage. Only Justin can authorise an override, with a reason.",
     );
   }
 }

@@ -1,3 +1,4 @@
+import { recoveryCardFeePercent } from "@/lib/db/recovery-fee-settings";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/ClaimTable";
@@ -231,6 +232,7 @@ export async function HireHeadScreen({
             <HeadAgreedForm claimId={id} head="hire" recordVersion={sectionVersion("money", `${id}:hire`)} />
             <div className="mt-4">
               <PaymentReviewPanel
+                cardFeePercent={recoveryCardFeePercent()}
                 claimId={id}
                 lockedHead={{ head: "hire", label: "Hire", receivedPence: section.receivedPence, agreedPence: section.agreedPence || 0, claimedPence: claimedForMoney }}
               />

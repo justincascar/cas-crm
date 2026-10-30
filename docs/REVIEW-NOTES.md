@@ -4,7 +4,26 @@ Written by the reviewer, Claude (Cowork), after testing the app in the browser a
 
 ## Open
 
-Nothing open.
+**Justin's answers, 30 October 2026.** When these are done, mark questions 13, 14 and 15 answered in `QUESTIONS-FOR-JUSTIN.md`.
+
+**R19 — Move the card fee to the point of payment.**
+Justin: VAT is added to the card fee, but the fee is only known when the invoice is paid, because that's when CAS learns the payer is using a card.
+
+What to do:
+- Remove the card-fee tick from the "Record the recovery" form and the new-claim form. Keep any figures already saved, with a history note.
+- When a payment is recorded against an invoice, or a draft invoice is prepared for payment, add "Paying by card". When ticked, it adds a separate card-fee line:
+  - the % from Settings, on the net amount being paid
+  - plus VAT
+- Show it on the invoice and on the money totals, kept separate from the recovery charge itself so it's never double-counted.
+- This applies to whichever head of loss is being paid (recovery, storage, repairs or hire), not just recovery.
+
+**R20 — GTA paragraph wording approved by Justin, as written.**
+Remove the draft marking. Staff can tick it on the rebuttal letters and the hire pack cover letter. It stays off unless ticked.
+
+**R21 — Override for recovery and storage claims without a signed agreement: Justin only.**
+- A recovery or storage payment request may be recorded as sent without a signed Storage & Recovery Agreement only by Justin's authorised override.
+- The override needs a written reason, which is kept on the file and shown in the history and the chronology. Same pattern as the hire handover override.
+
 
 ## Fixed
 

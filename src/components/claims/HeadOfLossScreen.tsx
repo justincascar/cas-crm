@@ -67,6 +67,14 @@ export function HeadOfLossScreen({
             <dt className="text-sm text-slate">Outstanding</dt>
             <dd className="font-semibold tabular">{moneyOrUnset(section.outstandingPence)}</dd>
           </div>
+          {section.cardFees.count > 0 ? (
+            <div data-card-fees>
+              <dt className="text-sm text-slate">Card fees (separate, paid by card)</dt>
+              <dd className="font-semibold tabular">
+                {formatGbp(section.cardFees.netPence)} + VAT {formatGbp(section.cardFees.vatPence)} = {formatGbp(section.cardFees.grossPence)}
+              </dd>
+            </div>
+          ) : null}
           {section.insurerReason ? (
             <div>
               <dt className="text-sm text-slate">Insurer&apos;s stated reason</dt>

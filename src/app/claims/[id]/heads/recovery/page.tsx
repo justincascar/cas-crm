@@ -1,7 +1,8 @@
+import { recoveryCardFeePercent } from "@/lib/db/recovery-fee-settings";
 import Link from "next/link";
 import { VehicleMovements } from "@/components/claims/VehicleMovements";
 import { StorageRecoveryAgreementPanel } from "@/components/claims/StorageRecoveryAgreementPanel";
-import { storageRecoveryState } from "@/lib/db/storage-recovery-signing";
+import { canOverrideUnsignedStorageRecovery, storageRecoveryState } from "@/lib/db/storage-recovery-signing";
 import { currentHireEpisode } from "@/lib/db/hire-readiness";
 import { listVehicleMovements, NOT_DRIVEABLE_REASONS, notDriveableLabel } from "@/lib/db/vehicle-movements";
 import { notFound, redirect } from "next/navigation";
@@ -20,7 +21,7 @@ import { formatUkDate, formatUkTime, toLondonDateTimeLocal } from "@/lib/dates";
 import { RecoveryFeeFields, feeDefaultsFromLines } from "@/components/claims/RecoveryFeeFields";
 import { SubmitKeyInput } from "@/components/SubmitKeyInput";
 import { ValidatedForm } from "@/components/ValidatedForm";
-import { recoveryCardFeePercent, recoveryFeeSchedule } from "@/lib/db/recovery-fee-settings";
+import { recoveryFeeSchedule } from "@/lib/db/recovery-fee-settings";
 import { recoveryDisplayLines, recoveryReviewFlags } from "@/lib/db/recovery-display";
 import { headScreenPath } from "@/lib/domain/head-screen";
 import { formatGbp } from "@/lib/money";
@@ -135,7 +136,7 @@ export async function RecoveryHeadScreen({
           <input name="arrivedTime" type="time" required defaultValue={arrivedLocal.slice(11, 16)} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" />
         </label>
       </div>
-      <RecoveryFeeFields fees={recoveryFeeSchedule()} defaults={feeDefaultsFromLines(savedLines)} cardFeePercent={recoveryCardFeePercent()} />
+      <RecoveryFeeFields fees={recoveryFeeSchedule()} defaults={feeDefaultsFromLines(savedLines)} />
       <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
         {recoveryDone ? "Save recovery" : "Record recovery"}
       </button>
@@ -179,6 +180,9 @@ export async function RecoveryHeadScreen({
       {query.saved === "sr-produced" && !query.error ? (
         <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm text-ok">Storage &amp; Recovery Agreement produced for signature. Nothing was sent.</p>
       ) : null}
+      {query.saved === "sr-override" && !query.error ? (
+        <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm text-ok">Override recorded with its reason. The agreement is still unsigned.</p>
+      ) : null}
       {query.saved === "sr-signed" && !query.error ? (
         <p className="rounded-md border border-ok/40 bg-[#eef6ee] px-4 py-3 text-sm text-ok">Signed Storage &amp; Recovery Agreement filed.</p>
       ) : null}
@@ -206,7 +210,7 @@ export async function RecoveryHeadScreen({
         )}
       </section>
 
-      <StorageRecoveryAgreementPanel claimId={id} state={storageRecoveryState(id)} clientName={String(data.claim.client_name || "")} hasHireCar={Boolean(currentHireEpisode(id)?.fleet_vehicle_id)} />
+      <StorageRecoveryAgreementPanel claimId={id} state={storageRecoveryState(id)} clientName={String(data.claim.client_name || "")} hasHireCar={Boolean(currentHireEpisode(id)?.fleet_vehicle_id)} canOverride={canOverrideUnsignedStorageRecovery(staff.id)} />
 
       <div id="movements" className="scroll-mt-16">
         <VehicleMovements claimId={id} movements={listVehicleMovements(id)} returnTo={headScreenPath(id, "recovery")} />
@@ -357,6 +361,7 @@ export async function RecoveryHeadScreen({
             <HeadAgreedForm claimId={id} head="recovery" recordVersion={sectionVersion("money", `${id}:recovery`)} />
             <div className="mt-4">
               <PaymentReviewPanel
+                cardFeePercent={recoveryCardFeePercent()}
                 claimId={id}
                 lockedHead={{
                   head: "recovery",

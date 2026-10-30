@@ -3,7 +3,7 @@ import { PageHeader } from "@/components/ClaimTable";
 import { requireStaff } from "@/lib/auth/session";
 import { listClaimHandlers, listKnownInsurers, listKnownAgents, nextReference } from "@/lib/db/queries";
 import { draftPayload, getClaimDraft } from "@/lib/db/claim-drafts";
-import { recoveryCardFeePercent, recoveryFeeSchedule } from "@/lib/db/recovery-fee-settings";
+import { recoveryFeeSchedule } from "@/lib/db/recovery-fee-settings";
 
 export default async function NewClaimPage({
   searchParams,
@@ -31,7 +31,6 @@ export default async function NewClaimPage({
         insurers={listKnownInsurers()}
         agents={listKnownAgents()}
         fees={recoveryFeeSchedule()}
-        cardFeePercent={recoveryCardFeePercent()}
         defaults={draftPayload(openDraft)}
         draftId={openDraft?.id || ""}
         draftVersion={openDraft?.updated_at || ""}

@@ -13,16 +13,19 @@ export function StorageRecoveryAgreementPanel({
   state,
   clientName,
   hasHireCar,
+  canOverride,
 }: {
   claimId: string;
   state: StorageRecoveryState;
   clientName: string;
   hasHireCar: boolean;
+  /** Justin only: claim recovery or storage without a signed agreement, with a reason. */
+  canOverride: boolean;
 }) {
   return (
     <section id="agreement" className="scroll-mt-16 space-y-3 rounded-xl border border-line bg-card p-5" aria-label="Storage and Recovery Agreement" data-sr-agreement={state.status}>
       <h2 className="font-serif text-xl text-navy-deep">Storage &amp; Recovery Agreement</h2>
-      {state.status !== "not_signed" ? (
+      {state.status === "signed" || state.status === "covered_by_hire" ? (
         <p className="text-sm" data-sr-signed>
           {storageRecoverySignedLine(state)}{" "}
           <Link href={`/documents/${state.documentId}`} className="text-teal-dark underline">
@@ -31,6 +34,11 @@ export function StorageRecoveryAgreementPanel({
         </p>
       ) : (
         <>
+          {state.status === "override" ? (
+            <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2 text-sm" data-sr-override>
+              {storageRecoverySignedLine(state)}
+            </p>
+          ) : null}
           <p className="text-sm">
             The client signs this before recovery or storage is claimed. It is the Storage &amp; Recovery page, the relevant terms and the notice of the right to
             cancel from CAS&rsquo;s Hire Pack.
@@ -74,6 +82,20 @@ export function StorageRecoveryAgreementPanel({
                 <p className="text-xs text-slate sm:col-span-2">The date recorded is today, the day it is uploaded.</p>
                 <button type="submit" className="rounded-md bg-navy px-3 py-2 text-sm font-semibold text-white sm:col-span-2 sm:w-fit">
                   Upload signed copy
+                </button>
+              </form>
+            </details>
+          ) : null}
+          {canOverride && state.status === "not_signed" ? (
+            <details className="text-sm" data-sr-override-form>
+              <summary className="cursor-pointer text-teal-dark underline">Claim without a signed agreement (Justin&rsquo;s override)</summary>
+              <form method="post" action={`/claims/${claimId}/storage-recovery/override`} className="mt-3 space-y-3">
+                <label className="block">
+                  Reason (kept on the file and shown in the history and the chronology)
+                  <textarea name="reason" required minLength={5} rows={3} className={field} />
+                </label>
+                <button type="submit" className="rounded-md border border-overdue/40 bg-white px-3 py-2 text-sm font-semibold text-overdue">
+                  Authorise the override
                 </button>
               </form>
             </details>

@@ -39,10 +39,11 @@ export function recordRecoveryDone(input: { claimId: string; actorId: string; fo
     `SELECT id, charge_lines_json FROM recovery_jobs WHERE claim_id = ? ORDER BY id LIMIT 1`,
     [input.claimId],
   );
-  // An inherited charge typed on the new-claim form stays: it is a receipt, not a CAS fee.
+  // An inherited charge typed on the new-claim form stays: it is a receipt, not a CAS fee. A card fee saved under the
+  // old tick stays too (R19): card fees are now added when a card payment is recorded, and the saved figure is kept.
   const inherited = (() => {
     try {
-      return (JSON.parse(String(job?.charge_lines_json || "[]")) as RecoveryMoneyLine[]).filter((line) => line.key === "inherited");
+      return (JSON.parse(String(job?.charge_lines_json || "[]")) as RecoveryMoneyLine[]).filter((line) => line.key === "inherited" || line.key === "cardFee");
     } catch {
       return [];
     }

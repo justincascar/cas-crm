@@ -27,6 +27,7 @@ const MILESTONE_TYPES = [
   "engineer_report_received",
   "hire_ended",
   "storage_ended",
+  "storage_recovery_agreement_override",
 ] as const;
 
 /**

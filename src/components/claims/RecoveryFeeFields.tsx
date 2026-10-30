@@ -9,14 +9,11 @@ const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text
 export function RecoveryFeeFields({
   fees,
   defaults,
-  cardFeePercent,
 }: {
   /** Settings figures in pence, by fee key. */
   fees: Partial<Record<string, number>>;
   /** Earlier entries, by field name, to fill the form again. */
   defaults: Record<string, string>;
-  /** Card fee percentage from Settings. The fee is only charged when ticked. */
-  cardFeePercent: number;
 }) {
   return (
     <div className="space-y-3" data-recovery-fees>
@@ -74,11 +71,7 @@ export function RecoveryFeeFields({
           <input name="recoveryReason_manual" defaultValue={defaults.recoveryReason_manual || ""} className={field} />
         </label>
       </div>
-      <label className="flex items-center gap-2 text-sm" data-card-fee>
-        <input name="recoveryTick_cardFee" type="checkbox" value="yes" defaultChecked={defaults.recoveryTick_cardFee === "yes"} />
-        Card fee ({cardFeePercent}% of the ticked charges, plus VAT)
-      </label>
-      <p className="text-xs text-slate">Each ticked amount is plus VAT. Unticked items are not charged. The card fee is off unless ticked.</p>
+      <p className="text-xs text-slate">Each ticked amount is plus VAT. Unticked items are not charged. A card fee is added when a card payment is recorded, not here.</p>
     </div>
   );
 }
@@ -89,7 +82,8 @@ export function feeDefaultsFromLines(lines: Array<{ key: string; label: string; 
   if (lines.length === 0) return out;
   out.recoveryTick_standard = "no";
   for (const line of lines) {
-    if (line.key === "inherited") continue;
+    // An inherited receipt and a card fee kept from the old tick are not boxes on this form.
+    if (line.key === "inherited" || line.key === "cardFee") continue;
     const key = line.key;
     out[`recoveryTick_${key}`] = "yes";
     out[`recoveryAmount_${key}`] = filledPounds(line.netPence);

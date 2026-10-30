@@ -4,7 +4,8 @@ import { ensureStorageChronology } from "./storage-chronology";
 import { ensureGtaTables } from "./gta-rates";
 import { ensureEsignTable } from "./esign";
 import { ensureStorageRecoverySignatureTable } from "./storage-recovery-signing";
-import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_LEGAL_CORRESPONDENCE, APPROVE_SETTLEMENT, EXTENDED_WAIT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS, RELEASE_WITHOUT_EXCESS } from "../auth/roles";
+import { ensureCardFeesTable } from "./card-fees";
+import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_LEGAL_CORRESPONDENCE, APPROVE_SETTLEMENT, OVERRIDE_UNSIGNED_STORAGE_RECOVERY, EXTENDED_WAIT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS, RELEASE_WITHOUT_EXCESS } from "../auth/roles";
 
 const TABLES: Record<string, Array<[string, string]>> = {
   correspondence: [
@@ -378,6 +379,7 @@ export function migrate(db: DatabaseSync) {
   ensureGtaTables(db);
   ensureEsignTable(db);
   ensureStorageRecoverySignatureTable(db);
+  ensureCardFeesTable(db);
   db.exec(`
     CREATE TABLE IF NOT EXISTS repair_evidence (
       id TEXT PRIMARY KEY,
@@ -771,6 +773,11 @@ export function migrate(db: DatabaseSync) {
      SELECT ?, ?
      WHERE EXISTS (SELECT 1 FROM staff WHERE id = ?)`,
   ).run("staff-justin", APPROVE_LEGAL_CORRESPONDENCE, "staff-justin");
+  db.prepare(
+    `INSERT OR IGNORE INTO staff_permissions(staff_id, permission)
+     SELECT ?, ?
+     WHERE EXISTS (SELECT 1 FROM staff WHERE id = ?)`,
+  ).run("staff-justin", OVERRIDE_UNSIGNED_STORAGE_RECOVERY, "staff-justin");
   db.exec(`
     CREATE TABLE IF NOT EXISTS repair_gap_explanations (
       id TEXT PRIMARY KEY,

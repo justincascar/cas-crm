@@ -235,6 +235,7 @@ describe("pre-hire check overrides", () => {
         "extendedWait",
         "manageBankDetails",
         "overridePreHireChecks",
+        "overrideUnsignedStorageRecovery",
         "releaseWithoutExcess",
       ]);
       assert.deepEqual(listStaffPermissions("staff-sian"), []);
@@ -397,7 +398,7 @@ describe("pre-hire check overrides", () => {
       .all() as { permission: string }[];
     assert.deepEqual(
       permissions.map((row) => row.permission),
-      ["acceptPaymentSettlement", "approveLegalCorrespondence", "approveSettlement", "extendedWait", "manageBankDetails", "overridePreHireChecks", "releaseWithoutExcess"],
+      ["acceptPaymentSettlement", "approveLegalCorrespondence", "approveSettlement", "extendedWait", "manageBankDetails", "overridePreHireChecks", "overrideUnsignedStorageRecovery", "releaseWithoutExcess"],
     );
     const sian = db.prepare(`SELECT COUNT(*) AS n FROM staff_permissions WHERE staff_id = 'staff-sian'`).get() as { n: number };
     assert.equal(sian.n, 0);

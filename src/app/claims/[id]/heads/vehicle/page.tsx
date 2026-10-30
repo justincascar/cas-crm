@@ -1,3 +1,4 @@
+import { recoveryCardFeePercent } from "@/lib/db/recovery-fee-settings";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { PageHeader } from "@/components/ClaimTable";
@@ -87,6 +88,7 @@ export async function VehicleDamageScreen({
             {totalLoss ? <TotalLossAgreedForm claimId={id} returnTo={returnTo} suggestionOnly /> : null}
             <div className="mt-4">
               <PaymentReviewPanel
+                cardFeePercent={recoveryCardFeePercent()}
                 claimId={id}
                 lockedHead={{
                   head,

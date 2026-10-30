@@ -1,4 +1,5 @@
 import { nowUtcIso } from "../dates";
+import { recordCardFeeOnPayment } from "./card-fees";
 import { HEAD_LABELS, type HeadOfLoss } from "../constants";
 import { type ChaseKind } from "../domain/chase";
 import { TOTAL_LOSS_PAYMENT_RECEIVED_EVENT } from "../domain/follow-up-chases";
@@ -318,6 +319,8 @@ export function recordHeadPayment(input: {
   insurerReason?: string;
   submitKey: string;
   confirmSeparate?: boolean;
+  /** The payer is paying by card: a separate card fee is recorded with this payment (R19). */
+  payingByCard?: boolean;
 }) {
   const submitKey = requireSubmitKey(input.submitKey);
   const already = replaySubmit<Record<string, unknown>>(submitKey);
@@ -490,6 +493,9 @@ export function recordHeadPayment(input: {
     source: "staff",
     channel: "file",
   });
+  if (input.payingByCard && !applied.replacedPrevious) {
+    recordCardFeeOnPayment({ claimId: input.claimId, head: input.head, amountPence: input.amountPence, actorId: input.actorId });
+  }
   const after = moneyLine(input.claimId, input.head);
   const storageAfter = get<{ received_pence: number; agreed_pence: number }>(
     `SELECT received_pence, agreed_pence FROM financial_lines WHERE claim_id = ? AND head_of_loss = 'storage' ORDER BY id LIMIT 1`,

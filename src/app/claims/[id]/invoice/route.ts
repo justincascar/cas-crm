@@ -19,7 +19,12 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     if (replayed && typeof replayed === "object" && replayed.documentId) {
       return NextResponse.redirect(new URL(`/documents/${replayed.documentId}`, origin), 303);
     }
-    const made = produceDraftInvoice({ claimId: id, head: String(form.get("head") || ""), actorId: staff.id });
+    const made = produceDraftInvoice({
+      claimId: id,
+      head: String(form.get("head") || ""),
+      actorId: staff.id,
+      payingByCard: form.get("payingByCard") === "yes",
+    });
     storeSubmit(key, { ok: true, documentId: made.documentId });
     return NextResponse.redirect(new URL(`/documents/${made.documentId}`, origin), 303);
   } catch (error) {

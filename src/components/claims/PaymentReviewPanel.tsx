@@ -12,10 +12,13 @@ export function PaymentReviewPanel({
   claimId,
   payableHeads = [],
   lockedHead,
+  cardFeePercent,
 }: {
   claimId: string;
   payableHeads?: PayableHead[];
   lockedHead?: { head: string; label: string; receivedPence: number; agreedPence: number; claimedPence: number };
+  /** Card fee percentage from Settings, added only when Paying by card is ticked. */
+  cardFeePercent?: number;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -42,6 +45,7 @@ export function PaymentReviewPanel({
     setBusy(true);
     setMessage(null);
     form.set("claimId", claimId);
+    form.set("payingByCard", form.get("payingByCard") ? "yes" : "");
     form.set("submitKey", confirm ? crypto.randomUUID() : paymentKey.current);
     if (confirm) form.set("confirmSeparate", "yes");
     const result = await actionLogHeadPayment(form);
@@ -137,6 +141,13 @@ export function PaymentReviewPanel({
         <label className="text-sm">
           Insurer&apos;s stated reason for paying less, if they gave one
           <input name="insurerReason" className={field} />
+        </label>
+        <label className="flex items-start gap-2 text-sm" data-paying-by-card>
+          <input type="checkbox" name="payingByCard" value="yes" />
+          <span>
+            Paying by card. Adds a separate card fee{cardFeePercent != null ? ` of ${cardFeePercent}%` : ""} of the net amount paid, plus VAT. It is kept apart from this
+            charge.
+          </span>
         </label>
         <label className="flex items-start gap-2 text-sm">
           <input type="checkbox" name="correction" value="yes" />

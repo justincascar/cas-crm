@@ -572,7 +572,7 @@ export default async function SettingsPage({
               defaultValue={String(recoveryCardFeePercent())}
               className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
             />
-            <span className="mt-1 block text-xs text-slate">Offered as a tick on the recovery form, off unless ticked. Worked out on the ticked charges, then VAT is added to the fee.</span>
+            <span className="mt-1 block text-xs text-slate">Added only when a payment is recorded as Paying by card, or a draft invoice is prepared for a card payment. Worked out on the net amount being paid, then VAT is added to the fee. Any head of loss.</span>
           </label>
           <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white sm:col-span-2">
             Save recovery fees

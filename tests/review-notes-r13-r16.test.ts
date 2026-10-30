@@ -110,7 +110,7 @@ describe("Review notes R13–R16", () => {
     assert.match(settings, /Justin confirmed Monday to Friday, 09:00 to 17:00 UK time on 29\/10\/2026/);
   });
 
-  it("R15: the card fee is off unless ticked, worked out on the ticked charges, and shown as its own line", async () => {
+  it("R15 (changed by R19): the recovery form has no card fee tick; the percentage stays in Settings", async () => {
     const db = prepared();
     await withDatabaseAsync(db, async () => {
       assert.equal(recoveryCardFeePercent(), 4.5);
@@ -140,29 +140,25 @@ describe("Review notes R13–R16", () => {
 
       const card = await newClaim();
       recordRecoveryDone({ claimId: card.id, actorId: "staff-sian", form: recoveryForm({ recoveryTick_cardFee: "yes" }) });
-      const fee = lines(card.id).find((line) => line.key === "cardFee");
-      assert.ok(fee);
-      assert.equal(fee?.label, "Card fee (4.5%)");
-      assert.equal(fee?.netPence, cardFeeOnNet(39500, 4.5));
-      assert.equal(fee?.netPence, 1778);
-      assert.ok(Number(fee?.vatPence) > 0, "VAT is added to the fee, as on the old screen");
-      assert.equal(recoveryClaimForClaim(card.id).netPence, 39500 + 1778, "the money check counts the card fee, so it does not flag a difference");
+      assert.equal(lines(card.id).some((line) => line.key === "cardFee"), false, "an old tick in a posted form adds nothing");
+      assert.equal(recoveryClaimForClaim(card.id).netPence, 39500);
+      assert.equal(cardFeeOnNet(39500, 4.5), 1778);
 
       setRecoveryCardFeePercent("3");
       assert.equal(recoveryCardFeePercent(), 3);
       assert.throws(() => setRecoveryCardFeePercent("lots"), /percentage/);
     });
     db.close();
-    assert.match(read("src/components/claims/RecoveryFeeFields.tsx"), /name="recoveryTick_cardFee"[^>]*defaultChecked=\{defaults\.recoveryTick_cardFee === "yes"\}/);
+    assert.doesNotMatch(read("src/components/claims/RecoveryFeeFields.tsx"), /recoveryTick_cardFee/);
   });
 
-  it("R16: the not-a-GTA-subscriber paragraph is optional, and cannot be sent until Justin approves the wording", () => {
-    assert.equal(GTA_STATEMENT_APPROVED, false);
+  it("R16 (approved by R20): the not-a-GTA-subscriber paragraph is optional and carries no draft mark", () => {
+    assert.equal(GTA_STATEMENT_APPROVED, true);
     const body = "Dear Sirs,\n\nText.\n\nYours faithfully,\n\nSian";
     const added = withGtaStatement(body);
     assert.ok(added.indexOf(GTA_STATEMENT_TEXT) < added.indexOf("Yours faithfully"));
-    assert.ok(added.includes(GTA_DRAFT_MARK));
-    assert.ok(sendBlockedForUnapproved({ templateKey: "rebuttal_rate", body: added }), "a body with the draft paragraph cannot be sent");
+    assert.ok(!added.includes(GTA_DRAFT_MARK));
+    assert.equal(sendBlockedForUnapproved({ templateKey: "rebuttal_rate", body: added }), null, "the approved paragraph does not block sending");
 
     const db = prepared();
     withDatabase(db, () => {
@@ -176,7 +172,7 @@ describe("Review notes R13–R16", () => {
       assert.ok(!other.html.includes("General Terms of Agreement"), "only on the rebuttals and the payment pack");
 
       const made = generateClaimDocument({ claimId: "c1", templateKey: "hire_pack_cover", actorId: "staff-sian", recordOnFile: false, includeGtaStatement: true });
-      assert.match(String(unapprovedLegalAttachment("c1", [made.documentId])), /waiting for Justin's approval/);
+      assert.equal(unapprovedLegalAttachment("c1", [made.documentId]), null);
       const plain = generateClaimDocument({ claimId: "c1", templateKey: "hire_pack_cover", actorId: "staff-sian", recordOnFile: false });
       assert.equal(unapprovedLegalAttachment("c1", [plain.documentId]), null);
     });

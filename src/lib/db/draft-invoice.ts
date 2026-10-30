@@ -1,6 +1,9 @@
 import { formatUkDate, londonTodayIso, nowUtcIso } from "../dates";
 import { CAS_COMPANY } from "../documents/cas-hire-terms";
 import { storageRecoverySignedLine, storageRecoveryState } from "./storage-recovery-signing";
+import { listCardFees } from "./card-fees";
+import { cardFeeOnNet, recoveryCardFeePercent } from "./recovery-fee-settings";
+import { lineFromNet } from "../domain/recovery-fees";
 import { escapeHtml } from "../documents/correspondence";
 import { formatGbp } from "../money";
 import { recordClaimEvent } from "./chronology";
@@ -35,7 +38,7 @@ type Line = {
  * A plain draft invoice from the figures on the file. CAS's own invoice template, numbering and VAT number have not
  * been supplied, so the document says so. It is filed on the claim and is not sent.
  */
-export function produceDraftInvoice(input: { claimId: string; head: string; actorId: string }) {
+export function produceDraftInvoice(input: { claimId: string; head: string; actorId: string; payingByCard?: boolean }) {
   const head = INVOICE_HEADS[input.head];
   if (!head) throw new Error("Choose recovery, storage, hire or vehicle damage.");
   const toCustomer = input.head === "customer";
@@ -81,21 +84,47 @@ export function produceDraftInvoice(input: { claimId: string; head: string; acto
       return `<tr><td>${escapeHtml(String(line.description || head.label))}</td><td>${qty}</td><td>${formatGbp(lineNet)}</td><td>${formatGbp(lineVat)}</td><td>${formatGbp(lineGross)}</td></tr>`;
     })
     .join("");
+  // Card fees (R19) are their own lines, never part of the charge above. One already paid by card is shown as received.
+  const feeRows: string[] = [];
+  for (const fee of listCardFees(input.claimId).filter((row) => head.ledger.includes(row.head))) {
+    net += fee.netPence;
+    vat += fee.vatPence;
+    gross += fee.grossPence;
+    received += fee.grossPence;
+    feeRows.push(
+      `<tr data-card-fee><td>${escapeHtml(`Card fee on the card payment of ${formatGbp(fee.paymentPence)} on ${formatUkDate(fee.recordedAt)} (${fee.percent}% of ${formatGbp(fee.basisNetPence)} net)`)}</td><td>—</td><td>${formatGbp(fee.netPence)}</td><td>${formatGbp(fee.vatPence)}</td><td>${formatGbp(fee.grossPence)}</td></tr>`,
+    );
+  }
+  if (input.payingByCard) {
+    const balance = Math.max(0, gross - received);
+    const chargeGross = gross;
+    const basisNet = chargeGross > 0 ? Math.round((balance * net) / chargeGross) : 0;
+    const percent = recoveryCardFeePercent();
+    const fee = lineFromNet("cardFee", "Card fee", cardFeeOnNet(basisNet, percent));
+    if (fee.netPence > 0) {
+      net += fee.netPence;
+      vat += fee.vatPence;
+      gross += fee.grossPence;
+      feeRows.push(
+        `<tr data-card-fee><td>${escapeHtml(`Card fee, paying by card (${percent}% of ${formatGbp(basisNet)} net)`)}</td><td>—</td><td>${formatGbp(fee.netPence)}</td><td>${formatGbp(fee.vatPence)}</td><td>${formatGbp(fee.grossPence)}</td></tr>`,
+      );
+    }
+  }
   const today = londonTodayIso();
   // The customer is liable under the Storage & Recovery terms they signed (R17).
   const agreement = storageRecoveryState(input.claimId);
   const html = `<div class="letter">
-<p class="internal-note"><strong>Draft invoice.</strong> CAS's invoice template, invoice number and VAT number have not been supplied yet. Not sent.${toCustomer && agreement.status === "not_signed" ? " No signed Storage & Recovery Agreement is on the file yet. Get it signed on the Recovery page before this invoice is used." : ""}</p>
+<p class="internal-note"><strong>Draft invoice.</strong> CAS's invoice template, invoice number and VAT number have not been supplied yet. Not sent.${toCustomer && agreement.status === "not_signed" ? " No signed Storage &amp; Recovery Agreement is on the file yet. Get it signed on the Recovery page before this invoice is used." : ""}${toCustomer && agreement.status === "override" ? ` ${escapeHtml(storageRecoverySignedLine(agreement))}` : ""}</p>
 <p>${escapeHtml(CAS_COMPANY.name)}<br>${escapeHtml(CAS_COMPANY.address)}<br>${escapeHtml(CAS_COMPANY.phone)} · ${escapeHtml(CAS_COMPANY.email)}</p>
 ${toCustomer
     ? `<p>To: ${gap(claim.client_name, "Client name")}<br>${gap([claim.address_line1, claim.town, claim.postcode].filter((part) => part && !/^unknown$/i.test(String(part))).join(", "), "Client's address")}</p>`
     : `<p>To: ${gap(insurer?.insurer_name, "Third-party insurer")}<br>Your reference: ${gap(insurer?.insurer_ref, "Insurer reference")}</p>`}
 <p>Our reference: ${escapeHtml(claim.file_reference)}<br>Our client: ${gap(claim.client_name, "Client name")}<br>Vehicle: ${gap(claim.registration, "Client registration")}<br>Date: ${formatUkDate(today)}</p>
 <h2>Invoice — ${escapeHtml(head.label)}</h2>
-<table><thead><tr><th>Item</th><th>Quantity × rate</th><th>Net</th><th>VAT</th><th>Gross</th></tr></thead><tbody>${rows}</tbody>
+<table><thead><tr><th>Item</th><th>Quantity × rate</th><th>Net</th><th>VAT</th><th>Gross</th></tr></thead><tbody>${rows}${feeRows.join("")}</tbody>
 <tfoot><tr><td colspan="2">Total</td><td>${formatGbp(net)}</td><td>${formatGbp(vat)}</td><td>${formatGbp(gross)}</td></tr></tfoot></table>
 <p>Received to date: ${formatGbp(received)}. Balance: ${formatGbp(Math.max(0, gross - received))}.</p>
-${toCustomer ? `<p data-sr-reference>${escapeHtml(storageRecoverySignedLine(agreement))}${agreement.status === "not_signed" ? "" : " These charges are due under that agreement."}</p>` : ""}
+${toCustomer && (agreement.status === "signed" || agreement.status === "covered_by_hire") ? `<p data-sr-reference>${escapeHtml(storageRecoverySignedLine(agreement))} These charges are due under that agreement.</p>` : ""}
 </div>`;
   const version = Number(
     get<{ v: number }>(`SELECT COALESCE(MAX(version), 0) AS v FROM documents WHERE claim_id = ? AND template_key = ?`, [

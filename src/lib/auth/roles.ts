@@ -94,6 +94,12 @@ export const APPROVE_SETTLEMENT = "approveSettlement";
 export const APPROVE_LEGAL_CORRESPONDENCE = "approveLegalCorrespondence";
 
 /**
+ * Stored on staff_permissions. Recording a recovery or storage payment request as sent although the client has not
+ * signed the Storage & Recovery Agreement, with a written reason. Justin only (review note R21).
+ */
+export const OVERRIDE_UNSIGNED_STORAGE_RECOVERY = "overrideUnsignedStorageRecovery";
+
+/**
  * Stored on staff_permissions. Changing the bank details in Settings.
  * Not implied by the administrator role, and not read from the username.
  */

@@ -238,6 +238,7 @@ export async function actionLogHeadPayment(formData: FormData) {
       insurerReason: String(formData.get("insurerReason") || ""),
       submitKey: formSubmitKey(formData),
       confirmSeparate: String(formData.get("confirmSeparate") || "") === "yes",
+      payingByCard: String(formData.get("payingByCard") || "") === "yes",
     });
     if ("needsConfirm" in result && result.needsConfirm) {
       return { ok: false as const, needsConfirm: true as const, warning: String(result.warning || ""), error: undefined };

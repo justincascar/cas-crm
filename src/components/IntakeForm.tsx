@@ -644,7 +644,6 @@ export function IntakeForm({
   insurers,
   agents,
   fees,
-  cardFeePercent,
   defaults = {},
   draftId: initialDraftId = "",
   draftVersion: initialDraftVersion = "",
@@ -656,7 +655,6 @@ export function IntakeForm({
   insurers: KnownInsurer[];
   agents: KnownInsurer[];
   fees: Record<string, number>;
-  cardFeePercent: number;
   defaults?: Record<string, string>;
   draftId?: string;
   draftVersion?: string;
@@ -1051,7 +1049,7 @@ export function IntakeForm({
             </label>
           </div>
           <p className="text-xs text-slate">Leave the date blank if the car has not been recovered yet. Charges go on the file only when the recovery date and time are recorded.</p>
-          <RecoveryFeeFields fees={fees} defaults={defaults} cardFeePercent={cardFeePercent} />
+          <RecoveryFeeFields fees={fees} defaults={defaults} />
           <label className="flex items-center gap-2 text-sm">
             <input name="inheritedRecovery" type="checkbox" value="yes" defaultChecked={defaults.inheritedRecovery === "yes"} />
             There is an inherited recovery charge
