@@ -9,11 +9,14 @@ const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text
 export function RecoveryFeeFields({
   fees,
   defaults,
+  cardFeePercent,
 }: {
   /** Settings figures in pence, by fee key. */
   fees: Partial<Record<string, number>>;
   /** Earlier entries, by field name, to fill the form again. */
   defaults: Record<string, string>;
+  /** Card fee percentage from Settings. The fee is only charged when ticked. */
+  cardFeePercent: number;
 }) {
   return (
     <div className="space-y-3" data-recovery-fees>
@@ -71,7 +74,11 @@ export function RecoveryFeeFields({
           <input name="recoveryReason_manual" defaultValue={defaults.recoveryReason_manual || ""} className={field} />
         </label>
       </div>
-      <p className="text-xs text-slate">Each ticked amount is plus VAT. Unticked items are not charged.</p>
+      <label className="flex items-center gap-2 text-sm" data-card-fee>
+        <input name="recoveryTick_cardFee" type="checkbox" value="yes" defaultChecked={defaults.recoveryTick_cardFee === "yes"} />
+        Card fee ({cardFeePercent}% of the ticked charges, plus VAT)
+      </label>
+      <p className="text-xs text-slate">Each ticked amount is plus VAT. Unticked items are not charged. The card fee is off unless ticked.</p>
     </div>
   );
 }

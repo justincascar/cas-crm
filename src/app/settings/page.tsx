@@ -8,7 +8,7 @@ import { requireStaff } from "@/lib/auth/session";
 import { dbLocation, getSettings, listStaff } from "@/lib/db/queries";
 import { getDefaultVehicleLocation } from "@/lib/db/vehicle-location";
 import { getStorageDailyRatePence } from "@/lib/db/storage-charge";
-import { recoveryFeeSchedule } from "@/lib/db/recovery-fee-settings";
+import { recoveryCardFeePercent, recoveryFeeSchedule } from "@/lib/db/recovery-fee-settings";
 import { RECOVERY_FEE_DEFS, filledPounds } from "@/lib/domain/recovery-fees";
 import { getAgreementApproachingDay, getAgreementMaxDays, getChaseIntervalDays } from "@/lib/db/chase";
 import { getRepairGapThresholdDays } from "@/lib/db/repair-progress";
@@ -165,7 +165,7 @@ export default async function SettingsPage({
         <h2 className="font-serif text-xl text-navy-deep">Chaser sending hours</h2>
         <p className="mt-2 text-sm">
           Now: {describeSendingHours(sendingHours)}, UK time. A chase email is only sent inside these hours, once the
-          mailbox is live. Not yet confirmed by CAS.
+          mailbox is live. Justin confirmed Monday to Friday, 09:00 to 17:00 UK time on 29/10/2026.
         </p>
         <form method="post" action="/settings/sending-hours" className="mt-4 flex flex-wrap items-end gap-3">
           <RecordVersionField version={versionFor("settings-sending-hours")} />
@@ -565,6 +565,15 @@ export default async function SettingsPage({
               />
             </label>
           ))}
+          <label className="block text-sm">
+            Card fee (%)
+            <input
+              name="recovery_card_fee_percent"
+              defaultValue={String(recoveryCardFeePercent())}
+              className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
+            />
+            <span className="mt-1 block text-xs text-slate">Offered as a tick on the recovery form, off unless ticked. Worked out on the ticked charges, then VAT is added to the fee.</span>
+          </label>
           <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white sm:col-span-2">
             Save recovery fees
           </button>

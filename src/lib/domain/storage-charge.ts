@@ -180,6 +180,17 @@ export function recoveryScreenGrossPence(values: Record<string, string | undefin
   return Number.isFinite(total) ? total : 0;
 }
 
+/** The optional card fee has no column of its own; it is kept as a line with the other charges. */
+function recoveryCardFeeNet(json: string | null | undefined): number {
+  try {
+    const lines = JSON.parse(String(json || "[]")) as Array<{ key?: string; netPence?: number }>;
+    if (!Array.isArray(lines)) return 0;
+    return lines.filter((line) => line?.key === "cardFee").reduce((total, line) => total + (Number(line.netPence) || 0), 0);
+  } catch {
+    return 0;
+  }
+}
+
 export function recoveryJobNetPence(job: {
   charge_pence?: number | null;
   ooh_pence?: number | null;
@@ -192,9 +203,11 @@ export function recoveryJobNetPence(job: {
   skates_pence?: number | null;
   waiting_pence?: number | null;
   second_operator_pence?: number | null;
+  charge_lines_json?: string | null;
 } | null | undefined): number {
   if (!job) return 0;
   return (
+    recoveryCardFeeNet(job.charge_lines_json) +
     (Number(job.charge_pence) || 0) +
     (Number(job.ooh_pence) || 0) +
     (Number(job.environmental_pence) || 0) +

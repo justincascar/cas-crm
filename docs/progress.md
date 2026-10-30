@@ -1135,3 +1135,17 @@ Finish on 29 October 2026: 607 tests passed, 0 failed. Type check: 0 errors. Pro
 Walked through as Sian on new claim TEST-0028 (Northern Ireland): the reminder and status line, recovery with condition and reason, the automatic first movement and a workshop movement, an earliest-move chronology entry giving a proposed storage end of 28/10/2026 with the reason, a combined £500 offer refused when split £400/£50 and recorded when split £400 recovery / £100 storage, and the draft customer invoice.
 
 Finish on 29 October 2026: 612 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 70 passed, 0 failed. Journey checks passed. `EMAIL_SEND_MODE` stays `simulate`.
+
+## Justin's answers of 29 October: chase on step 7, sending hours, card fee, GTA paragraph (R13–R16, 30 October 2026)
+
+**Chase starts on step 7 (R13).** Recording that the report or estimate went to the third-party insurer now starts the 3-day chase by itself. The chase asks for repair payment ("arrange payment of repairs") on a repairable car, for the total-loss payment (pre-accident value less salvage) on a total loss, or for the insurer's decision when the outcome is not set. In that last case the handler gets a task "Set the outcome: repair or total loss". The wording is checked again each time a chase is prepared. If a chase was already requested it is left as it is. The usual rules still apply: a real reply pauses it, staff can pause, resume or cancel it.
+
+**Sending hours (R14).** Monday to Friday, 09:00 to 17:00 UK time, now shown as confirmed by Justin in Settings.
+
+**Card fee (R15).** The Record the recovery form (and the new-claim form) has a Card fee tick, off unless ticked. It is worked out on the ticked charges before VAT, then VAT is added to the fee, as on the old screen, and it is its own line ("Card fee (4.5%)"). The percentage is in Settings, under Recovery standard fees. The money check on the Recovery page counts the card fee, so it no longer flags a difference. VAT on the fee is question 13. The older recovery screen still uses its own fixed 4.5%.
+
+**Not a GTA subscriber (R16).** The rebuttal letters and the hire pack cover letter (the letter in the payment pack) offer a tick to add the paragraph saying CAS is not a GTA subscriber, off unless ticked. It sits above the sign-off. The wording waits for Justin's approval (question 14): until then the paragraph carries a draft note, the letter cannot be sent from the mailbox and cannot be attached to an email.
+
+Walked through as Sian on new claim TEST-0029: card fee ticked at intake (£17.78 + VAT £3.56 as its own line), recovery recorded with no figure warning, Engineer route, engineer instructed, report received, report sent to the insurer: step 8 showed "chasing every 3 days" and the handler task appeared; a hire-rate rebuttal with the GTA tick showed the paragraph and the draft note; Settings showed the card fee percentage and the confirmed sending hours.
+
+Finish on 30 October 2026: 616 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 70 passed, 0 failed. Journey checks passed. `EMAIL_SEND_MODE` stays `simulate`.

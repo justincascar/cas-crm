@@ -1,6 +1,6 @@
 /**
  * Chaser sending hours, in Europe/London. A chase email is only sent inside these hours.
- * The days and times are a Settings value. Monday to Friday, 09:00 to 17:00 until CAS confirms them.
+ * The days and times are a Settings value. Monday to Friday, 09:00 to 17:00 UK time, confirmed by Justin on 29/10/2026.
  */
 export type SendingHours = { days: number[]; start: string; end: string };
 

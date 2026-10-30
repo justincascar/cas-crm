@@ -428,6 +428,7 @@ export async function actionGenerateDocument(formData: FormData) {
       letterDate: String(formData.get("letterDate") || "") || undefined,
       recordOnFile: generationMarksStep(templateKey) && formData.get("holdBack") !== "yes",
       markSent: true,
+      includeGtaStatement: formData.get("gtaStatement") === "yes",
     });
     documentId = result.documentId;
   } catch (error) {
@@ -451,6 +452,7 @@ export async function actionPreviewCorrespondence(formData: FormData) {
       templateKey,
       String(formData.get("letterDate") || "") || undefined,
       String(formData.get("engineerId") || "") || undefined,
+      formData.get("gtaStatement") === "yes",
     );
   } catch (error) {
     return {

@@ -132,8 +132,74 @@ export function recordClaimEvent(input: {
     ],
   );
   applyEventSideEffects(input.claimId, input.eventType as ClaimEventType, occurredFromForm(input.occurredAt));
+  if (input.eventType === "engineer_report_sent_to_insurer") startChaseForReportSent(input.claimId, occurredFromForm(input.occurredAt), input.actorId);
   run(`UPDATE claims SET updated_at = ? WHERE id = ?`, [now, input.claimId]);
   return id;
+}
+
+export type VehicleOutcome = "repairable" | "total_loss" | "unknown";
+
+/** Repair or total loss, as the file records it. Unknown until someone sets it. */
+export function vehicleOutcome(claimId: string): VehicleOutcome {
+  const claim = get<{ total_loss: number | null; later_declared_total_loss: number | null }>(
+    `SELECT total_loss, later_declared_total_loss FROM claims WHERE id = ?`,
+    [claimId],
+  );
+  if (Number(claim?.total_loss) === 1 || Number(claim?.later_declared_total_loss) === 1) return "total_loss";
+  const screen = get<{ data_json: string }>(`SELECT data_json FROM claim_screen_data WHERE claim_id = ? AND screen_key = 'assessed-damage'`, [claimId]);
+  try {
+    const values = JSON.parse(String(screen?.data_json || "{}")) as Record<string, unknown>;
+    if (String(values.totalLoss || "") === "no") return "repairable";
+  } catch {
+    /* No assessed-damage screen saved yet. */
+  }
+  return "unknown";
+}
+
+/**
+ * Sending the report or estimate to the insurer (step 7) is the request, so the 3-day chase starts then. It chases
+ * repair payment, the total-loss payment, or (when the outcome is not on the file) the insurer's decision, and the
+ * handler is asked to set the outcome. The usual chase rules apply: a substantive reply pauses it, staff can pause,
+ * resume or cancel it, and the file is checked again before each send.
+ */
+function startChaseForReportSent(claimId: string, occurredAt: string, actorId: string | undefined) {
+  // A chase already requested stays as it is; staff restart it from the chase controls if the report is sent again.
+  const already = get<{ id: string }>(
+    `SELECT id FROM claim_events WHERE claim_id = ? AND event_type = 'repair_authorisation_requested' LIMIT 1`,
+    [claimId],
+  );
+  if (already) return;
+  const outcome = vehicleOutcome(claimId);
+  const asked =
+    outcome === "repairable"
+      ? "to arrange payment of repairs"
+      : outcome === "total_loss"
+        ? "for the total-loss payment (the pre-accident value less salvage, per the file)"
+        : "for its decision on the vehicle damage claim";
+  recordClaimEvent({
+    claimId,
+    eventType: "repair_authorisation_requested",
+    occurredAt,
+    actorId,
+    details: `The report went to the insurer, asking it ${asked}. The 3-day chase starts automatically. Outcome: ${outcome === "repairable" ? "repair" : outcome === "total_loss" ? "total loss" : "not set yet"}.`,
+    source: "system",
+  });
+  if (outcome === "unknown") {
+    const handler = get<{ handler_id: string | null }>(`SELECT handler_id FROM claims WHERE id = ?`, [claimId]);
+    run(
+      `INSERT INTO tasks(id, claim_id, handler_id, title, details, type, due_at, status, created_at)
+       VALUES (?, ?, ?, ?, ?, 'other', ?, 'open', ?)`,
+      [
+        newId("task"),
+        claimId,
+        handler?.handler_id || null,
+        "Set the outcome: repair or total loss",
+        "The report has gone to the insurer and the chase has started with neutral wording. Set the outcome on the assessed damage screen so the chase asks for the right thing.",
+        nowUtcIso(),
+        nowUtcIso(),
+      ],
+    );
+  }
 }
 
 function applyEventSideEffects(claimId: string, eventType: ClaimEventType, occurredAt: string) {
@@ -413,6 +479,8 @@ export function generateClaimDocument(input: {
   recordOnFile?: boolean;
   /** The handler says the letter has gone out. The step is then shown as sent, not only generated. */
   markSent?: boolean;
+  /** Add the "not a GTA subscriber" paragraph (rebuttals and the payment pack cover letter only). */
+  includeGtaStatement?: boolean;
 }) {
   if (!isDocumentTemplateKey(input.templateKey)) {
     throw new Error("Unknown document template.");
@@ -422,7 +490,7 @@ export function generateClaimDocument(input: {
   const blocked = impecuniosityRefusal(input.claimId, input.templateKey, "");
   if (blocked) throw new Error(blocked);
   const letterDate = occurredFromForm(input.letterDate);
-  const ctx = letterContext(input.claimId, letterDate);
+  const ctx = { ...letterContext(input.claimId, letterDate), includeGtaStatement: Boolean(input.includeGtaStatement) };
   const generated = isEmailTemplateKey(input.templateKey)
     ? generateEmail(input.templateKey, ctx)
     : generateLetter(input.templateKey, ctx);
@@ -872,10 +940,11 @@ export function letterPreview(
   templateKey: DocumentTemplateKey,
   letterDate?: string,
   engineerId?: string,
+  includeGtaStatement = false,
 ) {
   const blocked = impecuniosityRefusal(claimId, templateKey, "");
   if (blocked) throw new Error(blocked);
-  const ctx = letterContext(claimId, occurredFromForm(letterDate), engineerId);
+  const ctx = { ...letterContext(claimId, occurredFromForm(letterDate), engineerId), includeGtaStatement };
   if (isEmailTemplateKey(templateKey)) return generateEmail(templateKey, ctx);
   if (isLetterTemplateKey(templateKey)) return generateLetter(templateKey, ctx);
   throw new Error("Unknown document template.");
@@ -1204,7 +1273,13 @@ export function markEngineerReportChaseSent(input: {
   return { handlerName, occurredAt: when };
 }
 
-function chaseEmailCopy(kind: ChaseKind, ctx: CorrespondenceContext, contactName: string, clockAt: string | null) {
+function chaseEmailCopy(
+  kind: ChaseKind,
+  ctx: CorrespondenceContext,
+  contactName: string,
+  clockAt: string | null,
+  outcome: VehicleOutcome = "unknown",
+) {
   const fileRef = String(ctx.fileReference);
   const handlerName = String(ctx.handlerName || "Claims handler");
   const policy = String(ctx.tpPolicyOrClaimRef || ctx.ownPolicyRef || "").trim();
@@ -1227,13 +1302,32 @@ function chaseEmailCopy(kind: ChaseKind, ctx: CorrespondenceContext, contactName
     ].join("\n");
     return { subject, body };
   }
-  const subject = `Our ref: ${fileRef}  Your policy: ${policyLine} — repair authorisation outstanding`;
+  // The wording follows the outcome on the file, checked again each time the chase is prepared.
+  const wording =
+    outcome === "repairable"
+      ? {
+          topic: "repair payment outstanding",
+          asked: "asking you to arrange payment of repairs",
+          action: "Please confirm that you will arrange payment of repairs",
+        }
+      : outcome === "total_loss"
+        ? {
+            topic: "total-loss payment outstanding",
+            asked: "for payment of the total-loss settlement (the pre-accident value less salvage)",
+            action: "Please confirm when the total-loss payment will be made",
+          }
+        : {
+            topic: "decision outstanding",
+            asked: "for your decision on the vehicle damage claim",
+            action: "Please confirm your decision on the vehicle damage claim",
+          };
+  const subject = `Our ref: ${fileRef}  Your policy: ${policyLine} — ${wording.topic}`;
   const body = [
     `${greeting},`,
     "",
-    `We refer to ${fileRef} and our request of ${sentOn} for repair authorisation or payment. This remains outstanding.`,
+    `We refer to ${fileRef} and our request of ${sentOn} ${wording.asked}. This remains outstanding.`,
     "",
-    `Please confirm authorisation or send payment details to ${CAS_CLAIMS_MAILBOX}, quoting ${fileRef}.`,
+    `${wording.action} to ${CAS_CLAIMS_MAILBOX}, quoting ${fileRef}.`,
     "",
     "Kind regards,",
     handlerName,
@@ -1341,7 +1435,7 @@ export function prepareOutstandingChase(input: { claimId: string; actorId: strin
   }
   const existing = findPreparedChase(input.kind, input.claimId);
   const ctx = letterContext(input.claimId, nowUtcIso());
-  const { subject, body } = chaseEmailCopy(input.kind, ctx, view.contactName, view.clockAt);
+  const { subject, body } = chaseEmailCopy(input.kind, ctx, view.contactName, view.clockAt, vehicleOutcome(input.claimId));
   const to = view.contactEmail;
   if (existing) {
     run(`UPDATE correspondence SET subject = ?, preview = ?, body = ?, to_address = ?, from_address = ? WHERE id = ?`, [

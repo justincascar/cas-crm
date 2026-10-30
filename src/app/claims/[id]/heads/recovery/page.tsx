@@ -17,7 +17,7 @@ import { formatUkDate, formatUkTime, toLondonDateTimeLocal } from "@/lib/dates";
 import { RecoveryFeeFields, feeDefaultsFromLines } from "@/components/claims/RecoveryFeeFields";
 import { SubmitKeyInput } from "@/components/SubmitKeyInput";
 import { ValidatedForm } from "@/components/ValidatedForm";
-import { recoveryFeeSchedule } from "@/lib/db/recovery-fee-settings";
+import { recoveryCardFeePercent, recoveryFeeSchedule } from "@/lib/db/recovery-fee-settings";
 import { recoveryDisplayLines, recoveryReviewFlags } from "@/lib/db/recovery-display";
 import { headScreenPath } from "@/lib/domain/head-screen";
 import { formatGbp } from "@/lib/money";
@@ -132,7 +132,7 @@ export async function RecoveryHeadScreen({
           <input name="arrivedTime" type="time" required defaultValue={arrivedLocal.slice(11, 16)} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" />
         </label>
       </div>
-      <RecoveryFeeFields fees={recoveryFeeSchedule()} defaults={feeDefaultsFromLines(savedLines)} />
+      <RecoveryFeeFields fees={recoveryFeeSchedule()} defaults={feeDefaultsFromLines(savedLines)} cardFeePercent={recoveryCardFeePercent()} />
       <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
         {recoveryDone ? "Save recovery" : "Record recovery"}
       </button>

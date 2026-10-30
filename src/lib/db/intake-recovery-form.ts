@@ -11,7 +11,7 @@ import {
   type RecoveryMoneyLine,
 } from "../domain/recovery-fees";
 import { inheritedLineLabel } from "../domain/recovery-review";
-import { recoveryFeePence } from "./recovery-fee-settings";
+import { cardFeeOnNet, recoveryCardFeePercent, recoveryFeePence } from "./recovery-fee-settings";
 
 export type ParsedRecovery = {
   location?: string;
@@ -130,6 +130,13 @@ export function parseRecoveryForm(form: FormData, readText: (form: FormData, nam
     }
     if (!manualReason) return { ...base, fieldError: { field: "recoveryReason_manual", message: OVERRIDE_REASON_MESSAGE } };
     lines.push(lineFromNet("manual", `Manual charge: ${manualDescription}`, manualAmount, manualReason));
+  }
+  // Optional card fee: off unless ticked, worked out on the ticked charges above (not an inherited receipt).
+  if (flag(form, "recoveryTick_cardFee") && lines.length > 0) {
+    const percent = recoveryCardFeePercent();
+    const net = lines.reduce((total, line) => total + line.netPence, 0);
+    const fee = cardFeeOnNet(net, percent);
+    if (fee > 0) lines.push(lineFromNet("cardFee", `Card fee (${percent}%)`, fee, ""));
   }
   let inheritedNet: number | null = null;
   let inheritedVat: number | null = null;

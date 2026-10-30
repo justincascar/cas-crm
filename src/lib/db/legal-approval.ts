@@ -1,6 +1,7 @@
 import { APPROVE_LEGAL_CORRESPONDENCE } from "../auth/roles";
 import { formatUkDateTime, nowUtcIso } from "../dates";
 import { eventTypeForTemplate } from "../documents/catalog";
+import { GTA_DRAFT_MARK } from "../documents/gta-statement";
 import { recordClaimEvent } from "./chronology";
 import { all, get, run } from "./connection";
 import { listStaffPermissions } from "./permissions";
@@ -97,10 +98,12 @@ export function unapprovedLegalAttachment(claimId: string, documentIds: string[]
   const ids = [...new Set(documentIds.map((id) => id.trim()).filter(Boolean))];
   if (ids.length === 0) return null;
   const marks = ids.map(() => "?").join(", ");
-  const rows = all<{ title: string; template_key: string | null; legal_approved_at: string | null }>(
-    `SELECT title, template_key, legal_approved_at FROM documents WHERE claim_id = ? AND id IN (${marks})`,
+  const rows = all<{ title: string; template_key: string | null; legal_approved_at: string | null; body_html: string | null }>(
+    `SELECT title, template_key, legal_approved_at, body_html FROM documents WHERE claim_id = ? AND id IN (${marks})`,
     [claimId, ...ids],
   );
+  const draftGta = rows.find((row) => String(row.body_html || "").includes(GTA_DRAFT_MARK));
+  if (draftGta) return `${draftGta.title}: the GTA paragraph is waiting for Justin's approval of the wording. Nothing was sent.`;
   const blocked = rows.find((row) => needsLegalApproval(row.template_key) && !row.legal_approved_at);
   return blocked ? `${blocked.title}: ${NEEDS_JUSTIN_APPROVAL} before it is emailed. Nothing was sent.` : null;
 }

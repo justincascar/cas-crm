@@ -6,6 +6,7 @@ import { CAS_COMPANY } from "./cas-hire-terms";
 import type { ChronologyDateMap } from "../domain/events";
 import type { ClaimEventType } from "../domain/events";
 import { formatGbp } from "../money";
+import { offersGtaStatement, withGtaStatement } from "./gta-statement";
 
 export const CAS_TEMPLATE_NOTICE =
   "Wording is taken from CAS's supplied letter and email templates. It is not a signed original. Live sending is not connected.";
@@ -47,6 +48,8 @@ export type LetterContext = {
 };
 
 export type CorrespondenceContext = LetterContext & {
+  /** Staff ticked the "not a GTA subscriber" paragraph for this letter. Off unless ticked. */
+  includeGtaStatement?: boolean;
   senderTitle: string;
   clientEmail: string;
   tpInsuredName: string;
@@ -449,7 +452,8 @@ export function generateFromSpec(spec: CorrespondenceSpec, ctx: CorrespondenceCo
   const vars = correspondenceVars(ctx);
   const missing = missingFromSpec(spec.required, vars);
   const subject = fillPlaceholders(spec.subject, vars);
-  const body = fillPlaceholders(spec.body, vars);
+  const filled = fillPlaceholders(spec.body, vars);
+  const body = ctx.includeGtaStatement && offersGtaStatement(spec.key) ? withGtaStatement(filled) : filled;
   const letterDate = formatUkDate(ctx.letterDate);
   const notice = noticesFor(spec);
   const addressee =

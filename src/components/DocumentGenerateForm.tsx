@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { actionGenerateDocument, actionPreviewCorrespondence } from "@/app/actions";
 import { DOCUMENT_TEMPLATES, generationMarksStep } from "@/lib/documents/catalog";
 import { THIRD_PARTY_ONLY_TEMPLATES } from "@/lib/documents/email-templates";
+import { GTA_STATEMENT_APPROVED, offersGtaStatement } from "@/lib/documents/gta-statement";
 import { letterSuggestionNote, suggestedLetterTemplateKey } from "@/lib/documents/notification-letters";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import Link from "next/link";
@@ -25,6 +26,7 @@ export function DocumentGenerateForm({
 }) {
   const suggested = suggestedLetterTemplateKey(liabilityStatus);
   const [templateKey, setTemplateKey] = useState(suggested || "");
+  const [gtaStatement, setGtaStatement] = useState(false);
   const [preview, setPreview] = useState<{
     subject: string;
     body: string;
@@ -61,6 +63,7 @@ export function DocumentGenerateForm({
     const form = new FormData();
     form.set("claimId", claimId);
     form.set("templateKey", templateKey);
+    if (gtaStatement && offersGtaStatement(templateKey)) form.set("gtaStatement", "yes");
     const result = await actionPreviewCorrespondence(form);
     setPreview({
       subject: result.subject,
@@ -118,6 +121,27 @@ export function DocumentGenerateForm({
         Letter date
         <input name="letterDate" type="date" className={field} />
       </label>
+      {offersGtaStatement(templateKey) ? (
+        <label className={`flex items-start gap-2 text-sm ${variant === "comms" ? "md:col-span-2" : ""}`} data-gta-statement>
+          <input
+            name="gtaStatement"
+            type="checkbox"
+            value="yes"
+            className="mt-1"
+            checked={gtaStatement}
+            onChange={(event) => {
+              setGtaStatement(event.target.checked);
+              setPreview(null);
+            }}
+          />
+          <span>
+            Add the paragraph saying CAS is not a GTA subscriber.
+            {GTA_STATEMENT_APPROVED ? null : (
+              <span className="block text-xs text-slate">The wording is waiting for Justin&rsquo;s approval. A letter with it can be filed but not sent.</span>
+            )}
+          </span>
+        </label>
+      ) : null}
       {generationMarksStep(templateKey) ? (
         <label className={`flex items-center gap-2 text-sm ${variant === "comms" ? "md:col-span-2" : ""}`}>
           <input name="holdBack" type="checkbox" value="yes" />

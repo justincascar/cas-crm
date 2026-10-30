@@ -170,6 +170,34 @@ The proposed storage end uses these dates and shows the reason.
 **Intake:**
 - Add a jurisdiction flag: England & Wales, Scotland or Northern Ireland. Northern Ireland files get a reminder about the extra evidence that court expects.
 
+### J9a — Template and wording review by Justin (MUST be done before going live)
+This is a gate. The CRM must not be used with real clients until it is complete.
+
+**The reviewer (Claude, Cowork) prepares one read-through document containing every piece of client-facing and insurer-facing wording the CRM uses:**
+- the Hire Pack and its terms
+- the recovery and storage agreement
+- every letter and email template
+- chasers, rebuttals and the GTA paragraph
+- the e-signing screen text
+- draft invoices
+
+Any gaps are marked clearly.
+
+**Justin checks it and supplies the missing documents:**
+- the client services / authority-to-act form and terms of business
+- a privacy notice
+- a credit repair agreement (if used)
+- a courtesy car agreement
+- the invoice layout, invoice numbering and VAT number
+- any newer version of the Hire Pack
+
+**His solicitor checks the items flagged for legal review**, such as the Hire Pack clause 5.3 citation and doorstep signing and cancellation rights.
+
+**Claude Code then:**
+- puts the approved wording in
+- removes anything marked draft
+- confirms every client and insurer document uses only approved wording
+
 ### J9 — Before live use (needs Justin's approval and costs first)
 - Hosting with tested backups and a restore.
 - Real logins in place of the demo ones.

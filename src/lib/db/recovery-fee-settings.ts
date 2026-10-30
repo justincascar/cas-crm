@@ -35,3 +35,29 @@ export function setRecoveryFeePence(key: RecoveryFeeKey, pence: number) {
   if (existing) run(`UPDATE settings SET value = ? WHERE key = ?`, [String(pence), fee.settingKey]);
   else run(`INSERT INTO settings(key, value) VALUES (?, ?)`, [fee.settingKey, String(pence)]);
 }
+
+export const CARD_FEE_SETTING_KEY = "recovery_card_fee_percent";
+export const CARD_FEE_DEFAULT_PERCENT = 4.5;
+
+/** The card fee percentage offered on the recovery form. The fee itself is only charged when staff tick it. */
+export function recoveryCardFeePercent(): number {
+  const row = get<{ value: string }>(`SELECT value FROM settings WHERE key = ?`, [CARD_FEE_SETTING_KEY]);
+  const parsed = Number(row?.value ?? "");
+  if (row?.value === undefined || !Number.isFinite(parsed) || parsed < 0 || parsed > 100) return CARD_FEE_DEFAULT_PERCENT;
+  return parsed;
+}
+
+/** Changes the setting only. A card fee already stored on a claim is not rewritten. */
+export function setRecoveryCardFeePercent(value: string) {
+  const trimmed = value.trim().replace(/%$/, "").trim();
+  const parsed = Number(trimmed);
+  if (!trimmed || !/^\d+(\.\d{1,2})?$/.test(trimmed) || parsed > 100) throw new Error("Enter the card fee as a percentage, for example 4.5.");
+  const existing = get<{ key: string }>(`SELECT key FROM settings WHERE key = ?`, [CARD_FEE_SETTING_KEY]);
+  if (existing) run(`UPDATE settings SET value = ? WHERE key = ?`, [String(parsed), CARD_FEE_SETTING_KEY]);
+  else run(`INSERT INTO settings(key, value) VALUES (?, ?)`, [CARD_FEE_SETTING_KEY, String(parsed)]);
+}
+
+/** Card fee on the ticked recovery charges (net), rounded to the penny. VAT is then added to the fee as for the old screen. */
+export function cardFeeOnNet(netPence: number, percent: number): number {
+  return Math.round((netPence * percent) / 100);
+}

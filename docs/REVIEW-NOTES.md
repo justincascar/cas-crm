@@ -4,7 +4,51 @@ Written by the reviewer, Claude (Cowork), after testing the app in the browser a
 
 ## Open
 
-(No open notes.)
+**Justin's answers, 29 October 2026 (evening).** Make these changes. When done, mark questions 6, 8, 9 and 11 answered in `QUESTIONS-FOR-JUSTIN.md`.
+
+**R13 — Chase starts automatically when the report goes to the insurer.**
+When step 7 is recorded (report or estimate sent to the third-party insurer), the every-3-days chase starts automatically. It must chase the right thing for the outcome on the file:
+- **Repairable:** chase for repair authorisation, using the wording "arrange payment of repairs" where appropriate.
+- **Total loss:** chase for the total-loss payment (pre-accident value less salvage, per the file).
+- **Outcome not recorded yet:** use neutral wording ("your decision on the vehicle damage claim") and flag it for the handler to set the outcome.
+
+The chase follows all the existing rules:
+- a substantive reply pauses it
+- an acknowledgement or out-of-office does not resolve it
+- the claim is rechecked before each send
+- staff can pause, resume or cancel it
+
+**R14 — Chaser sending hours confirmed.** Monday to Friday, 09:00 to 17:00 UK time. This is already the default; mark it confirmed.
+
+**R15 — Card fee as an optional tick.** Add the card fee (4.5%) to the new "Record the recovery" form:
+- as an optional tick, off by default
+- calculated on the ticked recovery charges
+- shown as its own line
+- with the percentage held in Settings
+
+Note in the questions file whether VAT applies to the card fee. Default: the same VAT treatment as the old screen used; Justin to confirm.
+
+**R16 — CAS is NOT a GTA subscriber (confirmed).** Add an optional paragraph that staff can tick to include in insurer letters and emails, off by default, shown on the rebuttal letters and the payment pack. Draft wording, for Justin to approve in the questions file; the CRM must not treat it as approved until he does:
+
+> "Complete Accident Solutions Ltd is not a subscriber to the General Terms of Agreement (GTA). GTA rates, rate reductions, protocols and dispute-resolution procedures do not apply to this claim."
+
+The daily rate stays as Justin decided: the GTA figure for the group plus the uplift %, used as CAS's own price list.
+
+**R17 — Use the recovery and storage wording CAS already supplied (answers question 10).**
+The supplied Hire Pack terms (`src/lib/documents/cas-hire-terms.ts`, taken from Hire Pack.doc) already define "Storage & Recovery Charges" as part of the "Total Charges" the customer must pay (definitions, and clauses 1.1, 1.5, 2.2 and 2.17).
+
+What to do:
+- Use that existing wording. Do not write new terms.
+- Make sure a client who has recovery or storage but NO hire car still signs the Storage & Recovery Agreement, with the relevant definitions and clauses from the same supplied terms attached, before charges are claimed. Use the same signing routes as the hire agreement: on screen or paper upload.
+- The customer invoice for recovery and storage refers to that signed agreement.
+- Update question 10 in `QUESTIONS-FOR-JUSTIN.md` to say the wording comes from the supplied Hire Pack. Justin only needs to send a newer version if one exists.
+
+**R18 — Flag for legal review only; do not change the wording.**
+Add to `QUESTIONS-FOR-JUSTIN.md`, under "for your solicitor":
+- Clause 5.3 cites the Consumer Credit (Exempt Agreements) Order 1989. The reviewer understands that Order was replaced in 2014, when consumer credit moved to the FCA, so the citation may need updating.
+- Doorstep signing and the client's cancellation rights.
+
+Do not edit the terms. This note is for Justin's solicitor to confirm.
 
 ## Fixed
 
