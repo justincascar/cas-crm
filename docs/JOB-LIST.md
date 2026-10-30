@@ -171,6 +171,7 @@ The proposed storage end uses these dates and shows the reason.
 - Add a jurisdiction flag: England & Wales, Scotland or Northern Ireland. Northern Ireland files get a reminder about the extra evidence that court expects.
 
 ### J11 — The awkward cases, tested end to end
+DONE — 461e878. `scripts/awkward-journeys.ts` (run by `npm run test:journeys`). Fixes and findings are in progress.md and audit items 53–59.
 CAS's real claims don't follow the happy path. Build a browser journey test for each case below, starting from a new claim and clicking through as `sian`. Fix whatever breaks. Each case must leave the money, the dates, the next step and the chronology correct.
 
 1. **Partial total-loss payment.** Hire must NOT end automatically. The file is flagged for review, the shortfall is shown, and the 7-day hire end waits for a handler.
@@ -310,6 +311,6 @@ J1 to J8 are done and pushed. J9 is not started: it needs Justin's approval and 
 
 Review notes R1–R12 are fixed (69cec49) and J10 is done (3cbeaa2). Everything on the list is done except J9, which needs Justin's approval and costs. Open questions: 1–3 and 5–12 in QUESTIONS-FOR-JUSTIN.md.
 
-## Where I stopped (30 October 2026, J11 in progress)
+## Where I stopped (30 October 2026)
 
-R22 is committed and pushed (eb9b355). J11 is in progress and not committed: `scripts/awkward-journeys.ts` drives each awkward case in a browser (`npx tsx scripts/awkward-journeys.ts 1 2` runs chosen cases after `npm run build`). Cases 1–6 pass. Fixed on the way: a part-paid total loss has its own shortfall chase; changing a repairable file to a total loss closes the repair steps with a reason and stops the repair chases; a car swap says why no new agreement page is needed; a logged renewal stays unsigned until the signed renewal is uploaded (it was being marked signed); the day-80 renewal alert now starts with the first signed agreement (it needed a restart before); replies to liability and repair-authorisation chases now pause, leave alone, or go to review like payment replies, and an out-of-office never pauses. Still to do: cases 7–10, adding the awkward cases to `npm run test:journeys`, unit tests for the fixes, the full routine, the walk-through and the docs.
+R22 (eb9b355) and J11 (461e878) are done and pushed. Next: J12, then J13 and J14. J9a and J9 wait for Justin. Open questions: 1–3, 5, 7, 10, 12 and 16–18 in QUESTIONS-FOR-JUSTIN.md.
