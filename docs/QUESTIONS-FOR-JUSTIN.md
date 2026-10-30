@@ -22,6 +22,17 @@ Each open question has a reversible default already in the CRM. Nothing here is 
     - Staff check every box with the client before saving.
 
     Please say if you want different limits, or a different rule for what is pre-filled.
+25. **The website's GitHub repository.** The new website (`Code\CAS-Website`) has its own git repository on this PC only, because GitHub is not signed in here, so no private repository could be created. Default: kept local. To put it on GitHub, create an empty **private** repository called `cas-website` under CAS's GitHub account (the one the CRM uses, `justincascar`), and Claude Code will push it.
+26. **Website details still in [brackets].** Please supply:
+    - the logo (the green "CAS" tile stands in);
+    - the three photos;
+    - opening hours and recovery hours;
+    - the areas you cover;
+    - the company number and registered office;
+    - the MOT booking link;
+    - real reviews and the Google rating, when you have them.
+
+    The five gold stars beside the rating placeholder came with the mock-up. They should come off if there are no real reviews by launch. The complaints, privacy, cookies and terms wording is part of J9a.
 
 ## For your solicitor
 

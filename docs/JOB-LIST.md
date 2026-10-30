@@ -320,6 +320,7 @@ The public website's "Start your claim" form must land in the CRM as an enquiry 
   - the usual browser walk-through
 
 ### J17 — Build the real CAS website (a SEPARATE project, not inside the CRM)
+DONE — CAS-Website commit 6730c22 (local only: GitHub is not signed in on this PC, see question 25). Open it with `npm run dev` in `Code\CAS-Website` (in PowerShell, `npm.cmd run dev`), at http://localhost:4000. Its README lists the checks and what is still placeholder.
 **Design reference:** `docs/website-mockup/`. `homepage-preview.html` is the approved look; open it in a browser. The screenshots are `desktop-top.png` and `phone-top.png`, and the source is `homepage-design-source.dc.html`. Match it closely: layout, colours, fonts (Barlow Condensed and Inter), the original SVG illustrations, wording and placeholders.
 
 - **Create a new folder beside the CRM:** `C:\Users\JustinRoberts\OneDrive - Complete Accident Solutions\Code\CAS-Website`, with its own git repository.
@@ -427,6 +428,8 @@ Security must be high. Nothing real goes in until every item below is done and e
 - Postcode, registration (VRM) and MID lookups.
 
 ## Where I stopped
+
+**30 October 2026 (late evening) — Claude Code:** J16 (138a8c7) and J17 (CAS-Website 6730c22, local) are done. Everything on the list is done except J9a, J9b and J9, which wait for Justin. Open questions: 1–3, 5, 7, 10, 12, 18, 20 and 22–26.
 
 **30 October 2026 (evening) — reviewer:** next are J16, then J17.
 

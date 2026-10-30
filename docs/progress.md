@@ -1327,3 +1327,42 @@ Finish on 30 October 2026:
 - Security checks passed, including a post from another site refused on the enquiry address.
 - Journey checks passed: the awkward cases, the permission checks (now including the enquiry list) and the security journeys. The new security journey covers a post refused before the address is saved, Sian unable to change it, another site refused, the spam trap, the rate limit, no claim created, the urgent count and list, and Convert opening the pre-filled form without making a claim.
 - `EMAIL_SEND_MODE` stays `simulate`.
+
+## The CAS website (J17, 30 October 2026)
+
+A separate project beside the CRM: `C:\Users\JustinRoberts\OneDrive - Complete Accident Solutions\Code\CAS-Website`, with its own git repository (commit 6730c22). GitHub is not signed in on this PC, so no repository was created there; it is local only. See question 25.
+
+- **A simple static site:** plain HTML, one stylesheet and one small script, built by a short Node script with no framework. `dist/` can go on any static host.
+- **Pages:**
+  - Home, matching the approved mock-up (layout, colours, Barlow Condensed and Inter, the original illustrations, wording and placeholders).
+  - Privacy notice, Complaints, Cookies and Terms: placeholders marked "awaiting approved wording (J9a)". The only line of real content, on Cookies, says the site sets no cookies and uses no tracking, which is true.
+  - "Thank you", "Not sent" and Page not found.
+- **The Start your claim form posts to the CRM** (J16), at the address in `site.config.json`.
+  - With JavaScript it checks each box first, then sends in the background. It shows the CRM's reference, the boxes to fix, or "Not sent" with the reason, and never says thank you unless the CRM confirmed it.
+  - Without JavaScript the browser posts the form and the CRM sends it back to the Thank you or Not sent page.
+  - It asks "Can your car be driven?". The answer and registration typed in the hero are carried into the form.
+  - The wording says "we'll send you a secure link", not "text you".
+- **Privacy:** no cookies, analytics or tracking. The fonts are kept on the site, so nothing loads from another website. A content security policy allows scripts only from the site and form posts only to the CRM.
+- **Accessibility:** proper headings and labels, a skip link, visible focus on light and dark backgrounds, full keyboard use, FAQs that work with and without JavaScript, alt text on the illustrations, and form errors listed and linked to each box.
+- **Phones:** the Call us / Start your claim bar shows on phones, and nothing scrolls sideways at phone, tablet or desktop width.
+- **Search engines:** a title, description and canonical address on each page, a sitemap and robots file, and LocalBusiness data with only the name, address, phone and email (no rating, no hours).
+- **Changes from the mock-up, each for a reason:**
+  - Darker box borders, for contrast.
+  - "Whose fault" starts on "Choose one".
+  - The first FAQ uses the fuller answer from the design source.
+  - "You'll get a text or email at every stage" became "We'll keep you updated at every stage".
+  - On a phone the registration plate box now fits inside its card (it overflowed in the mock-up).
+
+Checks in the website project, all passed:
+- **Links (`npm run test:links`):** every page, anchor, stylesheet, script and font exists, and nothing links to another website.
+- **Accessibility (`npm run test:a11y`):** axe-core finds no WCAG 2.1 A/AA problems on any of the 8 pages at 390, 768 and 1280px. There is no sideways scrolling, the action bar shows on phones only, no requests go to other websites, no cookies are set, the first Tab reaches the skip link with a visible outline, and the FAQs work by keyboard and without JavaScript.
+- **Screenshots (`npm run test:screens`):** 0.5% of pixels differ from the mock-up page at desktop width and 0.9% at phone width, both drawn with the same fonts. The supplied mock-up screenshots were drawn without Barlow Condensed, so they differ by about 21–25%, almost all in the big headings; that comparison is for information.
+- **Form to CRM (`npm run test:form`, against this CRM in development):**
+  - An empty form is stopped with seven messages and nothing sent.
+  - The hero answers are carried over.
+  - A real enquiry reached the CRM and the page showed its reference.
+  - A date more than six years ago, refused by the CRM, is shown against the date box.
+  - The CRM unreachable, or refusing with too many attempts: the page says "Not sent" and keeps the details.
+  - Without JavaScript the form came back to the Thank you page with the reference.
+
+Walked through live: on the website at http://localhost:4000, chose "No" for can the car be driven and typed a registration in the hero. Both were carried into the form, and the recovery note showed. I filled in the rest and sent it, and the page showed reference WEB-0005. As Sian, the CRM's Website enquiries list showed it at the top, marked urgent, with every detail and the privacy notice tick.
