@@ -78,6 +78,7 @@ const PAGES: Array<{ name: string; path: string }> = [
   { name: "Automations", path: "/automations" },
   { name: "Litigation", path: "/litigation" },
   { name: "Settings", path: "/settings" },
+  { name: "Client form, unknown link", path: "/c/not-a-real-link" },
   ...CLAIM_TAB_PAGES,
 ];
 

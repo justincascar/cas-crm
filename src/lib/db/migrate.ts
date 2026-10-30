@@ -6,6 +6,7 @@ import { ensureEsignTable } from "./esign";
 import { ensureStorageRecoverySignatureTable } from "./storage-recovery-signing";
 import { ensureCardFeesTable } from "./card-fees";
 import { ensureLitigationTables } from "./litigation";
+import { ensureClientFormTables } from "./client-form";
 import { ensureFleetGtaRulesTable } from "./fleet-details";
 import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_LEGAL_CORRESPONDENCE, APPROVE_SETTLEMENT, OVERRIDE_UNSIGNED_STORAGE_RECOVERY, EXPORT_AND_AUDIT, EXTENDED_WAIT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS, RELEASE_WITHOUT_EXCESS } from "../auth/roles";
 
@@ -385,6 +386,7 @@ export function migrate(db: DatabaseSync) {
   ensureStorageRecoverySignatureTable(db);
   ensureCardFeesTable(db);
   ensureLitigationTables(db);
+  ensureClientFormTables(db);
   ensureFleetGtaRulesTable(db);
   db.exec(`
     CREATE TABLE IF NOT EXISTS repair_evidence (

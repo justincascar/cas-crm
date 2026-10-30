@@ -1241,3 +1241,19 @@ Finish on 30 October 2026: 643 tests passed, 0 failed. Type check: 0 errors. Pro
 Walked through live as Sian on TEST-0034: opened the litigation file; added the insurer as "Insurer (not a party)" with its solicitors; a deadline with no "how it was worked out" was refused; with it, the deadline showed its source and "Needs verification"; Sian could not verify her own entry; a filed letter before action showed "Not approved by Justin", Sian was offered no approval, and posting "sent" or "approve" directly was refused on the server.
 
 Finish on 30 October 2026: 648 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 73 passed, 0 failed (the litigation file, an unopened litigation file and Who can do what were added). Journey checks passed, including the awkward cases and the permission checks. `EMAIL_SEND_MODE` stays `simulate`.
+
+## Client form on a phone (J14, 30 October 2026)
+
+**What was there before.** Nothing for the client: claims had an empty "client form status" column and no link or form.
+
+**Now.** On a claim's Documents tab, the Client form panel sends the client a secure link by email. In the prototype the email is simulated and filed on the Messages tab, with the link in it. The link works for 30 days and one link works at a time. Sending a new link switches the old one off and keeps what the client had entered. Only a fingerprint of the link is stored.
+
+- **The client** opens the link on a phone with no CAS login. The page shows their first name, file reference and a short list of what is still needed (worked out only from their own answers and uploads), then their details, the accident, the other vehicle, and photos and papers. Every button saves what they typed first, so adding a photo never loses an answer. They can save and come back, and send it to CAS. Photos and PDFs up to 12 MB, 20 files in all.
+- **They see only their own submission:** their answers and the names of their own uploads. Nothing else from the claim, and no staff page without signing in.
+- **Staff review.** Sending gives the handler a "Review the client's form" task. The panel shows each answer beside what the claim holds now. Only the ticked answers are applied: through the same versioned save as the screens, so the screen shows them, the audit log has the old and new value, and anyone with that screen open is told it changed. Answers about the other vehicle go on the history for staff to enter. Each upload is held apart from the claim until staff open it (it downloads, never shown inside the CRM) and add it as a chosen document type, or decide not to add it. An added licence, insurance certificate or V5C clears its paper chase in the usual way.
+- **Small-screen fixes found on the phone walk-through:** the still-needed list is one short paragraph, so the form starts on the first screen; the file chooser is a full-size button; and after adding a file the "Added" message shows beside the list.
+- The server's request-size limit was 10 MB, below the 12 MB upload limit. It is now 13 MB.
+
+Walked through live on new claim TEST-0035. As Sian, sent the link (simulated) and found it on Messages. At 375 × 812 as the client: no staff menu, no sideways scrolling; typed answers, added a photo (the answers stayed), came back to the link (still there), then sent it and got a plain thank-you. As Sian: saw the answers beside the claim, applied only "What happened" and the other vehicle's registration (the mobile number was not changed), added the photo as Other, and the review task closed.
+
+Finish on 30 October 2026: 656 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 74 passed, 0 failed (the client form page was added). Journey checks passed, including the new awkward case 11 (the client form on a 375-pixel phone, with no CAS sign-in, then the staff review) and the 48 permission checks. `EMAIL_SEND_MODE` stays `simulate`.

@@ -147,6 +147,9 @@ Five stages. Each later stage extends the same three journeys one step further: 
 57. **Fixed (J11).** A repairable file changed to a total loss kept its repair chase running and gave no reason for the repair steps disappearing. The repair steps are now closed with a reason on the history, and the repair chases stop.
 58. **Fixed (J11).** A part-paid total loss was chased only as the original payment. The shortfall is now chased separately, with any disputed amount named, and starts even if the total-loss notice was not recorded.
 59. **Fixed (J11).** One payment covering several heads could only be put on one head. The Money tab now splits it by head first; the parts must add up and none can be more than its head's balance. An overpayment on one head was refused outright; it can now be recorded after a confirmation, shown as overpaid on that head and never set against another.
+60. **Fixed (J14).** There was no client form: only an empty status column. Staff can now send a secure link from the Documents tab. The client fills it in on a phone with no CAS login, saves and comes back, adds photos and papers, and sends it. They only ever see what they entered. Nothing changes the claim until staff tick the answers to apply or accept each upload.
+61. **Fixed (J14).** The server buffered at most 10 MB of each request, below the 12 MB upload limit, so a large photo or PDF would have been cut short. The limit is now 13 MB.
+62. **Open.** Long typed boxes (for example "What happened") are put into capitals at the start of every word, like names (question 21).
 
 ## How to try hire on a demonstration file
 

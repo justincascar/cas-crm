@@ -784,6 +784,117 @@ const CASES: Case[] = [
       return null;
     },
   },
+  {
+    title: "11. The client's form on a phone",
+    async run(ctx) {
+      const { session, origin, dbPath, cookie } = ctx;
+      const made = await newClaim(ctx, "PhoneForm", { roadworthiness: "roadworthy", needsRecovery: false, needsReplacement: false });
+      if (typeof made === "string") return made;
+      await gotoPath(session, origin, `/claims/${made.claimId}/documents`);
+      const sent = followed(await submitForm(session, '[data-client-form-panel] form:has(input[value="send_link"])', { to: "phone.form@example.com" }), "Send the link");
+      if (sent) return sent;
+      const body = readDb(dbPath, (db) => db.prepare(`SELECT body FROM correspondence WHERE claim_id = ? AND template_key = 'client_form_link'`).get(made.claimId) as { body: string } | undefined);
+      const token = /\/c\/([A-Za-z0-9_-]+)/.exec(String(body?.body))?.[1];
+      if (!token) return "The link email was not filed on the claim.";
+
+      // The client: no CAS sign-in, on a 375-pixel-wide phone.
+      await session.send("Network.clearBrowserCookies");
+      await session.send("Emulation.setDeviceMetricsOverride", { width: 375, height: 812, deviceScaleFactor: 2, mobile: true });
+      try {
+        await gotoPath(session, origin, `/c/${token}`);
+        const layout = await session.evaluate<{ wide: boolean; staffMenu: boolean; smallText: string[]; smallButtons: string[] }>(`(() => ({
+          wide: document.documentElement.scrollWidth > window.innerWidth + 1,
+          staffMenu: Boolean(document.querySelector(".app-shell")),
+          smallText: [...document.querySelectorAll("input:not([type=hidden]):not([type=file]), textarea, select")].filter((el) => parseFloat(getComputedStyle(el).fontSize) < 16).map((el) => el.name),
+          smallButtons: [...document.querySelectorAll("button, input[type=file]")].filter((el) => el.getBoundingClientRect().height < 44).map((el) => el.textContent.trim() || el.name),
+        }))()`);
+        if (layout.wide) return "The client form scrolls sideways on a phone.";
+        if (layout.staffMenu) return "The client form shows the staff menu.";
+        if (layout.smallText.length) return `Boxes under 16px text zoom the page on a phone: ${layout.smallText.join(", ")}`;
+        if (layout.smallButtons.length) return `Buttons too small to tap: ${layout.smallButtons.join(", ")}`;
+
+        // Type, add a photo (the answers must survive), come back, then send.
+        const typed = await session.evaluate<string>(`(() => {
+          const set = (name, value) => {
+            const el = document.querySelector('[name="' + name + '"]');
+            const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;
+            Object.getOwnPropertyDescriptor(proto, "value").set.call(el, value);
+            el.dispatchEvent(new Event("input", { bubbles: true }));
+          };
+          set("mobile", "07700 900456");
+          set("accidentWhere", "Fictional Lane junction");
+          set("otherRegistration", "YY22 YYY");
+          const dt = new DataTransfer();
+          dt.items.add(new File([new Uint8Array([255, 216, 255, 224, 0, 16])], "front-bumper.jpg", { type: "image/jpeg" }));
+          document.querySelector('input[name="file"]').files = dt.files;
+          const button = document.querySelector('button[value="add"]');
+          button.form.requestSubmit(button);
+          return "ok";
+        })()`);
+        if (typed !== "ok") return "The client form could not be filled.";
+        const deadline = Date.now() + 15_000;
+        while (Date.now() < deadline && !(await session.evaluate<boolean>(`location.search.includes("added=1") && document.readyState === "complete"`))) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+        const afterAdd = await session.evaluate<{ mobile: string; files: string; error: string }>(`({
+          mobile: document.querySelector('[name="mobile"]').value,
+          files: document.querySelector("[data-client-uploads]")?.innerText || "",
+          error: document.querySelector("[data-form-error]")?.innerText || "",
+        })`);
+        if (afterAdd.error) return `Adding a photo was refused: ${afterAdd.error}`;
+        if (afterAdd.mobile !== "07700 900456") return "Adding a photo lost what the client had typed.";
+        if (!afterAdd.files.includes("front-bumper.jpg")) return "The photo is not listed for the client.";
+        await gotoPath(session, origin, `/c/${token}`);
+        if ((await session.evaluate<string>(`document.querySelector('[name="accidentWhere"]').value`)) !== "Fictional Lane junction") return "Coming back to the link lost the answers.";
+        await session.evaluate(`(() => { const b = document.querySelector('button[value="send"]'); b.form.requestSubmit(b); })()`);
+        const sendDeadline = Date.now() + 15_000;
+        while (Date.now() < sendDeadline && !(await session.evaluate<boolean>(`Boolean(document.querySelector("[data-client-sent]"))`))) {
+          await new Promise((resolve) => setTimeout(resolve, 200));
+        }
+        if (!(await session.evaluate<boolean>(`Boolean(document.querySelector("[data-client-sent]"))`))) return "Sending the form did not thank the client.";
+        const staffPage = await session.evaluate<string>(`fetch("/claims/${made.claimId}", { redirect: "follow" }).then((r) => new URL(r.url).pathname)`);
+        if (staffPage !== "/login") return "The client could reach a staff page without signing in.";
+      } finally {
+        await session.send("Emulation.clearDeviceMetricsOverride");
+        const [cookieName, ...cookieRest] = cookie.split("=");
+        await session.send("Network.setCookie", { name: cookieName, value: cookieRest.join("="), url: origin });
+      }
+
+      const untouched = readDb(dbPath, (db) =>
+        db.prepare(`SELECT p.mobile_tel FROM claims c JOIN people p ON p.id = c.client_person_id WHERE c.id = ?`).get(made.claimId) as { mobile_tel: string | null },
+      );
+      if (untouched.mobile_tel === "07700 900456") return "The client's answer changed the claim before staff reviewed it.";
+
+      // Staff review: apply the mobile number only, add the photo.
+      await gotoPath(session, origin, `/claims/${made.claimId}/documents`);
+      const shown = await session.evaluate<string>(`document.querySelector("[data-client-proposals]")?.innerText || ""`);
+      if (!shown.includes("07700 900456") || !shown.includes("YY22 YYY")) return "Staff do not see the client's answers beside the claim.";
+      const applied = followed(await submitForm(session, "[data-client-proposals]", { field: "mobile" }), "Apply the mobile number");
+      if (applied) return applied;
+      await gotoPath(session, origin, `/claims/${made.claimId}/documents`);
+      const added = await session.evaluate<Submitted>(`(() => {
+        const form = document.querySelector("[data-client-uploads-waiting] form");
+        if (!form) return { status: 0, location: "", problem: "No upload to check" };
+        const body = new FormData(form);
+        body.set("intent", "accept");
+        body.set("documentType", "other");
+        return fetch(form.action, { method: "POST", body, credentials: "same-origin" }).then((r) => ({ status: r.status, location: r.url }));
+      })()`);
+      const addProblem = followed(added, "Add the photo");
+      if (addProblem) return addProblem;
+      const after = readDb(dbPath, (db) => ({
+        mobile: (db.prepare(`SELECT p.mobile_tel FROM claims c JOIN people p ON p.id = c.client_person_id WHERE c.id = ?`).get(made.claimId) as { mobile_tel: string }).mobile_tel,
+        location: (db.prepare(`SELECT accident_location FROM claims WHERE id = ?`).get(made.claimId) as { accident_location: string | null }).accident_location,
+        photo: db.prepare(`SELECT id FROM documents WHERE claim_id = ? AND title = 'From the client: front-bumper.jpg'`).get(made.claimId),
+        history: db.prepare(`SELECT details FROM claim_events WHERE claim_id = ? AND event_type = 'client_form_reviewed'`).get(made.claimId) as { details: string } | undefined,
+      }));
+      if (after.mobile !== "07700 900456") return "The ticked mobile number was not applied.";
+      if (after.location === "Fictional Lane junction") return "An unticked answer was applied.";
+      if (!after.photo) return "The accepted photo is not on the claim.";
+      if (!/Mobile number: .* → 07700 900456/.test(String(after.history?.details))) return "The history does not show the old and new mobile number.";
+      return null;
+    },
+  },
 ];
 
 /** Extra fictional fleet cars, so every case can put a car on hire. */

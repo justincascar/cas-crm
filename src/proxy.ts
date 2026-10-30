@@ -4,8 +4,12 @@ import { SESSION_COOKIE } from "@/lib/auth/constants";
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
-  // The client signing page is reached from a one-time link and has no CAS login.
-  const isLogin = pathname === "/login" || pathname === "/login/submit" || /^\/sign\/[A-Za-z0-9_-]+(\/submit)?$/.test(pathname);
+  // The client signing page and the client form are reached from a link and have no CAS login.
+  const isLogin =
+    pathname === "/login" ||
+    pathname === "/login/submit" ||
+    /^\/sign\/[A-Za-z0-9_-]+(\/submit)?$/.test(pathname) ||
+    /^\/c\/[A-Za-z0-9_-]+(\/save)?$/.test(pathname);
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-cas-pathname", pathname);
   if (isLogin) {
