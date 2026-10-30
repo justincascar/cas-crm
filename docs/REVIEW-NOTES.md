@@ -4,6 +4,43 @@ Written by the reviewer, Claude (Cowork), after testing the app in the browser a
 
 ## Open
 
+**R17 — Use the recovery and storage wording CAS already supplied (answers question 10).**
+The supplied Hire Pack terms (`src/lib/documents/cas-hire-terms.ts`, taken from Hire Pack.doc) already define "Storage & Recovery Charges" as part of the "Total Charges" the customer must pay (definitions, and clauses 1.1, 1.5, 2.2 and 2.17).
+
+What to do:
+- Use that existing wording. Do not write new terms.
+- Make sure a client who has recovery or storage but NO hire car still signs the Storage & Recovery Agreement, with the relevant definitions and clauses from the same supplied terms attached, before charges are claimed. Use the same signing routes as the hire agreement: on screen or paper upload.
+- The customer invoice for recovery and storage refers to that signed agreement.
+- Update question 10 in `QUESTIONS-FOR-JUSTIN.md` to say the wording comes from the supplied Hire Pack. Justin only needs to send a newer version if one exists.
+
+**R18 — Flag for legal review only; do not change the wording.**
+Add to `QUESTIONS-FOR-JUSTIN.md`, under "for your solicitor":
+- Clause 5.3 cites the Consumer Credit (Exempt Agreements) Order 1989. The reviewer understands that Order was replaced in 2014, when consumer credit moved to the FCA, so the citation may need updating.
+- Doorstep signing and the client's cancellation rights.
+
+Do not edit the terms. This note is for Justin's solicitor to confirm.
+
+## Fixed
+
+- **R13** fixed in 37b2895: recording step 7 (report sent to the insurer) starts the 3-day chase, worded for repair payment, the total-loss payment (pre-accident value less salvage) or the insurer's decision; when the outcome is not set the handler gets a task to set it. Existing chase rules unchanged.
+- **R14** fixed in 37b2895: Settings shows the sending hours (Monday to Friday, 09:00 to 17:00 UK time) as confirmed by Justin.
+- **R15** fixed in 37b2895: Card fee tick on the Record the recovery and new-claim forms, off by default, worked out on the ticked charges, VAT on the fee as the old screen, its own line; percentage in Settings. VAT on the card fee is question 13.
+- **R16** fixed in 37b2895: optional not-a-GTA-subscriber paragraph on the three rebuttals and the hire pack cover letter, off by default, above the sign-off; draft-marked so it cannot be sent or attached until Justin approves the wording (question 14). Questions 6, 8, 9 and 11 marked answered.
+- **R1** fixed in 69cec49: mileage and fuel out, transmission (saved to the fleet record), licence date of issue and date out (booked date and time) are needed before the agreement is produced; the doorstep screen takes mileage and fuel first and re-produces the agreement; the agreement shows a dash, never "Missing — not guessed" or "not entered".
+- **R2** fixed in 69cec49: handover time defaults to now with the booked slot as a hint; a time before the electronic signature is refused unless a reason is given.
+- **R3** fixed in 69cec49: the handover record says how and when the agreement was signed (electronically, paper copy, or authorised override); the handover sheet signature is worded separately.
+- **R4** fixed in 69cec49: a delivery job closes when the hire starts; Driver jobs has a Done today group; open deliveries for started hires were closed with a history note (TEST-0004, TEST-0015); TEST-0004's old collection was cancelled with a note.
+- **R5** fixed in 69cec49: insurer letters and the insurer email show the insurer's claim reference and policy number, whichever are held; they do not ask for a reference already held; the date prints once.
+- **R6** fixed in 69cec49: no code word; one line "Email: simulated – nothing leaves the CRM"; Messages folds into sections with the likely next action first (the letter for step 4).
+- **R7** fixed in 69cec49: step 10 says Not started until a charge is recorded (recovery, hire and storage).
+- **R8** fixed in 69cec49: Recovery shows charges only once the recovery is recorded; recoverer details under More; offer, agreed, payment and dispute under one Money section, closed until there is something to do.
+- **R9** fixed in 69cec49: the list is "Open claims by next step" with All / Need action today / Overdue filters; each count opens its matching list.
+- **R10** fixed in 69cec49: group charged is suggested from the client's own car with the reason (or says why not); the header names the actual next hire item: Pre-hire checks, Hire agreement – sign, Handover.
+- **R11** fixed in 69cec49: only office staff are offered or accepted as claim handlers.
+- **R12** fixed in 69cec49: rebuttals and the impecuniosity response show "Needs Justin's approval"; a new approveLegalCorrespondence permission (Justin) approves; marking sent or emailing is refused until approved. No letter-before-action or court template exists yet; any added later goes on the same list.
+
+<details><summary>Reviewer's notes R13–R16 (29 October 2026, evening)</summary>
+
 **Justin's answers, 29 October 2026 (evening).** Make these changes. When done, mark questions 6, 8, 9 and 11 answered in `QUESTIONS-FOR-JUSTIN.md`.
 
 **R13 — Chase starts automatically when the report goes to the insurer.**
@@ -34,36 +71,7 @@ Note in the questions file whether VAT applies to the card fee. Default: the sam
 
 The daily rate stays as Justin decided: the GTA figure for the group plus the uplift %, used as CAS's own price list.
 
-**R17 — Use the recovery and storage wording CAS already supplied (answers question 10).**
-The supplied Hire Pack terms (`src/lib/documents/cas-hire-terms.ts`, taken from Hire Pack.doc) already define "Storage & Recovery Charges" as part of the "Total Charges" the customer must pay (definitions, and clauses 1.1, 1.5, 2.2 and 2.17).
-
-What to do:
-- Use that existing wording. Do not write new terms.
-- Make sure a client who has recovery or storage but NO hire car still signs the Storage & Recovery Agreement, with the relevant definitions and clauses from the same supplied terms attached, before charges are claimed. Use the same signing routes as the hire agreement: on screen or paper upload.
-- The customer invoice for recovery and storage refers to that signed agreement.
-- Update question 10 in `QUESTIONS-FOR-JUSTIN.md` to say the wording comes from the supplied Hire Pack. Justin only needs to send a newer version if one exists.
-
-**R18 — Flag for legal review only; do not change the wording.**
-Add to `QUESTIONS-FOR-JUSTIN.md`, under "for your solicitor":
-- Clause 5.3 cites the Consumer Credit (Exempt Agreements) Order 1989. The reviewer understands that Order was replaced in 2014, when consumer credit moved to the FCA, so the citation may need updating.
-- Doorstep signing and the client's cancellation rights.
-
-Do not edit the terms. This note is for Justin's solicitor to confirm.
-
-## Fixed
-
-- **R1** fixed in 69cec49: mileage and fuel out, transmission (saved to the fleet record), licence date of issue and date out (booked date and time) are needed before the agreement is produced; the doorstep screen takes mileage and fuel first and re-produces the agreement; the agreement shows a dash, never "Missing — not guessed" or "not entered".
-- **R2** fixed in 69cec49: handover time defaults to now with the booked slot as a hint; a time before the electronic signature is refused unless a reason is given.
-- **R3** fixed in 69cec49: the handover record says how and when the agreement was signed (electronically, paper copy, or authorised override); the handover sheet signature is worded separately.
-- **R4** fixed in 69cec49: a delivery job closes when the hire starts; Driver jobs has a Done today group; open deliveries for started hires were closed with a history note (TEST-0004, TEST-0015); TEST-0004's old collection was cancelled with a note.
-- **R5** fixed in 69cec49: insurer letters and the insurer email show the insurer's claim reference and policy number, whichever are held; they do not ask for a reference already held; the date prints once.
-- **R6** fixed in 69cec49: no code word; one line "Email: simulated – nothing leaves the CRM"; Messages folds into sections with the likely next action first (the letter for step 4).
-- **R7** fixed in 69cec49: step 10 says Not started until a charge is recorded (recovery, hire and storage).
-- **R8** fixed in 69cec49: Recovery shows charges only once the recovery is recorded; recoverer details under More; offer, agreed, payment and dispute under one Money section, closed until there is something to do.
-- **R9** fixed in 69cec49: the list is "Open claims by next step" with All / Need action today / Overdue filters; each count opens its matching list.
-- **R10** fixed in 69cec49: group charged is suggested from the client's own car with the reason (or says why not); the header names the actual next hire item: Pre-hire checks, Hire agreement – sign, Handover.
-- **R11** fixed in 69cec49: only office staff are offered or accepted as claim handlers.
-- **R12** fixed in 69cec49: rebuttals and the impecuniosity response show "Needs Justin's approval"; a new approveLegalCorrespondence permission (Justin) approves; marking sent or emailing is refused until approved. No letter-before-action or court template exists yet; any added later goes on the same list.
+</details>
 
 <details><summary>Reviewer's original notes (29 October 2026)</summary>
 
