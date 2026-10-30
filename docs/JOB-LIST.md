@@ -259,7 +259,7 @@ Any gaps are marked clearly.
 
 ## Where I stopped
 
-**30 October 2026 — reviewer:** commit and push R22 first (marked "commit to follow"). Then J11, J12, J13 and J14, in that order. J9a and J9 wait for Justin.
+**30 October 2026 — reviewer:** R22 committed and pushed in eb9b355. Then J11, J12, J13 and J14, in that order. J9a and J9 wait for Justin.
 (Claude Code writes here when it pauses.)
 
 **29 October 2026 — reviewer:** new Open items in REVIEW-NOTES.md (R1–R12) come first, then J10. J9 still waits for Justin.
