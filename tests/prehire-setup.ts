@@ -68,8 +68,13 @@ export function prepareAgreementItems(claimId: string, ratePence = 6653, group =
     [claimId],
   );
   run(
-    `UPDATE vehicles SET transmission = 'Manual'
-     WHERE (transmission IS NULL OR trim(transmission) = '') AND id IN (
+    // Fuel, seats, colour and the supplied car's GTA group print on the agreement too (R22). Test fleet values only.
+    `UPDATE vehicles SET transmission = COALESCE(NULLIF(trim(transmission), ''), 'Manual'),
+            fuel = COALESCE(NULLIF(trim(fuel), ''), 'Petrol'),
+            seats = COALESCE(seats, 5),
+            colour = COALESCE(NULLIF(trim(colour), ''), 'Grey'),
+            gta_group = COALESCE(NULLIF(trim(gta_group), ''), 'S3')
+     WHERE id IN (
        SELECT fv.vehicle_id FROM hire_episodes he JOIN fleet_vehicles fv ON fv.id = he.fleet_vehicle_id WHERE he.claim_id = ?)`,
     [claimId],
   );

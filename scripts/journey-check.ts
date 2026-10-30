@@ -696,6 +696,31 @@ async function fillBeforeSigning(session: BrowserSession, values: Record<string,
   return followed(result, "before signing");
 }
 
+/** R22: the boxes for details missing on the chosen car's fleet record. Only the boxes on the page are filled. */
+async function fillCarDetails(session: BrowserSession, values: Record<string, string>): Promise<string | null> {
+  const spec = JSON.stringify(values);
+  const result = await session.evaluate<Submitted>(`(() => {
+    const values = ${spec};
+    const form = document.querySelector('form[action$="/hire/car-details"]');
+    if (!(form instanceof HTMLFormElement)) return { status: 0, location: "", problem: "No car details form" };
+    const body = new FormData(form);
+    for (const [name, value] of Object.entries(values)) {
+      if (form.querySelector('[name="' + name + '"]')) body.set(name, value);
+    }
+    body.set("submitKey", crypto.randomUUID());
+    return fetch(form.action, { method: "POST", body, credentials: "same-origin", redirect: "follow" }).then((r) => ({ status: r.status, location: r.url }));
+  })()`);
+  return followed(result, "car details");
+}
+
+function fleetCarRecord(dbPath: string, fleetVehicleId: string) {
+  return readDb(dbPath, (db) =>
+    db
+      .prepare(`SELECT v.transmission, v.seats, v.colour, v.gta_group, v.fuel FROM fleet_vehicles fv JOIN vehicles v ON v.id = fv.vehicle_id WHERE fv.id = ?`)
+      .get(fleetVehicleId) as { transmission: string | null; seats: number | null; colour: string | null; gta_group: string | null; fuel: string | null } | undefined,
+  );
+}
+
 async function completeHandover(session: BrowserSession, origin: string, claimId: string, signed: boolean) {
   await gotoPath(session, origin, `/claims/${claimId}/hire`);
   const sent = await submitForm(
@@ -936,14 +961,38 @@ async function runHireJourneys(session: BrowserSession, origin: string, dbPath: 
   const stored = hireFacts(dbPath, repairable.claimId).episode;
   if (!stored?.rate_pence_per_day || stored.rate_taken_on !== HIRE_DAY) return "The daily rate was not stored on the hire with today's date.";
 
+  // R22: the chosen car has no gearbox, seats or GTA group on its fleet record. Staff enter them on the hire screen once.
+  const carId = stored.fleet_vehicle_id;
+  readDb(dbPath, (db) => {
+    db.prepare(`UPDATE vehicles SET transmission = NULL, seats = NULL, gta_group = NULL WHERE id = (SELECT vehicle_id FROM fleet_vehicles WHERE id = ?)`).run(carId);
+  });
+  await gotoPath(session, origin, `/claims/${repairable.claimId}/hire`);
+  const missingCar = refusedWith(await submitForm(session, 'form[action$="/hire/agreement"]', {}), /hire car gearbox.*seats.*GTA group/i, "Agreement with car details missing");
+  if (missingCar) return missingCar;
+  await gotoPath(session, origin, `/claims/${repairable.claimId}/hire`);
+  const carDetailsSaved = await fillCarDetails(session, { transmission: "Manual", seats: "5", gtaGroup: "S3", fuel: "Petrol", colour: "Grey", location: "CAS yard" });
+  if (carDetailsSaved) return `Car details: ${carDetailsSaved}`;
+  const record = fleetCarRecord(dbPath, carId);
+  if (record?.transmission !== "Manual" || record?.seats !== 5 || record?.gta_group !== "S3") {
+    return "The car details entered on the hire screen were not saved to the fleet record.";
+  }
+
   await gotoPath(session, origin, `/claims/${repairable.claimId}/hire`);
   // R1: mileage and fuel out, and the licence date of issue, go on the agreement before the client signs.
-  const readings = await fillBeforeSigning(session, { mileage: "1500", fuelLevel: "full", licenceIssuedOn: "2015-06-01", transmission: "Manual" });
+  const readings = await fillBeforeSigning(session, { mileage: "1500", fuelLevel: "full", licenceIssuedOn: "2015-06-01" });
   if (readings) return `Before signing: ${readings}`;
   await gotoPath(session, origin, `/claims/${repairable.claimId}/hire`);
   const produced = followed(await submitForm(session, 'form[action$="/hire/agreement"]', {}), "agreement");
   if (produced) return produced;
   if (hireFacts(dbPath, repairable.claimId).documents < 1) return "Repairable agreement was not stored.";
+  const agreementBody = readDb(dbPath, (db) =>
+    String(
+      (db.prepare(`SELECT body_html FROM documents WHERE claim_id = ? AND template_key = 'hire_agreement' ORDER BY created_at DESC, rowid DESC LIMIT 1`).get(repairable.claimId) as { body_html: string } | undefined)?.body_html || "",
+    ),
+  );
+  if (!/Transmission: Manual/.test(agreementBody) || !/Seats: 5/.test(agreementBody) || !/Group of vehicle supplied \(not used for the rate\): S3/.test(agreementBody)) {
+    return "The car details saved on the hire screen are not on the agreement.";
+  }
 
   // 7. Handover is refused without a signed agreement. The client signs through the link, then the handover completes.
   const unsigned = refusedWith(await completeHandover(session, origin, repairable.claimId, false), /signed hire agreement/i, "Handover with no signed copy");

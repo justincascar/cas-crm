@@ -867,12 +867,12 @@ export function handoverReadingsForClaim(claimId: string, hireEpisodeId: string 
 
 export function listHireBookings(claimId: string) {
   return all(
-    `SELECT he.id, he.started_at, v.registration, v.make, v.model
+    `SELECT he.id, he.started_at, he.fleet_vehicle_id, v.registration, v.make, v.model
      FROM hire_episodes he
      LEFT JOIN fleet_vehicles fv ON fv.id = he.fleet_vehicle_id
      LEFT JOIN vehicles v ON v.id = fv.vehicle_id
      WHERE he.claim_id = ?
      ORDER BY he.started_at DESC`,
     [claimId],
-  ) as Array<{ id: string; started_at: string | null; registration: string | null; make: string | null; model: string | null }>;
+  ) as Array<{ id: string; started_at: string | null; fleet_vehicle_id: string | null; registration: string | null; make: string | null; model: string | null }>;
 }

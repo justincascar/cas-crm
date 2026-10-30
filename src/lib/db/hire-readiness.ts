@@ -12,6 +12,7 @@ import { latestMitigationForPack } from "./impecuniosity";
 import { listStaffPermissions } from "./permissions";
 import { hireAgreementPrehireBlock } from "./prehire-checks";
 import { beforeSigningFor } from "./hire-out-readings";
+import { AGREEMENT_FLEET_FIELDS, fleetCarDetails, missingWords } from "./fleet-details";
 
 export const SIGNED_HIRE_AGREEMENT_TYPE = "signed_hire_agreement";
 export const SIGNED_AGREEMENT_OVERRIDE = "signed_agreement";
@@ -144,7 +145,13 @@ export function agreementMandatoryGaps(claimId: string): HireGapLink[] {
   // These print on the agreement the client signs, so they are needed before it is produced.
   const before = beforeSigningFor(claimId);
   if (before.vehicleId && !before.started) {
-    if (!before.transmission) add("transmission", "Hire car transmission", `${base}/hire#before-signing`);
+    if (!before.transmission) add("transmission", "Hire car gearbox", `${base}/hire#car-details`);
+    // Fuel, seats, colour and the supplied car's GTA group print on the agreement. They are saved to the fleet record.
+    const car = before.fleetVehicleId ? fleetCarDetails(before.fleetVehicleId) : null;
+    const missing = car ? AGREEMENT_FLEET_FIELDS.filter((field) => car.missing.includes(field)) : [];
+    if (missing.length) {
+      add("car-details", `Hire car ${missingWords(missing)}`, `${base}/hire#car-details`);
+    }
     if (before.mileage == null || !before.fuelLevel) add("readings-out", "Mileage and fuel out", `${base}/hire#before-signing`);
   }
   if (!before.licenceIssuedOn) add("licence-issued", "Licence date of issue", `${base}/hire#before-signing`);
@@ -154,7 +161,7 @@ export function agreementMandatoryGaps(claimId: string): HireGapLink[] {
 export function agreementMandatoryRefusal(claimId: string): string | null {
   const gaps = agreementMandatoryGaps(claimId);
   if (gaps.length === 0) return null;
-  return `A hire agreement was not produced. Still needed: ${gaps.map((gap) => gap.label.toLowerCase()).join(", ")}.`;
+  return `A hire agreement was not produced. Still needed: ${gaps.map((gap) => gap.label.charAt(0).toLowerCase() + gap.label.slice(1)).join(", ")}.`;
 }
 
 export type SignedAgreementFile = { id: string; title: string; createdAt: string };

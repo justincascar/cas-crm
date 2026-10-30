@@ -8,6 +8,8 @@ import { sectionVersion } from "@/lib/db/record-version";
 import { fleetSearchMatches } from "@/lib/db/fleet";
 import { fleetStatesToday, listFleetRecordsToCheck } from "@/lib/db/fleet-availability";
 import { vehicleClassLabel } from "@/lib/fleet/classes";
+import { FleetDetailBox } from "@/components/FleetDetailBox";
+import { fleetDetailLine, fleetGroupChoices, listFleetDetailsToComplete, missingWords } from "@/lib/db/fleet-details";
 import { formatVehicleRegistration } from "@/lib/text";
 
 function specLine(v: Record<string, string | number | null>) {
@@ -92,6 +94,8 @@ export default async function HirePage({
   const includeRemoved = show === "removed";
   const states = fleetStatesToday();
   const toCheck = listFleetRecordsToCheck();
+  const toComplete = listFleetDetailsToComplete();
+  const groupChoices = fleetGroupChoices();
   const wanted = status === "maintenance" ? "off_road" : status;
   const fleet = listFleet({ includeRemoved }).filter((v) => {
     if (wanted && states.get(String(v.id))?.state !== wanted) return false;
@@ -190,6 +194,43 @@ export default async function HirePage({
                     </form>
                   ) : null}
                 </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {toComplete.length > 0 ? (
+        <section id="details-to-complete" className="scroll-mt-4 rounded-xl border border-warn bg-[#fff6e8] p-5" data-details-to-complete={toComplete.length}>
+          <h2 className="font-serif text-xl text-navy-deep">Fleet details to complete</h2>
+          <p className="mt-1 text-sm">
+            {toComplete.length} real fleet {toComplete.length === 1 ? "car is" : "cars are"} missing details that a hire needs. Fuel and colour already
+            read from the V5C are used. Gearbox, seats and GTA group are never guessed: enter them from the car. What you save goes on the fleet record
+            and is carried into every hire of that car.
+          </p>
+          <ul className="mt-3 space-y-3 text-sm">
+            {toComplete.map((car) => (
+              <li key={car.fleetVehicleId} className="rounded-md border border-line bg-white p-3" data-complete-car={car.registration}>
+                <p>
+                  <strong>{car.registration || "No registration"}</strong> · {[car.make, car.model].filter(Boolean).join(" ") || "Make and model not on the V5C"}
+                  {fleetDetailLine(car) ? <span className="text-slate"> · {fleetDetailLine(car)}</span> : null}
+                </p>
+                <p className="text-overdue">Missing: {missingWords(car.missing)}</p>
+                <form method="post" action="/hire/details" className="mt-2 grid gap-3 sm:grid-cols-4">
+                  <input type="hidden" name="fleetVehicleId" value={car.fleetVehicleId} />
+                  <input type="hidden" name="fleetVersion" value={car.version} />
+                  {car.missing.map((field) => (
+                    <FleetDetailBox key={field} field={field} car={car} groups={groupChoices} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" />
+                  ))}
+                  <div className="flex items-end gap-3">
+                    <button type="submit" className="rounded-md bg-navy px-3 py-2 font-semibold text-white">
+                      Save
+                    </button>
+                    <Link href={`/hire/${car.fleetVehicleId}`} className="text-teal-dark underline">
+                      Open the car
+                    </Link>
+                  </div>
+                </form>
               </li>
             ))}
           </ul>

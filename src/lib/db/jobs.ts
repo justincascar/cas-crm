@@ -1,3 +1,4 @@
+import { fleetCarDetails, fleetDetailLine } from "./fleet-details";
 import { isoDateFromNow, londonTodayIso, nowUtcIso, requireLondonDateTime } from "../dates";
 import { DRIVER_ROLE, MECHANIC_ROLE, canDoFieldJob, isMechanicRole, isOfficeRole } from "../auth/roles";
 import { storeFileCopy } from "../storage/files";
@@ -56,6 +57,10 @@ export type DayJob = {
   fileReference: string;
   hireEpisodeId: string | null;
   vehicleLabel: string;
+  /** For a hire car: gearbox, fuel, seats, colour, GTA group and mileage from its fleet record. */
+  vehicleDetails: string;
+  /** For a delivery: where the hire car is kept, so the driver knows where to pick it up. */
+  pickUpFrom: string;
   workDate: string;
   href: string;
   completed: boolean;
@@ -77,6 +82,7 @@ type JobRow = {
   claim_id: string;
   file_reference: string | null;
   hire_episode_id: string | null;
+  fleet_vehicle_id: string | null;
   registration: string | null;
   make: string | null;
   model: string | null;
@@ -92,7 +98,7 @@ type JobRow = {
 
 const JOB_SELECT = `SELECT a.id, a.assignee_id, assignee.name AS assignee_name, a.job_kind, a.claim_id, c.file_reference, a.hire_episode_id, a.work_date,
             a.completed_at, a.actual_driver_id, a.actual_occurred_at, a.planned_at, a.place_text,
-            v.registration, v.make, v.model,
+            v.registration, v.make, v.model, fv.id AS fleet_vehicle_id,
             client.full_name AS client_name, client.telephone AS client_phone
      FROM day_assignments a
      JOIN claims c ON c.id = a.claim_id
@@ -105,6 +111,7 @@ const JOB_SELECT = `SELECT a.id, a.assignee_id, assignee.name AS assignee_name, 
 function mapJob(row: JobRow): DayJob {
   const repair = row.job_kind === "repair";
   const vehicle = [row.make, row.model, row.registration].filter(Boolean).join(" ") || "Vehicle";
+  const car = row.fleet_vehicle_id && row.job_kind.startsWith("hire_") ? fleetCarDetails(row.fleet_vehicle_id) : null;
   return {
     id: row.id,
     assigneeId: row.assignee_id,
@@ -115,6 +122,8 @@ function mapJob(row: JobRow): DayJob {
     fileReference: row.file_reference || "File",
     hireEpisodeId: row.hire_episode_id,
     vehicleLabel: vehicle,
+    vehicleDetails: car ? fleetDetailLine(car, { location: false }) : "",
+    pickUpFrom: car && row.job_kind === "hire_delivery" ? car.location : "",
     workDate: row.work_date,
     href: repair ? `/claims/${row.claim_id}/repair` : `/claims/${row.claim_id}/handover?job=${row.id}`,
     completed: Boolean(row.completed_at),

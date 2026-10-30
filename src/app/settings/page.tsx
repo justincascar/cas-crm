@@ -22,6 +22,7 @@ import { licenceCheckWindowDays } from "@/lib/db/licence-window";
 import { getInsurerPaymentDetails } from "@/lib/db/payment-details";
 import { loadClash, sectionVersion } from "@/lib/db/record-version";
 import { gtaTableFor, listGtaTables } from "@/lib/db/gta-rates";
+import { fleetGroupChoices, listFleetGtaRules } from "@/lib/db/fleet-details";
 import { EmailSendModeBanner } from "@/components/EmailSendModeBanner";
 import { CAS_CLAIMS_MAILBOX, INDICATIVE_DEFAULTS } from "@/lib/constants";
 import { mailboxIsConnected } from "@/lib/email/microsoft-graph";
@@ -59,6 +60,8 @@ export default async function SettingsPage({
   const gtaMarkupPercent = getGtaMarkupPercent();
   const gtaTables = listGtaTables();
   const gtaInForce = gtaTableFor();
+  const fleetGtaRules = listFleetGtaRules();
+  const fleetGroups = fleetGroupChoices();
   const paymentDetails = getInsurerPaymentDetails();
   const casInsurance = currentCasInsuranceDocument();
   return (
@@ -438,6 +441,66 @@ export default async function SettingsPage({
             </button>
           </form>
         </details>
+      </section>
+      <section id="fleet-gta-rules" className="scroll-mt-16 rounded-xl border border-line bg-card p-5" data-fleet-gta-rules={fleetGtaRules.length}>
+        <h2 className="font-serif text-xl text-navy-deep">GTA group of fleet cars</h2>
+        <p className="mt-1 text-sm text-slate">
+          A rule here suggests the GTA group for a fleet car with this make and model when its record has none. The model can be the whole model or its
+          first words, as on the V5C. Where no rule matches, or two rules disagree, nothing is suggested and staff choose. A suggestion is checked before it
+          is saved. No rules are set up for you.
+        </p>
+        {fleetGtaRules.length ? (
+          <ul className="mt-3 space-y-2 text-sm">
+            {fleetGtaRules.map((rule) => (
+              <li key={rule.id} className="flex flex-wrap items-center gap-3" data-fleet-gta-rule={rule.id}>
+                <span>
+                  {rule.make} {rule.model} → <strong>{rule.gtaGroup}</strong>
+                  <span className="text-slate">
+                    {" "}
+                    · added {formatUkDate(rule.createdAt)}
+                    {rule.createdByName ? ` by ${rule.createdByName}` : ""}
+                  </span>
+                </span>
+                <form method="post" action="/settings/fleet-gta-rules">
+                  <input type="hidden" name="action" value="remove" />
+                  <input type="hidden" name="ruleId" value={rule.id} />
+                  <button type="submit" className="text-teal-dark underline">
+                    Remove
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-3 text-sm">No rules yet. Staff choose each fleet car&apos;s group.</p>
+        )}
+        <form method="post" action="/settings/fleet-gta-rules" className="mt-4 flex flex-wrap items-end gap-3">
+          <input type="hidden" name="action" value="add" />
+          <label className="text-sm">
+            Make
+            <input name="make" required className="mt-1 w-40 rounded-md border border-line bg-white px-3 py-2 text-sm" placeholder="e.g. TOYOTA" />
+          </label>
+          <label className="text-sm">
+            Model, or its first words
+            <input name="model" required className="mt-1 w-56 rounded-md border border-line bg-white px-3 py-2 text-sm" placeholder="e.g. YARIS ICON" />
+          </label>
+          <label className="text-sm">
+            GTA group
+            <select name="group" required defaultValue="" className="mt-1 rounded-md border border-line bg-white px-3 py-2 text-sm">
+              <option value="" disabled>
+                Choose
+              </option>
+              {fleetGroups.map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </select>
+          </label>
+          <button className="rounded-md bg-navy px-4 py-2 text-sm text-white" type="submit">
+            Add rule
+          </button>
+        </form>
       </section>
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Indicative charge defaults</h2>

@@ -5,6 +5,7 @@ import { ensureGtaTables } from "./gta-rates";
 import { ensureEsignTable } from "./esign";
 import { ensureStorageRecoverySignatureTable } from "./storage-recovery-signing";
 import { ensureCardFeesTable } from "./card-fees";
+import { ensureFleetGtaRulesTable } from "./fleet-details";
 import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_LEGAL_CORRESPONDENCE, APPROVE_SETTLEMENT, OVERRIDE_UNSIGNED_STORAGE_RECOVERY, EXTENDED_WAIT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS, RELEASE_WITHOUT_EXCESS } from "../auth/roles";
 
 const TABLES: Record<string, Array<[string, string]>> = {
@@ -41,6 +42,8 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["removed_at", "TEXT"],
     ["removed_reason", "TEXT"],
     ["v5c_source_file", "TEXT"],
+    ["current_mileage", "INTEGER"],
+    ["current_mileage_on", "TEXT"],
   ],
   financial_lines: [["agreed_on", "TEXT"]],
   insurer_offers: [
@@ -380,6 +383,7 @@ export function migrate(db: DatabaseSync) {
   ensureEsignTable(db);
   ensureStorageRecoverySignatureTable(db);
   ensureCardFeesTable(db);
+  ensureFleetGtaRulesTable(db);
   db.exec(`
     CREATE TABLE IF NOT EXISTS repair_evidence (
       id TEXT PRIMARY KEY,

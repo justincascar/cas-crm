@@ -65,6 +65,8 @@ function baseView(overrides: Partial<HireAgreementView> = {}): HireAgreementView
     hireRegistration: "CAS 2",
     hireTransmission: "automatic",
     hireFuel: "diesel",
+    hireColour: "white",
+    hireSeats: "5",
     suppliedGroup: "S4",
     clientGroup: "S4",
     groupCharged: "S4",

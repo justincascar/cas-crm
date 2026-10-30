@@ -17,6 +17,7 @@ import { all, get, newId, run } from "./connection";
 import { MITIGATION_QUESTIONNAIRE } from "../domain/impecuniosity";
 import { impecuniosityGate, latestMitigationForPack, type ImpecuniosityGate } from "./impecuniosity";
 import { recordClaimEvent } from "./chronology";
+import { fleetCarDetails, fleetDetailLine, formatMileage } from "./fleet-details";
 import { recoveryDisplayLines, recoveryLinesPlain } from "./recovery-display";
 import { cancelNoticeHtml, storageRecoveryPageHtml, storageRecoveryTermsHtml } from "../documents/storage-recovery-agreement";
 
@@ -102,7 +103,7 @@ export function getHirePack(claimId: string) {
   if (!claim) return null;
   const hire = get<Record<string, string | number | null>>(
     `SELECT he.*, v.registration AS hire_reg, v.make AS hire_make, v.model AS hire_model, v.transmission AS hire_transmission, v.fuel AS hire_fuel,
-            v.gta_group AS supplied_gta_group
+            v.gta_group AS supplied_gta_group, v.seats AS hire_seats, v.colour AS hire_colour
      FROM hire_episodes he
      LEFT JOIN fleet_vehicles fv ON fv.id = he.fleet_vehicle_id
      LEFT JOIN vehicles v ON v.id = fv.vehicle_id
@@ -198,6 +199,8 @@ export function getHirePack(claimId: string) {
     handoverReadings,
     impecuniosity: impecuniosityGate(claimId),
     mitigationStatement: latestMitigationForPack(claimId),
+    /** The hire car's fleet record: gearbox, fuel, seats, colour, GTA group, mileage and where it is. */
+    car: hire?.fleet_vehicle_id ? fleetCarDetails(String(hire.fleet_vehicle_id)) : null,
   };
 }
 
@@ -390,6 +393,9 @@ export function renderHirePack(pack: NonNullable<ReturnType<typeof getHirePack>>
   const name = pack.ctx.hirerName || "Unknown";
   const address = pack.ctx.hirerAddress || "Unknown";
   const hireVehicle = `${v(hire?.hire_make)} ${v(hire?.hire_model)}`.replace("Unknown Unknown", "Unknown");
+  const car = pack.car;
+  const carLine = car ? fleetDetailLine(car, { location: false }) : "";
+  const carDetails = carLine ? `<br/>${escape(carLine)}` : "";
   const dateOut = s.date_out ? formatUkDate(String(s.date_out)) : formatUkDate(hire?.started_at ? String(hire.started_at) : null);
   const chargeableHireEnd = chargeableHireEndLabel(hire?.billing_end_at ? String(hire.billing_end_at) : null);
   const missingBanner =
@@ -407,7 +413,8 @@ ${missingBanner}
 <p>Delivery Address: ${escape(v(s.delivery_address || address))}</p>
 <p>Start Time: ${escape(v(s.driver_delivery_start))} &nbsp; Finish Time: ${escape(v(s.driver_delivery_finish))}</p>
 <p>Client: ${escape(name)}<br/>Address: ${escape(address)}<br/>Home Tel: ${escape(v(s.home_tel))} &nbsp; Work Tel: ${escape(v(s.work_tel))} &nbsp; Mob Tel: ${escape(v(s.mobile_tel))}</p>
-<p>Hire vehicle: ${escape(hireVehicle)} &nbsp; Reg: ${escape(v(hire?.hire_reg))}</p>
+<p>Hire vehicle: ${escape(hireVehicle)} &nbsp; Reg: ${escape(v(hire?.hire_reg))}${carDetails}</p>
+<p>Collect the car from: ${escape(v(car?.location))}${car?.mileage != null ? ` &nbsp; Last mileage: ${escape(formatMileage(car.mileage))}` : ""}</p>
 <p>Driver name: ${escape(v(s.driver_name))}</p>
 </section>
 
@@ -465,8 +472,8 @@ ${impecuniosityMeansHtml(pack)}
 <p>Delivery address: ${escape(v(s.delivery_address || address))}</p>
 <h3>Vehicle details</h3>
 <p>Make: ${escape(v(hire?.hire_make))} &nbsp; Model: ${escape(v(hire?.hire_model))} &nbsp; Reg: ${escape(v(hire?.hire_reg))}<br/>
-Transmission: ${escape(v(hire?.hire_transmission))} &nbsp; Fuel: ${escape(v(s.hire_fuel || hire?.hire_fuel))}<br/>
-Vehicle group: ${escape(v(s.vehicle_group))} &nbsp; Group charged: ${escape(v(s.group_charged))}<br/>
+Transmission: ${escape(v(car?.transmission || hire?.hire_transmission))} &nbsp; Fuel: ${escape(v(hire?.hire_fuel || s.hire_fuel))} &nbsp; Colour: ${escape(v(car?.colour))} &nbsp; Seats: ${escape(v(car?.seats))}<br/>
+Vehicle group: ${escape(v(car?.gtaGroup || s.vehicle_group))} &nbsp; Group charged: ${escape(v(s.group_charged))}<br/>
 Date out: ${escape(dateOut)} &nbsp; Date in: ${escape(chargeableHireEnd)}</p>
 <h3>Charges</h3>
 <table>

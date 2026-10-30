@@ -69,6 +69,8 @@ export default async function MyJobsPage({
               {job.clientName ? <p className="text-base">{job.clientName}</p> : null}
               {job.clientPhone ? <p className="text-sm">{job.clientPhone}</p> : null}
               <p className="mt-1 text-base">{job.vehicleLabel}</p>
+              {job.vehicleDetails ? <p className="text-sm" data-job-car-details>{job.vehicleDetails}</p> : null}
+              {job.pickUpFrom ? <p className="text-sm">Pick the car up from: {job.pickUpFrom}</p> : null}
               {job.place ? <p className="text-sm">{job.place}</p> : null}
               {job.plannedAt ? <p className="text-sm">{formatUkDateTime(job.plannedAt)}</p> : null}
               <p className={job.overdue ? "text-sm font-semibold text-overdue" : "text-sm text-slate"}>
@@ -104,6 +106,8 @@ export default async function MyJobsPage({
                     {job.clientName ? <p className="text-base">{job.clientName}</p> : null}
                     {job.clientPhone ? <p className="text-sm">{job.clientPhone}</p> : null}
                     <p className="mt-1 text-base">{job.vehicleLabel}</p>
+              {job.vehicleDetails ? <p className="text-sm" data-job-car-details>{job.vehicleDetails}</p> : null}
+              {job.pickUpFrom ? <p className="text-sm">Pick the car up from: {job.pickUpFrom}</p> : null}
                     {job.place ? <p className="text-sm">{job.place}</p> : null}
                     {job.plannedAt ? <p className="text-sm">{formatUkDateTime(job.plannedAt)}</p> : null}
                     <p className="text-sm text-slate">

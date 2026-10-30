@@ -170,6 +170,57 @@ The proposed storage end uses these dates and shows the reason.
 **Intake:**
 - Add a jurisdiction flag: England & Wales, Scotland or Northern Ireland. Northern Ireland files get a reminder about the extra evidence that court expects.
 
+### J11 — The awkward cases, tested end to end
+CAS's real claims don't follow the happy path. Build a browser journey test for each case below, starting from a new claim and clicking through as `sian`. Fix whatever breaks. Each case must leave the money, the dates, the next step and the chronology correct.
+
+1. **Partial total-loss payment.** Hire must NOT end automatically. The file is flagged for review, the shortfall is shown, and the 7-day hire end waits for a handler.
+2. **Disputed salvage.** The salvage deduction is disputed, the dispute is recorded, the shortfall is chased separately, and hire/storage endings are flagged rather than set automatically.
+3. **Repairable changed to total loss mid-claim.** History is kept, repair steps close with a reason, the total-loss figures open, and the hire and storage end rules switch to the total-loss rules.
+4. **Vehicle swap mid-hire.** One continuous hire, with the day count unchanged. The old car is freed, the new car is clash-checked, and a new signed agreement page or addendum is required where the CAS terms need one. Never invent wording; if unclear, ask in the questions file.
+5. **Agreement renewal at day 80–88.** The alert shows at day 80, it's overdue at day 88, and renewing keeps one continuous history.
+6. **Insurer reply arrives just before a chaser is due.** A substantive reply pauses that chase and the chaser is NOT sent. An acknowledgement or out-of-office reply does not pause it. An uncertain reply goes to review.
+7. **Two staff edit the same claim at once.** The second save gets the clash message and nothing is lost.
+8. **A payment covering several heads of loss.** It must be allocated by head before anything is marked paid, with no double counting.
+9. **Overpayment.** It's shown separately and never nets off another head.
+10. **A fault claim:**
+    - Audatex estimate
+    - an authorisation with reductions
+    - excess unpaid → release blocked
+    - excess paid → release allowed
+    - invoice to the client's own insurer = the authorised amount minus the excess
+
+### J12 — Foundations you can test before going live
+- **Full export:**
+  - one button (Justin only) exports all claims, people, money, history and documents as a zip
+  - a CSV per table, plus the document files
+  - test that an export can be read back
+- **Backup and restore on this PC:**
+  - a script makes a dated backup of the database and documents
+  - a restore script puts a chosen backup back into a separate test copy
+  - test it: back up, change some data, restore, then confirm the data matches the backup
+  - write plain step-by-step instructions in `docs/BACKUP-AND-RESTORE.md`
+- **Audit view:** a page where Justin can see who changed what and when, on any claim, with filters.
+- **A permissions check page or test:** for each role (Justin, office staff, driver, mechanic), list what they can see and do, and prove it with server-side tests. That includes drivers and mechanics being refused claims, money and bank statements by direct address.
+- **Speed:** generate 1,000 fictional claims in a separate test database. Confirm the dashboard, claims list and a claim page each open in under 2 seconds. Fix any slow page.
+
+### J13 — Litigation and disputes, the basics
+Check what the Litigation section does today, then make it useful without inventing anything:
+- **Parties and representatives**, with their legal capacity. Never assume CAS is the claimant or the insurer is the defendant.
+- **Court references, hearings, orders and deadlines.** Every deadline records its source and how it was calculated, and is marked "needs verification" until a person confirms it. The CRM never calculates court deadlines on its own authority.
+- **Auto-built from the file:**
+  - a chronology
+  - a schedule of loss, by head, with claimed, offered, agreed and paid
+  - an evidence checklist (what's on file and what's missing)
+  - a bundle index
+- **No legal document is sent or filed without Justin's approval:** letters before action, claim forms, court documents. Mark anything needing qualified legal review.
+
+### J14 — Client form on a phone
+- Check the secure client link on a phone-sized screen.
+- The client can save and come back, and upload photos and documents.
+- They can only ever see their own submission.
+- Staff review proposed changes before anything updates the claim.
+- Fix anything awkward on a small screen.
+
 ### J9a — Template and wording review by Justin (MUST be done before going live)
 This is a gate. The CRM must not be used with real clients until it is complete.
 
@@ -207,6 +258,8 @@ Any gaps are marked clearly.
 - Postcode, registration (VRM) and MID lookups.
 
 ## Where I stopped
+
+**30 October 2026 — reviewer:** commit and push R22 first (marked "commit to follow"). Then J11, J12, J13 and J14, in that order. J9a and J9 wait for Justin.
 (Claude Code writes here when it pauses.)
 
 **29 October 2026 — reviewer:** new Open items in REVIEW-NOTES.md (R1–R12) come first, then J10. J9 still waits for Justin.

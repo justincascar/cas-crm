@@ -8,6 +8,8 @@ import { formatUkDate, formatUkDateTime, londonTodayIso } from "@/lib/dates";
 import type { HireArea, HireCarChoice } from "@/lib/db/hire-choice";
 import type { SaveClashView } from "@/lib/db/record-version";
 import { FUEL_LEVELS } from "@/lib/db/handover";
+import { FleetDetailBox } from "@/components/FleetDetailBox";
+import { FLEET_DETAIL_LABELS, fleetDetailLine, formatMileage, type FleetCarDetails } from "@/lib/db/fleet-details";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
@@ -35,7 +37,16 @@ function gapHref(claimId: string, href: string) {
 }
 
 function carOption(car: HireCarChoice) {
-  return `${car.label} · ${car.transmission || "transmission not recorded"} · ${car.seats ?? "seats not recorded"}${car.seats ? " seats" : ""}`;
+  return [
+    car.label,
+    car.transmission || "gearbox not recorded",
+    car.seats != null ? `${car.seats} seats` : "seats not recorded",
+    car.fuel,
+    car.colour,
+    car.gtaGroup ? `group ${car.gtaGroup}` : "GTA group not recorded",
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 /** A finished step: one line with a Change button. The form opens underneath. */
@@ -299,6 +310,7 @@ export function HireJourney({
                       : ` · reserved for ${plannedWords || "a date not set"} · ${deliveryWords}`}
                   </span>
                 </div>
+                {area.chosen.details ? <CarDetails claimId={id} car={area.chosen.details} groups={area.groupChoices} /> : null}
                 <details className="mt-2">
                   <summary className="cursor-pointer text-sm text-teal-dark underline">Change car</summary>
                   <div className="mt-4">{reserveForm}</div>
@@ -356,7 +368,7 @@ export function HireJourney({
             <p className="mt-2 text-sm" data-pack-licence>
               Licence number: {area.licenceNumber || "not on the file yet"}
             </p>
-            {carDone && !started && !area.signed ? <BeforeSigningForm claimId={id} before={area.beforeSigning} /> : null}
+            {carDone && !started && !area.signed ? <BeforeSigningForm claimId={id} before={area.beforeSigning} car={area.chosen?.details || null} /> : null}
             {agreementDone && area.agreement ? (
               <DoneLine
                 summary={
@@ -458,7 +470,8 @@ export function HireJourney({
                 {area.chosen ? (
                   <form method="post" action={`/claims/${id}/hire/handover`} encType="multipart/form-data" className="mt-4 space-y-3">
                     <p className="text-sm" data-handover-car={area.chosen.registration}>
-                      {area.chosen.label || area.chosen.registration}. Completing this starts the {carLabel}.{" "}
+                      {area.chosen.label || area.chosen.registration}
+                      {area.chosen.details && fleetDetailLine(area.chosen.details) ? ` · ${fleetDetailLine(area.chosen.details)}` : ""}. Completing this starts the {carLabel}.{" "}
                       <Link href={`/claims/${id}/handover`} className="text-teal-dark underline">
                         Photographs
                       </Link>
@@ -665,8 +678,8 @@ function RateForm({ claimId, group, groups, label, hint }: { claimId: string; gr
 }
 
 /** Printed on the agreement the client signs. A changed reading produces a new version of an unsigned agreement. */
-function BeforeSigningForm({ claimId, before }: { claimId: string; before: HireArea["beforeSigning"] }) {
-  const done = before.mileage != null && Boolean(before.fuelLevel) && Boolean(before.transmission) && Boolean(before.licenceIssuedOn);
+function BeforeSigningForm({ claimId, before, car }: { claimId: string; before: HireArea["beforeSigning"]; car: FleetCarDetails | null }) {
+  const done = before.mileage != null && Boolean(before.fuelLevel) && Boolean(before.licenceIssuedOn);
   return (
     <form
       id="before-signing"
@@ -680,6 +693,12 @@ function BeforeSigningForm({ claimId, before }: { claimId: string; before: HireA
       <label>
         Mileage out
         <input name="mileage" inputMode="numeric" required className={field} defaultValue={before.mileage ?? ""} />
+        {before.mileage == null && car?.mileage != null ? (
+          <span className="mt-1 block text-slate">
+            Last recorded: {formatMileage(car.mileage)}
+            {car.mileageOn ? ` on ${formatUkDate(car.mileageOn)}` : ""}. Read the car before it goes out.
+          </span>
+        ) : null}
       </label>
       <label>
         Fuel out
@@ -692,16 +711,6 @@ function BeforeSigningForm({ claimId, before }: { claimId: string; before: HireA
           ))}
         </select>
       </label>
-      {!before.transmission ? (
-        <label>
-          Hire car transmission (saved to the fleet record)
-          <select name="transmission" required className={field} defaultValue="">
-            <option value="">Choose</option>
-            <option value="Manual">Manual</option>
-            <option value="Automatic">Automatic</option>
-          </select>
-        </label>
-      ) : null}
       {!before.licenceIssuedOn ? (
         <label>
           Licence date of issue (4a)
@@ -771,6 +780,61 @@ function StepHead({ n, title, status }: { n: number; title: string; status: "Don
         {n}. {title}
       </h2>
       <p className="text-sm font-semibold text-navy">{status}</p>
+    </div>
+  );
+}
+
+/**
+ * The chosen car as its fleet record holds it (R22). A detail missing on the record is a box here. What is entered is
+ * saved to the fleet record once, so the next hire has it. Gearbox, seats and GTA group are never guessed.
+ */
+function CarDetails({ claimId, car, groups }: { claimId: string; car: FleetCarDetails; groups: string[] }) {
+  const missing = new Set(car.missing);
+  const rows: Array<{ key: keyof typeof FLEET_DETAIL_LABELS; value: string }> = [
+    { key: "make", value: car.make },
+    { key: "model", value: car.model },
+    { key: "transmission", value: car.transmission },
+    { key: "fuel", value: car.fuel },
+    { key: "seats", value: car.seats != null ? String(car.seats) : "" },
+    { key: "colour", value: car.colour },
+    { key: "gtaGroup", value: car.gtaGroup || "" },
+    { key: "mileage", value: car.mileage != null ? `${formatMileage(car.mileage)}${car.mileageOn ? ` (${formatUkDate(car.mileageOn)})` : ""}` : "" },
+    { key: "location", value: car.location },
+  ];
+  return (
+    <div id="car-details" className="mt-3 scroll-mt-16 rounded-lg border border-line bg-white p-3 text-sm" data-car-details={car.missing.length ? "missing" : "complete"}>
+      <p className="font-semibold">
+        {car.registration}
+        {car.missing.length ? " · some details are not on the fleet record" : ""}
+      </p>
+      <dl className="mt-2 grid gap-x-4 gap-y-1 sm:grid-cols-3" data-car-detail-list>
+        {rows
+          .filter((row) => !missing.has(row.key))
+          .map((row) => (
+            <div key={row.key} data-car-detail={row.key}>
+              <dt className="text-slate">{FLEET_DETAIL_LABELS[row.key]}</dt>
+              <dd>{row.value}</dd>
+            </div>
+          ))}
+      </dl>
+      {car.missing.length ? (
+        <form method="post" action={`/claims/${claimId}/hire/car-details`} className="mt-3 border-t border-line pt-3" data-car-details-form>
+          <SubmitKeyInput />
+          <input type="hidden" name="returnHash" value="#car" />
+          <input type="hidden" name="fleetVersion" value={car.version} />
+          <p>Not on the fleet record yet. What you enter is saved to the fleet record, so the next hire has it.</p>
+          <div className="mt-2 grid gap-3 sm:grid-cols-3">
+            {rows
+              .filter((row) => missing.has(row.key))
+              .map((row) => (
+                <FleetDetailBox key={row.key} field={row.key} car={car} groups={groups} className={field} />
+              ))}
+          </div>
+          <button className={`${quiet} mt-3`} type="submit">
+            Save to the fleet record
+          </button>
+        </form>
+      ) : null}
     </div>
   );
 }

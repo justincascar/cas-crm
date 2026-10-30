@@ -69,6 +69,8 @@ export default async function DriverJobsPage({ searchParams }: { searchParams: P
                       </Link>{" "}
                       · {job.jobLabel} · {job.vehicleLabel}
                     </p>
+                    {job.vehicleDetails ? <p className="text-slate" data-job-car-details>{job.vehicleDetails}</p> : null}
+                    {job.pickUpFrom ? <p className="text-slate">Pick the car up from: {job.pickUpFrom}</p> : null}
                     <p className="break-words text-slate">{job.place || "No address on the job"}</p>
                     <p className={job.overdue || !job.assigneeId ? "font-semibold" : "text-slate"}>
                       {job.assigneeName || "Driver not assigned"} · {statusWord(job)}

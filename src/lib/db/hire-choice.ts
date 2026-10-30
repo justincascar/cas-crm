@@ -14,6 +14,7 @@ import { activeReservationFor, startHireFromHandover } from "./hire-start";
 import { recordClaimEvent } from "./chronology";
 import { touchFleetVersion } from "./fleet";
 import { fleetAvailability } from "./fleet-availability";
+import { allFleetCarDetails, fleetCarDetails, fleetGroupChoices, missingWords, type FleetCarDetails } from "./fleet-details";
 import {
   agreementMandatoryGaps,
   currentHireEpisode,
@@ -34,7 +35,7 @@ import {
 import { all, get, newId, run } from "./connection";
 import { latestEsign, type EsignView } from "./esign";
 import { beforeSigningFor, type BeforeSigning } from "./hire-out-readings";
-import { withImmediateTransaction, sectionVersion } from "./record-version";
+import { withImmediateTransaction } from "./record-version";
 import { replaySubmit, storeSubmit } from "./submit-key";
 
 export type HireCarChoice = {
@@ -44,6 +45,9 @@ export type HireCarChoice = {
   model: string;
   transmission: string;
   seats: number | null;
+  fuel: string;
+  colour: string;
+  gtaGroup: string | null;
   vehicleClass: string;
   label: string;
   version: string;
@@ -81,7 +85,11 @@ export type HireArea = {
     label: string;
     registration: string;
     reservationId: string | null;
+    /** Everything the fleet record holds on the car, and what is missing from it. */
+    details: FleetCarDetails | null;
   } | null;
+  /** GTA groups offered when the supplied car has none on its fleet record. */
+  groupChoices: string[];
   startedAt: string | null;
   dayCount: number | null;
   renewal: string | null;
@@ -156,34 +164,19 @@ function claimRow(claimId: string) {
   );
 }
 
-function fleetCarDetails(): Map<string, Omit<HireCarChoice, "label" | "version">> {
-  const rows = all<{
-    id: string;
-    registration: string | null;
-    make: string | null;
-    model: string | null;
-    transmission: string | null;
-    seats: number | null;
-    vehicle_class: string | null;
-  }>(
-    `SELECT fv.id, v.registration, v.make, v.model, v.transmission, v.seats, v.vehicle_class
-     FROM fleet_vehicles fv JOIN vehicles v ON v.id = fv.vehicle_id
-     WHERE fv.removed_at IS NULL`,
-  );
-  return new Map(
-    rows.map((row) => [
-      String(row.id),
-      {
-        id: String(row.id),
-        registration: String(row.registration || ""),
-        make: String(row.make || ""),
-        model: String(row.model || ""),
-        transmission: String(row.transmission || ""),
-        seats: row.seats == null ? null : Number(row.seats),
-        vehicleClass: String(row.vehicle_class || ""),
-      },
-    ]),
-  );
+function carChoice(car: FleetCarDetails): Omit<HireCarChoice, "label" | "version"> {
+  return {
+    id: car.fleetVehicleId,
+    registration: car.registration,
+    make: car.make,
+    model: car.model,
+    transmission: car.transmission,
+    seats: car.seats,
+    fuel: car.fuel,
+    colour: car.colour,
+    gtaGroup: car.gtaGroup,
+    vehicleClass: car.vehicleClass,
+  };
 }
 
 function knownTransmission(value: string | null | undefined): string {
@@ -414,7 +407,7 @@ export function chooseHireCar(input: {
     );
     if (!availability || availability.state === "removed") throw new Error("That car is not on the fleet.");
     if (!availability.free) throw new Error(carNotFreeMessage(availability));
-    const car = fleetCarDetails().get(input.fleetVehicleId);
+    const car = fleetCarDetails(input.fleetVehicleId);
     if (!car) throw new Error("That car is not on the fleet.");
     touchFleetVersion({
       fleetVehicleId: input.fleetVehicleId,
@@ -541,7 +534,9 @@ export function chooseHireCar(input: {
       actorId: input.actorId,
       details: openEpisode?.started_at
         ? `Hire car changed to ${label}. The hire start date was not changed. Charges follow the original handover.`
-        : `Reserved ${label} for ${how} on ${formatUkDateTime(clock.at)}. A reservation does not start hire charges.${rateWords}`,
+        : `Reserved ${label} for ${how} on ${formatUkDateTime(clock.at)}. A reservation does not start hire charges.${rateWords}${
+            car.missing.length ? ` Not on the fleet record yet: ${missingWords(car.missing)}.` : ""
+          }`,
       source: "staff",
     });
     return { reservationId, episodeId, jobId, missing: agreementMandatoryGaps(input.claimId).map((gap) => gap.label) };
@@ -802,15 +797,15 @@ export function loadHireArea(
   const wantTransmission = knownTransmission(used.transmission);
   const wantSeats = /^\d+$/.test(used.seats) ? Number(used.seats) : null;
   const wantClass = used.vehicleClass.trim().toLowerCase();
-  const details = fleetCarDetails();
+  const details = allFleetCarDetails();
   const free = fleetAvailability({ startAt: date, endAt: agreementHoldEndDay(date), ignoreClaimId: claimId })
     .filter((row) => row.free)
     .map((row) => details.get(row.carId))
     .filter((car): car is NonNullable<typeof car> => Boolean(car))
     .map((car) => ({
-      ...car,
+      ...carChoice(car),
       label: [car.make, car.model, car.registration].filter(Boolean).join(" "),
-      version: sectionVersion("fleet", car.id),
+      version: car.version,
     }))
     .sort((a, b) => a.registration.localeCompare(b.registration, "en-GB", { numeric: true }));
   const missingDetails = (car: HireCarChoice) => !knownTransmission(car.transmission) || car.seats == null;
@@ -859,6 +854,7 @@ export function loadHireArea(
         label: [episode.make, episode.model, episode.registration].filter(Boolean).join(" "),
         registration: String(episode.registration || ""),
         reservationId: reservation ? String(reservation.id) : null,
+        details: fleetCarDetails(String(episode.fleet_vehicle_id)),
       }
     : null;
   const agreementRow = get<{ id: string; title: string | null; created_at: string }>(
@@ -926,6 +922,7 @@ export function loadHireArea(
     rateGroups: creditHire ? settingsGtaGroups() : [],
     cars,
     carsMissingDetails,
+    groupChoices: fleetGroupChoices(),
     filters: used,
     delivery: deliveryJob
       ? {

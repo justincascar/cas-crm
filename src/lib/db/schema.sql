@@ -85,7 +85,9 @@ CREATE TABLE IF NOT EXISTS fleet_vehicles (
   is_real INTEGER NOT NULL DEFAULT 0,
   removed_at TEXT,
   removed_reason TEXT,
-  v5c_source_file TEXT
+  v5c_source_file TEXT,
+  current_mileage INTEGER,
+  current_mileage_on TEXT
 );
 
 CREATE TABLE IF NOT EXISTS claims (

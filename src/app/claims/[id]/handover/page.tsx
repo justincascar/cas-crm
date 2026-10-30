@@ -28,7 +28,16 @@ import { handoverStaleLines } from "@/lib/domain/prehire-checks";
 import { licenceCheckWindowDays } from "@/lib/db/licence-window";
 import { listHireDrivers, listLicenceChecks } from "@/lib/db/prehire-checks";
 import { getClaim } from "@/lib/db/queries";
+import { fleetCarDetails, fleetDetailLine } from "@/lib/db/fleet-details";
 import { signedAgreementOverride, signedHireAgreementOnFile } from "@/lib/db/hire-readiness";
+
+/** The hire car with its gearbox, fuel, seats, colour, GTA group and mileage from the fleet record. */
+function bookingLabel(booking: { fleet_vehicle_id: string | null; make: string | null; model: string | null; registration: string | null }) {
+  const name = [booking.make, booking.model, booking.registration].filter(Boolean).join(" ") || "Hire car";
+  const car = booking.fleet_vehicle_id ? fleetCarDetails(booking.fleet_vehicle_id) : null;
+  const line = car ? fleetDetailLine(car, { location: false }) : "";
+  return line ? `${name} · ${line}` : name;
+}
 
 const field = "mt-1 w-full max-w-full rounded-md border border-line bg-white px-3 py-3 text-base";
 const scanAccept = "application/pdf,image/jpeg,image/png,image/webp,image/gif,text/plain,text/csv,text/html,text/xml,application/json,.pdf,.txt,.csv,.xml,.html,.json,.log";
@@ -256,7 +265,7 @@ export async function HandoverScreen({
         occasions={HANDOVER_EVENTS.map((event) => ({ kind: event.kind, label: event.label, needsBooking: event.needsBooking }))}
         bookings={bookings.map((booking) => ({
           id: booking.id,
-          label: [booking.make, booking.model, booking.registration].filter(Boolean).join(" ") || "Hire car",
+          label: bookingLabel(booking),
         }))}
         initialVehicle={suggestion?.vehicle}
         initialEventKind={suggestion?.eventKind}

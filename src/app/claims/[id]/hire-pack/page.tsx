@@ -9,6 +9,7 @@ import { RecordVersionField, SaveClashNotice } from "@/components/SaveClashNotic
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { requireStaff } from "@/lib/auth/session";
 import { getHirePack } from "@/lib/db/hire-pack";
+import { fleetDetailLine, missingWords } from "@/lib/db/fleet-details";
 import { gtaTableFor } from "@/lib/db/gta-rates";
 import { loadClash, sectionVersion } from "@/lib/db/record-version";
 import { SHARED_CLIENT_GTA, SHARED_CLIENT_PERSON } from "@/lib/db/shared-fields";
@@ -215,8 +216,10 @@ export async function HirePackScreen({
         <fieldset className="space-y-3 rounded-xl border border-line bg-card p-5">
           <legend className="font-serif text-xl text-navy-deep">Hire vehicle and period</legend>
           <p className="text-sm text-slate">
-            Hire vehicle supplied: {pack.hire ? `${pack.hire.hire_make} ${pack.hire.hire_model} ${pack.hire.hire_reg}` : "None allocated yet"}.
+            Hire vehicle supplied: {pack.hire ? `${pack.hire.hire_make} ${pack.hire.hire_model} ${pack.hire.hire_reg}` : "None allocated yet"}
+            {pack.car && fleetDetailLine(pack.car) ? ` (${fleetDetailLine(pack.car)})` : ""}.
             Its GTA group is {gtaGroupLabel(suppliedGroup)} and is not used to calculate the rate.
+            {pack.car?.missing.length ? ` Not on its fleet record yet: ${missingWords(pack.car.missing)}. Enter them on the Hire tab.` : ""}
             Client&apos;s own vehicle: {pack.clientMake} {pack.clientModel} {pack.ctx.clientVehicleRegistration || "not on file"}.
             Its GTA group is {gtaGroupLabel(clientGroup)}.
           </p>
@@ -231,10 +234,16 @@ export async function HirePackScreen({
             </p>
           ) : null}
           <div className="grid gap-3 sm:grid-cols-2">
-            <label className="text-sm">
-              Fuel
-              <input name="hire_fuel" className={field} defaultValue={String(s.hire_fuel || pack.hire?.hire_fuel || "")} />
-            </label>
+            {pack.hire?.hire_fuel ? (
+              <p className="text-sm">
+                Fuel: {String(pack.hire.hire_fuel)} (from the fleet record)
+              </p>
+            ) : (
+              <label className="text-sm">
+                Fuel
+                <input name="hire_fuel" className={field} defaultValue={String(s.hire_fuel || "")} />
+              </label>
+            )}
             <label className="text-sm">
               Client&apos;s own vehicle GTA group
               <select name="client_gta_group" className={field} defaultValue={clientGroup || ""}>

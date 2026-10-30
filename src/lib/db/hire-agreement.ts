@@ -19,6 +19,7 @@ import { hireAgreementPrehireBlock } from "./prehire-checks";
 import { agreementMandatoryRefusal, currentHireEpisode, plannedHandoverAt } from "./hire-readiness";
 import { beforeSigningFor } from "./hire-out-readings";
 import { FUEL_LEVELS } from "./handover";
+import { gearbox } from "./fleet-details";
 import { gtaTableFor, settingsDailyRatePence } from "./gta-rates";
 
 export const HIRE_AGREEMENT_TEMPLATE_KEY = "hire_agreement";
@@ -54,6 +55,8 @@ export type HireAgreementView = {
   hireRegistration: string;
   hireTransmission: string;
   hireFuel: string;
+  hireColour: string;
+  hireSeats: string;
   suppliedGroup: string | null;
   clientGroup: string | null;
   groupCharged: string | null;
@@ -194,7 +197,7 @@ ${view.includeHire ? `<section>
 <p>Delivery address: ${shown(view.deliveryAddress || view.hirerAddress)}</p>
 <h3>Vehicle details</h3>
 <p>Make: ${shown(view.hireMake)} &nbsp; Model: ${shown(view.hireModel)} &nbsp; Vehicle reg: ${shown(view.hireRegistration)}<br/>
-Transmission: ${shown(view.hireTransmission)} &nbsp; Fuel: ${shown(view.hireFuel)}<br/>
+Transmission: ${shown(view.hireTransmission)} &nbsp; Fuel: ${shown(view.hireFuel)} &nbsp; Colour: ${shown(view.hireColour)} &nbsp; Seats: ${shown(view.hireSeats)}<br/>
 Group of vehicle supplied (not used for the rate): ${escape(gtaGroupLabel(view.suppliedGroup))}<br/>
 Group Charged: ${shown(gtaGroupLabel(view.groupCharged) === GTA_NOT_CLASSIFIED ? "" : gtaGroupLabel(view.groupCharged))}<br/>
 Client's own vehicle group (the rating group): ${escape(gtaGroupLabel(view.clientGroup))}<br/>
@@ -369,8 +372,11 @@ export function buildHireAgreementView(
     hireMake: String(hire?.hire_make || ""),
     hireModel: String(hire?.hire_model || ""),
     hireRegistration: String(hire?.hire_reg || ""),
-    hireTransmission: String(hire?.hire_transmission || before.transmission || ""),
-    hireFuel: String(s.hire_fuel || hire?.hire_fuel || ""),
+    // The car's details come from its fleet record, so they are never typed again for the agreement.
+    hireTransmission: gearbox(hire?.hire_transmission) || gearbox(before.transmission),
+    hireFuel: String(hire?.hire_fuel || s.hire_fuel || ""),
+    hireColour: String(hire?.hire_colour || ""),
+    hireSeats: Number(hire?.hire_seats) > 0 ? String(hire?.hire_seats) : "",
     suppliedGroup: normaliseGtaGroup(String(hire?.supplied_gta_group || "")),
     clientGroup: normaliseGtaGroup(String(pack.claim.client_gta_group || "")),
     groupCharged: normaliseGtaGroup(String(s.group_charged || pack.claim.client_gta_group || "")),

@@ -4,10 +4,10 @@ Written by the reviewer, Claude (Cowork), after testing the app in the browser a
 
 ## Open
 
-Nothing open.
 
 ## Fixed
 
+- **R22** fixed (commit to follow): a chosen hire car shows make, model, registration, gearbox, fuel, seats, colour, GTA group, current mileage and where it is; they carry into the hire pack, the agreement, the handover and the driver job; missing ones are boxes on the Hire tab, saved to the fleet record once; Hire / Fleet has "Fleet details to complete" (V5C fuel and colour used, gearbox, seats and group never guessed); Settings has make-and-model rules that suggest a group only when they agree.
 - **R19** fixed in 7bf709f: card-fee tick removed from the recovery and new-claim forms (saved fees kept, with a history note); "Paying by card" on Record a payment and on each draft invoice adds a separate card fee (Settings % of the net amount being paid, plus VAT) on any head, in its own ledger, shown beside the head totals and as its own invoice line, never in the charge, received or outstanding. Question 16 asks Justin to confirm the net basis.
 - **R20** fixed in 7bf709f: GTA paragraph approved as written; no draft mark; still off unless ticked on the rebuttals and the hire pack cover letter.
 - **R21** fixed in 7bf709f: only Justin can authorise claiming recovery or storage without a signed Storage & Recovery Agreement, with a written reason kept on the file and shown in the history, the chronology and the Recovery page. Questions 13, 14 and 15 marked answered.
@@ -29,6 +29,28 @@ Nothing open.
 - **R10** fixed in 69cec49: group charged is suggested from the client's own car with the reason (or says why not); the header names the actual next hire item: Pre-hire checks, Hire agreement – sign, Handover.
 - **R11** fixed in 69cec49: only office staff are offered or accepted as claim handlers.
 - **R12** fixed in 69cec49: rebuttals and the impecuniosity response show "Needs Justin's approval"; a new approveLegalCorrespondence permission (Justin) approves; marking sent or emailing is refused until approved. No letter-before-action or court template exists yet; any added later goes on the same list.
+
+<details><summary>Reviewer's note R22 (30 October 2026)</summary>
+
+**R22 — Choosing a hire car must show and carry over all of its details (from Justin, 30 October 2026).**
+When Justin selected a hire car, the gearbox, GTA group and fuel type didn't come through. Most of CAS's real fleet cars were imported from V5Cs with transmission, seats and group missing ("transmission not recorded · seats not recorded"), and the hire agreement showed the supplied car's group as "not classified".
+
+What to do:
+- **When a car is chosen,** show its full details next to it:
+  - make, model and registration
+  - gearbox, fuel, seats, colour
+  - GTA group
+  - current mileage
+  - where it is
+- Carry every one of those into the hire pack, the agreement, the handover and the driver job automatically. Never ask for them again.
+- **If any of those details are missing on the fleet record,** show the missing ones as boxes right there on the hire screen. Whatever staff enter is saved to the fleet record once, so the next hire has it.
+- **Help complete the real fleet records in one go.** Add a "Fleet details to complete" list on Hire / Fleet, showing each car with what's missing and quick boxes to fill it in.
+  - Where the V5C data already held gives fuel or colour, use it.
+  - Never guess gearbox, seats or GTA group. Staff enter those.
+- **Suggest the GTA group for the supplied car** from its make and model only where Settings has a clear rule. Otherwise staff choose it.
+- **Test:** choose a car with complete details and confirm all of them appear on the agreement. Then choose a car with missing details, fill them in on the hire screen, and confirm they're saved to the fleet record and appear on the agreement.
+
+</details>
 
 <details><summary>Reviewer's notes R19–R21 (30 October 2026)</summary>
 

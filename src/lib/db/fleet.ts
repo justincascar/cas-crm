@@ -460,6 +460,15 @@ export function ensureRealFleet(db: DatabaseSync) {
 
     const fleetVehicleId = existing?.id || fleetId;
     const linkedVehicleId = existing?.vehicle_id || vehicleId;
+    // Fuel and colour read from the V5C fill a blank on the record. A value already saved is kept.
+    if (existing && (fuel || colour)) {
+      db.prepare(
+        `UPDATE vehicles
+         SET fuel = CASE WHEN (fuel IS NULL OR trim(fuel) = '') AND ? IS NOT NULL THEN ? ELSE fuel END,
+             colour = CASE WHEN (colour IS NULL OR trim(colour) = '') AND ? IS NOT NULL THEN ? ELSE colour END
+         WHERE id = ? AND ((? IS NOT NULL AND (fuel IS NULL OR trim(fuel) = '')) OR (? IS NOT NULL AND (colour IS NULL OR trim(colour) = '')))`,
+      ).run(fuel, fuel, colour, colour, linkedVehicleId, fuel, colour);
+    }
     if (sourceAvailable) {
       attachV5cOn(db, {
         fleetVehicleId,
