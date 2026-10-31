@@ -116,38 +116,145 @@ Fix, for every form in the CRM, not just Recovery:
 - **Add a test per form type** (recovery, swap, licence check, payment, offer, handover, new claim, client form). Submit with one deliberate mistake and assert the other values are still there.
 - **Check it as `sian`:** do the recovery with a missing time and a wrong amount. Fix only those two, save, and nothing else should need retyping.
 
-**R60 — Hire car details come from the fleet record and can't be changed on the hire (Justin, 31 October 2026).**
-Choosing a hire car shows a list of faults: hire car gearbox, fuel and so on. Justin's rule:
-- A fleet car's gearbox, fuel, seats, colour and GTA group are entered **once**, on the fleet record, and are simply there on every hire.
-- On the hire, staff can change only the **group charged**, with the R27 reason when it's above the car's group.
-- Gearbox, fuel, seats and the car's own group are **not editable on the hire screen**.
+**R61 — TEST-0042 (Justin's test): recovery lost, and the signed agreement has no Storage & Recovery page (31 October 2026).**
 
-The cause: the dashboard shows "Fleet details to complete: 42". Almost every fleet record lacks gearbox, seats and group, so every hire asks again.
+What happened on TEST-0042 (Miss Aria Roberts):
+- Justin entered the recovery with deliberate mistakes. The form wiped everything (R59), and **no recovery was ever saved**: the history has no recovery entry, and step 2 is still "To do".
+- He then did the hire. Hire Agreement TEST-HA-000013 was signed on screen at 16:44. Because no recovery was recorded at that moment, the agreement correctly left out the Storage & Recovery page. In practice CAS *did* recover and store the car, so the client signed nothing covering recovery and storage.
+- The reviewer then recorded a recovery on TEST-0040 with no mistakes, and it saved correctly ("At the yard from 31/10/2026 15:30 · £474.00"). So the save works; the loss is the R59 wipe.
 
 Fix:
-1. **One-page fleet table.** Hire / Fleet → "Complete fleet details": one table of every car, with a row per car:
-   - registration, make and model
-   - type (car, van, motorbike, campervan, taxi)
-   - gearbox, fuel (R51 list), seats, colour and GTA group, as drop-downs
-   - Each row saves on change (R54 style) and shows a tick when complete.
-   - Filter: "Only cars with details missing".
-   - Office staff can fill all 42 in one sitting.
-2. **Suggestions, never silent.** Pre-fill a suggestion, shown in grey with its source, which staff confirm with one click:
-   - **Fuel and seats** from the V5C data already imported. The V5C shows seating capacity; use it where it was read.
-   - **Gearbox** from the model name: AUTO, S-A, CVT, DSG, "A" suffix → Automatic. Otherwise leave it blank.
-   - **GTA group** from the Settings make-and-model rules, where they agree.
-3. **Read-only on the hire.** On the Hire tab and the swap form, the chosen car's details show read-only with a small "Fleet record wrong? Edit in Fleet" link (office staff). Remove the gearbox, fuel, seats and group boxes from the hire and swap screens. **Group charged** stays editable (defaults per R10, reason per R27).
-4. **A car with details missing can't be chosen.** In the choose-car and swap lists it shows "details missing – complete in Fleet" and is greyed out. Office staff get a link to complete it there and come straight back to the hire with the car chosen.
-5. **Change history.** Fleet record changes show in the car's history with who and when. A change never alters an agreement already produced or signed.
-6. **Test:**
-   - complete two cars in the fleet table, using one suggestion and one typed value
-   - start a hire as `sian` and choose one of them: no faults, details read-only, group charged editable
-   - try to choose an incomplete car: greyed out, with the link
+1. **When recovery or storage is recorded after the hire agreement was signed without the Storage & Recovery page,** say so plainly on the Recovery page, the claim's next step and the dashboard: "The signed hire agreement TEST-HA-000013 does not cover recovery and storage. Get the Storage & Recovery Agreement signed." Offer the existing on-screen, link and paper routes.
+   - Today the Recovery page says "This client has a hire car. Once the hire agreement is signed with its Storage & Recovery page, nothing more is needed here" even when the signed agreement doesn't include that page (TEST-0040, TEST-0042). Only show that sentence when the signed agreement actually includes the page.
+2. **Before the hire agreement is produced on an unroadworthy, non-fault file with recovery "needed" but not recorded,** ask: "Recovery not recorded yet – record it now so the agreement includes the Storage & Recovery page?" with a link. Staff can carry on without it, with a reason.
+3. **Payment requests** for recovery and storage stay refused until a signature covers them (R17). Check this is enforced on TEST-0042 once its recovery is recorded.
+4. **Leave TEST-0042 for Justin** to finish as a test: record the recovery, then sign the Storage & Recovery Agreement on screen.
+
+**R62 — Driving licence number accepted with the wrong format (TEST-0042).**
+TEST-0042's licence number is "DSSGXDCBCXB", 11 characters. A GB licence number is 16 characters:
+- the first 5 letters of the surname, padded with 9s
+- 6 digits encoding the date of birth, with the month +5 for women
+- 2 initials, padded with 9
+- 1 digit
+- 2 check characters
+
+Fix:
+- Check the format when the number is entered, and check it against the surname and date of birth on the file. Show a clear message if it doesn't match.
+- Allow a Northern Ireland (8 digits) or foreign licence through an explicit "Not a GB licence" choice, with the issuing country.
+- Never block the licence check result itself; flag the mismatch for review.
+- Test with a valid fictional number, a wrong-length one and a DOB mismatch.
+
+**R63 — Step 4 "Send letter" should prepare the right letters automatically (Justin, 31 October 2026).**
+Today, clicking "Send letter" on step 4 leads to "Choose who this is going to", then "Choose a CAS email template", then "Fill from this file". Justin's rule: the first letters are always the same for a given kind of file, so the CRM should prepare them filled in and addressed. Staff only check and send.
+
+Clicking step 4 "Send letter" opens a **"First letters" page** with the right pack already prepared:
+
+**Non-fault file:**
+1. **Initial letter to the third-party insurer**: the existing "Non-fault initial letter (third-party insurer)" wording.
+   - Addressed to the third-party insurer's email from the file. If a third-party representative (agent) is recorded, send to the agent and copy the insurer.
+   - It must carry:
+     - the CAS reference, and their claim reference and policy number where held (R5)
+     - client, both vehicles, accident date, time and location
+     - **the MID search**: date searched, registration searched, result, insurer and policy number found. Add this as a short block in the letter if the template has no place for it, and show Justin the wording in the Read-the-wording style (R46).
+   - It asks them to confirm: that they are the insurer and indemnity is in place, their claim reference, and their position on liability. Don't ask for anything already held (R5).
+2. **Client welcome**: the existing "Client welcome (intake)" email, to the client's email.
+3. **Client acceptance of services / authority**: see question 30 below. Until Justin supplies or approves the wording, show "Waiting for CAS's wording" and don't generate it.
+
+**Fault file:**
+1. **Letter to the client's own insurer**: the existing "Fault claim letter (client's own insurer)", reworded per Justin. In short: CAS has been asked by their policyholder to carry out the repairs. Please provide your claim reference and **network (approved repairer) code**, so the repair can be networked to CAS.
+   - Include: client and policyholder, policy number, vehicle, accident date, and the CAS reference.
+   - Mark the new wording as draft until Justin approves it, the same as R16. Don't add legal or contractual statements.
+2. **Client welcome**: as above, worded for a fault claim. Repairs and courtesy car only; don't promise recovery of losses from a third party.
+
+**On the page:**
+- Each letter shows a preview, its recipient (changeable), what's missing (with links to fix), and "Generate" (letter or PDF) or "Send" (email, simulated). There's also "Send all".
+- Step 4 is done when the insurer letter is sent or marked sent, and the existing chase starts.
+- Add a "Network code" field to the file: insurer's claim reference and network code, on the client's own insurer panel. Fill it when the insurer replies.
+- **In the general "Send email" section,** choosing a recipient should pick the matching template and fill it straight away. Remove the separate "Fill from this file" click.
+
+**Questions file:**
+- **Question 30:** "Client acceptance of services / authority form. Supply CAS's current wording, or ask the reviewer to draft one for your solicitor to approve. Until then it isn't generated."
+- **For your solicitor:** "Wording of the fault-claim letter asking the client's own insurer for a network code (not legal advice, check only)."
+
+**Test:**
+- a non-fault file with the MID recorded: the pack is prepared, the insurer letter shows the MID block and the references, step 4 completes and the chase starts
+- a fault file: own-insurer letter asking for the claim reference and network code
+- a file with no insurer email: "missing" with a link
+
+**R64 — Letters by liability status, and new draft documents (Justin, 31 October 2026). This extends R63.**
+The reviewer has drafted the missing documents in `docs/correspondence-templates/drafts/CAS-document-drafts-31oct2026.md`:
+- client instruction and authority (the "acceptance of services")
+- fault repair authority
+- the own-insurer letter asking for the claim reference and network code
+- the own-insurer notification on non-fault claims
+- split-liability letters to the insurer and the client
+- the letter for liability disputed or not yet known
+- a courtesy car agreement outline
+
+None is approved.
+
+Do this:
+1. **Liability status choices** on the file: Non-fault, Fault, Split (with the percentages), Disputed, Not yet known. Map existing values.
+2. **The "First letters" page (R63)** picks its pack from the table at the top of the drafts file:
+   - **Non-fault:** the initial letter to the third-party insurer, plus Draft 4 to the client's own insurer, plus the welcome and Draft 1.
+   - **Fault:** Draft 3 to the client's own insurer, plus the welcome (fault wording) and Draft 2. **Never** the initial letter to the third-party insurer.
+   - **Split:** Drafts 5a and 3, plus 5b and Draft 1.
+   - **Disputed or not yet known:** Drafts 6 and 4, plus the welcome and Draft 1.
+
+   When the status changes, offer the new status's letters and keep the earlier ones on the file.
+3. **Add each draft as a template, word for word,** on CAS headed paper.
+   - Each is marked "Waiting for Justin's approval" and can be previewed, but can't be sent, marked sent or signed until Justin approves it in Settings (the R46 / R16 pattern).
+   - Drafts 1, 2, 4 and 5 also need the solicitor's sign-off. Record that on the approval: "Approved by Justin on … · solicitor checked on …".
+   - Draft 7 (courtesy car) is an outline only. Show "Waiting for CAS's wording" and generate nothing.
+4. **Signed documents.** Drafts 1 and 2 are signed like the hire agreement: on screen, by link or on paper. The signed copy is filed. The tick at clause 10 (Draft 1) or clause 9 (Draft 2) is required to sign.
+5. **Missing-data rules** as written in the drafts:
+   - leave out reference lines that aren't held
+   - leave out the MID sentence when there's no MID record
+   - the one-line account in Draft 6 is typed or checked by the handler, never generated
+6. **Split liability.** On a Split file, show a warning on the Hire tab: "Split liability – check with Justin before continuing credit hire." Justin decides per file.
+7. **Questions file:** replace question 30 with "Read the drafts (link to the drafts file) and approve or change each one". Add the drafts file's "Points for the solicitor to check" under "For your solicitor".
+8. **Test:** one file of each liability status. Check the right pack appears, a fault file never offers the third-party initial letter, unapproved drafts can't be sent, and changing Non-fault to Split offers 5a and 5b.
+
+**R65 — Step 5: one-click engineer and Audatex instructions (Justin, 31 October 2026).**
+Today, step 5 is "Engineer, Audatex estimate, or both → Save choice", then a bare "Engineer instructed" button. Nothing is produced or sent, and the engineer gets nothing from the CRM. Justin wants step 5 to send the instruction, with everything the engineer needs, in one click.
+
+Build:
+1. **Step 5 shows the right buttons for the choice:**
+   - **Engineer:** "Send instruction to [engineer]". Default: Settings → Engineers → the default engineer, which is CAS's engineer on live files. TEST files use the fictional engineer (R40 stays). The engineer can be changed from a drop-down.
+   - **Audatex:** "Send to [staff member] for Audatex". Send it to the staff member set in Settings as the Audatex estimator (question 31), and create their task "Prepare Audatex estimate – [CAS ref]", due today.
+   - **Both:** both buttons, plus "Send both".
+2. **One click sends (simulated until the mailbox is live).** The email is built from the engineer instruction template (`02-engineer-instruction`) on headed paper, with a PDF attached and the file's photos attached. A small "Preview first" link is optional, not a required step.
+3. **CC:** the file's handler by default, plus any extra CC addresses set in Settings (for example a shared claims mailbox). The Audatex email CCs the handler.
+4. **Everything the engineer needs, filled from the file:**
+   - **References:** CAS reference and the handler's name and phone.
+   - **Client:** name and mobile, to arrange access.
+   - **Vehicle:** make, model, registration, colour, fuel and mileage if known.
+   - **Where the vehicle is now (R55):** address, contact, keys and access notes.
+   - **Damage:** accident date and a short circumstances summary, the damage areas (R52 diagram list) and the description, roadworthiness and the "safe to drive" answers.
+   - **Insurer:** third-party insurer and their references, and the liability status.
+   - **What CAS needs back:** inspection date, report, repair estimate, and, if uneconomical, the pre-accident value and salvage category. Use the template's wording for this list; if the template lacks an item, add it as a short bullet and show it in the R46-style wording check for Justin.
+5. **Missing items stop the send and list themselves with links** (R56 style), for example "No vehicle location" or "No photos – send anyway?". Photos are a warning, not a block.
+6. **After sending:**
+   - step 5 shows "Instruction sent to Rhodri Testun 31/10/2026 17:10" (on TEST)
+   - the engineer report chase starts (existing rule; R48 sentence; needs Justin's approval to auto-send)
+   - the email is filed in Communications and the history
+   - "Mark as instructed by phone" stays as a fallback, with a note
+7. **Settings → Engineers:**
+   - default engineer
+   - extra CC addresses
+   - Audatex estimator (staff drop-down)
+8. **Questions file:** add question 31, "Who prepares Audatex estimates, and should anyone else be copied in on engineer instructions?" Default: the handler prepares the estimate and is the only CC.
+9. **Test on a TEST file:**
+   - Engineer: one click sends; the email has every item above, the PDF and photos; the handler is CC'd; the chase starts
+   - Audatex: the task is created for the estimator
+   - Both
+   - a file with no vehicle location is blocked, with the link
 
 **Not independently verified:** R30 automatic sending. Nothing is sent until Justin approves a chaser's wording (question 27); Settings → Automatic chasers now shows each chaser's full wording beside its switch (R46). Retest when he has.
 
 ## Fixed
 
+- **R60** fixed in c0f8b85: Hire / Fleet → "Complete fleet details" is one table of every car (type, gearbox, fuel, seats, colour, GTA group as drop-downs), each change saved at once, a tick when complete, and "Only cars with details missing". Suggestions show in grey with their source and are saved only when staff press Use: gearbox from the model name (AUTO, S-A, CVT, DSG, a final "A"), fuel and colour from the V5C import, GTA group from the Settings rules. Seats are never suggested: the V5C import read no seating capacity. The hire and swap screens show the chosen car's details read-only with "Fleet record wrong? Edit in Fleet"; only the group charged is editable. A car with details missing is greyed out ("details missing – complete in Fleet") and cannot be chosen; the link returns to the hire with the car chosen. Each change goes in the car's history with who and when; agreements already produced keep their wording. Checked as `sian` on the new TEST-0044: one suggestion used (YT18 VJL gearbox, from "AUTO") and one typed value (TEST car CAS 4), incomplete cars greyed out, CU20 FYT chosen with its details read-only and the group charged editable.
 - **R56** fixed in 4e84bc3: on save, a red box at the top says "3 things to fix before saving" and lists each problem in plain words as a link that opens a folded section and goes to the box; each box is outlined with its message underneath; as each is fixed its line goes and the count drops ("2 left to fix"), with a Next problem → button; when none are left it says "All fixed – save now". The box takes focus so a screen reader announces it. Every form built on the shared form gets this (new claim, Details tab, client form, Hire Pack and the others); the new-claim form and the Details tab get every problem back from the server at once, and a refused new claim goes back to its draft with what was typed.
 - **R57** fixed in 14eade4: only a Mobile box needs 07 or +447. Every other telephone box takes any UK number (01, 02, 03, 05, 07 or 08 with the right digits, or +44) or an international number starting +, with spaces and an extension ("ext 12"). Their hint reads "UK number, for example 01792 341069 or 07700 900123". A landline in a mobile box is refused with "… looks like a landline: put it under Telephone instead". Labels read Mobile or Telephone; the client's second number is Other telephone.
 - **R48** fixed in 14f366d: every chaser (liability, engineer report, repair authorisation, each payment reminder, the combined email once per item, the liability chaser letter and the supplied payment chases, and the Read the wording preview) has one sentence near the top: when we first wrote (the request marked sent) and how many chasers have been sent or marked sent since, with the latest date. First chaser: "have not yet received a response", no count. A substantive reply restarts the count from the reply and the sentence says so. Left out when the first-request date is not on the file.
