@@ -1,5 +1,6 @@
 "use server";
 
+import { saveClaimDraft } from "@/lib/db/claim-drafts";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireStaff } from "@/lib/auth/session";
@@ -51,17 +52,18 @@ import { isoDaysFromNow } from "@/lib/dates";
 import { postcodeLookup } from "@/lib/lookups/postcode";
 import { VEHICLE_MANUAL_HINT, vehicleLookup } from "@/lib/lookups/vehicle";
 import { generationMarksStep, isDocumentTemplateKey } from "@/lib/documents/catalog";
-import { errorQuery, FieldValidationError } from "@/lib/form-validation";
+import { errorQuery, FieldValidationError, problemsQuery } from "@/lib/form-validation";
 import { phoneFieldError } from "@/lib/phone-number";
 import { redirectClash } from "@/lib/http/version-clash";
 import { setClaimEngineer } from "@/lib/db/engineers";
 
 export async function actionCreateClaim(formData: FormData) {
-  await requireStaff();
+  const staff = await requireStaff();
   const input = intakeFromFormData(formData);
-  const blocked = intakeFieldErrors(input)[0];
-  if (blocked) {
-    redirect(`/claims/new${errorQuery(blocked.message, blocked.field)}`);
+  const problems = intakeFieldErrors(input);
+  // R56: what was typed is kept in the draft before staff are sent back to fix the problems.
+  if (problems.length) {
+    redirect(`/claims/new${problemsQuery(problems, { draft: keepTypedInDraft(formData, staff.id) })}`);
   }
   let result: { id: string };
   try {
@@ -86,16 +88,33 @@ export async function actionCreateClaim(formData: FormData) {
       run(`UPDATE recovery_jobs SET receipt_document_id = ? WHERE claim_id = ?`, [documentId, result.id]);
     }
   } catch (error) {
+    const draft = keepTypedInDraft(formData, staff.id);
     if (error instanceof FieldValidationError) {
-      redirect(`/claims/new${errorQuery(error.message, error.field)}`);
+      redirect(`/claims/new${problemsQuery([{ field: error.field, message: error.message }], { draft })}`);
     }
     const message = error instanceof Error ? error.message : "Could not create the claim.";
     const field = /forename or surname/i.test(message) ? "client_forename" : undefined;
-    redirect(`/claims/new${errorQuery(message, field)}`);
+    redirect(`/claims/new${field ? problemsQuery([{ field, message }], { draft }) : `${errorQuery(message)}${draft ? `&draft=${encodeURIComponent(draft)}` : ""}`}`);
   }
   revalidatePath("/");
   revalidatePath("/claims");
   redirect(`/claims/${result.id}`);
+}
+
+/** Saves the submitted boxes into the claim draft (a new one if there is none). Returns the draft to reopen. */
+function keepTypedInDraft(formData: FormData, actorId: string): string {
+  const fields: Record<string, string> = {};
+  for (const [name, value] of formData.entries()) {
+    if (typeof value !== "string" || name.startsWith("$ACTION") || name === "submitKey") continue;
+    fields[name] = name in fields ? `${fields[name]},${value}` : value;
+  }
+  const draftId = String(formData.get("draftId") || "");
+  try {
+    return saveClaimDraft({ draftId, expectedVersion: String(formData.get("draftVersion") || ""), payload: fields, actorId }).id;
+  } catch {
+    // Someone else saved the draft meanwhile: theirs is kept, and staff reopen it.
+    return draftId;
+  }
 }
 
 export async function actionAddNote(formData: FormData) {
@@ -316,8 +335,8 @@ export async function actionSaveClaimScreen(formData: FormData) {
   } catch (error) {
     if (error instanceof VersionConflictError) redirect(pathWithClash(back, error));
     const message = error instanceof Error ? error.message : "Could not save this screen.";
-    const field = error instanceof FieldValidationError ? error.field : undefined;
-    redirect(`${back}${errorQuery(message, field)}`);
+    if (error instanceof FieldValidationError) redirect(`${back}${problemsQuery(error.problems)}`);
+    redirect(`${back}${errorQuery(message)}`);
   }
   revalidatePath(`/claims/${claimId}`);
   revalidatePath(`/claims/${claimId}/work/${screenKey}`);

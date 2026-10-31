@@ -10,10 +10,13 @@ export type FieldError = { field: string; message: string };
 
 export class FieldValidationError extends Error {
   field: string;
-  constructor(field: string, message: string) {
+  /** R56: every problem found on this save, the first being field and message. */
+  problems: Array<{ field: string; message: string }>;
+  constructor(field: string, message: string, problems?: Array<{ field: string; message: string }>) {
     super(message);
     this.name = "FieldValidationError";
     this.field = field;
+    this.problems = problems?.length ? problems : [{ field, message }];
   }
 }
 
@@ -99,6 +102,32 @@ export function errorQuery(message: string, field?: string): string {
   params.set("error", message);
   if (field) params.set("field", field);
   return `?${params.toString()}`;
+}
+
+/** R56: one problem the server found, for the list at the top of the form. */
+export type FieldProblem = { field: string; message: string };
+
+/** All the problems at once, and the draft to reopen so nothing typed is lost. */
+export function problemsQuery(problems: FieldProblem[], extra: Record<string, string> = {}): string {
+  const params = new URLSearchParams();
+  params.set("error", problems.length === 1 ? problems[0]!.message : `${problems.length} things to fix before saving.`);
+  if (problems[0]) params.set("field", problems[0].field);
+  params.set("problems", JSON.stringify(problems.slice(0, 30).map((item) => ({ field: item.field, message: item.message.slice(0, 300) }))));
+  for (const [key, value] of Object.entries(extra)) if (value) params.set(key, value);
+  return `?${params.toString()}`;
+}
+
+export function readProblems(raw: string | null | undefined): FieldProblem[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((item): item is FieldProblem => Boolean(item) && typeof (item as FieldProblem).field === "string" && typeof (item as FieldProblem).message === "string")
+      .slice(0, 30);
+  } catch {
+    return [];
+  }
 }
 
 function shouldSkip(el: FormControl): boolean {

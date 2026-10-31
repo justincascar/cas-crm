@@ -1,4 +1,5 @@
 import { IntakeForm } from "@/components/IntakeForm";
+import { readProblems } from "@/lib/form-validation";
 import { PageHeader } from "@/components/ClaimTable";
 import { requireStaff } from "@/lib/auth/session";
 import { formatUkDateTime } from "@/lib/dates";
@@ -10,10 +11,10 @@ import { enquiryForDraft } from "@/lib/db/website-enquiries";
 export default async function NewClaimPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; field?: string; draft?: string }>;
+  searchParams: Promise<{ error?: string; field?: string; draft?: string; problems?: string }>;
 }) {
   const me = await requireStaff();
-  const { error, field, draft } = await searchParams;
+  const { error, field, draft, problems } = await searchParams;
   const draftRow = draft ? getClaimDraft(draft) : undefined;
   const openDraft = draftRow && !draftRow.discarded_at && !draftRow.claim_id ? draftRow : undefined;
   const enquiry = enquiryForDraft(openDraft?.id);
@@ -43,6 +44,7 @@ export default async function NewClaimPage({
         draftId={openDraft?.id || ""}
         draftVersion={openDraft?.updated_at || ""}
         currentStaffId={me.id}
+        problems={readProblems(problems)}
       />
     </div>
   );

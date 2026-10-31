@@ -1,5 +1,6 @@
 "use client";
 
+import type { FieldProblem } from "@/lib/form-validation";
 import { CarDamageDiagram } from "@/components/CarDamageDiagram";
 import Link from "next/link";
 import { useRef, useState } from "react";
@@ -174,6 +175,7 @@ export function ScreenForm({
   agents = [],
   error,
   errorField,
+  problems,
   recordVersion = "",
   extraHidden,
   hideSections = [],
@@ -188,6 +190,8 @@ export function ScreenForm({
   agents?: KnownInsurer[];
   error?: string;
   errorField?: string;
+  /** R56: every problem the server found. */
+  problems?: FieldProblem[];
   recordVersion?: string;
   extraHidden?: Record<string, string>;
   /** Section titles this page shows elsewhere, so they are not asked twice. */
@@ -199,6 +203,7 @@ export function ScreenForm({
       className="space-y-6"
       initialError={error}
       initialErrorField={errorField}
+      initialProblems={problems}
     >
       <input type="hidden" name="claimId" value={claimId} />
       <input type="hidden" name="screenKey" value={def.key} />

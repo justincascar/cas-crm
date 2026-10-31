@@ -109,6 +109,46 @@ export function screenSaveFieldError(
   screenKey: string,
   values: ScreenValues,
 ): { field: string; message: string } | null {
+  return screenSaveFieldErrors(claimId, screenKey, values)[0] ?? null;
+}
+
+/** R56: every problem on the screen at once. */
+export function screenSaveFieldErrors(
+  claimId: string,
+  screenKey: string,
+  values: ScreenValues,
+): Array<{ field: string; message: string }> {
+  const single = screenSaveSingleError(claimId, screenKey, values);
+  if (single) return [single];
+  const def = getClaimScreen(screenKey);
+  if (!def) return [];
+  const problems: Array<{ field: string; message: string }> = [];
+  const claim = get<{ client_role: string | null }>(`SELECT client_role FROM claims WHERE id = ?`, [claimId]);
+  for (const section of def.sections) {
+    for (const field of section.fields) {
+      if (isPhoneBoxName(field.name)) {
+        const kept = values[`saveAnyway_${field.name}`] === "yes";
+        const phoneErr = kept ? null : phoneFieldError(field.name, values[field.name]);
+        if (phoneErr) problems.push({ field: field.name, message: phoneErr });
+      }
+      if (!isDobFieldName(field.name)) continue;
+      const err = dobSaveError(
+        values[field.name],
+        dobKindForField(screenKey, field.name, claim?.client_role || undefined),
+        values[dobConfirmName(field.name)] === "yes",
+      );
+      if (err) problems.push({ field: field.name, message: err });
+    }
+  }
+  return problems;
+}
+
+/** The screen-specific checks, each about one box. */
+function screenSaveSingleError(
+  claimId: string,
+  screenKey: string,
+  values: ScreenValues,
+): { field: string; message: string } | null {
   if (screenKey === "recovery") {
     const extra = somethingElseSaveError(values);
     if (extra) return extra;
@@ -133,26 +173,7 @@ export function screenSaveFieldError(
   }
   if (screenKey === "accident") {
     const accident = accidentDateError(values.accidentDate);
-    return accident ? { field: "accidentDate", message: accident } : null;
-  }
-  const def = getClaimScreen(screenKey);
-  if (!def) return null;
-  const claim = get<{ client_role: string | null }>(`SELECT client_role FROM claims WHERE id = ?`, [claimId]);
-  for (const section of def.sections) {
-    for (const field of section.fields) {
-      if (isPhoneBoxName(field.name)) {
-        const kept = values[`saveAnyway_${field.name}`] === "yes";
-        const phoneErr = kept ? null : phoneFieldError(field.name, values[field.name]);
-        if (phoneErr) return { field: field.name, message: phoneErr };
-      }
-      if (!isDobFieldName(field.name)) continue;
-      const err = dobSaveError(
-        values[field.name],
-        dobKindForField(screenKey, field.name, claim?.client_role || undefined),
-        values[dobConfirmName(field.name)] === "yes",
-      );
-      if (err) return { field: field.name, message: err };
-    }
+    if (accident) return { field: "accidentDate", message: accident };
   }
   return null;
 }
@@ -354,8 +375,8 @@ export function saveScreenData(
   shared?: Record<string, string | undefined>,
 ) {
   const stored = screenKey === "recovery" ? normaliseRecoveryScreen(values) : values;
-  const blocked = screenSaveFieldError(claimId, screenKey, stored);
-  if (blocked) throw new FieldValidationError(blocked.field, blocked.message);
+  const blocked = screenSaveFieldErrors(claimId, screenKey, stored);
+  if (blocked.length) throw new FieldValidationError(blocked[0]!.field, blocked[0]!.message, blocked);
   const guard = () => guardScreenOverlap(claimId, screenKey, stored, actorId, shared, loaded);
   if (expectedVersion === undefined) {
     guard();

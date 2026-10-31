@@ -1,3 +1,4 @@
+import { readProblems } from "@/lib/form-validation";
 import Link from "next/link";
 import { loadClaimSteps } from "@/lib/claims/load-claim-steps";
 import { currentClaimStep } from "@/lib/domain/claim-steps";
@@ -41,14 +42,14 @@ export async function ClaimWorkScreen({
   searchParams,
 }: {
   params: Promise<{ id: string; screen: string }>;
-  searchParams: Promise<{ saved?: string; error?: string; field?: string; whatsapp?: string; clash?: string; tlError?: string; tlMail?: string; mailboxError?: string; mailboxSent?: string; mailboxSimulated?: string; mailboxReport?: string; stepError?: string; stepSaved?: string }>;
+  searchParams: Promise<{ saved?: string; error?: string; field?: string; problems?: string; whatsapp?: string; clash?: string; tlError?: string; tlMail?: string; mailboxError?: string; mailboxSent?: string; mailboxSimulated?: string; mailboxReport?: string; stepError?: string; stepSaved?: string }>;
 }) {
   const { id, screen } = await params;
   if (screen === "storage" || screen === "recovery") redirect(headScreenPath(id, screen));
   if (screen === "reserve" || screen === "hire-vehicle") redirect(`/claims/${id}/hire#car`);
   if (screen === "delivery-collection") redirect(`/claims/${id}/hire#handover`);
   await requireStaff();
-  const { saved, error, field, whatsapp, clash, tlError, tlMail, mailboxError, mailboxSent, mailboxSimulated, mailboxReport, stepError, stepSaved } = await searchParams;
+  const { saved, error, field, problems, whatsapp, clash, tlError, tlMail, mailboxError, mailboxSent, mailboxSimulated, mailboxReport, stepError, stepSaved } = await searchParams;
   const def = getClaimScreen(screen);
   if (!def) notFound();
   const data = getClaim(id);
@@ -290,6 +291,7 @@ export async function ClaimWorkScreen({
           agents={listKnownAgents()}
           error={error}
           errorField={field}
+          problems={readProblems(problems)}
           recordVersion={recordVersion}
           extraHidden={extraHidden}
         />

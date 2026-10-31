@@ -1,5 +1,6 @@
 "use client";
 
+import type { FieldProblem } from "@/lib/form-validation";
 import { FuelSelect } from "@/components/FuelSelect";
 import { normaliseFuel } from "@/lib/domain/fuel";
 import { CarDamageDiagram } from "@/components/CarDamageDiagram";
@@ -740,8 +741,11 @@ export function IntakeForm({
   draftId: initialDraftId = "",
   draftVersion: initialDraftVersion = "",
   currentStaffId = "",
+  problems = [],
 }: {
   currentStaffId?: string;
+  /** R56: every problem the server found. */
+  problems?: FieldProblem[];
   staff: Staff[];
   nextRef: string;
   error?: string;
@@ -877,8 +881,8 @@ export function IntakeForm({
 
   return (
     <>
-    <ValidatedForm action={actionCreateClaim} className="space-y-6" initialError={error} initialErrorField={errorField} encType="multipart/form-data">
-      {error ? (
+    <ValidatedForm action={actionCreateClaim} className="space-y-6" initialError={error} initialErrorField={errorField} initialProblems={problems} encType="multipart/form-data">
+      {error && !problems.length && !errorField ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
       ) : null}
       <p className="text-sm text-slate">

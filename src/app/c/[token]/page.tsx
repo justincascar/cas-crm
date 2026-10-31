@@ -1,3 +1,4 @@
+import { ValidatedForm } from "@/components/ValidatedForm";
 import { CarDamageDiagram } from "@/components/CarDamageDiagram";
 import type { Metadata } from "next";
 import { formatUkDateTime } from "@/lib/dates";
@@ -72,7 +73,7 @@ export default async function ClientFormPage({
         </p>
       ) : null}
 
-      <form method="post" action={`/c/${token}/save`} encType="multipart/form-data" className="space-y-5">
+      <ValidatedForm method="post" action={`/c/${token}/save`} encType="multipart/form-data" className="space-y-5">
         {sections.map((section) => (
           <fieldset key={section} className="space-y-4 rounded-xl border border-line bg-card p-4">
             <legend className="px-1 text-lg font-semibold text-navy-deep">{section}</legend>
@@ -158,7 +159,7 @@ export default async function ClientFormPage({
             </a>
           </p>
         </div>
-      </form>
+      </ValidatedForm>
     </main>
   );
 }
