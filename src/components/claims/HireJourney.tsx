@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { RECOVERY_NOT_RECORDED_QUESTION, recoveryNeededNotRecorded } from "@/lib/db/storage-recovery-signing";
 import type { ReactNode } from "react";
 import { HirePackScreen } from "@/app/claims/[id]/hire-pack/page";
 import { PrehireChecksScreen } from "@/app/claims/[id]/prehire/page";
@@ -875,6 +876,7 @@ function AgreementBody({
   /** Once signed, the instruction to print and sign it is no longer shown. */
   signed: boolean;
 }) {
+  const askRecovery = !signed && recoveryNeededNotRecorded(claimId);
   return (
     <div className="mt-3 space-y-3 text-sm">
       {stillNeeded.length ? (
@@ -894,9 +896,24 @@ function AgreementBody({
         <p className="text-ok">Everything the agreement needs is on the file.</p>
       )}
       {signed ? null : <p>Get it signed on screen, by the signing link, or on paper (upload the signed copy).</p>}
-      <form method="post" action={`/claims/${claimId}/hire/agreement`}>
+      <form method="post" action={`/claims/${claimId}/hire/agreement`} className="space-y-3">
         <SubmitKeyInput />
         <input type="hidden" name="returnHash" value="#pack" />
+        {askRecovery ? (
+          <div className="rounded-md border border-warn bg-[#fff6e8] p-3" data-recovery-not-recorded>
+            <p className="font-semibold">{RECOVERY_NOT_RECORDED_QUESTION}</p>
+            <p className="mt-1">
+              <Link href={`/claims/${claimId}/heads/recovery#record`} className="font-semibold text-teal-dark underline">
+                Record the recovery now
+              </Link>{" "}
+              and the agreement will include the Storage &amp; Recovery page.
+            </p>
+            <label className="mt-2 block">
+              Or carry on without it. Reason (kept on the file)
+              <textarea name="noRecoveryReason" rows={2} maxLength={500} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" />
+            </label>
+          </div>
+        ) : null}
         <button className={button} type="submit">
           {again ? "Produce a new version for signature" : "Produce agreement for signature"}
         </button>

@@ -18,6 +18,7 @@ import { loadClash } from "@/lib/db/record-version";
 import { DASHBOARD_SCOPE_COOKIE, resolveDashboardScope, type DashboardScope } from "@/lib/domain/dashboard-scope";
 import { BANK_DETAILS_MISSING_SETTINGS, paymentDetailsComplete } from "@/lib/domain/payment-details";
 import { getInsurerPaymentDetails, latestBankDetailsChange } from "@/lib/db/payment-details";
+import { listStorageRecoveryNotCovered } from "@/lib/db/storage-recovery-signing";
 
 type Count = { key: string; label: string; value: string; href: string; tone: string };
 
@@ -85,6 +86,8 @@ export default async function DashboardPage({
   }
   const bankDetailsMissing = !paymentDetailsComplete(getInsurerPaymentDetails());
   const bankChange = latestBankDetailsChange();
+  // R61: files where recovery or storage is recorded but the signed hire agreement does not cover it.
+  const notCovered = listStorageRecoveryNotCovered();
   const drafts = listOpenClaimDrafts();
 
   // One next step per claim. The claim's other items are on the claim itself.
@@ -154,6 +157,22 @@ export default async function DashboardPage({
         <p className="mt-4 rounded-md border border-line bg-card px-4 py-3 text-sm">
           Bank details changed on {formatUkDate(bankChange.at)} by {bankChange.actorName}
         </p>
+      ) : null}
+
+      {notCovered.length ? (
+        <section className="mt-4 rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm" data-sr-not-covered-list={notCovered.length}>
+          <p className="font-semibold text-overdue">Recovery and storage not covered by a signature</p>
+          <ul className="mt-1 space-y-1">
+            {notCovered.map((item) => (
+              <li key={item.claimId}>
+                <Link href={`/claims/${item.claimId}/heads/recovery#agreement`} className="font-semibold text-navy underline">
+                  {item.reference}
+                </Link>
+                : {item.message}
+              </li>
+            ))}
+          </ul>
+        </section>
       ) : null}
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3" data-dashboard-counts>

@@ -3,7 +3,7 @@ import { recoveryCardFeePercent } from "@/lib/db/recovery-fee-settings";
 import Link from "next/link";
 import { VehicleMovements } from "@/components/claims/VehicleMovements";
 import { StorageRecoveryAgreementPanel } from "@/components/claims/StorageRecoveryAgreementPanel";
-import { canOverrideUnsignedStorageRecovery, storageRecoveryState } from "@/lib/db/storage-recovery-signing";
+import { canOverrideUnsignedStorageRecovery, storageRecoveryState, hireAgreementIncludesStorageRecovery, storageRecoveryNotCovered } from "@/lib/db/storage-recovery-signing";
 import { currentHireEpisode } from "@/lib/db/hire-readiness";
 import { listVehicleMovements, NOT_DRIVEABLE_REASONS, notDriveableLabel } from "@/lib/db/vehicle-movements";
 import { notFound, redirect } from "next/navigation";
@@ -213,7 +213,7 @@ export async function RecoveryHeadScreen({
         )}
       </section>
 
-      <StorageRecoveryAgreementPanel claimId={id} state={storageRecoveryState(id)} clientName={String(data.claim.client_name || "")} hasHireCar={Boolean(currentHireEpisode(id)?.fleet_vehicle_id)} canOverride={canOverrideUnsignedStorageRecovery(staff.id)} />
+      <StorageRecoveryAgreementPanel claimId={id} state={storageRecoveryState(id)} clientName={String(data.claim.client_name || "")} hasHireCar={Boolean(currentHireEpisode(id)?.fleet_vehicle_id)} hireIncludesPage={hireAgreementIncludesStorageRecovery(id)} notCovered={storageRecoveryNotCovered(id)} canOverride={canOverrideUnsignedStorageRecovery(staff.id)} />
 
       <div id="movements" className="scroll-mt-16">
         <VehicleMovements claimId={id} movements={listVehicleMovements(id)} returnTo={headScreenPath(id, "recovery")} />

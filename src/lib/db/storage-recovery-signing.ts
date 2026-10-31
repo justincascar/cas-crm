@@ -8,7 +8,7 @@ import { recordClaimEvent } from "./chronology";
 import { get, getDb, newId, run } from "./connection";
 import { insertStoredDocument } from "./documents-store";
 import { clientAgreementHtml } from "./esign";
-import { signedHireAgreementOnFile } from "./hire-readiness";
+import { SIGNED_HIRE_AGREEMENT_TYPE, signedHireAgreementOnFile } from "./hire-readiness";
 import { OVERRIDE_UNSIGNED_STORAGE_RECOVERY } from "../auth/roles";
 import { listStaffPermissions } from "./permissions";
 
@@ -180,6 +180,82 @@ export function storageRecoverySignedLine(state: StorageRecoveryState): string {
 }
 
 const CLAIM_EVENTS = new Set(["recovery_payment_request_sent", "storage_payment_request_sent"]);
+
+const STORAGE_RECOVERY_PAGE = "<h2>Storage &amp; Recovery Agreement</h2>";
+
+function latestHireAgreement(claimId: string): { title: string; body: string } | null {
+  const row = get<{ title: string | null; body_html: string | null }>(
+    `SELECT title, body_html FROM documents WHERE claim_id = ? AND template_key = 'hire_agreement' ORDER BY version DESC, created_at DESC, rowid DESC LIMIT 1`,
+    [claimId],
+  );
+  return row ? { title: String(row.title || ""), body: String(row.body_html || "") } : null;
+}
+
+/** R61: whether the hire agreement produced on the file includes the Storage & Recovery page. */
+export function hireAgreementIncludesStorageRecovery(claimId: string): boolean {
+  return Boolean(latestHireAgreement(claimId)?.body.includes(STORAGE_RECOVERY_PAGE));
+}
+
+/** R61: recovery or storage is recorded on the file (the car was recovered, or storage has a start date). */
+export function recoveryOrStorageRecorded(claimId: string): boolean {
+  const recovered = get<{ n: number }>(`SELECT COUNT(*) AS n FROM recovery_jobs WHERE claim_id = ? AND recovered_at IS NOT NULL AND trim(recovered_at) <> ''`, [claimId]);
+  if (Number(recovered?.n || 0) > 0) return true;
+  const storage = get<{ storage_started_on: string | null }>(`SELECT storage_started_on FROM claims WHERE id = ?`, [claimId]);
+  return Boolean(String(storage?.storage_started_on || "").trim());
+}
+
+/**
+ * R61: a non-fault file with an unroadworthy car marked as needing recovery, where no recovery is recorded yet. A hire
+ * agreement produced now would leave out the Storage & Recovery page, so staff are asked first.
+ */
+export function recoveryNeededNotRecorded(claimId: string): boolean {
+  const claim = get<{ claim_type: string | null; roadworthiness: string | null; needs_recovery: number | null }>(
+    `SELECT claim_type, roadworthiness, needs_recovery FROM claims WHERE id = ?`,
+    [claimId],
+  );
+  if (!claim || claim.claim_type !== "non_fault" || claim.roadworthiness !== "unroadworthy" || Number(claim.needs_recovery) !== 1) return false;
+  if (recoveryOrStorageRecorded(claimId)) return false;
+  return storageRecoveryState(claimId).status === "not_signed";
+}
+
+export const RECOVERY_NOT_RECORDED_QUESTION = "Recovery not recorded yet – record it now so the agreement includes the Storage & Recovery page?";
+
+export type StorageRecoveryGap = { agreementNumber: string; message: string };
+
+/**
+ * R61: recovery or storage is recorded, but the only signature on the file is a hire agreement signed without the
+ * Storage & Recovery page (it was produced before any recovery was recorded). The client has signed nothing that
+ * covers recovery and storage, so the Storage & Recovery Agreement must be signed. Null when nothing is missing.
+ */
+export function storageRecoveryNotCovered(claimId: string): StorageRecoveryGap | null {
+  if (!signedHireAgreementOnFile(claimId)) return null;
+  if (storageRecoveryState(claimId).status !== "not_signed") return null;
+  if (!recoveryOrStorageRecorded(claimId)) return null;
+  const agreement = latestHireAgreement(claimId);
+  const agreementNumber =
+    agreement?.body.match(/Agreement number: <strong>([^<]+)<\/strong>/)?.[1] || agreement?.title.match(/[A-Z]+-HA-\d+/)?.[0] || "";
+  const named = agreementNumber ? `The signed hire agreement ${agreementNumber}` : "The signed hire agreement";
+  return { agreementNumber, message: `${named} does not cover recovery and storage. Get the Storage & Recovery Agreement signed.` };
+}
+
+/** R61: every open file where recovery or storage is recorded but no signature covers it, for the dashboard. */
+export function listStorageRecoveryNotCovered(): Array<{ claimId: string; reference: string; message: string }> {
+  ready();
+  const candidates = getDb()
+    .prepare(
+      `SELECT DISTINCT c.id, c.file_reference FROM claims c
+       JOIN documents d ON d.claim_id = c.id AND d.document_type = ?
+       WHERE NOT EXISTS (SELECT 1 FROM claim_events closed WHERE closed.claim_id = c.id AND closed.event_type = 'case_closed')
+       ORDER BY c.file_reference`,
+    )
+    .all(SIGNED_HIRE_AGREEMENT_TYPE) as Array<{ id: string; file_reference: string }>;
+  const out: Array<{ claimId: string; reference: string; message: string }> = [];
+  for (const row of candidates) {
+    const gap = storageRecoveryNotCovered(String(row.id));
+    if (gap) out.push({ claimId: String(row.id), reference: String(row.file_reference), message: gap.message });
+  }
+  return out;
+}
 
 /** Recovery and storage are not claimed until the client has signed the Storage & Recovery terms. */
 export function guardStorageRecoveryClaim(claimId: string, eventType: string) {

@@ -1,4 +1,5 @@
 import { HEAD_LABELS, HEADS_OF_LOSS, type HeadOfLoss } from "@/lib/constants";
+import { storageRecoveryNotCovered } from "@/lib/db/storage-recovery-signing";
 import { jurisdictionLabel } from "@/lib/domain/jurisdiction";
 import { currentClaimStep, resolveDisplayedNextAction, stepStageLabel } from "@/lib/domain/claim-steps";
 import { liabilityStatusLabel, roadworthinessLabel } from "@/lib/domain/claim-status";
@@ -149,6 +150,7 @@ export function buildClaimSummaryModel(claimId: string): ClaimSummaryModel | nul
   });
   const running = claimRunningDaily(id);
   const conflict = fleetConflictForClaim(id);
+  const notCovered = storageRecoveryNotCovered(id);
   const flags: ClaimSummaryFlag[] = [
     ...outstandingForClaim(id).map((item) => ({
       id: item.id,
@@ -163,6 +165,8 @@ export function buildClaimSummaryModel(claimId: string): ClaimSummaryModel | nul
         label: gap.wording,
       })),
     ...(conflict ? [{ id: "fleet", href: `/claims/${id}#fleet-conflict`, label: conflict.text }] : []),
+    // R61: recovery or storage recorded, but the signed hire agreement does not cover it.
+    ...(notCovered ? [{ id: "storage-recovery-not-covered", href: `/claims/${id}/heads/recovery#agreement`, label: notCovered.message }] : []),
     ...recoveryReviewFlags(id).map((label, index) => ({
       id: `recovery-review-${index}`,
       href: `/claims/${id}/heads/recovery`,

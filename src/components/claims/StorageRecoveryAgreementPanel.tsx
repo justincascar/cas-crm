@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { formatUkDate } from "@/lib/dates";
-import { storageRecoverySignedLine, type StorageRecoveryState } from "@/lib/db/storage-recovery-signing";
+import { storageRecoverySignedLine, type StorageRecoveryGap, type StorageRecoveryState } from "@/lib/db/storage-recovery-signing";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
@@ -13,12 +13,18 @@ export function StorageRecoveryAgreementPanel({
   state,
   clientName,
   hasHireCar,
+  hireIncludesPage,
+  notCovered,
   canOverride,
 }: {
   claimId: string;
   state: StorageRecoveryState;
   clientName: string;
   hasHireCar: boolean;
+  /** R61: the hire agreement on the file includes the Storage & Recovery page. */
+  hireIncludesPage: boolean;
+  /** R61: recovery or storage is recorded but the signed hire agreement does not cover it. */
+  notCovered: StorageRecoveryGap | null;
   /** Justin only: claim recovery or storage without a signed agreement, with a reason. */
   canOverride: boolean;
 }) {
@@ -43,7 +49,11 @@ export function StorageRecoveryAgreementPanel({
             The client signs this before recovery or storage is claimed. It is the Storage &amp; Recovery page, the relevant terms and the notice of the right to
             cancel from CAS&rsquo;s Hire Pack.
           </p>
-          {hasHireCar ? (
+          {notCovered ? (
+            <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-3 py-2 text-sm font-semibold text-overdue" role="alert" data-sr-not-covered>
+              {notCovered.message} Produce it below, then the client signs on screen or on paper.
+            </p>
+          ) : hasHireCar && hireIncludesPage ? (
             <p className="text-sm text-slate">This client has a hire car. Once the hire agreement is signed with its Storage &amp; Recovery page, nothing more is needed here.</p>
           ) : null}
           {state.produced ? (
