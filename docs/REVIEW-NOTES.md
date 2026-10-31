@@ -4,12 +4,134 @@ Written by the reviewer, Claude (Cowork), after testing the app in the browser a
 
 ## Open
 
-Nothing open. R42–R47 from the retest of 31 October 2026 (afternoon) are fixed below.
+**R49 — QR code on the authenticator set-up.** Part done in 14f366d: the set-up page now says each new set-up gives a new key (signing in again, pressing "Set up an authenticator app" again, or after the 5-minute step expires) and to remove the old CAS CRM entry first. A plain refresh of the page keeps the same key, so the line says what really makes a new one. **Still open:** the QR code needs a QR encoder. None is in the CRM; Claude Code asked to install the `qrcode` package from npm (MIT) and had no answer, so nothing was downloaded. Question 30.
+Justin set up his authenticator by typing the key, and was caught out when the page reloaded with a new key. Fix:
+- Show a QR code of the same key, made on the server with no outside service, so it can be scanned instead of typed.
+- Add one line: "If you refresh this page you get a new key: remove the old CAS CRM entry from your app first."
+
+**R55 — Rebuild the Recovery page as four steps (Justin approved, 31 October 2026).**
+
+**Today's problems:**
+- It only records the end ("When the car has arrived at the yard … Storage starts that day").
+- "Where the car was" is free text.
+- It re-asks condition and the not-driveable reason.
+- It always assumes the CAS yard.
+- Ten charge lines show before anything has happened.
+- The same details sit in "Record the recovery", "Recovery details", "More – recoverer details" and "Car movements".
+
+**Build one Recovery page with four steps.** Each step folds to one line with Change once done, like the claim steps.
+
+**Step 1 — Where is the car now?**
+- Choose one:
+  - **Accident scene** (filled from the intake location)
+  - **Client's home** (filled from the client's address)
+  - **Client's work** (address box, saved to the client)
+  - **Roadside elsewhere** (postcode, road or landmark, optional map pin)
+  - **Police or council compound** (name, address, reference, release fees)
+  - **Another garage** (name, address)
+  - **Other**
+- Then:
+  - Who is with the car, and their phone
+  - Where the keys are
+  - Access notes: low height or car park, locked or damaged wheels, needs skates or dollies, in a ditch
+- Condition and the unroadworthy reasons come pre-filled from the intake (R52) and can be edited here. Don't ask twice.
+- "Recovery not needed" (for example roadworthy and the client keeps the car) with a reason, which closes the page to one line.
+
+**Step 2 — Book it.**
+- Who: a CAS driver (staff with the driver role) or an outside recovery firm (saved recoverers, the same type-ahead as insurers, with their reference).
+- Booked date and time.
+- This creates the driver's job, like delivery jobs, with the location, contacts, keys and access notes.
+- Optional "Recovery on the way" message to the client (simulated, using the existing template).
+
+**Step 3 — Collected.**
+- Date and time collected, photos at collection (optional), and the condition at collection if different.
+- Charges appear here and nowhere earlier:
+  - Standard recovery £395 + VAT, ticked and overridable with a reason, as now.
+  - A "+ Add extras" control for the existing extras and amounts (environmental, winching, forklift, out of hours, specialist winching, skates/dollies, waiting time, second operator, manual charge).
+- **Out of hours** is suggested (ticked, with "why" shown) when the collection time falls in Settings → Out-of-hours times. Defaults confirmed by Justin: before 08:00, after 18:00, Saturdays and Sundays. Bank holidays: a setting, off until Justin confirms. Staff can untick it with a reason.
+
+**Step 4 — Delivered to.**
+- **CAS yard** (default), **a repairer** (saved repairers type-ahead), **the client's home**, or **other** address.
+- Arrival date and time.
+- **Storage starts only when the car is delivered into storage:** the CAS yard, or another storage address on the file. Delivery to a repairer or home starts no storage and says so.
+- Delivery fills the movement record automatically.
+
+**Also:**
+- **Below the steps:** Money (closed until there is something to do), the Storage & Recovery Agreement, and the movement history built automatically from steps 2–4, plus "Record another movement" for later moves (keep the required-by-accident or convenience question).
+- **Remove the duplicate blocks.** Fold "More – recoverer details" into step 2. Fold the old "Recovery details" into the step summaries.
+- **Existing files keep their recorded data,** mapped into the steps with a history note. Nothing is recharged.
+- **The claim's step 2 and the dashboard** show the stage, for example "Recovery booked 14:00 – Rhodri", "Collected – on the way to the yard", "At the yard since 31/10/2026 19:10".
+- **Fault claims** use the same page.
+- **Test as `sian` on a new claim:**
+  - roadside → booked → collected at 19:30 (out of hours suggested) → CAS yard: storage starts at arrival
+  - client's home → repairer: no storage
+  - "recovery not needed"
+  - check the driver job is created and phone-width works for the driver
+
+**R56 — Errors: take staff to each problem in turn (Justin, 31 October 2026).**
+Justin saved a new claim with deliberate mistakes, such as a missing email. The form took him to the first problem only, and he had to hunt for the rest.
+
+Fix, on the new-claim form, the Details tab, the client form and every other long form:
+- **List every problem at the top.** On save, show a red box at the top: "3 things to fix before saving", listing each problem in plain words as a link, for example "Client's email: enter an email address, or tick 'No email'". Clicking one jumps to the field and opens its section if it's folded.
+- **Mark each field.** Each problem field gets a red message under it, with the field outlined.
+- **Move on to the next problem.** Once a field is fixed, its message and its line in the top box clear straight away, and a "Next problem →" button jumps to the next one. The counter updates: "2 left".
+- **Say when it's done.** When none are left, the box says "All fixed – save now".
+- **Keep the draft.** Fixing errors never loses what's typed (see R54).
+- **Make it accessible.** The top box gets focus on save so screen readers announce it, and the links work by keyboard.
+- **Check the server agrees.** The server checks the same rules and returns all problems at once, not one at a time.
+
+**R57 — Phone numbers: only mobile boxes need 07 (Justin, 31 October 2026).**
+Third-party, insurer, agent, handler, recoverer and repairer numbers are usually landlines (01, 02, 03) or 0800/0845-type numbers. Only a box labelled **Mobile** should require 07 or +447.
+
+Fix:
+- **Every other phone box** accepts any UK number: 01, 02, 03, 05, 07 or 08, with the right number of digits, or +44, plus international numbers starting +. Allow spaces and an extension, for example "ext 214".
+- **The hint under those boxes** says "UK number, for example 01792 341069 or 07700 900123". Never "a UK mobile starts 07".
+- **Label boxes clearly:** "Mobile" for mobiles, "Telephone" for everything else.
+- **The client's main number** is "Mobile" (it's used for WhatsApp), with "Other telephone" as now.
+- **Test:** a third party with 01792 341069, an insurer with 0345 000 1234, an agent with "+44 29 2000 0000 ext 12". All must be accepted. A client mobile of 01792… must be refused, with a clear message.
+
+**R58 — Urgent roadside recovery: send the truck first, and the client signs on the driver's phone (Justin approved, 31 October 2026). Build it together with R55.**
+
+Example: a caller is stuck on the A467 roundabout and needs recovery now. Nobody knows the extras (oil granules, winching, skates) until the driver arrives.
+
+1. **"Urgent recovery" button** on the dashboard and the claims list. It asks only for:
+   - name
+   - mobile
+   - where the car is (free text, plus an optional map pin)
+   - registration
+   - "Anyone hurt or in danger?" (Yes / No). Yes shows one line: "Tell them to call 999 if anyone is hurt or in danger."
+
+   It creates the claim (CAS reference at once) and the recovery job (R55 step 2, booked now), and assigns or notifies the driver. Everything else stays in the draft for the office to complete later. File set-up items stay "Not yet known" (R50).
+2. **Driver's phone screen on arrival:**
+   - **Photos**, at least one of the car in place.
+   - **Extras actually used**, ticked by the driver with the default price shown. Environmental, winching, specialist winching, skates/dollies, waiting time, second operator and forklift each need at least one photo, or a written reason why no photo was possible. Photos are kept with time and place and filed on the claim.
+   - **The client signs the Storage & Recovery Agreement on the driver's phone before the car is loaded.** Use the existing R17 agreement and on-screen signing.
+     - The screen above the signature shows the standard recovery £395 + VAT and lists the possible extras with their prices, marked "charged only if needed, with photo evidence".
+     - The extras the driver has ticked are listed. Extras added after signing are shown to the client on the delivery or follow-up screen.
+   - **If the client can't sign** (hospital, unfit, police-directed removal, not present), the driver chooses the reason and adds photos. A signing link is offered to send later (simulated). Until it's signed, recovery and storage can be claimed only with Justin's existing override (R21).
+3. **Cancellation wording:** use the express-request wording and cancellation notice from CAS's supplied Hire Pack / Storage & Recovery Agreement only. **Don't write new legal wording.** Add a tick, which the client must tick, recording that they asked for the recovery to start straight away; use the wording already in the supplied documents if there is any. If there isn't, leave a clearly marked placeholder for the solicitor and add the question below.
+4. **Questions file, "For your solicitor":** add "Roadside signing: a recovery agreed and started at the roadside is likely to be an off-premises contract under the Consumer Contracts Regulations 2013. Please confirm:
+   - the express-request and acknowledgement wording, so the recovery can start within the 14-day cancellation period (reg. 36), and what the client pays if they cancel after work has begun (reg. 37)
+   - whether any exception applies to urgent roadside recovery
+   - the effect if the cancellation information isn't given at the roadside"
+
+   Justin's view: clients can waive the right. The solicitor confirms the exact position and wording.
+5. **Test** on a phone-width screen, as the driver and as `sian`:
+   - urgent recovery created in under a minute
+   - the driver job appears
+   - the driver adds an environmental extra with a photo, and the client signs, then collected → CAS yard: storage starts at arrival
+   - a second run where the client can't sign (reason recorded, link offered, claim blocked without Justin's override)
 
 **Not independently verified:** R30 automatic sending. Nothing is sent until Justin approves a chaser's wording (question 27); Settings → Automatic chasers now shows each chaser's full wording beside its switch (R46). Retest when he has.
 
 ## Fixed
 
+- **R48** fixed in 14f366d: every chaser (liability, engineer report, repair authorisation, each payment reminder, the combined email once per item, the liability chaser letter and the supplied payment chases, and the Read the wording preview) has one sentence near the top: when we first wrote (the request marked sent) and how many chasers have been sent or marked sent since, with the latest date. First chaser: "have not yet received a response", no count. A substantive reply restarts the count from the reply and the sentence says so. Left out when the first-request date is not on the file.
+- **R50** fixed in 14f366d: the new-claim form follows the call: client, accident, vehicle and damage, third parties, then File set-up last. Liability is never suggested (a one-line summary of what happened sits above it); jurisdiction is suggested from the accident postcode or the client's (England & Wales only for an English or Welsh postcode; border districts and no postcode are Not yet known); roadworthiness from the R52 answers, with a reason needed to choose otherwise; the handler defaults to the person entering. Any of them can be Not yet known: the claim saves, the file shows File set-up incomplete as its next step, and chasers, the Storage & Recovery and hire agreements and fault or non-fault letters wait. The Details tab uses the same order with File set-up last.
+- **R51** fixed in 14f366d: one fuel drop-down (Petrol, Diesel, Hybrid, Plug-in hybrid, Electric, LPG, Other with a box, Not known by default) for the client vehicle, fleet records, the car-details boxes, the Hire Pack and the Details tab; shown the same way on the agreement, the Hire Pack and the fleet list. Stored values were mapped once with a change-history note (petrol → Petrol, hybrid electric → Hybrid, unclear → Other with the old text); colours held in capitals were tidied (BLACK → Black). Gearbox reads Not known.
+- **R52** fixed in 14f366d: a bird's-eye car drawing (original SVG) with front bumper, bonnet, windscreen, roof, rear window, boot, rear bumper, each side's wing, doors, rear quarter and wheel, plus underside and interior; sides labelled Driver side (offside) and Passenger side (nearside); a tapped zone turns CAS red and shows as a chip; All over; works by keyboard; marks on click only, so scrolling cannot mark it. Ten Is it safe to drive? questions (Yes, No, Not known); any Yes suggests Unroadworthy with the reasons. Stored as data on the Vehicle damage screen; shown on the Details tab and the client form; the engineer instruction prints a small copy and the list; the recovery record's not-driveable reason is filled from the Yes answers; the history records both.
+- **R53** fixed in 14f366d: each third party's vehicle asks only registration (with the lookup), make, model, colour, Taxed? and MOT? (Yes, No, Not known, filled from the lookup). The MID check sits with the vehicle (the full askMID record for third party 1, the insurer named for 2 and 3); Use this insurer fills the insurer fields when pressed and only while none is entered. Stored third-party gearbox and fuel are kept and not shown.
+- **R54** fixed in 14f366d: the new-claim draft is saved 1.5 seconds after any change, however it was made (typing, drop-downs, ticks, a picked insurer or agent, a lookup, the damage drawing); the form shows Saving…, then Saved with the time to the second, or Not saved – check your connection in red while it retries; leaving with unsaved changes asks first. The Details tab saves with its own button and does not autosave.
 - **R42** fixed in 4be50b3: the notes about where a letter's wording came from ("Wording is taken from CAS's supplied letter and email templates…", the solicitor sign-off and operational-draft notes) are shown on the screen above the sheet only, print-hidden, and are no longer put in the letter, its text, an email or an attachment. Letters stored before the fix: unsigned ones and emails not yet sent were cleaned once; signed ones are left as stored and cleaned whenever shown, printed or attached. Notes for staff inside a document (the draft invoice's note, the agreement's and pack's notes) show on screen in a dashed box marked "Note for staff, not printed" and never print or go out; draft invoices print headed "Draft invoice — …". Printed to A4 as `sian`: TEST-0041's new initial letter, TEST-0040's earlier initial letter, a rate rebuttal, an engineer instruction, two draft invoices, TEST-HA-000012 (agreement and pack), a Storage & Recovery Agreement, a credit recovery and storage agreement and TEST-0039's chronology. None carries the line.
 - **R43** fixed in 4be50b3: after a swap, Hire step 4 leads with the current signed agreement (TEST-0039: TEST-HA-000012, signed 13:04) and lists the earlier ones under "Earlier agreements (replaced)", each with its own signature. The Documents list shows a produced agreement as "Signed – see signed copy" (signed on screen, by link, or printed and uploaded), "Replaced" (a later agreement was produced before it was signed), or "Unsigned".
 - **R44** fixed in 4be50b3: step 10 reads "Paid in full dd/mm/yyyy" once the money received meets the agreed figure, the confirmed claimed figure or the recorded recovery charge (TEST-0039 recovery: "Paid in full 31/10/2026"); a claimed repair estimate reads "Claimed £1,500.00 · awaiting authorisation" (or "authorised, awaiting payment"; a total loss "awaiting settlement"); running figures read "£93.60 so far, including VAT".
@@ -58,6 +180,129 @@ Nothing open. R42–R47 from the retest of 31 October 2026 (afternoon) are fixed
 - **R10** fixed in 69cec49: group charged is suggested from the client's own car with the reason (or says why not); the header names the actual next hire item: Pre-hire checks, Hire agreement – sign, Handover.
 - **R11** fixed in 69cec49: only office staff are offered or accepted as claim handlers.
 - **R12** fixed in 69cec49: rebuttals and the impecuniosity response show "Needs Justin's approval"; a new approveLegalCorrespondence permission (Justin) approves; marking sent or emailing is refused until approved. No letter-before-action or court template exists yet; any added later goes on the same list.
+
+<details><summary>Reviewer's notes R48 and R50–R54 (31 October 2026)</summary>
+
+**R48 — Every chaser states when we first wrote and how often we've chased (Justin, 31 October 2026).**
+Put one sentence near the top of every chaser:
+- liability, engineer report, repair authorisation
+- each payment chase
+- the combined email, once per item
+
+Example: "We first wrote to you on 03/11/2026 requesting repair authorisation and have chased on 4 occasions since, most recently on 12/11/2026."
+
+Rules:
+- **Fill everything from the file.** The first-request date is when the request was marked sent: the step 7 report sent, the initial letter, or the payment request. The count and the latest date come from the chasers actually sent or marked sent, never from scheduled ones.
+- **Don't list every date.** The full list stays in the chronology.
+- **First chaser:** "We wrote to you on 03/11/2026 requesting … and have not yet received a response." Use no count.
+- **Missing first-request date:** leave the sentence out rather than guess.
+- **Show it everywhere the wording appears:** in the "Read the wording" preview, so Justin sees it before approving, and in chasers prepared by hand.
+- **Reset on a reply:** if a substantive reply restarts a chase, the next chaser counts from the date of that reply, and the sentence says so.
+- **Tests:** first chaser, fourth chaser, and a chase restarted after a reply.
+
+**R50 — New-claim form: decisions come last, after the facts (Justin, 31 October 2026).**
+Justin, entering a real-style claim, reports the problem: right after the client and owner details, the form asks for file set-up (fault or non-fault, liability status, jurisdiction, roadworthiness, handler). Those can't be decided until the accident, the circumstances and the damage are known.
+
+Reorder the new-claim form (and the client form where it overlaps) to follow the order of the phone call:
+1. **Client, owner, driver**: as now.
+2. **The accident**: date, time, location, circumstances, weather, police, witnesses, photos at the scene.
+3. **The client's vehicle and damage.**
+   - Registration and lookup, as now.
+   - **Areas of damage** as tick boxes: front, rear, nearside, offside, roof, underside, interior, with nearside/offside front/rear where useful.
+   - The damage description.
+   - Simple roadworthiness questions: Can it be driven? Warning lights on? Lights, glass, tyres or wheels damaged? Leaking fluids? Is it where it was left safely?
+4. **Third party and insurer**: as now, including the MID result.
+5. **File set-up, last**, each item pre-filled as a suggestion that staff confirm or change:
+   - **Fault / non-fault and liability status:** never decided automatically. Show a one-line summary of the circumstances above the choice. "Not yet known" is allowed.
+   - **Jurisdiction:** suggested from the accident location or postcode. Allow "Not yet known"; default England & Wales only if the postcode is in England or Wales.
+   - **Roadworthiness:** suggested from the step 3 answers, for example "Unroadworthy – warning lights and fluid leak". Allow "Not yet known".
+   - **Handler:** defaults to the person entering the claim.
+
+Rules:
+- **Saving with gaps:** the claim can be saved, and reopened from New enquiries, with any of the file set-up items as "Not yet known". The file shows "File set-up incomplete" as its next step until they're decided. Nothing that depends on them starts until they're set: chasers, the recovery and storage agreements, and letters choosing fault or non-fault wording.
+- **Keep what works:** keep all existing fields, checks and draft saving. This changes the order and adds the damage-area ticks and roadworthiness questions.
+- **Same order in both places:** use the same order in the new-claim form and the "Details" tab.
+- **Test:** enter a claim as `sian` in call order with liability "Not yet known", save, reopen, then complete the file set-up later.
+
+**R51 — Fuel is a free-text box; make it a drop-down (Justin, 31 October 2026).**
+On the new-claim form, the client's vehicle fuel (`veh_fuel`) and the third party's (`tp1_veh_fuel`, and the other third parties) are typed boxes. The fleet records are already inconsistent: "petrol", "Diesel", "hybrid electric".
+
+Fix:
+- **One drop-down list everywhere fuel is entered or shown:** client vehicle, third-party vehicles, fleet records, the swap and car-details boxes, the client form, and any list that shows fuel. The options are: Petrol, Diesel, Hybrid, Plug-in hybrid, Electric, LPG, Other (with a short box to say what), Not known.
+- **Default "Not known".** Never guess. A registration lookup can fill it when it returns fuel, and staff can still change it.
+- **Map existing values once,** with a note in the change history: petrol → Petrol, diesel → Diesel, hybrid electric → Hybrid. Anything unclear becomes Other, with the old text kept in the box.
+- **Show it the same way** on the hire agreement, the Hire Pack, letters and the fleet list.
+- **Gearbox:** the option reads "Unknown — do not guess". Change it to "Not known", to match.
+- **Colour:** check whether the colour box needs the same treatment. Keep it as typed text, but tidy capitals per R23.
+
+**R52 — Damage diagram and roadworthiness questions (Justin, 31 October 2026). This replaces the damage-area tick boxes and the roadworthiness questions in R50 step 3.**
+
+Section 3 has only a description box. Replace the damage part with:
+
+1. **A bird's-eye drawing of a car** (original SVG, nothing copied) that staff click or tap to mark the damaged areas.
+   - The zones:
+     - front bumper, bonnet, windscreen, roof, rear window, boot or tailgate, rear bumper
+     - on each side, front wing, front door, rear door and rear quarter
+     - the four wheels
+     - underside and interior as separate buttons
+   - Label the sides **"Driver side (offside)"** and **"Passenger side (nearside)"**. Staff say driver and passenger side; insurers and engineers say offside and nearside.
+   - A selected zone turns CAS red and shows as a chip below the drawing, for example "Passenger side front door". Click again to remove it. An "All over" button selects everything. The zones also work by keyboard, for accessibility.
+   - Big enough to tap on a phone. Use the same drawing in the client form, so clients can mark their own damage.
+2. **A description box** underneath, as now, for example "nearside headlamp smashed".
+3. **Is it safe to drive?** Answer each question Yes / No / Not known:
+   - lights smashed or not working
+   - loose or hanging parts
+   - sharp or jagged edges
+   - glass broken or cracked
+   - tyre, wheel or suspension damage
+   - warning lights on the dashboard
+   - leaking fluids
+   - airbags gone off
+   - doors, bonnet or boot won't shut
+   - steering pulls or it drives badly
+
+Any "Yes" suggests **Unroadworthy** in File set-up (R50 step 5), with the reasons listed, for example "Unroadworthy – lights smashed, sharp edges". It's a suggestion only: staff confirm or change it, and record a reason if they change it.
+
+Where it shows:
+- the Details tab
+- the engineer instruction, as a small printed copy of the diagram plus the list
+- the recovery record: the "why not driveable" reason is filled in from the "Yes" answers and can be edited
+- the chronology entry
+
+Store the zones and answers as data, not as a picture, so they can be searched and reported on.
+
+**Test:** on a phone-width screen, mark three zones and two "Yes" answers. Check File set-up suggests Unroadworthy with those reasons, the engineer instruction shows them, and nothing can be marked by accident when scrolling.
+
+**R53 — Third-party vehicle: only what CAS needs (Justin, 31 October 2026).**
+The new-claim form's third-party vehicle section asks for gearbox and fuel, which CAS doesn't need for the other vehicle.
+
+For each third party (tp1, tp2, tp3), the vehicle section asks only for:
+- **Registration**, with the lookup as now.
+- **Make, model and colour.**
+- **Taxed?** and **MOT?**: Yes, No or Not known, filled from the lookup when it returns them.
+- **MID check**, the existing block: date checked, result, insurer name, policy number.
+  - When the MID result names an insurer, offer "Use this insurer" to fill the third-party insurer fields. Staff confirm it.
+  - It's never filled silently, and it never overwrites an insurer already entered.
+
+Other rules:
+- **Remove gearbox and fuel from the third-party section** on the new-claim form, the Details tab and the client form.
+- **Keep any values already stored** on existing files. Don't show them in the form, and don't print them on letters.
+- **R51's fuel drop-down** now applies only to the client's vehicle and the fleet.
+- **Letters** continue to print the third-party vehicle as make, model and registration.
+
+**R54 — Autosave misses values filled by picking a saved insurer (reviewer test, 31 October 2026).**
+On a new claim, the reviewer typed the client's name and "Exam" in the third-party insurer box, then picked "Example Mutual Insurance" from the suggestions. The suggestion filled the name and the email. "Draft saved 31/10/2026 16:12" showed.
+
+More than 30 seconds later, reopening the draft (`/claims/new?draft=draft_2de10804…`) still had the insurer as "Exam" and a blank email. The client name was kept. So anything filled by a suggestion (insurer, agent, address lookup, vehicle lookup), and possibly drop-downs and ticks, may not be saved until someone types again.
+
+Fix:
+- **Save the draft after every change,** whatever made it: typing, a drop-down, a tick, picking a suggestion, a lookup filling fields, the damage diagram (R52). Wait a second or two after the last change, then save.
+- **Show the state clearly:** "Saving…" while it saves, then "Saved 16:12:45" with seconds, so staff can see it's caught up. If a save fails, show "Not saved – check your connection" in red and keep retrying.
+- **Warn before leaving** the page if there are unsaved changes.
+- **Tests:** pick a saved insurer, then a saved agent, use the address lookup, change a drop-down and tick a box. Close straight after the "Saved" time updates, reopen the draft, and check every value is there. Do the same on the Details tab, if it autosaves.
+- **The insurer and agent suggestions themselves work** (name and email filled; policy number left blank). Keep them as they are.
+
+</details>
 
 <details><summary>Reviewer's note R22 (30 October 2026)</summary>
 
