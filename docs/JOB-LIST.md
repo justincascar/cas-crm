@@ -464,6 +464,8 @@ Security must be high. Nothing real goes in until every item below is done and e
 
 ## Where I stopped
 
+**31 October 2026 (night) — Claude Code:** review notes R59–R66 are fixed and pushed (R65 ad58661, R66 29aefd6; earlier ones as below). Next: R55 and R58 together (the four-step Recovery page and urgent roadside recovery with signing on the driver's phone), then J18–J20. R49 waits for Justin's yes on the QR package (question 30); the drafts wait for his approval (question 31); question 32 asks who prepares Audatex estimates.
+
 **31 October 2026 (late evening) — Claude Code:** review notes R59–R64 are fixed and pushed (R60 c0f8b85, R62 98aba47, R59 cdb9a03, R61 2f5a558, R63/R64 e2512a6). Next: R65 and R66 (steps 5 to 9 in place), then R55 and R58 (Recovery rebuild and urgent roadside recovery), then J18–J20. R49 waits for Justin's yes on the QR package (question 30); the drafts wait for his approval (question 31).
 
 **31 October 2026 (evening) — Claude Code:** review notes R42–R47 are fixed (4be50b3). The website restyle and registered office are pushed to `justincascar/cas-website` (853ba3a, question 25 answered). No other job is open: J9a, J9b and J9 wait for Justin. Open questions: 1–3, 5, 7 (template and numbering), 10, 12, 18, 20, 22–24, 26 (photos, hours, areas, MOT link, reviews), 27, 28 and 29.
