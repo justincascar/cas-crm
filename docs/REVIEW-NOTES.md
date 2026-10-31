@@ -100,77 +100,6 @@ Example: a caller is stuck on the A467 roundabout and needs recovery now. Nobody
    - the driver adds an environmental extra with a photo, and the client signs, then collected → CAS yard: storage starts at arrival
    - a second run where the client can't sign (reason recorded, link offered, claim blocked without Justin's override)
 
-**R63 — Step 4 "Send letter" should prepare the right letters automatically (Justin, 31 October 2026).**
-Today, clicking "Send letter" on step 4 leads to "Choose who this is going to", then "Choose a CAS email template", then "Fill from this file". Justin's rule: the first letters are always the same for a given kind of file, so the CRM should prepare them filled in and addressed. Staff only check and send.
-
-Clicking step 4 "Send letter" opens a **"First letters" page** with the right pack already prepared:
-
-**Non-fault file:**
-1. **Initial letter to the third-party insurer**: the existing "Non-fault initial letter (third-party insurer)" wording.
-   - Addressed to the third-party insurer's email from the file. If a third-party representative (agent) is recorded, send to the agent and copy the insurer.
-   - It must carry:
-     - the CAS reference, and their claim reference and policy number where held (R5)
-     - client, both vehicles, accident date, time and location
-     - **the MID search**: date searched, registration searched, result, insurer and policy number found. Add this as a short block in the letter if the template has no place for it, and show Justin the wording in the Read-the-wording style (R46).
-   - It asks them to confirm: that they are the insurer and indemnity is in place, their claim reference, and their position on liability. Don't ask for anything already held (R5).
-2. **Client welcome**: the existing "Client welcome (intake)" email, to the client's email.
-3. **Client acceptance of services / authority**: see question 30 below. Until Justin supplies or approves the wording, show "Waiting for CAS's wording" and don't generate it.
-
-**Fault file:**
-1. **Letter to the client's own insurer**: the existing "Fault claim letter (client's own insurer)", reworded per Justin. In short: CAS has been asked by their policyholder to carry out the repairs. Please provide your claim reference and **network (approved repairer) code**, so the repair can be networked to CAS.
-   - Include: client and policyholder, policy number, vehicle, accident date, and the CAS reference.
-   - Mark the new wording as draft until Justin approves it, the same as R16. Don't add legal or contractual statements.
-2. **Client welcome**: as above, worded for a fault claim. Repairs and courtesy car only; don't promise recovery of losses from a third party.
-
-**On the page:**
-- Each letter shows a preview, its recipient (changeable), what's missing (with links to fix), and "Generate" (letter or PDF) or "Send" (email, simulated). There's also "Send all".
-- Step 4 is done when the insurer letter is sent or marked sent, and the existing chase starts.
-- Add a "Network code" field to the file: insurer's claim reference and network code, on the client's own insurer panel. Fill it when the insurer replies.
-- **In the general "Send email" section,** choosing a recipient should pick the matching template and fill it straight away. Remove the separate "Fill from this file" click.
-
-**Questions file:**
-- **Question 30:** "Client acceptance of services / authority form. Supply CAS's current wording, or ask the reviewer to draft one for your solicitor to approve. Until then it isn't generated."
-- **For your solicitor:** "Wording of the fault-claim letter asking the client's own insurer for a network code (not legal advice, check only)."
-
-**Test:**
-- a non-fault file with the MID recorded: the pack is prepared, the insurer letter shows the MID block and the references, step 4 completes and the chase starts
-- a fault file: own-insurer letter asking for the claim reference and network code
-- a file with no insurer email: "missing" with a link
-
-**R64 — Letters by liability status, and new draft documents (Justin, 31 October 2026). This extends R63.**
-The reviewer has drafted the missing documents in `docs/correspondence-templates/drafts/CAS-document-drafts-31oct2026.md`:
-- client instruction and authority (the "acceptance of services")
-- fault repair authority
-- the own-insurer letter asking for the claim reference and network code
-- the own-insurer notification on non-fault claims
-- split-liability letters to the insurer and the client
-- the letter for liability disputed or not yet known
-- a courtesy car agreement outline
-
-None is approved.
-
-Do this:
-1. **Liability status choices** on the file: Non-fault, Fault, Split (with the percentages), Disputed, Not yet known. Map existing values.
-2. **The "First letters" page (R63)** picks its pack from the table at the top of the drafts file:
-   - **Non-fault:** the initial letter to the third-party insurer, plus Draft 4 to the client's own insurer, plus the welcome and Draft 1.
-   - **Fault:** Draft 3 to the client's own insurer, plus the welcome (fault wording) and Draft 2. **Never** the initial letter to the third-party insurer.
-   - **Split:** Drafts 5a and 3, plus 5b and Draft 1.
-   - **Disputed or not yet known:** Drafts 6 and 4, plus the welcome and Draft 1.
-
-   When the status changes, offer the new status's letters and keep the earlier ones on the file.
-3. **Add each draft as a template, word for word,** on CAS headed paper.
-   - Each is marked "Waiting for Justin's approval" and can be previewed, but can't be sent, marked sent or signed until Justin approves it in Settings (the R46 / R16 pattern).
-   - Drafts 1, 2, 4 and 5 also need the solicitor's sign-off. Record that on the approval: "Approved by Justin on … · solicitor checked on …".
-   - Draft 7 (courtesy car) is an outline only. Show "Waiting for CAS's wording" and generate nothing.
-4. **Signed documents.** Drafts 1 and 2 are signed like the hire agreement: on screen, by link or on paper. The signed copy is filed. The tick at clause 10 (Draft 1) or clause 9 (Draft 2) is required to sign.
-5. **Missing-data rules** as written in the drafts:
-   - leave out reference lines that aren't held
-   - leave out the MID sentence when there's no MID record
-   - the one-line account in Draft 6 is typed or checked by the handler, never generated
-6. **Split liability.** On a Split file, show a warning on the Hire tab: "Split liability – check with Justin before continuing credit hire." Justin decides per file.
-7. **Questions file:** replace question 30 with "Read the drafts (link to the drafts file) and approve or change each one". Add the drafts file's "Points for the solicitor to check" under "For your solicitor".
-8. **Test:** one file of each liability status. Check the right pack appears, a fault file never offers the third-party initial letter, unapproved drafts can't be sent, and changing Non-fault to Split offers 5a and 5b.
-
 **R65 — Step 5: one-click engineer and Audatex instructions (Justin, 31 October 2026).**
 Today, step 5 is "Engineer, Audatex estimate, or both → Save choice", then a bare "Engineer instructed" button. Nothing is produced or sent, and the engineer gets nothing from the CRM. Justin wants step 5 to send the instruction, with everything the engineer needs, in one click.
 
@@ -257,6 +186,8 @@ Money shows the same figures; nothing is entered twice.
 
 ## Fixed
 
+- **R63** fixed in e2512a6: step 4 "Send letter" (and the fault file's "Notify the client's own insurer") opens a First letters page with the pack for the file (R64), each letter filled in and addressed: to the third-party representative with the insurer copied in where one is recorded, otherwise to the insurer; what is missing with links (including "no email" for sending by email, which can still be posted); a preview; Send (email, simulated, letters attached), Mark as sent (posted) and Generate on the file; and Send all. Sending or marking the insurer letter sent does step 4 and starts the existing liability chase. The MID search goes into the initial letter as a short block, shown in Settings → Draft documents for Justin; it is added only once he approves that wording, so the supplied letter stays sendable meanwhile. The own insurer panel's network code is labelled "Network code (approved repairer, Audatex)" (it was already there as the Audatex network code); the fault letter asks for it. In Send email, choosing a recipient picks the matching template and fills it straight away; the separate "Fill from this file" button is gone (it asks before replacing a message already typed). Tests as in R64; the fault own-insurer letter is sent and records step 4. Checked as `sian` on TEST-0044: step 4 opens First letters, the welcome was sent (simulated) and shows as sent, and sending an unapproved draft was refused.
+- **R64** fixed in 7c8e6b1 (Split status) and e2512a6: liability status choices are Non-fault, Fault, Split (shared liability, with the third party's percentage, 1–99 or blank until proposed), Disputed and Not yet known; existing values keep their meaning. The First letters page picks its pack from the drafts table (non-fault: initial letter to the third-party insurer, Draft 4, welcome, Draft 1; fault: Draft 3, fault welcome, Draft 2, never the third-party initial letter; split: 5a, Draft 3, 5b, Draft 1; disputed or not yet known: Draft 6, Draft 4, welcome, Draft 1). Changing the status offers the new letters and keeps the earlier ones on the file ("Letters made for an earlier liability status"). Each draft is a template word for word, marked "DRAFT – wording not approved by CAS. Waiting for Justin's approval" until he approves it in Settings → Draft documents waiting for approval, where each can be read as it would be produced on a TEST file; Drafts 1, 2, 4 and 5 need the solicitor's check date ("Approved by Justin on … · solicitor checked on …"). Until approved a draft cannot be sent, marked sent, attached to an email or signed. Draft 7 shows "Waiting for CAS's wording" and generates nothing. Drafts 1 and 2 are signed on screen, by link or on paper, the signed copy filed, and the clause 10 / clause 9 tick required. Missing data: reference lines not held are left out, the MID sentence is left out without a MID search, and Draft 6's one-line account is typed by the handler on the page, never generated (otherwise it shows as missing). A Split file shows "Split liability – check with Justin before continuing credit hire" on the Hire tab. The fault-claim welcome is new wording (the supplied welcome without the third-party steps) and waits for approval too. Questions: question 31 (read and approve the drafts; question 30 was already the QR code) and the drafts' solicitor points under For your solicitor. Tests: one file of each status, a fault file never offered the third-party letter, unapproved drafts refused, Non-fault to Split offering 5a and 5b, and signing on screen and by link. Checked as `sian`: the new TEST-0045 set to Split 50% shows the Hire tab warning and the split pack; Settings lists the drafts with their wording, without an Approve button for Sian; the signing page refuses until approved.
 - **R61** fixed in 2f5a558: when recovery or storage is recorded and the only signature on the file is a hire agreement signed without the Storage & Recovery page, the Recovery page shows "The signed hire agreement TEST-HA-… does not cover recovery and storage. Get the Storage & Recovery Agreement signed." above the existing on-screen and paper routes; the same line is in the claim's "Problems needing attention" and in a new dashboard box, "Recovery and storage not covered by a signature", listing each file. There is no signing-by-link route for the Storage & Recovery Agreement yet, so the page offers on screen and on paper only. "This client has a hire car … nothing more is needed here" now shows only when the hire agreement on the file includes the page. Before a hire agreement is produced on a non-fault file with an unroadworthy car marked as needing recovery and none recorded, the agreement step asks "Recovery not recorded yet – record it now so the agreement includes the Storage & Recovery page?" with a link; producing it anyway needs a reason, which goes in the history. Recovery and storage payment requests stay refused until a signature or Justin's override covers them (tested). Checked as `sian`: TEST-0040 shows the warning on its Recovery page and on the dashboard; on the new TEST-0045 the question shows and Produce agreement without a reason was refused with it. TEST-0042 is untouched for Justin: once he records its recovery, the warning appears.
 - **R59** fixed in cdb9a03: every form in the CRM keeps what was typed when it comes back with a mistake. A form keeper in the app shell keeps a copy of the form when it is sent (in that browser tab only, used once, within ten minutes; never hidden fields, passwords, sign-in codes or bank details) and puts it back when the page returns with an error, whether the page calls it "error", "offerError", "stepError" or another name: text, amounts, dates, times, ticks, radio buttons and drop-downs. A chosen file cannot be put back by a browser, so the box says "Please choose the file again". Amounts are now checked before sending, so a wrong amount is listed with a missing time in one R56 box. Also fixed on the way: the payment form showed a refusal in a plain grey line (now red, "Not recorded: …", and checked before sending); a refused swap came back without its replacement car chosen; an offer could be dated after today. A journey (awkward case 12, plus case 11 for the client's own form) sends the new claim, client details, licence check, recovery, offer, payment, handover and swap forms each with one mistake and checks every other value is still there. Checked as `sian` on TEST-0044: the recovery with a missing time and a wrong amount listed both problems at once; fixing only those two and saving recorded it ("At the yard from 31/10/2026 15:30 · £515.00 + VAT").
 - **R62** fixed in 98aba47: a licence number is checked when it is entered (client details, additional drivers, hire pack, licence check card). A GB number must be 16 characters in the GB format; TEST-0042's 11-character number is refused with "A GB licence number is 16 letters and numbers; this one has 11 …". Northern Ireland (8 digits) and foreign licences go through only with the new "Not a GB licence" tick and the issuing country. A GB number in the right format that does not match the surname (Mac is accepted as MC) or the date of birth (the month with or without the +5 for women) is kept and flagged: a warning on the details screen and on the licence check card, with a link to correct it, and a history entry when a check is recorded. The licence check itself is never blocked. Tests: a valid fictional number, a wrong-length one, a date-of-birth mismatch, Northern Ireland and foreign numbers. Checked as `sian` on TEST-0044: the 11-character number was refused, a number with the wrong date-of-birth digits was saved and flagged, and the licence check was recorded with the flag showing. TEST-0042 still holds its 11-character number for Justin to correct.
