@@ -22,18 +22,18 @@ Each open question has a reversible default already in the CRM. Nothing here is 
     - Staff check every box with the client before saving.
 
     Please say if you want different limits, or a different rule for what is pre-filled.
-25. **The website's GitHub repository.** The new website (`Code\CAS-Website`) has its own git repository on this PC only, because GitHub is not signed in here, so no private repository could be created. Default: kept local. To put it on GitHub, create an empty **private** repository called `cas-website` under CAS's GitHub account (the one the CRM uses, `justincascar`), and Claude Code will push it.
-26. **Website details still in [brackets].** The logo, the company number and the VAT number are answered: they came with the headed paper and are on the website's header and footer. Please supply:
+25. **The website's GitHub repository.** Justin created the private `cas-website` repository under `justincascar` on 31/10/2026. The push was refused with "Repository not found": the GitHub sign-in saved on this PC reaches `cas-crm` but not the new repository (it may be limited to `cas-crm`, or the name differs). Default: the website stays committed on this PC, with the remote set, ready to push. Please give the saved GitHub sign-in access to `cas-website` (or tell Claude Code the exact repository name).
+26. **Website details still in [brackets].** The logo, the company number, the VAT number and the registered office (171 Cwmgarw Road, confirmed by Justin on 31/10/2026) are answered: they came with the headed paper and are on the website's header and footer. Please supply:
     - the three photos;
     - opening hours and recovery hours;
     - the areas you cover;
-    - the registered office (the headed paper gives 171 Cwmgarw Road as CAS's address but does not say it is the registered office);
     - the MOT booking link;
     - real reviews and the Google rating, when you have them.
 
     The five gold stars beside the rating placeholder came with the mock-up. They should come off if there are no real reviews by launch. The complaints, privacy, cookies and terms wording is part of J9a.
 27. **Approve the chaser wording for automatic sending.** The CRM now sends chasers on its own (simulated until the mailbox is connected), but only for the chasers whose wording you approve, one switch each in Settings → Automatic chasers (Justin only). All are off. Default: nothing is sent automatically; staff prepare and mark chasers by hand as before. Please read each chaser's wording (the liability response, engineer report, repair authorisation and each payment chase) and switch on the ones you approve. Chasers due to the same recipient on the same file go in one email listing each item.
 28. **CAS's engineer.** The engineer seeded in the CRM (Andy Montgomery, Montgomery Assessors) looks like CAS's real engineer, so he is kept in Settings for live use only: he cannot be chosen on a TEST file and nothing is sent to him. TEST files use a fictional engineer. Default: as above. Please confirm he is CAS's engineer and that his details are right.
+29. **Authenticator for all staff?** Only an administrator (Justin) must use an authenticator app to sign in. Sian, Tom, Megan and the driver and mechanic logins do not, though anyone can switch one on in Settings → Your sign-in. Default: as now (required for administrators, optional for everyone else). Please say whether every member of staff must use one before live use.
 
 ## For your solicitor
 

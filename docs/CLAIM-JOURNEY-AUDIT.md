@@ -160,6 +160,8 @@ Five stages. Each later stage extends the same three journeys one step further: 
 70. **Fixed (R27–R41).** Found while fixing the review notes: the agreement to sign was chosen by the highest version number, so a swap agreement with its own number (version 1) would have lost to an older agreement's version 2. The latest produced agreement is the one signed now.
 71. **Fixed (R30).** The automatic chaser is new: chases due on approved rules are sent (simulated) by the server; before, every chase waited for a person to prepare and mark it.
 72. **Fixed (R33).** Steps entered with today's date were stamped 09:00, which put them before things done earlier that day. They now take the time recorded.
+73. **Fixed (R42).** Found while fixing R42: notes for staff inside documents (the draft invoice's "not supplied yet, not sent" note, the agreement's and pack's notes) printed, and went out in attachments. They now show on screen only. Older draft invoices printed as "Invoice — …" once that note stopped printing, so every draft invoice now prints headed "Draft invoice — …".
+74. **Fixed (R44).** Step 10 relied on the payment chase to say "Paid in full", so a head paid without a payment request (TEST-0039's recovery, paid by card) never read as paid. It now compares the money received with the agreed, confirmed claimed or recorded recovery figure (never claimed and agreed added together).
 
 ## How to try hire on a demonstration file
 
