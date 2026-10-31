@@ -2,7 +2,6 @@ import { formatUkDate, formatUkTime } from "../dates";
 import { normalizeLiabilityStatus, type LiabilityStatus } from "../domain/claim-status";
 import { CAS_COMPANY } from "./cas-hire-terms";
 import {
-  CAS_TEMPLATE_NOTICE,
   claimValueOrGap,
   escapeHtml,
   handlerInitials,
@@ -71,9 +70,9 @@ function letterClose(handlerName: string): { html: string; text: string } {
   const handler = isBlankClaimValue(handlerName) ? CAS_COMPANY.name : handlerName.trim();
   return {
     html: `<p>Yours faithfully,</p>
-<p>${escapeHtml(handler)}<br/>${escapeHtml(CAS_COMPANY.name)}</p>
-<p class="text-xs">${escapeHtml(CAS_TEMPLATE_NOTICE)}</p>`,
-    text: ["Yours faithfully,", "", handler, CAS_COMPANY.name, "", CAS_TEMPLATE_NOTICE].join("\n"),
+<p>${escapeHtml(handler)}<br/>${escapeHtml(CAS_COMPANY.name)}</p>`,
+    // R42: the template note is shown on the screen above the sheet, never in the letter.
+    text: ["Yours faithfully,", "", handler, CAS_COMPANY.name].join("\n"),
   };
 }
 

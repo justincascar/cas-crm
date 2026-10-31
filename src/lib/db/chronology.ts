@@ -1364,6 +1364,16 @@ export function markEngineerReportChaseSent(input: {
   return { handlerName, occurredAt: when };
 }
 
+/**
+ * R46: a chaser's wording on a TEST file that does not have that chase due, for Justin to read before approving it.
+ * Nothing is filed. The recipient's name is a placeholder.
+ */
+export function chaseWordingIllustration(kind: ChaseKind, claimId: string): { subject: string; body: string } | null {
+  if (kind === "engineer_report" || kind === "hire_agreement_renewal" || isPaymentChaseKind(kind)) return null;
+  const ctx = letterContext(claimId, nowUtcIso());
+  return chaseEmailCopy(kind, ctx, "[recipient's name]", nowUtcIso(), vehicleOutcome(claimId));
+}
+
 function chaseEmailCopy(
   kind: ChaseKind,
   ctx: CorrespondenceContext,

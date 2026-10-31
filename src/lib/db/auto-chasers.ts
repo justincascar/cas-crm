@@ -8,10 +8,11 @@ import { chaseFileStateFromPosition, chaseStopReason } from "../domain/rules";
 import { describeSendingHours, insideSendingHours } from "../domain/sending-hours";
 import { sendOutboundEmail } from "../email/gateway";
 import { chaseForClaim, listDueChases, pauseChase, type ChaseView } from "./chase";
-import { automaticSentDetails, markOutstandingChaseSent, prepareOutstandingChase, recordClaimEvent } from "./chronology";
+import { automaticSentDetails, chaseWordingIllustration, markOutstandingChaseSent, prepareOutstandingChase, recordClaimEvent } from "./chronology";
 import { all, get, getDb, newId, run } from "./connection";
 import { isLiveOnlyEngineerEmail, ENGINEER_INSTRUCTION_MARKED_SENT, ENGINEER_INSTRUCTION_PREPARED } from "./engineers";
 import { getInsurerPaymentDetails } from "./payment-details";
+import { paymentRequestCopy } from "../domain/payment-chase";
 import { listStaffPermissions } from "./permissions";
 import { getSendingHours } from "./sending-hours";
 
@@ -386,4 +387,127 @@ export function startAutomaticChasers() {
   void pass();
   const timer = setInterval(() => void pass(), RUN_EVERY_MS);
   timer.unref?.();
+}
+
+/**
+ * A payment chaser when no TEST file has one that could go: the same wording with example figures, clearly labelled.
+ * The first request and the reminder are both shown, because the chaser sends whichever stage the file has reached.
+ */
+function paymentIllustration(kind: ChaseKind, fileReference: string): { subject: string; body: string; note: string } | null {
+  const head = chaseDefinition(kind).paymentHead;
+  if (!isPaymentChaseKind(kind) || !head) return null;
+  const at = nowUtcIso();
+  const copy = (stage: "first" | "reminder") =>
+    paymentRequestCopy({
+      stage,
+      fileReference,
+      theirRef: "[their reference]",
+      head,
+      agreedPence: 100000,
+      claimedPence: 100000,
+      receivedPence: 0,
+      outstandingPence: 100000,
+      bank: getInsurerPaymentDetails(),
+      paymentTerm: null,
+      asAt: at,
+      hirePackSentOn: null,
+      firstChaseOn: stage === "reminder" ? at : null,
+      handlerName: "[handler's name]",
+    });
+  const first = copy("first");
+  const reminder = copy("reminder");
+  return {
+    subject: first.subject,
+    body: `First request:
+
+${first.body}
+
+────────
+
+Reminder (Subject: ${reminder.subject}):
+
+${reminder.body}`,
+    note: "Illustration with example figures (£1,000.00 agreed and outstanding), because no TEST file has this chaser due to a recipient with an email address. On a real file the figures, references and dates are that file's.",
+  };
+}
+
+export type ChaserPreview = { kind: ChaseKind; title: string; fileReference: string | null; to: string | null; subject: string | null; body: string | null; note: string | null };
+
+/**
+ * R46: exactly what each chaser would send, made by the same code the automatic chaser uses, on a TEST file. It runs
+ * inside a savepoint that is rolled back, so making a preview files nothing, sends nothing and changes no clock.
+ */
+function previewOn(claimId: string, kind: ChaseKind): { to: string; subject: string; body: string } | null {
+  const db = getDb();
+  db.exec("SAVEPOINT chaser_preview");
+  try {
+    const email = prepareOutstandingChase({ claimId, actorId: "", kind });
+    return { to: email.to, subject: email.subject, body: email.body };
+  } catch {
+    return null;
+  } finally {
+    db.exec("ROLLBACK TO chaser_preview");
+    db.exec("RELEASE chaser_preview");
+  }
+}
+
+type ChaserWordingPreviews = { previews: ChaserPreview[]; combined: { fileReference: string; subject: string; body: string; sameFile: boolean } | null };
+
+export function chaserWordingPreviews(): ChaserWordingPreviews {
+  ready();
+  // Working out a file's chases can tidy its records; all of it is rolled back, so a preview changes nothing.
+  const db = getDb();
+  db.exec("SAVEPOINT chaser_previews");
+  try {
+    return buildChaserWordingPreviews();
+  } finally {
+    db.exec("ROLLBACK TO chaser_previews");
+    db.exec("RELEASE chaser_previews");
+  }
+}
+
+function buildChaserWordingPreviews(): ChaserWordingPreviews {
+  const claims = all<{ id: string; file_reference: string }>(
+    `SELECT id, file_reference FROM claims WHERE file_reference LIKE 'TEST-%' ORDER BY file_reference LIMIT 60`,
+  );
+  const byClaim = new Map<string, Array<{ title: string; to: string; body: string }>>();
+  const previews = AUTO_CHASE_KINDS.map((kind): ChaserPreview => {
+    const title = chaseDefinition(kind).title;
+    for (const claim of claims) {
+      if (!chaseForClaim(kind, claim.id)) continue;
+      const email = previewOn(claim.id, kind);
+      if (!email) continue;
+      const list = byClaim.get(claim.file_reference) || [];
+      list.push({ title, to: email.to, body: email.body });
+      byClaim.set(claim.file_reference, list);
+      return { kind, title, fileReference: claim.file_reference, to: email.to, subject: email.subject, body: email.body, note: null };
+    }
+    const illustration = paymentIllustration(kind, claims[0]?.file_reference || "TEST-0001");
+    if (illustration) return { kind, title, fileReference: null, to: null, ...illustration };
+    const fallback = claims[0] ? chaseWordingIllustration(kind, claims[0].id) : null;
+    if (fallback && claims[0]) {
+      return {
+        kind,
+        title,
+        fileReference: null,
+        to: null,
+        ...fallback,
+        note: `Illustration with example figures on ${claims[0].file_reference}'s details, because no TEST file has this chaser due to a recipient with an email address. On a real file the names, references and dates are that file's.`,
+      };
+    }
+    return { kind, title, fileReference: null, to: null, subject: null, body: null, note: "No TEST file has this chaser due to a recipient with an email address, so there is no example to show yet." };
+  });
+  // The combined email: two chasers on one TEST file to the same recipient, or else the first two examples together.
+  for (const [fileReference, parts] of byClaim) {
+    const same = parts.filter((part) => part.to === parts[0]!.to);
+    if (same.length >= 2) return { previews, combined: { ...combinedChaseEmail(fileReference, same), fileReference, sameFile: true } };
+  }
+  const shown = previews.filter((preview) => preview.body);
+  if (shown.length < 2) return { previews, combined: null };
+  const fileReference = shown[0]!.fileReference!;
+  const combined = combinedChaseEmail(
+    fileReference,
+    shown.slice(0, 2).map((preview) => ({ title: preview.title, body: preview.body! })),
+  );
+  return { previews, combined: { ...combined, fileReference, sameFile: false } };
 }

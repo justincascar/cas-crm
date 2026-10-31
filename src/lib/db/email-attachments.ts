@@ -4,6 +4,7 @@ import { CAS_INSURANCE_DOCUMENT_TYPE } from "../email/payment-request-pack";
 import { formatUkDate } from "../dates";
 import { readStoredFile, safeFilename } from "../storage/files";
 import { all } from "./connection";
+import { forSending } from "../documents/screen-notices";
 
 export type EmailFileAttachment = {
   documentId: string;
@@ -85,7 +86,8 @@ function readOne(row: StoredRow): { ok: true; attachment: EmailFileAttachment } 
       return { ok: false, error: `${label} is recorded on this claim, but the file itself is missing. Nothing was sent.` };
     }
   }
-  const html = String(row.body_html || "").trim();
+  // R42: notes for staff never go out in an attachment.
+  const html = forSending(String(row.body_html || ""), row.template_key ? String(row.template_key) : null).trim();
   if (!html) return { ok: false, error: `${label} has no file to attach. Nothing was sent.` };
   const name = safeFilename(`${String(row.title || "document").trim() || "document"}.html`);
   return {

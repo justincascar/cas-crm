@@ -111,6 +111,15 @@ export function loadClaimSteps(claimId: string): ClaimStepView[] | null {
     ? { sinceDay: storageStart, soFarPence: storageSoFar.status === "calculated" ? storageSoFar.totalPence : null, invoiced: invoiced("storage") }
     : null;
 
+  // R44: the latest payment recorded on a head, for "Paid in full dd/mm/yyyy".
+  const lastPaymentDay = (head: string): string | null => {
+    const paid = events
+      .filter((event) => event.event_type === "head_payment_logged" && new RegExp(`head=${head}\\b`).test(event.details || ""))
+      .map((event) => event.occurred_at)
+      .sort();
+    return paid.length ? paid[paid.length - 1] : null;
+  };
+
   function pay(key: ClaimPaymentLineInput["key"], head: string, label: string, endConfirmed: boolean | null): ClaimPaymentLineInput {
     const row = byHead.get(head);
     const chaseKind =
@@ -128,6 +137,11 @@ export function loadClaimSteps(claimId: string): ClaimStepView[] | null {
       paidInFull: Boolean(chase?.payment?.paidInFull),
       partPaid: Boolean(chase?.payment?.partPaid),
       running: key === "hire" ? hireRunning : key === "storage" ? storageRunning : null,
+      duePence: (row?.agreedPence || 0) > 0 ? row?.agreedPence : (row?.confirmedClaimedPence || 0) > 0 ? row?.confirmedClaimedPence : key === "recovery" && recoveryCharge && (row?.claimedPence || 0) > 0 ? row?.claimedPence : null,
+      claimedPence: row?.claimedPence || 0,
+      lastPaymentDay: lastPaymentDay(head),
+      repairsAuthorised: key === "repairs" ? eventTypes.has("repairs_authorised") : undefined,
+      totalLoss: key === "repairs" ? totalLoss : undefined,
     };
   }
 

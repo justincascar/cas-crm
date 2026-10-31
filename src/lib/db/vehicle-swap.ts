@@ -575,7 +575,7 @@ export function swapView(claimId: string, todayYmd: string): SwapView {
   };
 }
 
-export type SwapAgreementLine = { documentId: string; title: string; createdAt: string; state: string; awaiting: boolean };
+export type SwapAgreementLine = { documentId: string; title: string; createdAt: string; state: string; awaiting: boolean; signed: boolean };
 
 /**
  * Hire step 4: each replacement car's agreement on its own line with its own signature state (R29). The signature on
@@ -615,6 +615,7 @@ export function swapAgreementLines(claimId: string): SwapAgreementLine[] {
       createdAt: String(row.created_at),
       state,
       awaiting: row.status === "awaiting_signature",
+      signed: row.status === "completed" && Boolean(row.signed_document_id),
     };
   });
 }

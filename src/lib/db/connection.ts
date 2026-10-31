@@ -10,6 +10,7 @@ import { ensureStorageDailyRateSetting } from "./storage-charge";
 import { ensureRecoveryFeeSettings } from "./recovery-fee-settings";
 import { clearFalseDemonstrationHireCollection, closeDeliveriesForStartedHires } from "./demo-jobs";
 import { correctUnprovenSentEmails } from "./sent-status-repair";
+import { removeScreenNoticesFromStoredLetters } from "./screen-notice-repair";
 import { noteKeptRecoveryCardFees } from "./card-fees";
 import { ensureTest0005StorageDemonstration } from "./test-0005-storage";
 import { ensureTest0008HireDemonstration } from "./test-0008-hire";
@@ -57,6 +58,7 @@ function openDatabase(): DatabaseSync {
   clearFalseDemonstrationHireCollection(db);
   closeDeliveriesForStartedHires(db);
   correctUnprovenSentEmails(db);
+  removeScreenNoticesFromStoredLetters(db);
   noteKeptRecoveryCardFees(db);
   minimiseConvictionText(db);
   ensureTest0005StorageDemonstration(db, { financialLines: true });
@@ -84,6 +86,7 @@ function prepareExistingDatabase(db: DatabaseSync) {
   clearFalseDemonstrationHireCollection(db);
   closeDeliveriesForStartedHires(db);
   correctUnprovenSentEmails(db);
+  removeScreenNoticesFromStoredLetters(db);
   noteKeptRecoveryCardFees(db);
   minimiseConvictionText(db);
   ensureTest0005StorageDemonstration(db);

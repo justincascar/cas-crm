@@ -26,7 +26,7 @@ import { loadClash, sectionVersion } from "@/lib/db/record-version";
 import { gtaTableFor, listGtaTables } from "@/lib/db/gta-rates";
 import { fleetGroupChoices, listFleetGtaRules } from "@/lib/db/fleet-details";
 import { EmailSendModeBanner } from "@/components/EmailSendModeBanner";
-import { CAS_CLAIMS_MAILBOX, INDICATIVE_DEFAULTS } from "@/lib/constants";
+import { AGREEMENT_LENGTH_DAYS, CAS_CLAIMS_MAILBOX, INDICATIVE_DEFAULTS } from "@/lib/constants";
 import { mailboxIsConnected } from "@/lib/email/microsoft-graph";
 import { emailSendBanner } from "@/lib/email/send-mode";
 import { formatGbp } from "@/lib/money";
@@ -34,7 +34,7 @@ import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import { currentCasInsuranceDocument } from "@/lib/db/company-insurance";
 import { PAYMENT_REQUEST_PACK_MISSING } from "@/lib/email/payment-request-pack";
 import { DEV_WEBSITE_ORIGINS, isDevelopment, savedWebsiteOrigins } from "@/lib/db/website-enquiries";
-import { canApproveChasers, chaseRuleApprovals, describeRun, lastChaserRuns } from "@/lib/db/auto-chasers";
+import { canApproveChasers, chaseRuleApprovals, chaserWordingPreviews, describeRun, lastChaserRuns, type ChaserPreview } from "@/lib/db/auto-chasers";
 import { COMPANY_DETAIL_LABELS, companyFooterLines, getCompanyDetails } from "@/lib/db/company-details";
 
 export default async function SettingsPage({
@@ -73,6 +73,8 @@ export default async function SettingsPage({
   const websiteOrigins = savedWebsiteOrigins();
   const websiteDev = isDevelopment();
   const chaserApprovals = chaseRuleApprovals();
+  // R46: Justin reads exactly what each chaser sends before switching it on.
+  const chaserWording = chaserWordingPreviews();
   const chaserRuns = lastChaserRuns();
   const mayApproveChasers = canApproveChasers(staffUser.id);
   const company = getCompanyDetails();
@@ -149,7 +151,7 @@ export default async function SettingsPage({
             />
           </label>
           <label className="text-sm">
-            Agreement maximum days
+            Overdue from day (the agreement period is {AGREEMENT_LENGTH_DAYS} days)
             <input
               name="agreementMaxDays"
               type="number"
@@ -293,6 +295,7 @@ export default async function SettingsPage({
         <ul className="mt-3 divide-y divide-line text-sm">
           {chaserApprovals.map((rule) => (
             <li key={rule.kind} className="flex flex-wrap items-center justify-between gap-2 py-2" data-chaser-rule={rule.kind} data-approved={rule.approved ? "yes" : "no"}>
+              <ChaserWording preview={chaserWording.previews.find((preview) => preview.kind === rule.kind)} />
               <span>
                 <span className="font-semibold">{rule.title}</span> ·{" "}
                 {rule.approved
@@ -311,6 +314,18 @@ export default async function SettingsPage({
             </li>
           ))}
         </ul>
+        {chaserWording.combined ? (
+          <details className="mt-3 rounded-md border border-line bg-white px-3 py-2 text-sm" data-chaser-combined>
+            <summary className="cursor-pointer font-semibold">Read the combined email (two or more chasers due to the same recipient)</summary>
+            <p className="mt-2 text-xs text-slate">
+              {chaserWording.combined.sameFile
+                ? `Example on ${chaserWording.combined.fileReference}, made by the same code that sends it. Nothing was filed or sent.`
+                : `Example made from the first two chasers above (no TEST file has two due to the same recipient). Nothing was filed or sent.`}
+            </p>
+            <p className="mt-2"><span className="font-semibold">Subject:</span> {chaserWording.combined.subject}</p>
+            <pre className="mt-2 whitespace-pre-wrap break-words font-sans">{chaserWording.combined.body}</pre>
+          </details>
+        ) : null}
         <p className="mt-3 text-sm text-slate" data-chaser-last-run>
           Last check: {describeRun(chaserRuns.latest)} Last chaser produced: {describeRun(chaserRuns.lastSent)}
         </p>
@@ -498,7 +513,8 @@ export default async function SettingsPage({
         <dl className="mt-3 grid gap-2 text-sm">
           <Row label="Status" value={settings.environment || "prototype"} />
           <Row label="File prefix" value={settings.file_prefix} />
-          <Row label="Agreement maximum days" value={String(agreementMaxDays)} />
+          <Row label="Agreement period" value={`${AGREEMENT_LENGTH_DAYS} days`} />
+          <Row label="Agreement overdue from day" value={String(agreementMaxDays)} />
           <Row label="Renewal approaching (amber) day" value={String(agreementRenewalApproachingDay)} />
           <Row label="Renewal due (red) day" value={String(agreementRenewalAlertDay)} />
           <Row
@@ -666,7 +682,7 @@ export default async function SettingsPage({
         <h2 className="font-serif text-xl text-navy-deep">Indicative charge defaults</h2>
         <p className="mt-1 text-sm text-slate">
           Recovery, out of hours, environmental, winch and the card fee fill in on the Recovery screen. A different figure
-          can still be typed on that job. The card fee is added only when Card fee is ticked. Storage and the other
+          can still be typed on that job. The card fee is added only when "Paying by card" is ticked in Record a payment. Storage and the other
           amounts are not added unless someone enters them. A range is not a chosen rate.
         </p>
         <ul className="mt-3 space-y-1 text-sm">
@@ -690,8 +706,9 @@ export default async function SettingsPage({
           After an outstanding request is marked as sent, the file is flagged if the outcome has not been logged within
           this many calendar days. Each type has its own default. The payment reminder uses the same three-day demonstration
           default. It is not the insurer payment term. The default is due on receipt unless that insurer has its own term. A longer interval can still be set on an individual
-          file (for example where an insurer has agreed a slower chase). Reminders only — no email is sent
-          automatically. Changing these numbers later does not reopen a chase that has already been cancelled, paused,
+          file (for example where an insurer has agreed a slower chase). These intervals are used by the
+          automatic chaser too: a chaser is sent automatically only once Justin has approved its wording under Automatic
+          chasers below, and otherwise staff prepare and mark it by hand. Changing these numbers later does not reopen a chase that has already been cancelled, paused,
           or cleared by a logged outcome, and does not overwrite a per-file override.
         </p>
         <ValidatedForm action={actionSaveChaseIntervals} className="mt-4 grid gap-3 sm:grid-cols-3 sm:items-end">
@@ -869,5 +886,28 @@ function Row({ label, value }: { label: string; value: string }) {
       <dt className="text-slate">{label}</dt>
       <dd className="ref">{value}</dd>
     </div>
+  );
+}
+
+/** R46: one chaser's full wording, as it would be sent on a TEST file. */
+function ChaserWording({ preview }: { preview: ChaserPreview | undefined }) {
+  if (!preview) return null;
+  return (
+    <details className="order-last basis-full rounded-md border border-line bg-white px-3 py-2" data-chaser-wording={preview.kind}>
+      <summary className="cursor-pointer font-semibold">Read the wording</summary>
+      {preview.body ? (
+        <>
+          <p className="mt-2 text-xs text-slate">
+            {preview.fileReference
+              ? `Example on ${preview.fileReference}, made by the same code that sends it, to ${preview.to}. Nothing was filed or sent. On another file the names, references and dates are that file's.`
+              : preview.note}
+          </p>
+          <p className="mt-2"><span className="font-semibold">Subject:</span> {preview.subject}</p>
+          <pre className="mt-2 whitespace-pre-wrap break-words font-sans">{preview.body}</pre>
+        </>
+      ) : (
+        <p className="mt-2 text-slate">{preview.note}</p>
+      )}
+    </details>
   );
 }

@@ -144,7 +144,7 @@ export function getAgreementMaxDays(): number {
 
 export function setAgreementMaxDays(value: string | number) {
   const days = parseChaseIntervalDays(value, 0);
-  if (days < 1) throw new Error("Enter the agreement maximum as a whole number of days, at least 1.");
+  if (days < 1) throw new Error("Enter the overdue day as a whole number of days, at least 1.");
   const existing = get<{ key: string }>(`SELECT key FROM settings WHERE key = ?`, [SETTING_AGREEMENT_MAX_DAYS]);
   if (existing) {
     run(`UPDATE settings SET value = ? WHERE key = ?`, [String(days), SETTING_AGREEMENT_MAX_DAYS]);

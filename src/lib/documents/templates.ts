@@ -5,8 +5,6 @@ import {
   generateNonFaultTpInsurerLetter,
 } from "./notification-letters";
 import {
-  CAS_TEMPLATE_NOTICE,
-  OPERATIONAL_DRAFT_NOTICE,
   emptyCorrespondenceFields,
   escapeHtml,
   generateFromSpec,
@@ -127,9 +125,8 @@ function heading(ctx: LetterContext, extraRef?: string) {
 }
 
 function operationalClose(ctx: LetterContext) {
-  return `<p>Yours faithfully</p><p>${escapeHtml(ctx.handlerName)}<br/>Complete Accident Solutions Ltd</p>
-<p class="text-xs">${escapeHtml(OPERATIONAL_DRAFT_NOTICE)}</p>
-<p class="text-xs">${escapeHtml(CAS_TEMPLATE_NOTICE)}</p>`;
+  // R42: the operational-draft and template notes are shown on the screen above the sheet, never in the letter.
+  return `<p>Yours faithfully</p><p>${escapeHtml(ctx.handlerName)}<br/>Complete Accident Solutions Ltd</p>`;
 }
 
 function generateRepairCommencement(ctx: LetterContext): GeneratedLetter {
@@ -170,7 +167,7 @@ ${operationalClose(ctx)}`,
     title: "Repair commencement letter",
     subject,
     html,
-    text: `${text}\n\n${OPERATIONAL_DRAFT_NOTICE}`,
+    text,
     missing,
     legalSignOffRequired: false,
   };
@@ -209,7 +206,7 @@ ${operationalClose(ctx)}`,
     title: "Liability chaser",
     subject,
     html,
-    text: `${text}\n\n${OPERATIONAL_DRAFT_NOTICE}`,
+    text,
     missing,
     legalSignOffRequired: false,
   };

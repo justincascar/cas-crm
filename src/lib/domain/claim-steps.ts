@@ -96,6 +96,14 @@ export type ClaimPaymentLineInput = {
   partPaid: boolean;
   /** R35: a hire or storage charge running with no end date yet: since when, the amount so far, and whether invoiced. */
   running?: { sinceDay: string; soFarPence: number | null; invoiced: boolean } | null;
+  /** R44: the figure the head is measured against (agreed, or the confirmed claimed figure), never the two added. */
+  duePence?: number | null;
+  claimedPence?: number;
+  /** R44: the day of the latest payment recorded on this head. */
+  lastPaymentDay?: string | null;
+  /** R44: repairs only: the insurer's authorisation is on the file. Total loss reads as a settlement. */
+  repairsAuthorised?: boolean;
+  totalLoss?: boolean;
 };
 
 export type AudatexReduction = { pence: number | null; note: string | null };
@@ -333,22 +341,32 @@ function claimNumberFrom(events: ClaimStepEvent[]): string | null {
   return match?.[1]?.trim() || null;
 }
 
-function paymentText(row: ClaimPaymentLineInput): string {
+export function paymentText(row: ClaimPaymentLineInput): string {
   if ((row.key === "hire" || row.key === "storage") && row.endConfirmed === false && row.running) {
-    const soFar = row.running.soFarPence != null ? ` · ${formatGbp(row.running.soFarPence)} so far` : "";
+    // R44: the running figure is the gross charge, so it says it includes VAT.
+    const soFar = row.running.soFarPence != null ? ` · ${formatGbp(row.running.soFarPence)} so far, including VAT` : "";
     return `Running since ${formatUkDate(row.running.sinceDay)}${soFar} · ${row.running.invoiced ? "draft invoice produced" : "not yet invoiced"}`;
   }
   if ((row.key === "hire" || row.key === "storage") && row.endConfirmed === false) {
     // Nothing charged yet reads as not started, not as waiting for an end date.
     return row.chargeRecorded ? "Not ready (end date not confirmed)" : "Not started";
   }
-  if (row.paidInFull) return "Paid in full";
+  // R44: paid in full when the chase says so, or when the money received meets the agreed (or confirmed claimed) figure.
+  const due = row.duePence ?? 0;
+  if (row.paidInFull || (due > 0 && row.receivedPence >= due)) {
+    return row.lastPaymentDay ? `Paid in full ${formatUkDate(row.lastPaymentDay)}` : "Paid in full";
+  }
   if (row.partPaid) return `Part paid ${formatGbp(Math.max(0, row.receivedPence))}`;
   if (row.requestSent && row.intervalDays) {
     const days = row.intervalDays;
     return `Payment request sent, chasing every ${days} ${days === 1 ? "day" : "days"}`;
   }
   if (row.key === "recovery" && row.chargeRecorded) return "Figure final. No payment request recorded.";
+  if (row.key === "repairs" && (row.claimedPence || 0) > 0) {
+    const claimed = `Claimed ${formatGbp(row.claimedPence || 0)}`;
+    if (row.totalLoss) return `${claimed} · awaiting settlement`;
+    return `${claimed} · ${row.repairsAuthorised ? "authorised, awaiting payment" : "awaiting authorisation"}`;
+  }
   return "Not started";
 }
 
@@ -1010,9 +1028,11 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
 
   function paymentsStep(): ClaimStepView {
     const lines = input.payments.map((row) => ({ label: row.label, date: paymentText(row) }));
-    const moving = lines.some((row) => row.date.startsWith("Payment request") || row.date.startsWith("Part paid") || row.date.startsWith("Running since"));
+    const moving = lines.some(
+      (row) => row.date.startsWith("Payment request") || row.date.startsWith("Part paid") || row.date.startsWith("Running since") || row.date.startsWith("Claimed "),
+    );
     const anyPaid = lines.some((row) => row.date === "Paid in full");
-    const allSettled = lines.length > 0 && lines.every((row) => row.date === "Paid in full" || row.date === "Not started");
+    const allSettled = lines.length > 0 && lines.every((row) => row.date.startsWith("Paid in full") || row.date === "Not started");
     return applyNotNeeded("payments", shell({
       key: "payments",
       title: "Payments",

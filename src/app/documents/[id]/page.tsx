@@ -12,10 +12,12 @@ import { getDocument } from "@/lib/db/chronology";
 import { claimDocumentTypeLabel } from "@/lib/domain/claim-documents";
 import { specForTemplate } from "@/lib/documents/catalog";
 import { plainPackFields } from "@/lib/documents/hire-pack-fields";
-import { CAS_LEGAL_SIGNOFF_NOTICE, CAS_TEMPLATE_NOTICE } from "@/lib/documents/correspondence";
+import { CAS_LEGAL_SIGNOFF_NOTICE, CAS_TEMPLATE_NOTICE, OPERATIONAL_DRAFT_NOTICE } from "@/lib/documents/correspondence";
+import { OPERATIONAL_TEMPLATE_KEYS, withDraftInvoiceHeading, withoutScreenNotices } from "@/lib/documents/screen-notices";
 import { HeadedPaper } from "@/components/HeadedPaper";
 import { getCompanyDetails } from "@/lib/db/company-details";
 import { headedPaperVariant } from "@/lib/documents/headed-paper";
+import { documentKindLabel } from "@/lib/documents/kind-label";
 
 export default async function DocumentPage({
   params,
@@ -49,7 +51,7 @@ export default async function DocumentPage({
           <p className="text-sm text-slate">
             Version {String(doc.version)} · {formatUkDateTime(String(doc.created_at))}
             {doc.client_name ? ` · ${String(doc.client_name)}` : ""}
-            {doc.document_type ? ` · ${claimDocumentTypeLabel(String(doc.document_type)) || String(doc.document_type)}` : ""}
+            {` · ${claimDocumentTypeLabel(String(doc.document_type || "")) || documentKindLabel(doc)}`}
           </p>
         </div>
         <div className="flex gap-3">
@@ -87,7 +89,10 @@ export default async function DocumentPage({
       {actionError ? <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue print:hidden">{actionError}</p> : null}
       <LegalApprovalPanel documentId={id} state={legalApprovalState(id)} canApprove={accountCanApproveLegal(staff.id)} />
       {!storedPath && !String(doc.template_key || "").startsWith("draft_invoice") ? (
-        <p className="text-xs text-slate print:hidden">{CAS_TEMPLATE_NOTICE}</p>
+        <p className="text-xs text-slate print:hidden" data-screen-notice>{CAS_TEMPLATE_NOTICE}</p>
+      ) : null}
+      {OPERATIONAL_TEMPLATE_KEYS.has(String(doc.template_key || "")) ? (
+        <p className="text-xs text-slate print:hidden" data-screen-notice>{OPERATIONAL_DRAFT_NOTICE}</p>
       ) : null}
       {specForTemplate(String(doc.template_key || ""))?.legalCitations ? (
         <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm print:hidden">{CAS_LEGAL_SIGNOFF_NOTICE}</p>
@@ -101,7 +106,7 @@ export default async function DocumentPage({
       ) : doc.body_html ? (
         <div className="letter-paper rounded-xl border border-line bg-white" data-letter-paper>
           <HeadedPaper company={getCompanyDetails()} variant={headedPaperVariant(String(doc.template_key || ""))}>
-            <div dangerouslySetInnerHTML={{ __html: String(doc.body_html) }} />
+            <div dangerouslySetInnerHTML={{ __html: withDraftInvoiceHeading(withoutScreenNotices(String(doc.body_html)), String(doc.template_key || "")) }} />
           </HeadedPaper>
         </div>
       ) : (

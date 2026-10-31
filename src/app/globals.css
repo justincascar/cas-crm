@@ -201,7 +201,9 @@ body {
   }
 
   aside,
-  .print\:hidden {
+  .print\:hidden,
+  .letter .internal-note,
+  [data-letter-paper] .internal-note {
     display: none !important;
   }
 
@@ -405,4 +407,20 @@ body {
   .headed-paper-logo {
     padding: 0;
   }
+}
+
+/* R42: notes for staff inside a document show on screen only. They never print or go out in an attachment. */
+.letter .internal-note,
+[data-letter-paper] .internal-note {
+  border: 1px dashed #b7c0c7;
+  border-radius: 6px;
+  background: #f6f7f8;
+  padding: 6px 10px;
+  font-size: 0.85em;
+  color: #4a555e;
+}
+.letter .internal-note::before,
+[data-letter-paper] .internal-note::before {
+  content: "Note for staff, not printed: ";
+  font-weight: 600;
 }

@@ -189,7 +189,9 @@ describe("letters from file dates", () => {
     assert.match(letter.text, /Neil McBride v UK Insurance Ltd; Peter Clayton v EUI Ltd/);
     assert.match(letter.text, /Bunting v Zurich/);
     assert.equal(letter.legalSignOffRequired, true);
-    assert.match(letter.text, /solicitor sign-off/i);
+    // R42: the sign-off warning is shown on the screen above the sheet, never in the letter itself.
+    assert.doesNotMatch(letter.text, /solicitor sign-off/i);
+    assert.doesNotMatch(letter.html, /solicitor sign-off/i);
   });
 });
 

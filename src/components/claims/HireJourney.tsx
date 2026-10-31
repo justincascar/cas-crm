@@ -85,6 +85,22 @@ export function HireJourney({
   const agreementDone = area.agreementCount > 0;
   // R38: once signed, step 4 folds to one line with Change.
   const agreementSigned = agreementDone && Boolean(area.signed || area.esign?.status === "signed");
+  // R43: after a swap the current signed agreement leads step 4; earlier ones are listed as replaced, each with its own signature.
+  const signedSwapAgreements = area.swapAgreements.filter((line) => line.signed);
+  const currentSwapAgreement = signedSwapAgreements.at(-1) ?? null;
+  const originalAgreementLine = area.agreement ? (
+    <>
+      <Link href={`/documents/${area.agreement.id}`} className="text-teal-dark underline">
+        {area.agreement.title}
+      </Link>{" "}
+      · filed {formatUkDate(area.agreement.createdAt)} ·{" "}
+      {area.esign?.status === "signed"
+        ? `signed electronically by ${area.esign.signerName} on ${formatUkDateTime(area.esign.signedAt)}`
+        : area.signed
+          ? "signed copy on file"
+          : "not signed yet"}
+    </>
+  ) : null;
   const started = Boolean(area.startedAt);
   const wait = waitingFor(area.gaps);
   const refusedChecks = checkError(error);
@@ -374,17 +390,16 @@ export function HireJourney({
             {agreementDone && area.agreement ? (
               <DoneLine
                 summary={
-                  <>
-                    <Link href={`/documents/${area.agreement.id}`} className="text-teal-dark underline">
-                      {area.agreement.title}
-                    </Link>{" "}
-                    · filed {formatUkDate(area.agreement.createdAt)} ·{" "}
-                    {area.esign?.status === "signed"
-                      ? `signed electronically by ${area.esign.signerName} on ${formatUkDateTime(area.esign.signedAt)}`
-                      : area.signed
-                        ? "signed copy on file"
-                        : "not signed yet"}
-                  </>
+                  currentSwapAgreement ? (
+                    <span data-current-agreement="swap">
+                      <Link href={`/documents/${currentSwapAgreement.documentId}`} className="text-teal-dark underline">
+                        {currentSwapAgreement.title}
+                      </Link>{" "}
+                      · filed {formatUkDate(currentSwapAgreement.createdAt)} · {currentSwapAgreement.state}
+                    </span>
+                  ) : (
+                    <span data-current-agreement="first">{originalAgreementLine}</span>
+                  )
                 }
                 open={showPack}
               >
@@ -398,7 +413,23 @@ export function HireJourney({
             ) : (
               <AgreementBody claimId={id} stillNeeded={agreementStillNeeded} showPack={showPack} again={false} signed={false} />
             )}
-            {area.swapAgreements.map((line) => (
+            {currentSwapAgreement && area.agreement ? (
+              <div className="mt-3 text-sm" data-earlier-agreements>
+                <p className="font-semibold">Earlier agreements (replaced)</p>
+                <ul className="mt-1 space-y-1">
+                  <li>{originalAgreementLine}</li>
+                  {signedSwapAgreements.slice(0, -1).map((line) => (
+                    <li key={line.documentId}>
+                      <Link href={`/documents/${line.documentId}`} className="text-teal-dark underline">
+                        {line.title}
+                      </Link>{" "}
+                      · filed {formatUkDate(line.createdAt)} · {line.state}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {area.swapAgreements.filter((line) => !line.signed).map((line) => (
               <p key={line.documentId} className="mt-2 text-sm" data-swap-agreement={line.awaiting ? "awaiting" : "done"}>
                 <Link href={`/documents/${line.documentId}`} className="text-teal-dark underline">
                   {line.title}

@@ -118,7 +118,7 @@ ${toCustomer
     ? `<p>To: ${gap(claim.client_name, "Client name")}<br>${gap([claim.address_line1, claim.town, claim.postcode].filter((part) => part && !/^unknown$/i.test(String(part))).join(", "), "Client's address")}</p>`
     : `<p>To: ${gap(insurer?.insurer_name, "Third-party insurer")}<br>Your reference: ${gap(insurer?.insurer_ref, "Insurer reference")}</p>`}
 <p>Our reference: ${escapeHtml(claim.file_reference)}<br>Our client: ${gap(claim.client_name, "Client name")}<br>Vehicle: ${gap(claim.registration, "Client registration")}<br>Date: ${formatUkDate(today)}</p>
-<h2>Invoice — ${escapeHtml(head.label)}</h2>
+<h2>Draft invoice — ${escapeHtml(head.label)}</h2>
 <table><thead><tr><th>Item</th><th>Quantity × rate</th><th>Net</th><th>VAT</th><th>Gross</th></tr></thead><tbody>${rows}${feeRows.join("")}</tbody>
 <tfoot><tr><td colspan="2">Total</td><td>${formatGbp(net)}</td><td>${formatGbp(vat)}</td><td>${formatGbp(gross)}</td></tr></tfoot></table>
 <p>Received to date: ${formatGbp(received)}. Balance: ${formatGbp(Math.max(0, gross - received))}.</p>

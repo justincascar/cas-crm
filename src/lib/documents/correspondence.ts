@@ -442,15 +442,6 @@ export function missingFromSpec(required: readonly string[], vars: Record<string
   return missing;
 }
 
-function noticesFor(spec: CorrespondenceSpec): { html: string; text: string } {
-  const lines = [CAS_TEMPLATE_NOTICE];
-  if (spec.legalCitations) lines.push(CAS_LEGAL_SIGNOFF_NOTICE);
-  return {
-    html: lines.map((line) => `<p class="text-xs">${escapeHtml(line)}</p>`).join("\n"),
-    text: `\n\n${lines.join("\n")}`,
-  };
-}
-
 export function generateFromSpec(spec: CorrespondenceSpec, ctx: CorrespondenceContext): GeneratedLetter {
   const vars = correspondenceVars(ctx);
   const missing = missingFromSpec(spec.required, vars);
@@ -458,7 +449,7 @@ export function generateFromSpec(spec: CorrespondenceSpec, ctx: CorrespondenceCo
   const filled = fillPlaceholders(spec.body, vars);
   const body = ctx.includeGtaStatement && offersGtaStatement(spec.key) ? withGtaStatement(filled) : filled;
   const letterDate = formatUkDate(ctx.letterDate);
-  const notice = noticesFor(spec);
+  // R42: the notes about where the wording came from are shown on the screen above the sheet, never in the letter.
   const addressee =
     spec.audience === "engineer"
       ? {
@@ -470,13 +461,13 @@ export function generateFromSpec(spec: CorrespondenceSpec, ctx: CorrespondenceCo
     addressee?.name
       ? `${addressee.name}${addressee.address ? `\n${addressee.address}` : ""}\n\n`
       : "";
-  const html = wrapLetter(ctx, subject, `${bodyToHtml(body)}\n${notice.html}`, letterDate, addressee);
+  const html = wrapLetter(ctx, subject, bodyToHtml(body), letterDate, addressee);
   return {
     templateKey: spec.key,
     title: spec.title,
     subject,
     html,
-    text: `${addressBlock}${body}${notice.text}`,
+    text: `${addressBlock}${body}`,
     missing,
     legalSignOffRequired: spec.legalCitations,
   };

@@ -4,6 +4,8 @@ import { requireStaff } from "@/lib/auth/session";
 import { listDocuments } from "@/lib/db/queries";
 import { claimDocumentTypeLabel } from "@/lib/domain/claim-documents";
 import { documentHasGeneratedBody, documentIsStoredFile, documentListSignedLabel, DOCUMENT_PLACEHOLDER_NOTE } from "@/lib/documents/list-display";
+import { agreementDocumentState, agreementStateLabel } from "@/lib/db/agreement-state";
+import { documentKindLabel } from "@/lib/documents/kind-label";
 
 export default async function DocumentsPage() {
   await requireStaff();
@@ -29,6 +31,10 @@ export default async function DocumentsPage() {
               const stored = documentIsStoredFile(d);
               const onFile = documentHasGeneratedBody(d.body_html) || stored;
               const typeLabel = claimDocumentTypeLabel(String(d.document_type || ""));
+              // R43: a produced agreement is signed through its separate signed copy, or replaced by a later agreement.
+              const agreementLabel = agreementStateLabel(
+                agreementDocumentState({ id: String(d.id), claim_id: String(d.claim_id), template_key: d.template_key ? String(d.template_key) : null, created_at: String(d.created_at) }),
+              );
               return (
                 <tr key={String(d.id)}>
                   <td>
@@ -48,8 +54,8 @@ export default async function DocumentsPage() {
                       </span>
                     )}
                   </td>
-                  <td>{typeLabel || String(d.kind)}</td>
-                  <td>{documentListSignedLabel(d)}</td>
+                  <td>{typeLabel || documentKindLabel(d)}</td>
+                  <td>{agreementLabel || documentListSignedLabel(d)}</td>
                 </tr>
               );
             })}
