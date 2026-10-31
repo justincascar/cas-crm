@@ -86,7 +86,7 @@ describe("claim steps from history", () => {
       needsReplacement: false,
       needsRecovery: true,
       createdAt: "2026-10-19T16:02:51.628Z",
-      clientName: "Mr Jason Roberts",
+      clientName: "Mr Iolo Testwr",
       accidentAt: "2026-10-19T13:30:00.000Z",
       registration: "CU63VLX",
       insurerName: "",

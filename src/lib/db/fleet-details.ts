@@ -31,6 +31,9 @@ export const FLEET_DETAIL_LABELS: Record<FleetDetailField, string> = {
 /** Printed on the agreement the client signs, so they are needed before it is produced. Gearbox has its own gap. */
 export const AGREEMENT_FLEET_FIELDS: FleetDetailField[] = ["fuel", "seats", "colour", "gtaGroup"];
 
+/** What a swap's new agreement prints about the replacement car, so the swap form asks for any of it that is missing (R28). */
+export const SWAP_AGREEMENT_FIELDS: FleetDetailField[] = ["transmission", ...AGREEMENT_FLEET_FIELDS];
+
 export const GEARBOXES = ["Manual", "Automatic"] as const;
 
 export type FleetGtaSuggestion = { group: string; rule: string };
@@ -293,7 +296,8 @@ export function saveMissingFleetDetails(input: {
   return withImmediateTransaction(() => saveMissingFleetDetailsNow(input));
 }
 
-function saveMissingFleetDetailsNow(input: Parameters<typeof saveMissingFleetDetails>[0]): { saved: FleetDetailField[]; details: FleetCarDetails } {
+/** The same, inside a transaction the caller already holds. */
+export function saveMissingFleetDetailsNow(input: Parameters<typeof saveMissingFleetDetails>[0]): { saved: FleetDetailField[]; details: FleetCarDetails } {
   const car = fleetCarDetails(input.fleetVehicleId);
   if (!car) throw new Error("That car is not on the fleet.");
   const entered = FLEET_DETAIL_FIELDS.filter((field) => car.missing.includes(field) && text(input.values[field]));

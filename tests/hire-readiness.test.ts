@@ -47,6 +47,8 @@ function prepared() {
   db.exec(schema);
   migrate(db);
   seed(db);
+  // Fictional files: the client's own car group was never looked up, which the group check (R27) accepts with a reason.
+  db.exec(`UPDATE vehicles SET gta_unclassified_reason = 'Fictional test car: group not looked up' WHERE gta_group IS NULL AND id IN (SELECT client_vehicle_id FROM claims)`);
   return db;
 }
 
@@ -419,6 +421,7 @@ describe("status wording follows the steps", () => {
       form.set("roadworthiness", "roadworthy");
       form.set("needsReplacement", "yes");
       const created = await createClaimFromIntake(intakeFromFormData(form));
+      db.prepare(`UPDATE vehicles SET gta_unclassified_reason = 'Fictional test car: group not looked up' WHERE id = (SELECT client_vehicle_id FROM claims WHERE id = ?)`).run(created.id);
       const row = () => listClaims().find((item) => item.id === created.id);
       const header = () => buildClaimSummaryModel(created.id);
       assert.equal(get<{ next_action: string | null }>(`SELECT next_action FROM claims WHERE id = ?`, [created.id])?.next_action, null);

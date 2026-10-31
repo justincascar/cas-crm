@@ -13,6 +13,7 @@ import {
 export function JustificationChronology({
   events,
   totalLoss = false,
+  creditHire = false,
   claimId,
   progressGaps = [],
   stepError,
@@ -20,12 +21,14 @@ export function JustificationChronology({
 }: {
   events: JustificationSourceEvent[];
   totalLoss?: boolean;
+  /** A credit-hire file: the hire and its agreements are on the chronology (R33). */
+  creditHire?: boolean;
   claimId?: string;
   progressGaps?: RepairProgressGap[];
   stepError?: string;
   stepSaved?: string;
 }) {
-  const lines = justificationChronology(events, { totalLoss });
+  const lines = justificationChronology(events, { totalLoss, creditHire });
   const gaps = justificationRepairGaps(events, { totalLoss });
   const unexplained = progressGaps.filter((gap) => !gap.explained);
   const explained = progressGaps.filter((gap) => gap.explained);

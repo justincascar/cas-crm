@@ -8,14 +8,28 @@ export type Engineer = {
   address: string;
   email: string;
   active: number;
+  /** CAS's real engineer: kept in Settings for live use only, never offered on or sent to from TEST files (R40). */
+  liveOnly?: number;
 };
 
+/** The fictional engineer the TEST files use. */
 export const SEEDED_ENGINEER = {
+  id: "eng-test-assessor",
+  name: "Rhodri Testun, Example Assessors (fictional)",
+  address: "Unit 1, Example Business Park, Cardiff, CF10 9ZZ",
+  email: "engineer.test@example.org",
+};
+
+/** CAS's own engineer, as supplied by Justin. Live use only: not chosen on, or emailed from, TEST files. */
+const CAS_LIVE_ENGINEER = {
   id: "eng-andy-montgomery",
   name: "Andy Montgomery, Montgomery Assessors",
   address: "Woodlands, Ham Lane South, Llantwit Major, Vale Of Glamorgan, CF61 1RU",
   email: "andy.mont@hotmail.co.uk",
 };
+
+export const LIVE_ONLY_ENGINEER_REFUSAL =
+  "That is CAS's real engineer, kept for live use only. Nothing is sent to him from the test CRM. Choose the fictional engineer for TEST files.";
 
 export const ENGINEER_INSTRUCTION_PREPARED = "prepared_not_sent";
 export const ENGINEER_INSTRUCTION_MARKED_SENT = "handler_marked_sent";
@@ -32,6 +46,7 @@ function mapEngineer(row: {
   address: string | null;
   email: string | null;
   active: number;
+  live_only?: number | null;
 }): Engineer {
   return {
     id: row.id,
@@ -39,6 +54,7 @@ function mapEngineer(row: {
     address: row.address || "",
     email: row.email || "",
     active: Number(row.active),
+    liveOnly: Number(row.live_only || 0),
   };
 }
 
@@ -54,31 +70,61 @@ export function ensureEngineers(db: DatabaseSync) {
       updated_at TEXT NOT NULL
     );
   `);
+  const columns = new Set((db.prepare(`PRAGMA table_info(engineers)`).all() as Array<{ name: string }>).map((c) => c.name));
+  if (!columns.has("live_only")) db.exec(`ALTER TABLE engineers ADD COLUMN live_only INTEGER NOT NULL DEFAULT 0`);
   const now = nowUtcIso();
-  const existing = db
-    .prepare(`SELECT id FROM engineers WHERE lower(email) = lower(?)`)
-    .get(SEEDED_ENGINEER.email) as { id: string } | undefined;
-  if (!existing) {
-    const byId = db.prepare(`SELECT id FROM engineers WHERE id = ?`).get(SEEDED_ENGINEER.id) as { id: string } | undefined;
-    if (!byId) {
+  for (const [engineer, liveOnly] of [
+    [SEEDED_ENGINEER, 0],
+    [CAS_LIVE_ENGINEER, 1],
+  ] as const) {
+    const existing = db.prepare(`SELECT id FROM engineers WHERE id = ? OR lower(email) = lower(?)`).get(engineer.id, engineer.email) as { id: string } | undefined;
+    if (!existing) {
       db.prepare(
-        `INSERT INTO engineers(id, name, address, email, active, created_at, updated_at)
-         VALUES (?, ?, ?, ?, 1, ?, ?)`,
-      ).run(SEEDED_ENGINEER.id, SEEDED_ENGINEER.name, SEEDED_ENGINEER.address, SEEDED_ENGINEER.email, now, now);
+        `INSERT INTO engineers(id, name, address, email, active, live_only, created_at, updated_at)
+         VALUES (?, ?, ?, ?, 1, ?, ?, ?)`,
+      ).run(engineer.id, engineer.name, engineer.address, engineer.email, liveOnly, now, now);
+    } else if (liveOnly) {
+      db.prepare(`UPDATE engineers SET live_only = 1 WHERE id = ?`).run(existing.id);
     }
   }
+  // TEST files never use the real engineer. A file that did is moved to the fictional one, with a note.
+  const moved = db
+    .prepare(
+      `SELECT c.id FROM claims c JOIN engineers e ON e.id = c.engineer_id WHERE e.live_only = 1 AND c.file_reference LIKE 'TEST-%'`,
+    )
+    .all() as Array<{ id: string }>;
+  for (const claim of moved) {
+    db.prepare(`UPDATE claims SET engineer_id = ? WHERE id = ?`).run(SEEDED_ENGINEER.id, claim.id);
+    db.prepare(
+      `INSERT INTO claim_events(id, claim_id, event_type, title, details, occurred_at, recorded_at, source)
+       VALUES (?, ?, 'other', 'Other', ?, ?, ?, 'system')`,
+    ).run(
+      newId("event"),
+      claim.id,
+      `Engineer on this TEST file changed to the fictional engineer (${SEEDED_ENGINEER.name}). CAS's real engineer is kept in Settings for live use only and is never emailed from test files.`,
+      now,
+      now,
+    );
+  }
+}
+
+/** A live-only engineer's address: nothing is sent to it from this test CRM. */
+export function isLiveOnlyEngineerEmail(email: string): boolean {
+  const address = email.trim().toLowerCase();
+  if (!address) return false;
+  return Boolean(get<{ id: string }>(`SELECT id FROM engineers WHERE live_only = 1 AND lower(email) = ?`, [address]));
 }
 
 export function listEngineersOn(db: DatabaseSync, opts?: { activeOnly?: boolean }): Engineer[] {
   const sql = opts?.activeOnly
-    ? `SELECT id, name, address, email, active FROM engineers WHERE active = 1 ORDER BY name COLLATE NOCASE`
-    : `SELECT id, name, address, email, active FROM engineers ORDER BY active DESC, name COLLATE NOCASE`;
+    ? `SELECT id, name, address, email, active, live_only FROM engineers WHERE active = 1 AND live_only = 0 ORDER BY name COLLATE NOCASE`
+    : `SELECT id, name, address, email, active, live_only FROM engineers ORDER BY active DESC, name COLLATE NOCASE`;
   return (db.prepare(sql).all() as Array<Engineer & { address: string | null; email: string | null }>).map(mapEngineer);
 }
 
 export function getEngineerOn(db: DatabaseSync, id: string): Engineer | undefined {
   const row = db
-    .prepare(`SELECT id, name, address, email, active FROM engineers WHERE id = ?`)
+    .prepare(`SELECT id, name, address, email, active, live_only FROM engineers WHERE id = ?`)
     .get(id) as (Engineer & { address: string | null; email: string | null }) | undefined;
   return row ? mapEngineer(row) : undefined;
 }
@@ -143,6 +189,7 @@ export function setClaimEngineer(claimId: string, engineerId: string | null) {
   if (engineerId) {
     const engineer = getEngineer(engineerId);
     if (!engineer || engineer.active !== 1) throw new Error("Pick an engineer from the saved list.");
+    if (engineer.liveOnly === 1) throw new Error(LIVE_ONLY_ENGINEER_REFUSAL);
   }
   run(`UPDATE claims SET engineer_id = ?, updated_at = ? WHERE id = ?`, [engineerId, nowUtcIso(), claimId]);
 }

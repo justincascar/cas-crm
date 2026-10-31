@@ -2,49 +2,51 @@ import Link from "next/link";
 import { PageHeader } from "@/components/ClaimTable";
 import { formatUkDateTime } from "@/lib/dates";
 import { requireStaff } from "@/lib/auth/session";
-import { listAutomations } from "@/lib/db/queries";
+import { listAutomationView } from "@/lib/db/automation-view";
+import { describeRun, lastChaserRuns } from "@/lib/db/auto-chasers";
 
+/** R34: every chase in plain words, worked out from the file, never the stored codes. */
 export default async function AutomationsPage() {
   await requireStaff();
-  const rows = listAutomations();
+  const rows = listAutomationView();
+  const runs = lastChaserRuns();
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
         title="Automations"
-        subtitle="Demonstration scheduling uses 3 calendar days. Nothing is sent live. Closed, disputed-and-awaiting-CAS, or solicitor files are not chased. A rebuttal resets the hire-pack chase clock; a partial payment reduces the balance rather than cancelling the chase. A substantive reply would suspend the affected chase — out-of-office would not."
+        subtitle="Each chase as the file stands now. The automatic chaser checks every five minutes inside the sending hours and sends only the chasers Justin has approved; email is simulated until CAS's mailbox is connected. Closed, disputed-and-awaiting-CAS and solicitor files are not chased. A reply on file stops the chase until a person has read it."
       />
+      <p className="text-sm" data-chaser-last-run>
+        Last check: {describeRun(runs.latest)} Last chaser produced: {describeRun(runs.lastSent)}{" "}
+        <Link href="/settings#automatic-chasers" className="text-teal-dark underline">
+          Approvals in Settings
+        </Link>
+      </p>
       <div className="overflow-x-auto rounded-xl border border-line bg-card">
         <table className="ledger-table">
           <thead>
             <tr>
               <th>File</th>
-              <th>Track</th>
-              <th>Next</th>
-              <th>Interval</th>
-              <th>Status</th>
-              <th>Reason</th>
+              <th>Chase</th>
+              <th>Next due</th>
+              <th>How often</th>
+              <th>Where it stands</th>
+              <th>Sending</th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
-              <tr key={String(r.id)}>
+            {rows.map((row) => (
+              <tr key={row.id} data-automation={row.kind}>
                 <td>
-                  {r.claim_id ? (
-                    <Link className="ref text-teal-dark hover:underline" href={`/claims/${r.claim_id}`}>
-                      {String(r.file_reference)}
-                    </Link>
-                  ) : (
-                    "—"
-                  )}
+                  <Link className="ref text-teal-dark hover:underline" href={`/claims/${row.claimId}`}>
+                    {row.fileReference}
+                  </Link>
                 </td>
-                <td>{String(r.track)}</td>
-                <td>{r.next_run_at ? formatUkDateTime(String(r.next_run_at)) : "—"}</td>
-                <td>
-                  {String(r.interval_days)} {String(r.interval_unit)}
-                  {Number(r.paused) ? " · paused" : ""}
-                </td>
-                <td>{String(r.status)}</td>
-                <td>{String(r.reason)}</td>
+                <td>{row.title}</td>
+                <td>{row.dueAt ? formatUkDateTime(row.dueAt) : "—"}</td>
+                <td>{row.every}</td>
+                <td>{row.state}</td>
+                <td>{row.sending}</td>
               </tr>
             ))}
           </tbody>

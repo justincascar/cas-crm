@@ -1,7 +1,8 @@
 import {
   actionRecordEvent,
 } from "@/app/actions";
-import { DocumentGenerateForm } from "@/components/DocumentGenerateForm";
+import { DocumentGenerateForm } from "@/components/DocumentGenerateForm";
+import { sentStatusWords } from "@/lib/domain/chase-status";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import { CLAIM_EVENT_TYPES } from "@/lib/domain/events";
 import { STRUCTURED_REPAIR_RECORD_TYPES } from "@/lib/domain/repair-progress";
@@ -182,7 +183,7 @@ export function FileHistory({
           <ul className="mt-2 space-y-1 text-sm">
             {correspondence.map((c) => (
               <li key={String(c.id)}>
-                {formatUkDateTime(String(c.created_at))} · {String(c.direction)} {String(c.channel)} · {String(c.subject)} ({String(c.sent_status)})
+                {formatUkDateTime(String(c.created_at))} · {String(c.direction)} {String(c.channel)} · {String(c.subject)} ({sentStatusWords(c.sent_status ? String(c.sent_status) : null)})
               </li>
             ))}
           </ul>

@@ -10,6 +10,7 @@ import { MailboxSendNotice, SendPreparedEmailForm } from "@/components/claims/Se
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
 import { liveEmailSending } from "@/lib/email/send-mode";
 import { DOCUMENT_CHASES } from "@/lib/domain/follow-up-chases";
+import { noBankAccountRecorded } from "@/lib/db/hire-agreement";
 import {
   claimDocumentGaps,
   claimDocumentVehicleChoices,
@@ -52,6 +53,7 @@ export default async function ClaimDocumentsPage({
   const documents = listClaimFileDocuments(id);
   const gaps = claimDocumentGaps(id);
   const vehicles = claimDocumentVehicleChoices(id);
+  const noBank = noBankAccountRecorded(id);
   const paperChases = listFollowUpChases(nowUtcIso(), id).filter((row) => DOCUMENT_CHASES.some((paper) => paper.kind === row.kind));
   const liveSending = liveEmailSending();
 
@@ -89,7 +91,9 @@ export default async function ClaimDocumentsPage({
         {DOCUMENT_CHASES.some((paper) => paper.trigger === "welcome" && !paperChases.some((chase) => chase.kind === paper.kind)) ? (
           <p className="mt-3 text-sm">Driving licence, insurance certificate and logbook have not started. The client welcome has not been marked as sent.</p>
         ) : null}
-        {paperChases.some((chase) => chase.kind === "document_bank_statements") ? null : (
+        {noBank ? (
+          <p className="mt-3 text-sm" data-no-bank>No bank account is recorded, so bank statements are not chased. Only the statement of means is asked for.</p>
+        ) : paperChases.some((chase) => chase.kind === "document_bank_statements") ? null : (
           <p className="mt-3 text-sm">Bank statements have not started. The hire agreement has not been generated yet.</p>
         )}
         {paperChases.length === 0 ? null : (

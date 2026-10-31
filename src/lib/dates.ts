@@ -60,6 +60,14 @@ export function accidentDateError(dateYmd: string | null | undefined, asAt = new
   return null;
 }
 
+/**
+ * A step entered with a date only (R33). Today's date takes the time it is recorded, so it sorts after what was done
+ * earlier today. An earlier day has no time to go on and is placed at 09:00 that day.
+ */
+export function occurredOnDay(day: string): string {
+  return day === londonTodayIso() ? nowUtcIso() : utcFromLondonDateTime(`${day}T09:00`);
+}
+
 export function utcFromLondonDateTime(dateTimeLocal: string): string {
   // dateTimeLocal: "2026-09-15T09:30" interpreted as Europe/London
   const asUtc = fromZonedTime(dateTimeLocal, TIMEZONE);
@@ -120,7 +128,7 @@ export function isoDateFromNow(days: number): string {
 /** Accepts a date (yyyy-MM-dd) or datetime-local value as Europe/London. */
 export function occurredFromForm(value: string | null | undefined): string {
   if (!value) return nowUtcIso();
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return utcFromLondonDateTime(`${value}T09:00`);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return occurredOnDay(value);
   if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value) || /(?:[zZ]|[+-]\d{2}:\d{2})$/.test(value)) {
     const parsed = new Date(value);
     if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();

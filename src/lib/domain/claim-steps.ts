@@ -94,6 +94,8 @@ export type ClaimPaymentLineInput = {
   receivedPence: number;
   paidInFull: boolean;
   partPaid: boolean;
+  /** R35: a hire or storage charge running with no end date yet: since when, the amount so far, and whether invoiced. */
+  running?: { sinceDay: string; soFarPence: number | null; invoiced: boolean } | null;
 };
 
 export type AudatexReduction = { pence: number | null; note: string | null };
@@ -332,6 +334,10 @@ function claimNumberFrom(events: ClaimStepEvent[]): string | null {
 }
 
 function paymentText(row: ClaimPaymentLineInput): string {
+  if ((row.key === "hire" || row.key === "storage") && row.endConfirmed === false && row.running) {
+    const soFar = row.running.soFarPence != null ? ` · ${formatGbp(row.running.soFarPence)} so far` : "";
+    return `Running since ${formatUkDate(row.running.sinceDay)}${soFar} · ${row.running.invoiced ? "draft invoice produced" : "not yet invoiced"}`;
+  }
   if ((row.key === "hire" || row.key === "storage") && row.endConfirmed === false) {
     // Nothing charged yet reads as not started, not as waiting for an end date.
     return row.chargeRecorded ? "Not ready (end date not confirmed)" : "Not started";
@@ -1004,7 +1010,7 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
 
   function paymentsStep(): ClaimStepView {
     const lines = input.payments.map((row) => ({ label: row.label, date: paymentText(row) }));
-    const moving = lines.some((row) => row.date.startsWith("Payment request") || row.date.startsWith("Part paid"));
+    const moving = lines.some((row) => row.date.startsWith("Payment request") || row.date.startsWith("Part paid") || row.date.startsWith("Running since"));
     const anyPaid = lines.some((row) => row.date === "Paid in full");
     const allSettled = lines.length > 0 && lines.every((row) => row.date === "Paid in full" || row.date === "Not started");
     return applyNotNeeded("payments", shell({

@@ -1,3 +1,4 @@
+import { londonDateIso, utcFromLondonDateTime } from "../dates";
 import { CHASE_KIND_DEFINITIONS } from "./chase";
 import { eventLabel } from "./events";
 import { DOCUMENT_CHASE_SENT_EVENT, TOTAL_LOSS_PAYMENT_CHASE_SENT_EVENT } from "./follow-up-chases";
@@ -29,7 +30,45 @@ const MILESTONE_TYPES = [
   "storage_ended",
   "storage_recovery_agreement_override",
   "repair_steps_closed_total_loss",
+  // R33: payments received.
+  "head_payment_logged",
+  "repair_payment_received",
+  "repair_invoice_payment_logged",
+  "settlement_payment_logged",
+  "total_loss_payment_received",
 ] as const;
+
+/** R33: the hire is part of the litigation chronology on a credit-hire file. A fault courtesy car is not credit hire. */
+const CREDIT_HIRE_TYPES = new Set<string>(["hire_started", "hire_swap_started", "hire_vehicle_changed", "hire_agreement_renewed"]);
+
+/** A signed hire agreement, kept by its note (it is filed as a document). */
+export function signedAgreementNote(event: { event_type: string; details: string | null }): boolean {
+  return event.event_type === "document_filed" && /hire agreement/i.test(event.details || "") && /signed/i.test(event.details || "");
+}
+
+/** A payment line in plain words. The stored note keeps its codes for the money screens. */
+export function paymentWords(details: string | null): string | null {
+  const text = details || "";
+  const head = text.match(/head=([a-z_]+)/)?.[1];
+  const amount = Number(text.match(/amount_pence=(-?\d+)/)?.[1]);
+  if (!head || !Number.isFinite(amount)) return details;
+  const names: Record<string, string> = { repairs: "Repairs", vehicle_damage: "Vehicle damage", recovery: "Recovery", storage: "Storage", hire: "Hire" };
+  const pounds = (Math.abs(amount) / 100).toLocaleString("en-GB", { style: "currency", currency: "GBP" });
+  const correction = /correction=1/.test(text);
+  return `${names[head] || head} ${correction ? "payment corrected by" : "payment received:"} ${amount < 0 ? "-" : ""}${pounds}.`;
+}
+
+/**
+ * A step dated today used to be stamped 09:00 although it was recorded later, which put it before things done earlier
+ * that day. Such a line is placed at the time it was recorded.
+ */
+export function effectiveTime(event: { occurred_at: string; recorded_at?: string | null }): string {
+  const recorded = event.recorded_at || "";
+  if (!recorded || recorded <= event.occurred_at) return event.occurred_at;
+  const day = londonDateIso(new Date(event.occurred_at));
+  if (day !== londonDateIso(new Date(recorded))) return event.occurred_at;
+  return event.occurred_at === utcFromLondonDateTime(`${day}T09:00`) ? recorded : event.occurred_at;
+}
 
 /**
  * Dated repair steps. Shown when repair applies, and also when already
@@ -104,6 +143,8 @@ export type JustificationRepairGap = {
 export type JustificationChronologyOptions = {
   /** A total loss does not expect missing workshop steps. Steps already recorded stay on the list. */
   totalLoss?: boolean;
+  /** A credit-hire file: the hire, the swap and the signed agreements are listed (R33). */
+  creditHire?: boolean;
 };
 
 export function justificationChaseEventTypes(): string[] {
@@ -177,9 +218,12 @@ export function justificationChronology(
       }
     }
   }
-  const kept = events.filter((event) => allowed.has(event.event_type));
+  if (options?.creditHire) for (const type of CREDIT_HIRE_TYPES) allowed.add(type);
+  const kept = events.filter((event) => allowed.has(event.event_type) || (options?.creditHire && signedAgreementNote(event)));
   kept.sort((a, b) => {
-    if (a.occurred_at !== b.occurred_at) return a.occurred_at < b.occurred_at ? -1 : 1;
+    const aAt = effectiveTime(a);
+    const bAt = effectiveTime(b);
+    if (aAt !== bAt) return aAt < bAt ? -1 : 1;
     const aRecorded = a.recorded_at || "";
     const bRecorded = b.recorded_at || "";
     if (aRecorded !== bRecorded) return aRecorded < bRecorded ? -1 : 1;
@@ -188,9 +232,9 @@ export function justificationChronology(
   return kept.map((event) => ({
     id: event.id,
     eventType: event.event_type,
-    occurredAt: event.occurred_at,
-    title: event.title.trim() || eventLabel(event.event_type),
-    details: event.details,
+    occurredAt: effectiveTime(event),
+    title: signedAgreementNote(event) ? "Hire agreement signed" : event.title.trim() || eventLabel(event.event_type),
+    details: event.event_type === "head_payment_logged" ? paymentWords(event.details) : event.details,
     dispatch: NO_DISPATCH.has(event.event_type) ? null : dispatchFromHistoryNote(event.details),
   }));
 }

@@ -342,6 +342,7 @@ export const NOT_PERSONAL: Record<string, string[]> = {
   vehicle_compliance_checks: ["registration", "details_match", "notes"],
   vehicles: ["body_type", "details_match_client"],
   fleet_gta_rules: ["name"],
+  chaser_runs: ["emails"],
 };
 
 export const PERSONAL_NAME_PATTERN =

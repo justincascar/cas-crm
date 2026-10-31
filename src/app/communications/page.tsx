@@ -6,12 +6,14 @@ import { requireStaff } from "@/lib/auth/session";
 import { listCorrespondence } from "@/lib/db/queries";
 import { CAS_CLAIMS_MAILBOX } from "@/lib/constants";
 import { emailSendBanner } from "@/lib/email/send-mode";
+import { sentStatusWords } from "@/lib/domain/chase-status";
 
 function channelLabel(channel: string, direction: string) {
-  if (channel === "whatsapp") return `${direction} WhatsApp`;
+  const way = direction === "outgoing" ? "Outgoing" : direction === "incoming" ? "Incoming" : direction;
+  if (channel === "whatsapp") return `${way} WhatsApp`;
   if (channel === "phone") return direction === "outgoing" ? "Call made" : "Call received";
-  if (channel === "email") return `${direction} email`;
-  return `${direction} ${channel}`;
+  if (channel === "email") return `${way} email`;
+  return `${way} ${channel}`;
 }
 
 export default async function CommunicationsPage() {
@@ -57,7 +59,7 @@ export default async function CommunicationsPage() {
                   {String(r.subject)}
                   <div className="text-xs text-slate">{String(r.preview || "")}</div>
                 </td>
-                <td>{String(r.sent_status)}</td>
+                <td>{sentStatusWords(r.sent_status ? String(r.sent_status) : null)}</td>
               </tr>
             ))}
           </tbody>

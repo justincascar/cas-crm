@@ -14,6 +14,7 @@ import { listStaffPermissions } from "./permissions";
 import { hireAgreementPrehireBlock } from "./prehire-checks";
 import { beforeSigningFor } from "./hire-out-readings";
 import { AGREEMENT_FLEET_FIELDS, fleetCarDetails, missingWords } from "./fleet-details";
+import { hireGroupCheck } from "./hire-group-check";
 
 export const SIGNED_HIRE_AGREEMENT_TYPE = "signed_hire_agreement";
 export const SIGNED_AGREEMENT_OVERRIDE = "signed_agreement";
@@ -156,6 +157,8 @@ export function agreementMandatoryGaps(claimId: string): HireGapLink[] {
     if (before.mileage == null || !before.fuelLevel) add("readings-out", "Mileage and fuel out", `${base}/hire#before-signing`);
   }
   if (!before.licenceIssuedOn) add("licence-issued", "Licence date of issue", `${base}/hire#before-signing`);
+  // R27: the client's own car group (or why it cannot be classified), and a reason for charging above the car supplied.
+  for (const gap of hireGroupCheck(claimId).gaps) add(gap.key, gap.label, gap.href);
   return gaps;
 }
 

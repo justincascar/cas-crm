@@ -7,6 +7,7 @@ import { emailGateway } from "../email/gateway";
 import { loadClaimEmailAttachments } from "./email-attachments";
 import { emailSendMode } from "../email/send-mode";
 import { mailboxSentDetails } from "../email/sent-wording";
+import { CHASE_COMBINED_STATUS } from "../domain/chase-status";
 import { phoneGateway } from "../phone/gateway";
 import { whatsappGateway } from "../whatsapp/gateway";
 import { scenePhotosWhatsAppBody, scenePhotosWhatsAppSubject } from "../whatsapp/scene-photos";
@@ -452,6 +453,12 @@ function letterContext(claimId: string, letterDate: string = nowUtcIso(), engine
     tpVehicleReg: String(tp?.tp_reg || ""),
     tpPolicyNumber: String(tp?.policy_number || ""),
     lossesClaimed: summariseLossesClaimed(lines, creditHire, { storageProvisional, hireProvisional }),
+    lossHeadsOnFile: [
+      "vehicle repair charges",
+      recovery || history.some((event) => event.event_type === "recovery_completed") ? "recovery charges" : "",
+      claim.storage_started_on ? "storage charges" : "",
+      creditHire ? "credit hire charges" : "",
+    ].filter(Boolean),
     creditHire,
     courtesyAllocated: Boolean(courtesyReservation),
   };
@@ -1267,12 +1274,34 @@ export function prepareEngineerReportChase(input: { claimId: string; actorId: st
   };
 }
 
+/** A chase sent by the automatic chaser (R30). Simulated until CAS's mailbox is connected; combined when it went in one email with others. */
+export type AutomaticChaseSend = { simulated: boolean; combinedId?: string };
+
+/** The status kept on the chase's own email row. */
+function automaticStatus(automatic: AutomaticChaseSend | undefined): string {
+  if (!automatic) return ENGINEER_INSTRUCTION_MARKED_SENT;
+  if (automatic.combinedId) return CHASE_COMBINED_STATUS;
+  return automatic.simulated ? "simulated_sent" : ENGINEER_INSTRUCTION_MARKED_SENT;
+}
+
+export function automaticSentDetails(subject: string, to: string, automatic: AutomaticChaseSend): string {
+  return automatic.simulated
+    ? `${subject}: automatic chaser to ${to}, simulated. Not sent to a real mailbox (email sending is simulated until CAS's mailbox is connected).`
+    : `${subject}: automatic chaser sent to ${to} from ${CAS_CLAIMS_MAILBOX}.`;
+}
+
+function automaticClockDetails(title: string, automatic: AutomaticChaseSend): string {
+  const how = automatic.simulated ? "by the automatic chaser, simulated" : `by the automatic chaser from ${CAS_CLAIMS_MAILBOX}`;
+  return `${title} sent ${how}${automatic.combinedId ? ", in one email with the other items due to the same recipient" : ""}. Interval restarted.`;
+}
+
 export function markEngineerReportChaseSent(input: {
   claimId: string;
   correspondenceId: string;
   actorId: string;
   occurredAt?: string;
   deliveredByMailbox?: boolean;
+  automatic?: AutomaticChaseSend;
 }) {
   const row = get<{
     id: string;
@@ -1297,33 +1326,39 @@ export function markEngineerReportChaseSent(input: {
   const when = occurredFromForm(input.occurredAt);
   const handler = get<{ name: string }>(`SELECT name FROM staff WHERE id = ?`, [input.actorId]);
   const handlerName = handler?.name || "Unknown handler";
-  run(`UPDATE correspondence SET sent_status = ? WHERE id = ?`, [ENGINEER_INSTRUCTION_MARKED_SENT, input.correspondenceId]);
+  run(`UPDATE correspondence SET sent_status = ? WHERE id = ?`, [automaticStatus(input.automatic), input.correspondenceId]);
   const subject = String(row.subject || "Engineer report chase");
   const to = String(row.to_address || "");
   const mailbox = Boolean(input.deliveredByMailbox);
-  recordClaimEvent({
-    claimId: input.claimId,
-    eventType: "outgoing_email",
-    occurredAt: when,
-    details: mailbox
-      ? mailboxSentDetails(subject, to, handlerName)
-      : `${subject} prepared for ${to}. Marked as sent by ${handlerName} after opening their own email client. Not auto-sent — live sending from ${CAS_CLAIMS_MAILBOX} is not connected.`,
-    actorId: input.actorId,
-    channel: "email",
-    correspondenceId: input.correspondenceId,
-    source: "staff",
-  });
+  if (!input.automatic?.combinedId) {
+    recordClaimEvent({
+      claimId: input.claimId,
+      eventType: "outgoing_email",
+      occurredAt: when,
+      details: input.automatic
+        ? automaticSentDetails(subject, to, input.automatic)
+        : mailbox
+          ? mailboxSentDetails(subject, to, handlerName)
+          : `${subject} prepared for ${to}. Marked as sent by ${handlerName} after opening their own email client. Not auto-sent — live sending from ${CAS_CLAIMS_MAILBOX} is not connected.`,
+      actorId: input.actorId,
+      channel: "email",
+      correspondenceId: input.correspondenceId,
+      source: input.automatic ? "system" : "staff",
+    });
+  }
   recordClaimEvent({
     claimId: input.claimId,
     eventType: "engineer_report_chase_sent",
     occurredAt: when,
-    details: mailbox
-      ? `Engineer report chase sent from ${CAS_CLAIMS_MAILBOX} by ${handlerName}. Interval restarted.`
-      : `Engineer report chase marked as sent by ${handlerName}. Interval restarted. Prepared, not auto-sent from ${CAS_CLAIMS_MAILBOX}.`,
+    details: input.automatic
+      ? automaticClockDetails("Engineer report chase", input.automatic)
+      : mailbox
+        ? `Engineer report chase sent from ${CAS_CLAIMS_MAILBOX} by ${handlerName}. Interval restarted.`
+        : `Engineer report chase marked as sent by ${handlerName}. Interval restarted. Prepared, not auto-sent from ${CAS_CLAIMS_MAILBOX}.`,
     actorId: input.actorId,
     channel: "email",
-    correspondenceId: input.correspondenceId,
-    source: "staff",
+    correspondenceId: input.automatic?.combinedId || input.correspondenceId,
+    source: input.automatic ? "system" : "staff",
   });
   restartEngineerInstructionChaseClock(input.claimId, when);
   return { handlerName, occurredAt: when };
@@ -1543,6 +1578,7 @@ function markPaymentChaseSent(input: {
   kind: ChaseKind;
   occurredAt?: string;
   deliveredByMailbox?: boolean;
+  automatic?: AutomaticChaseSend;
 }) {
   const def = chaseDefinition(input.kind);
   const head = def.paymentHead;
@@ -1569,31 +1605,38 @@ function markPaymentChaseSent(input: {
   const firstAlready = paymentHistorySent(input.claimId, head, "payment_chase_1_sent");
   const clockEvent = (firstAlready ? def.chaseSentEventType : def.startEventTypes[0]) as ClaimEventType;
   const historyEvent = (firstAlready ? "payment_chase_2_sent" : "payment_chase_1_sent") as ClaimEventType;
-  run(`UPDATE correspondence SET sent_status = ? WHERE id = ?`, [ENGINEER_INSTRUCTION_MARKED_SENT, input.correspondenceId]);
+  run(`UPDATE correspondence SET sent_status = ? WHERE id = ?`, [automaticStatus(input.automatic), input.correspondenceId]);
   const subject = String(row.subject || def.title);
   const to = String(row.to_address || "");
   const mailbox = Boolean(input.deliveredByMailbox);
-  recordClaimEvent({
-    claimId: input.claimId,
-    eventType: "outgoing_email",
-    occurredAt: when,
-    details: mailbox
-      ? mailboxSentDetails(subject, to, handlerName)
-      : `${subject} prepared for ${to}. Marked as sent by ${handlerName} after opening their own email client. Not auto-sent — live sending from ${CAS_CLAIMS_MAILBOX} is not connected.`,
-    actorId: input.actorId,
-    channel: "email",
-    correspondenceId: input.correspondenceId,
-    source: "staff",
-  });
+  const source = input.automatic ? "system" : "staff";
+  if (!input.automatic?.combinedId) {
+    recordClaimEvent({
+      claimId: input.claimId,
+      eventType: "outgoing_email",
+      occurredAt: when,
+      details: input.automatic
+        ? automaticSentDetails(subject, to, input.automatic)
+        : mailbox
+          ? mailboxSentDetails(subject, to, handlerName)
+          : `${subject} prepared for ${to}. Marked as sent by ${handlerName} after opening their own email client. Not auto-sent — live sending from ${CAS_CLAIMS_MAILBOX} is not connected.`,
+      actorId: input.actorId,
+      channel: "email",
+      correspondenceId: input.correspondenceId,
+      source,
+    });
+  }
   recordClaimEvent({
     claimId: input.claimId,
     eventType: clockEvent,
     occurredAt: when,
-    details: `head=${head} ${mailbox ? "Sent" : "Marked as sent"} by ${handlerName}. Reminder only — not auto-sent.`,
+    details: input.automatic
+      ? `head=${head} ${automaticClockDetails(def.title, input.automatic)}`
+      : `head=${head} ${mailbox ? "Sent" : "Marked as sent"} by ${handlerName}. Not sent automatically.`,
     actorId: input.actorId,
     channel: "email",
-    correspondenceId: input.correspondenceId,
-    source: "staff",
+    correspondenceId: input.automatic?.combinedId || input.correspondenceId,
+    source,
   });
   recordClaimEvent({
     claimId: input.claimId,
@@ -1602,8 +1645,8 @@ function markPaymentChaseSent(input: {
     details: `head=${head} ${subject}`,
     actorId: input.actorId,
     channel: "email",
-    correspondenceId: input.correspondenceId,
-    source: "staff",
+    correspondenceId: input.automatic?.combinedId || input.correspondenceId,
+    source,
   });
   return { handlerName, occurredAt: when };
 }
@@ -1615,6 +1658,8 @@ export function markOutstandingChaseSent(input: {
   kind: ChaseKind;
   occurredAt?: string;
   deliveredByMailbox?: boolean;
+  /** Sent by the automatic chaser (R30), simulated until CAS's mailbox is connected. */
+  automatic?: AutomaticChaseSend;
 }) {
   if (input.kind === "engineer_report") {
     return markEngineerReportChaseSent({
@@ -1623,6 +1668,7 @@ export function markOutstandingChaseSent(input: {
       actorId: input.actorId,
       occurredAt: input.occurredAt,
       deliveredByMailbox: input.deliveredByMailbox,
+      automatic: input.automatic,
     });
   }
   if (isPaymentChaseKind(input.kind)) {
@@ -1648,33 +1694,40 @@ export function markOutstandingChaseSent(input: {
   const when = occurredFromForm(input.occurredAt);
   const handler = get<{ name: string }>(`SELECT name FROM staff WHERE id = ?`, [input.actorId]);
   const handlerName = handler?.name || "Unknown handler";
-  run(`UPDATE correspondence SET sent_status = ? WHERE id = ?`, [ENGINEER_INSTRUCTION_MARKED_SENT, input.correspondenceId]);
+  run(`UPDATE correspondence SET sent_status = ? WHERE id = ?`, [automaticStatus(input.automatic), input.correspondenceId]);
   const subject = String(row.subject || def.title);
   const to = String(row.to_address || "");
   const mailbox = Boolean(input.deliveredByMailbox);
-  recordClaimEvent({
-    claimId: input.claimId,
-    eventType: "outgoing_email",
-    occurredAt: when,
-    details: mailbox
-      ? mailboxSentDetails(subject, to, handlerName)
-      : `${subject} prepared for ${to}. Marked as sent by ${handlerName} after opening their own email client. Not auto-sent — live sending from ${CAS_CLAIMS_MAILBOX} is not connected.`,
-    actorId: input.actorId,
-    channel: "email",
-    correspondenceId: input.correspondenceId,
-    source: "staff",
-  });
+  const source = input.automatic ? "system" : "staff";
+  if (!input.automatic?.combinedId) {
+    recordClaimEvent({
+      claimId: input.claimId,
+      eventType: "outgoing_email",
+      occurredAt: when,
+      details: input.automatic
+        ? automaticSentDetails(subject, to, input.automatic)
+        : mailbox
+          ? mailboxSentDetails(subject, to, handlerName)
+          : `${subject} prepared for ${to}. Marked as sent by ${handlerName} after opening their own email client. Not auto-sent — live sending from ${CAS_CLAIMS_MAILBOX} is not connected.`,
+      actorId: input.actorId,
+      channel: "email",
+      correspondenceId: input.correspondenceId,
+      source,
+    });
+  }
   recordClaimEvent({
     claimId: input.claimId,
     eventType: def.chaseSentEventType as ClaimEventType,
     occurredAt: when,
-    details: mailbox
-      ? `${def.title} sent from ${CAS_CLAIMS_MAILBOX} by ${handlerName}. Interval restarted.`
-      : `${def.title} marked as sent by ${handlerName}. Interval restarted. Prepared, not auto-sent from ${CAS_CLAIMS_MAILBOX}.`,
+    details: input.automatic
+      ? automaticClockDetails(def.title, input.automatic)
+      : mailbox
+        ? `${def.title} sent from ${CAS_CLAIMS_MAILBOX} by ${handlerName}. Interval restarted.`
+        : `${def.title} marked as sent by ${handlerName}. Interval restarted. Prepared, not auto-sent from ${CAS_CLAIMS_MAILBOX}.`,
     actorId: input.actorId,
     channel: "email",
-    correspondenceId: input.correspondenceId,
-    source: "staff",
+    correspondenceId: input.automatic?.combinedId || input.correspondenceId,
+    source,
   });
   return { handlerName, occurredAt: when };
 }

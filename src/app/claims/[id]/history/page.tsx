@@ -35,6 +35,7 @@ export default async function ClaimHistoryPage({
       <JustificationChronology
         events={data.events}
         totalLoss={Number(claim.total_loss) === 1 || Number(claim.later_declared_total_loss) === 1}
+        creditHire={String(claim.claim_type || "") !== "fault"}
         claimId={claimId}
         progressGaps={gapsForClaim(claimId, totalLoss)}
       />

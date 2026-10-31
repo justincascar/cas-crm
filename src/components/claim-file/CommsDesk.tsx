@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
+import { sentStatusWords } from "@/lib/domain/chase-status";
 import { useRouter } from "next/navigation";
 import {
   actionLogIncomingEmail,
@@ -638,7 +639,7 @@ export function CommsDesk({
                 {" — "}
                 {String(row.subject)}
                 <div className="text-xs text-slate">{String(row.preview || "")}</div>
-                <div className="text-xs text-slate">{String(row.sent_status)}</div>
+                <div className="text-xs text-slate">{sentStatusWords(row.sent_status ? String(row.sent_status) : null)}</div>
                 {attachmentSummary(row.attachments_json) ? (
                   <div className="text-xs text-slate">Attached: {attachmentSummary(row.attachments_json)}</div>
                 ) : null}

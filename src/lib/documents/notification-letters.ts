@@ -7,6 +7,7 @@ import {
   escapeHtml,
   handlerInitials,
   isBlankClaimValue,
+  joinEnglishList,
   markGapHtml,
   namesDiffer,
   wrapLetter,
@@ -56,6 +57,11 @@ function vehicleLine(
   missing: string[],
 ): string {
   const makeModel = [make, model].filter((part) => !isBlankClaimValue(part)).join(" ").trim();
+  // R39: the registration alone prints when the make is not known. The gap still shows on screen.
+  if (!makeModel && !isBlankClaimValue(registration)) {
+    missing.push(labels.makeModel);
+    return String(registration).trim();
+  }
   const makeModelText = makeModel || claimValueOrGap("", labels.makeModel, missing);
   const registrationText = claimValueOrGap(registration, labels.registration, missing);
   return `${makeModelText} ${registrationText}`.trim();
@@ -212,6 +218,9 @@ export function generateNonFaultTpInsurerLetter(ctx: LetterContext | Corresponde
   const accidentTime = ctx.accidentAt ? formatUkTime(ctx.accidentAt) : claimValueOrGap("", "Accident time", missing);
   const location = claimValueOrGap(ctx.accidentLocation, "Accident location", missing);
   const subject = `Uninsured losses — ${ctx.fileReference}`;
+  // The supplied notification template lists repairs, hire and related losses such as recovery and storage, so the
+  // heads recorded on this file are listed.
+  const losses = ctx.lossHeadsOnFile?.length ? joinEnglishList(ctx.lossHeadsOnFile) : "vehicle repair charges and credit hire charges";
   const facts = [
     ...refs.lines.map((line) => `${line.label}: ${line.value}`),
     `Our Client: ${client}`,
@@ -236,7 +245,7 @@ export function generateNonFaultTpInsurerLetter(ctx: LetterContext | Corresponde
     "",
     "Accordingly, we place you on notice of our client's claim.",
     "",
-    "Our client's losses include vehicle repair charges and credit hire charges. Full supporting documentation is being provided with our covering email.",
+    `Our client's losses include ${losses}. Full supporting documentation is being provided with our covering email.`,
     "",
     "Please confirm by return:",
     ...(refs.haveClaimRef ? [] : ["- your claim reference;"]),
@@ -267,7 +276,7 @@ ${driverRow}<p>Our Insured's Vehicle: ${markGapHtml(ownVehicle)}</p>
 <p>Accident Location: ${markGapHtml(location)}</p>
 <p>We act on behalf of ${markGapHtml(client)} in respect of uninsured losses arising from the above road traffic accident.</p>
 <p>Accordingly, we place you on notice of our client's claim.</p>
-<p>Our client's losses include vehicle repair charges and credit hire charges. Full supporting documentation is being provided with our covering email.</p>
+<p>Our client's losses include ${escapeHtml(losses)}. Full supporting documentation is being provided with our covering email.</p>
 <p>Please confirm by return:</p>
 <ul>
 ${refs.haveClaimRef ? "" : "<li>your claim reference;</li>\n"}<li>that you are the relevant insurer/claims handler for vehicle ${markGapHtml(tpReg)};</li>

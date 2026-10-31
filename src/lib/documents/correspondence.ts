@@ -44,6 +44,8 @@ export type LetterContext = {
   tpInsurerAddress?: string;
   ownInsurerAddress?: string;
   lossesClaimed?: string;
+  /** R39: the heads recorded on the file (repairs, recovery, storage, credit hire), for the initial letter. */
+  lossHeadsOnFile?: string[];
   creditHire?: boolean;
   courtesyAllocated?: boolean;
 };
@@ -313,10 +315,9 @@ export function wrapLetter(
             : ""
         }</p>`
       : "";
+  // R41: the headed paper's footer carries CAS's name and address, so the letter no longer repeats them at the top.
   return `<article class="letter">
 <header>
-<p><strong>${escapeHtml(CAS_COMPANY.name)}</strong></p>
-<p>${escapeHtml(CAS_COMPANY.address)}</p>
 <p>${letterDate}</p>
 ${addresseeHtml}
 <p>${escapeHtml(subject)}</p>

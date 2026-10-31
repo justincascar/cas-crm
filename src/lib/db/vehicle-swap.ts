@@ -10,15 +10,17 @@ import { storeFileCopy } from "../storage/files";
 import { recordClaimEvent } from "./chronology";
 import { all, get, getDb, newId, run } from "./connection";
 import { fleetAvailability } from "./fleet-availability";
-import { fleetCarDetails } from "./fleet-details";
+import { fleetCarDetails, missingWords, saveMissingFleetDetailsNow, SWAP_AGREEMENT_FIELDS, type FleetDetailField } from "./fleet-details";
+import { hireGroupCheck } from "./hire-group-check";
+import { describeHireAgreementParts } from "../documents/hire-agreement-parts";
 import { FUEL_LEVELS } from "./handover";
 import {
-  allocateHireAgreementNumber,
   buildHireAgreementView,
   HIRE_AGREEMENT_DOCUMENT_TYPE,
   HIRE_AGREEMENT_TEMPLATE_KEY,
   hireAgreementMissing,
   renderHireAgreement,
+  takeNextHireAgreementNumber,
 } from "./hire-agreement";
 import { getHirePack } from "./hire-pack";
 import { readSignedUpload, SIGNED_HIRE_AGREEMENT_TYPE } from "./hire-readiness";
@@ -65,11 +67,19 @@ export function ensureVehicleSwapTables(db: DatabaseSync) {
   `);
   const columns = new Set((db.prepare(`PRAGMA table_info(documents)`).all() as Array<{ name: string }>).map((c) => c.name));
   if (!columns.has("superseded_by_document_id")) db.exec(`ALTER TABLE documents ADD COLUMN superseded_by_document_id TEXT`);
+  const swapColumns = new Set((db.prepare(`PRAGMA table_info(hire_swaps)`).all() as Array<{ name: string }>).map((c) => c.name));
+  // R29: the new agreement has its own number, linked to the one it replaces.
+  if (!swapColumns.has("agreement_number")) db.exec(`ALTER TABLE hire_swaps ADD COLUMN agreement_number TEXT`);
+  if (!swapColumns.has("replaces_agreement_number")) db.exec(`ALTER TABLE hire_swaps ADD COLUMN replaces_agreement_number TEXT`);
+  // R27: the reason for charging above the replacement car's group.
+  if (!swapColumns.has("above_supplied_reason")) db.exec(`ALTER TABLE hire_swaps ADD COLUMN above_supplied_reason TEXT`);
 }
 
 function ready() {
   ensureVehicleSwapTables(getDb());
 }
+
+export { SWAP_AGREEMENT_FIELDS };
 
 export type SwapReadings = {
   oldMileageIn: string;
@@ -96,6 +106,9 @@ type SwapRow = {
   new_condition: string;
   agreement_document_id: string | null;
   signed_document_id: string | null;
+  agreement_number: string | null;
+  replaces_agreement_number: string | null;
+  above_supplied_reason: string | null;
   status: string;
   override_reason: string | null;
   created_at: string;
@@ -154,7 +167,19 @@ export function canOverrideUnsignedSwap(staffId: string): boolean {
  * The car on the hire does not change until the agreement is signed. A courtesy car has no agreement, so its swap
  * completes straight away.
  */
-export function startVehicleSwap(input: { claimId: string; actorId: string; newFleetVehicleId: string; date: string; time: string } & SwapReadings) {
+export function startVehicleSwap(
+  input: {
+    claimId: string;
+    actorId: string;
+    newFleetVehicleId: string;
+    date: string;
+    time: string;
+    /** Details missing on the replacement car's fleet record (R28). Saved to the fleet record. */
+    details?: Partial<Record<FleetDetailField, string>>;
+    /** Why the group charged is above the replacement car's group (R27). */
+    aboveSuppliedReason?: string;
+  } & SwapReadings,
+) {
   ready();
   const episode = runningEpisode(input.claimId);
   if (!episode) throw new Error("A swap is for a car already on hire. Choose a car on the Hire tab instead.");
@@ -177,6 +202,7 @@ export function startVehicleSwap(input: { claimId: string; actorId: string; newF
   if (!availability || availability.state === "removed") throw new Error("That car is not on the fleet.");
   if (!availability.free) throw new Error(carNotFreeMessage(availability));
   const creditHire = Number(episode.credit_hire) === 1;
+  const aboveReason = creditHire ? swapAgreementChecks(input) : "";
   const now = nowUtcIso();
   const reservationId = newId("res");
   run(
@@ -188,8 +214,8 @@ export function startVehicleSwap(input: { claimId: string; actorId: string; newF
   const id = newId("swap");
   run(
     `INSERT INTO hire_swaps(id, claim_id, hire_episode_id, old_fleet_vehicle_id, new_fleet_vehicle_id, reservation_id, swap_at,
-       old_mileage_in, old_fuel_in, old_condition, new_mileage_out, new_fuel_out, new_condition, created_by, created_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       old_mileage_in, old_fuel_in, old_condition, new_mileage_out, new_fuel_out, new_condition, created_by, created_at, above_supplied_reason)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       input.claimId,
@@ -206,6 +232,7 @@ export function startVehicleSwap(input: { claimId: string; actorId: string; newF
       readings.newCondition,
       input.actorId,
       now,
+      aboveReason || null,
     ],
   );
   const oldLabel = carLabel(episode.fleet_vehicle_id);
@@ -226,21 +253,74 @@ export function startVehicleSwap(input: { claimId: string; actorId: string; newF
     completeSwap({ swapId: id, actorId: input.actorId, signedDocumentId: null, overrideReason: null });
     return { swapId: id, agreementDocumentId: null, completed: true };
   }
-  const agreementDocumentId = produceSwapAgreement({ claimId: input.claimId, actorId: input.actorId, swapId: id });
+  const produced = produceSwapAgreement({ claimId: input.claimId, actorId: input.actorId, swapId: id });
+  const agreementDocumentId = produced.documentId;
+  const charged = hireGroupCheck(input.claimId).groupCharged;
+  const car = fleetCarDetails(input.newFleetVehicleId);
+  const aboveWords = aboveReason
+    ? ` Group charged ${charged} is above the replacement car's group (${car?.gtaGroup}). Reason: ${aboveReason}. The rate stays on group ${charged}.`
+    : "";
   recordClaimEvent({
     claimId: input.claimId,
     eventType: "hire_swap_started",
     occurredAt: now,
     actorId: input.actorId,
     documentId: agreementDocumentId,
-    details: `Vehicle swap to ${newLabel} on ${formatUkDateTime(swapAt)}. ${returned}. ${out}. A new hire agreement for ${newLabel} was produced from the Hire Pack for the client to sign. The swap is completed when it is signed. Until then ${oldLabel} stays on the hire.`,
+    details: `Vehicle swap to ${newLabel} on ${formatUkDateTime(swapAt)}. ${returned}. ${out}. New hire agreement ${produced.agreementNumber} for ${newLabel} was produced from the Hire Pack for the client to sign${produced.replaces ? `. It replaces agreement ${produced.replaces}` : ""}. The swap is completed when it is signed. Until then ${oldLabel} stays on the hire.${aboveWords}`,
     source: "staff",
   });
   return { swapId: id, agreementDocumentId, completed: false };
 }
 
-/** The new agreement, from the supplied Hire Pack, with the replacement car's details and readings. No wording is changed. */
-function produceSwapAgreement(input: { claimId: string; actorId: string; swapId: string }): string {
+/**
+ * Before a credit-hire swap: the replacement car's gearbox, seats, fuel, colour and group are on its fleet record
+ * (entered on the swap form if not, R28), the client's own car group is on the file (R27), and a reason is given when
+ * the group charged is above the replacement car's group. Returns that reason.
+ */
+function swapAgreementChecks(input: {
+  claimId: string;
+  actorId: string;
+  newFleetVehicleId: string;
+  details?: Partial<Record<FleetDetailField, string>>;
+  aboveSuppliedReason?: string;
+}): string {
+  const before = fleetCarDetails(input.newFleetVehicleId);
+  if (!before) throw new Error("That car is not on the fleet.");
+  const entered = Object.fromEntries(Object.entries(input.details || {}).filter(([, value]) => String(value || "").trim()));
+  if (before.missing.some((field) => field in entered)) {
+    saveMissingFleetDetailsNow({ fleetVehicleId: input.newFleetVehicleId, actorId: input.actorId, values: entered, claimId: input.claimId });
+  }
+  const car = fleetCarDetails(input.newFleetVehicleId)!;
+  const missing = SWAP_AGREEMENT_FIELDS.filter((field) => car.missing.includes(field));
+  if (missing.length) throw new Error(`Enter the replacement car's ${missingWords(missing)}. They print on the new agreement and are saved to the fleet record.`);
+  const check = hireGroupCheck(input.claimId, { suppliedGroup: car.gtaGroup, aboveSuppliedReason: input.aboveSuppliedReason || "" });
+  if (check.gaps.some((gap) => gap.key === "client-group")) {
+    throw new Error("Record the client's own car group, or why it cannot be classified, before the new agreement (group check on the Hire tab).");
+  }
+  if (check.chargedAboveSupplied && !check.aboveSuppliedReason) {
+    throw new Error(`Write the reason for charging group ${check.groupCharged} when the replacement car is group ${car.gtaGroup}.`);
+  }
+  return check.chargedAboveSupplied ? check.aboveSuppliedReason.slice(0, 1000) : "";
+}
+
+/** The agreement the new one replaces: the last swap's, otherwise the file's own agreement number. */
+function currentAgreementNumber(claimId: string): string | null {
+  const swapped = get<{ agreement_number: string | null }>(
+    `SELECT agreement_number FROM hire_swaps
+     WHERE claim_id = ? AND status = 'completed' AND signed_document_id IS NOT NULL AND agreement_number IS NOT NULL
+     ORDER BY completed_at DESC LIMIT 1`,
+    [claimId],
+  );
+  if (swapped?.agreement_number) return String(swapped.agreement_number);
+  const claim = get<{ hire_agreement_number: string | null }>(`SELECT hire_agreement_number FROM claims WHERE id = ?`, [claimId]);
+  return claim?.hire_agreement_number ? String(claim.hire_agreement_number) : null;
+}
+
+/**
+ * The new agreement, from the supplied Hire Pack, with the replacement car's details and readings. No wording is
+ * changed. It has the next agreement number, linked to the one it replaces (R29): a new car is a new agreement.
+ */
+function produceSwapAgreement(input: { claimId: string; actorId: string; swapId: string }): { documentId: string; agreementNumber: string; replaces: string | null } {
   const swap = get<SwapRow>(`SELECT * FROM hire_swaps WHERE id = ?`, [input.swapId])!;
   const pack = getHirePack(input.claimId);
   if (!pack) throw new Error("File not found.");
@@ -248,9 +328,23 @@ function produceSwapAgreement(input: { claimId: string; actorId: string; swapId:
   if (!car) throw new Error("That car is not on the fleet.");
   const episode = runningEpisode(input.claimId);
   const rate = Number(episode?.rate_pence_per_day) > 0 ? Number(episode?.rate_pence_per_day) : null;
-  const base = buildHireAgreementView(pack, allocateHireAgreementNumber(input.claimId), rate);
+  const replaces = swap.replaces_agreement_number || currentAgreementNumber(input.claimId);
+  const agreementNumber = swap.agreement_number || takeNextHireAgreementNumber();
+  run(`UPDATE hire_swaps SET agreement_number = ?, replaces_agreement_number = ? WHERE id = ?`, [agreementNumber, replaces, input.swapId]);
+  const base = buildHireAgreementView(pack, agreementNumber, rate);
+  const newCar = [car.make, car.model, car.registration].filter(Boolean).join(" ");
   const view = {
     ...base,
+    // The CRM's own note names the car this agreement is for, never the car it replaces.
+    hireReason: describeHireAgreementParts({
+      hireAllocated: true,
+      hireDescription: newCar,
+      recoveryStatus: null,
+      storageStatus: null,
+      storageStartedOn: null,
+      recoveryRecoveredAt: null,
+      hasReservation: true,
+    }).hire.reason,
     hireMake: car.make,
     hireModel: car.model,
     hireRegistration: car.registration,
@@ -265,17 +359,17 @@ function produceSwapAgreement(input: { claimId: string; actorId: string; swapId:
   };
   const html = renderHireAgreement(view);
   const missing = hireAgreementMissing(view);
-  const version =
-    Number(get<{ v: number }>(`SELECT COALESCE(MAX(version), 0) AS v FROM documents WHERE claim_id = ? AND template_key = ?`, [input.claimId, HIRE_AGREEMENT_TEMPLATE_KEY])?.v || 0) + 1;
+  // A new agreement, so its first version.
+  const version = 1;
   const documentId = newId("doc");
-  const title = `Hire Agreement ${view.agreementNumber} (replacement car ${car.registration})`;
+  const title = `Hire Agreement ${agreementNumber} (replacement car ${car.registration}${replaces ? `, replaces ${replaces}` : ""})`;
   run(
     `INSERT INTO documents(id, claim_id, title, kind, document_type, version, signed, simulated, body_html, template_key, missing_json, created_by, created_at)
      VALUES (?, ?, ?, 'agreement', ?, ?, 0, 1, ?, ?, ?, ?, ?)`,
     [documentId, input.claimId, title, HIRE_AGREEMENT_DOCUMENT_TYPE, version, html, HIRE_AGREEMENT_TEMPLATE_KEY, JSON.stringify(missing), input.actorId, nowUtcIso()],
   );
   run(`UPDATE hire_swaps SET agreement_document_id = ? WHERE id = ?`, [documentId, input.swapId]);
-  return documentId;
+  return { documentId, agreementNumber, replaces };
 }
 
 /** A photographed or scanned signed copy of the swap agreement. Its signed date is the upload, never earlier. */
@@ -369,6 +463,15 @@ function completeSwap(input: { swapId: string; actorId: string | null; signedDoc
     [swap.hire_episode_id],
   )!;
   run(`UPDATE hire_episodes SET fleet_vehicle_id = ? WHERE id = ?`, [swap.new_fleet_vehicle_id, episode.id]);
+  // The reason given at the swap now belongs to the car on the hire, so the Hire tab's group check stays met.
+  if (swap.above_supplied_reason) {
+    const check = hireGroupCheck(swap.claim_id);
+    run(`UPDATE hire_pack_data SET above_supplied_reason = ?, above_supplied_for = ? WHERE claim_id = ?`, [
+      swap.above_supplied_reason,
+      `${check.groupCharged || ""}>${check.suppliedGroup || ""}`,
+      swap.claim_id,
+    ]);
+  }
   run(`UPDATE reservations SET status = 'cancelled' WHERE claim_id = ? AND fleet_vehicle_id = ? AND status IN ('reserved', 'active')`, [swap.claim_id, swap.old_fleet_vehicle_id]);
   if (swap.reservation_id) run(`UPDATE reservations SET status = 'active' WHERE id = ?`, [swap.reservation_id]);
   run(`UPDATE fleet_vehicles SET status = 'on_hire', current_mileage = ?, current_mileage_on = ? WHERE id = ?`, [swap.new_mileage_out, now, swap.new_fleet_vehicle_id]);
@@ -406,7 +509,11 @@ function completeSwap(input: { swapId: string; actorId: string | null; signedDoc
         Number(episode.rate_pence_per_day) > 0 ? Number(episode.rate_pence_per_day) : null,
       ],
     );
-    agreementWords = ` The new hire agreement was signed on ${formatUkDate(now)}. The earlier agreement is kept on the file, marked superseded. The renewal alerts now follow the new agreement (day ${AGREEMENT_ALERT_FROM_DAY} and day 88 from ${formatUkDate(startOn)}).`;
+    // The new agreement is now the file's agreement. A later version of it keeps its number.
+    if (swap.agreement_number) run(`UPDATE claims SET hire_agreement_number = ? WHERE id = ?`, [swap.agreement_number, swap.claim_id]);
+    const newNumber = swap.agreement_number ? ` ${swap.agreement_number}` : "";
+    const oldNumber = swap.replaces_agreement_number ? ` ${swap.replaces_agreement_number}` : "";
+    agreementWords = ` New hire agreement${newNumber} was signed on ${formatUkDate(now)}. The earlier agreement${oldNumber} is kept on the file, marked superseded. The renewal alerts now follow the new agreement (day ${AGREEMENT_ALERT_FROM_DAY} and day 88 from ${formatUkDate(startOn)}).`;
   } else if (input.overrideReason) {
     agreementWords = ` Completed without the new signed agreement, on Justin's override. Reason: ${input.overrideReason}. The renewal alerts still follow the earlier signed agreement.`;
   }
@@ -466,6 +573,50 @@ export function swapView(claimId: string, todayYmd: string): SwapView {
       how: row.signed_document_id ? "new agreement signed" : row.override_reason ? `Justin's override: ${row.override_reason}` : "courtesy car, no agreement",
     })),
   };
+}
+
+export type SwapAgreementLine = { documentId: string; title: string; createdAt: string; state: string; awaiting: boolean };
+
+/**
+ * Hire step 4: each replacement car's agreement on its own line with its own signature state (R29). The signature on
+ * the earlier agreement is never shown against the new car.
+ */
+export function swapAgreementLines(claimId: string): SwapAgreementLine[] {
+  ready();
+  const rows = all<{
+    agreement_document_id: string;
+    status: string;
+    signed_document_id: string | null;
+    override_reason: string | null;
+    completed_at: string | null;
+    title: string | null;
+    created_at: string;
+  }>(
+    `SELECT s.agreement_document_id, s.status, s.signed_document_id, s.override_reason, s.completed_at, d.title, d.created_at
+     FROM hire_swaps s JOIN documents d ON d.id = s.agreement_document_id
+     WHERE s.claim_id = ? ORDER BY d.created_at`,
+    [claimId],
+  );
+  return rows.map((row) => {
+    const signedBy = row.signed_document_id
+      ? get<{ signer_name: string | null; signed_at: string | null }>(
+          `SELECT signer_name, signed_at FROM esign_requests WHERE signed_document_id = ? LIMIT 1`,
+          [row.signed_document_id],
+        )
+      : undefined;
+    let state = "awaiting signature";
+    if (row.status === "cancelled") state = "not used: the swap was cancelled";
+    else if (row.signed_document_id && signedBy?.signer_name) state = `signed electronically by ${signedBy.signer_name} on ${formatUkDateTime(String(signedBy.signed_at))}`;
+    else if (row.signed_document_id) state = `signed copy filed ${formatUkDateTime(String(row.completed_at))}`;
+    else if (row.override_reason) state = `not signed: completed on Justin's override (${row.override_reason})`;
+    return {
+      documentId: String(row.agreement_document_id),
+      title: String(row.title || "Hire agreement (replacement car)"),
+      createdAt: String(row.created_at),
+      state,
+      awaiting: row.status === "awaiting_signature",
+    };
+  });
 }
 
 /** Days a completed swap happened, for the hire charge's "does not add a day" note. */

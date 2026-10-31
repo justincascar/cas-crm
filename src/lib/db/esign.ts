@@ -74,7 +74,7 @@ export function clientAgreementHtml(html: string): string {
 export function latestAgreementDocument(claimId: string): AgreementDoc | null {
   const row = get<{ id: string; title: string | null; version: number; body_html: string | null; claim_id: string; missing_json: string | null }>(
     `SELECT id, title, version, body_html, claim_id, missing_json FROM documents
-     WHERE claim_id = ? AND template_key = 'hire_agreement' ORDER BY version DESC, created_at DESC LIMIT 1`,
+     WHERE claim_id = ? AND template_key = 'hire_agreement' ORDER BY created_at DESC, rowid DESC LIMIT 1`,
     [claimId],
   );
   if (!row?.body_html) return null;
@@ -128,7 +128,8 @@ export type EsignView = {
   witnessName: string | null;
 };
 
-export function latestEsign(claimId: string): EsignView | null {
+/** The latest signing request on the file, or for one agreement document when its id is given. */
+export function latestEsign(claimId: string, documentId?: string): EsignView | null {
   ready();
   const row = get<{
     id: string;
@@ -147,8 +148,8 @@ export function latestEsign(claimId: string): EsignView | null {
     `SELECT e.id, e.route, e.status, e.document_title, e.document_version, e.sent_to, e.requested_at, e.expires_at,
             e.signed_at, e.signer_name, e.signed_document_id, s.name AS witness_name
      FROM esign_requests e LEFT JOIN staff s ON s.id = e.witness_staff_id
-     WHERE e.claim_id = ? ORDER BY e.requested_at DESC, e.rowid DESC LIMIT 1`,
-    [claimId],
+     WHERE e.claim_id = ? AND (? IS NULL OR e.document_id = ?) ORDER BY e.requested_at DESC, e.rowid DESC LIMIT 1`,
+    [claimId, documentId ?? null, documentId ?? null],
   );
   if (!row) return null;
   return {

@@ -3,6 +3,7 @@ import { isOfficeRole } from "@/lib/auth/roles";
 import { getRequestStaff } from "@/lib/auth/session";
 import { storeClaimDocument } from "@/lib/db/claim-documents";
 import { logEngineerReportReceived } from "@/lib/db/chronology";
+import { readReportOutcome, saveReportOutcome } from "@/lib/db/report-outcome";
 import { formSubmitKey, replaySubmit, storeSubmit } from "@/lib/db/submit-key";
 import { browserOrigin } from "@/lib/http/browser-origin";
 
@@ -26,6 +27,20 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     if (replaySubmit(key)) return back();
     const occurredOn = String(form.get("occurredOn") || "").trim();
     if (!/^\d{4}-\d{2}-\d{2}$/.test(occurredOn)) throw new Error("Enter the date the report was received.");
+    // R32: the outcome and its figures are checked before anything is saved.
+    const text = (name: string) => String(form.get(name) || "");
+    const outcome = {
+      claimId: id,
+      actorId: staff.id,
+      outcome: text("outcome"),
+      estimateNet: text("estimateNet"),
+      estimateVat: text("estimateVat"),
+      estimateGross: text("estimateGross"),
+      pav: text("pav"),
+      salvageCategory: text("salvageCategory"),
+      salvageDeduction: text("salvageDeduction"),
+    };
+    readReportOutcome(outcome);
     const uploaded = form.get("document");
     if (uploaded instanceof File && uploaded.size > 0) {
       const buffer = Buffer.from(await uploaded.arrayBuffer());
@@ -38,6 +53,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
       });
     }
     logEngineerReportReceived({ claimId: id, actorId: staff.id, occurredAt: occurredOn });
+    saveReportOutcome({ ...outcome, occurredOn });
     storeSubmit(key, { ok: true });
     return back();
   } catch (error) {

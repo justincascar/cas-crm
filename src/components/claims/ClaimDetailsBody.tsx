@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { sentStatusWords } from "@/lib/domain/chase-status";
 import { addressLine } from "@/lib/domain/address-text";
 import { notFound, redirect } from "next/navigation";
 import type { ReactNode } from "react";
@@ -646,7 +647,7 @@ export async function ClaimDetailsBody({
           {data.correspondence.map((c) => (
             <p key={String(c.id)} className="text-sm">
               {Number(c.unread) ? "Unread · " : ""}
-              {pretty(c.direction)} {pretty(c.channel)}: {String(c.subject)} ({pretty(c.sent_status)})
+              {pretty(c.direction)} {pretty(c.channel)}: {String(c.subject)} ({sentStatusWords(c.sent_status ? String(c.sent_status) : null)})
             </p>
           ))}
         </Box>

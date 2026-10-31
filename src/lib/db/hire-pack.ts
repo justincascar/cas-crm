@@ -15,7 +15,7 @@ import { chargeableHireEndLabel } from "../domain/rules";
 import { formatGbp } from "../money";
 import { all, get, newId, run } from "./connection";
 import { MITIGATION_QUESTIONNAIRE } from "../domain/impecuniosity";
-import { impecuniosityGate, latestMitigationForPack, type ImpecuniosityGate } from "./impecuniosity";
+import { impecuniosityGate, latestMitigationForPack, listFinancialCircumstances, listImpecuniosityAccounts, type ImpecuniosityGate } from "./impecuniosity";
 import { recordClaimEvent } from "./chronology";
 import { fleetCarDetails, fleetDetailLine, formatMileage } from "./fleet-details";
 import { recoveryDisplayLines, recoveryLinesPlain } from "./recovery-display";
@@ -387,6 +387,8 @@ function impecuniosityMeansHtml(pack: { impecuniosity?: ImpecuniosityGate }) {
 }
 
 export function renderHirePack(pack: NonNullable<ReturnType<typeof getHirePack>>) {
+  // R37: a client with no bank account recorded is asked only for the statement of means.
+  const noBank = noBankAccountOnFile(String(pack.claim.id));
   const s = pack.stored;
   const hire = pack.hire;
   const agreement = pack.ctx.agreementNumber;
@@ -445,9 +447,9 @@ ${missingBanner}
 <p>${MITIGATION_QUESTIONNAIRE.preamble}</p>
 ${mitigationAnswersHtml(pack, s)}
 <h3>Financial means</h3>
-<p>Need for a vehicle is separate from whether I could reasonably have paid for a replacement myself. The hire agreement asks for a statement of means and three months' bank statements before the replacement vehicle goes out. This declaration refers to that request; it does not replace it.</p>
-<p>${Number(s.means_documents_requested) ? "☑" : "☐"} A statement of means and bank statements have been requested</p>
-<p>${Number(s.means_documents_on_file) ? "☑" : "☐"} A statement of means and/or bank statements are on this file</p>
+<p>Need for a vehicle is separate from whether I could reasonably have paid for a replacement myself. The hire agreement asks for ${noBank ? "a statement of means (no bank account is recorded)" : "a statement of means and three months' bank statements"} before the replacement vehicle goes out. This declaration refers to that request; it does not replace it.</p>
+<p>${Number(s.means_documents_requested) ? "☑" : "☐"} ${noBank ? "A statement of means has been requested" : "A statement of means and bank statements have been requested"}</p>
+<p>${Number(s.means_documents_on_file) ? "☑" : "☐"} ${noBank ? "A statement of means is on this file" : "A statement of means and/or bank statements are on this file"}</p>
 ${impecuniosityMeansHtml(pack)}
 <p>Further notes: ${escape(v(s.means_notes))}</p>
 <p>${MITIGATION_QUESTIONNAIRE.statementOfTruth}</p>
@@ -531,6 +533,12 @@ Telephone: ${CAS_COMPANY.phone}</p>
  * Hire Pack Storage & Recovery page, the relevant supplied definitions and clauses, and the supplied notice of the
  * right to cancel (review note R17). The client signs it on screen or on paper before recovery or storage is claimed.
  */
+/** A no-bank explanation is the latest word on the client's means, and no bank account is listed. */
+function noBankAccountOnFile(claimId: string): boolean {
+  const latest = listFinancialCircumstances(claimId).at(-1);
+  return Boolean(String(latest?.no_bank_explanation || "").trim()) && !listImpecuniosityAccounts(claimId).some((row) => row.kind === "bank_account");
+}
+
 export function renderStorageRecovery(pack: NonNullable<ReturnType<typeof getHirePack>>) {
   const s = pack.stored;
   const shown = (value: string | number | null | undefined) => escape(v(value));

@@ -120,6 +120,20 @@ body {
   line-height: 1.5;
 }
 
+.letter table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.75rem 0;
+}
+
+.letter th,
+.letter td {
+  padding: 0.35rem 0.5rem;
+  text-align: left;
+  vertical-align: top;
+  border-bottom: 1px solid var(--color-line);
+}
+
 .letter .missing-field {
   background: #fff6e8;
   font-weight: 600;
@@ -252,5 +266,143 @@ body {
   .hire-agreement tr {
     break-inside: avoid;
     page-break-inside: avoid;
+  }
+}
+
+/* CAS headed paper (R41). One A4 sheet on screen; in print the logo, tyre track, red bar and footer sit on every page. */
+.headed-paper {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  max-width: 210mm;
+  min-height: 297mm;
+  margin: 0 auto;
+  background: white;
+  color: #101c24;
+  overflow: hidden;
+}
+
+.headed-paper .hp-tyre,
+.headed-paper .hp-logo,
+.headed-paper .hp-bar,
+.headed-paper .hp-footer {
+  position: absolute;
+}
+
+/* Behind the text, as in the supplied headed paper. */
+.headed-paper .hp-tyre {
+  z-index: -1;
+  top: 0;
+  left: 0;
+  width: 46mm;
+  height: 46mm;
+}
+
+.headed-paper .hp-logo {
+  top: 4.4mm;
+  right: 9mm;
+  width: 87mm;
+  height: auto;
+}
+
+.headed-paper .hp-bar {
+  top: 0;
+  right: 0;
+  width: 4.7mm;
+  height: 100%;
+  object-fit: fill;
+}
+
+.headed-paper .hp-frame {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.headed-paper .hp-frame > thead > tr > td,
+.headed-paper .hp-frame > tfoot > tr > td,
+.headed-paper .hp-frame > tbody > tr > td {
+  border: none;
+  padding: 0;
+}
+
+.headed-paper .hp-top-space {
+  height: 30mm;
+}
+
+.headed-paper .hp-bottom-space {
+  height: 24mm;
+}
+
+.headed-paper .hp-frame > tbody > tr > td.hp-body {
+  padding: 0 22mm 0 20mm;
+  vertical-align: top;
+}
+
+.headed-paper .hp-footer {
+  left: 20mm;
+  right: 22mm;
+  bottom: 7mm;
+  font-size: 7.5pt;
+  line-height: 1.45;
+  text-align: center;
+  color: #3d4a52;
+}
+
+.headed-paper .hp-footer p {
+  margin: 0;
+}
+
+.headed-paper-logo .hp-logo-inline {
+  display: block;
+  width: 60mm;
+  height: auto;
+  margin: 0 0 4mm auto;
+}
+
+@media print {
+  .headed-paper {
+    page: headed;
+    max-width: none;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  .headed-paper .hp-tyre,
+  .headed-paper .hp-logo,
+  .headed-paper .hp-bar,
+  .headed-paper .hp-footer {
+    position: fixed;
+  }
+
+  .headed-paper .hp-bar {
+    height: 297mm;
+  }
+
+  .headed-paper .hp-frame > thead {
+    display: table-header-group;
+  }
+
+  .headed-paper .hp-frame > tfoot {
+    display: table-footer-group;
+  }
+
+  .headed-paper img {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+}
+
+@page headed {
+  size: A4;
+  margin: 0;
+}
+
+.headed-paper-logo {
+  padding: 2rem;
+}
+
+@media print {
+  .headed-paper-logo {
+    padding: 0;
   }
 }

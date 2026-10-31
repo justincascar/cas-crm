@@ -53,7 +53,8 @@ describe("notification letters from seeded TEST claims", () => {
       assert.match(letter.text, /Our Reference: TEST-0003\/TH\/Tom Hughes/);
       assert.match(letter.text, /Our Client: Ceri Walsh/);
       assert.match(letter.text, /Our Insured's Vehicle: Volkswagen Golf SA12 CWA/);
-      assert.match(letter.text, /vehicle repair charges and credit hire charges/);
+      // R39: the heads recorded on the file are listed (TEST-0003 has a recovery recorded).
+      assert.match(letter.text, /vehicle repair charges, recovery charges and credit hire charges/);
       assert.doesNotMatch(letter.text, /courtesy vehicle/);
       assert.doesNotMatch(letter.text, /c\/o /);
       // The insurer's reference is held, so it is shown and not asked for again (R5).

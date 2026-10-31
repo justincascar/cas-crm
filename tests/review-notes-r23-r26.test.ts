@@ -29,6 +29,8 @@ function prepared() {
   db.exec(schema);
   migrate(db);
   seed(db);
+  // Fictional files: the client's own car group was never looked up, which the group check (R27) accepts with a reason.
+  db.exec(`UPDATE vehicles SET gta_unclassified_reason = 'Fictional test car: group not looked up' WHERE gta_group IS NULL AND id IN (SELECT client_vehicle_id FROM claims)`);
   return db;
 }
 
@@ -53,7 +55,7 @@ function freeCar(claimId: string): string {
 }
 
 function swapInput(claimId: string, fleetVehicleId: string) {
-  return { claimId, actorId: "staff-sian", newFleetVehicleId: fleetVehicleId, date: londonTodayIso(), time: "10:30", ...readings };
+  return { claimId, actorId: "staff-sian", newFleetVehicleId: fleetVehicleId, date: londonTodayIso(), time: "10:30", ...readings, details: { transmission: "Manual", seats: "5", gtaGroup: "S3", fuel: "Petrol", colour: "Blue" }, aboveSuppliedReason: "Fictional test: only a higher-group car was free" };
 }
 
 describe("Review note R26 — a vehicle swap needs a new signed hire agreement", () => {

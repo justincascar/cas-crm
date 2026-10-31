@@ -106,6 +106,11 @@ export const OVERRIDE_UNSIGNED_STORAGE_RECOVERY = "overrideUnsignedStorageRecove
 export const OVERRIDE_UNSIGNED_SWAP = "overrideUnsignedSwap";
 
 /**
+ * Stored on staff_permissions. Approving a chaser's wording so the automatic chaser may send it. Justin only (R30).
+ */
+export const APPROVE_CHASER_TEMPLATES = "approveChaserTemplates";
+
+/**
  * Stored on staff_permissions. Downloading the full export of every claim, person, money line, history entry and
  * document, and opening the audit view of who changed what. Justin only (J12).
  */

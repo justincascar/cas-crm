@@ -1,6 +1,6 @@
 import { formatUkDate } from "../dates";
 import { eventLabel } from "./events";
-import { dispatchFromHistoryNote } from "./justification-chronology";
+import { dispatchFromHistoryNote, effectiveTime, paymentWords, signedAgreementNote } from "./justification-chronology";
 
 /**
  * A clean dated list for an insurer chase.
@@ -12,6 +12,14 @@ const STEP_TYPES = [
   "file_opened",
   "recovery_completed",
   "hire_started",
+  // R33: the swap, the new agreement and payments received are on the printed chronology too.
+  "hire_swap_started",
+  "hire_vehicle_changed",
+  "hire_agreement_renewed",
+  "head_payment_logged",
+  "repair_payment_received",
+  "repair_invoice_payment_logged",
+  "settlement_payment_logged",
   "initial_letter_tp_insurer",
   "initial_letter_own_insurer",
   "engineer_instructed",
@@ -66,6 +74,7 @@ export type PrintChronologyEvent = {
   title: string;
   details: string | null;
   occurred_at: string;
+  recorded_at?: string | null;
 };
 
 export type PrintChronologyLine = {
@@ -104,17 +113,21 @@ function dispatchWords(dispatch: PrintChronologyLine["dispatch"]): string {
 
 export function printChronology(events: PrintChronologyEvent[]): PrintChronologyLine[] {
   const lines = events
-    .filter((event) => KEPT.has(event.event_type) && !isLetterBeforeAction(event))
+    .filter((event) => (KEPT.has(event.event_type) || signedAgreementNote(event)) && !isLetterBeforeAction(event))
     .map((event) => {
       const dispatch = printDispatch(event.details);
       const words = dispatchWords(dispatch);
-      const title = event.title || eventLabel(event.event_type);
+      const title = signedAgreementNote(event)
+        ? "Hire agreement signed"
+        : event.event_type === "head_payment_logged"
+          ? paymentWords(event.details) || eventLabel(event.event_type)
+          : event.title || eventLabel(event.event_type);
       return {
         id: event.id,
-        date: formatUkDate(event.occurred_at),
+        date: formatUkDate(effectiveTime(event)),
         text: words ? `${title}. ${words}` : title,
         dispatch,
-        occurredAt: event.occurred_at,
+        occurredAt: effectiveTime(event),
       };
     });
   lines.sort((a, b) => (a.occurredAt < b.occurredAt ? -1 : a.occurredAt > b.occurredAt ? 1 : a.id < b.id ? -1 : 1));

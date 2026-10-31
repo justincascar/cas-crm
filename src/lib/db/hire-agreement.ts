@@ -15,7 +15,7 @@ import { get, newId, run } from "./connection";
 import { recordClaimEvent } from "./chronology";
 import { formatHandoverMileage } from "./handover";
 import { getHirePack, type HirePackData } from "./hire-pack";
-import { hireAgreementPrehireBlock } from "./prehire-checks";
+import { bankStatementPosition, hireAgreementPrehireBlock } from "./prehire-checks";
 import { agreementMandatoryRefusal, currentHireEpisode, plannedHandoverAt } from "./hire-readiness";
 import { beforeSigningFor } from "./hire-out-readings";
 import { FUEL_LEVELS } from "./handover";
@@ -82,6 +82,8 @@ export type HireAgreementView = {
   hireReason: string;
   storageReason: string;
   termsReason: string;
+  /** R37: no bank account is recorded, so only the statement of means is asked for. */
+  noBankAccount?: boolean;
 };
 
 const EXTRA_ROWS: Array<[string, string, string, string]> = [
@@ -179,7 +181,7 @@ export function renderHireAgreement(view: HireAgreementView): string {
 ${missingBanner}
 ${view.includeHire ? warningBanner : ""}
 <p class="internal-note">${escape(view.hireReason)} ${escape(view.storageReason)} ${escape(view.termsReason)}</p>
-<p>Before the replacement vehicle goes out, please provide a short statement of means and your last three months' bank statements. This is the evidence that supports your entitlement to a replacement vehicle on credit.</p>
+<p>${view.noBankAccount ? "Before the replacement vehicle goes out, please provide a short statement of means." : "Before the replacement vehicle goes out, please provide a short statement of means and your last three months' bank statements."} This is the evidence that supports your entitlement to a replacement vehicle on credit.</p>
 ${view.includeHire ? `<section>
 <h2>Hire Agreement — ${pageLabel(hirePage)}</h2>
 <p>${CAS_HIRE_AGREEMENT_BANNER}</p>
@@ -252,6 +254,12 @@ ${cancelNoticeHtml({
   generated: escape(formatUkDateTime(nowUtcIso())),
 })}
 </article>`;
+}
+
+/** The client has no bank account on record: a no-bank explanation, and no account or statement listed. */
+export function noBankAccountRecorded(claimId: string): boolean {
+  const position = bankStatementPosition(claimId);
+  return Boolean(position.noBankExplanation) && position.bankAccounts.length === 0 && position.statements.length === 0;
 }
 
 export function getGtaMarkupPercent(): number {
@@ -333,14 +341,19 @@ export function allocateHireAgreementNumber(claimId: string): string {
     [claimId],
   );
   if (existing?.hire_agreement_number) return String(existing.hire_agreement_number);
+  const number = takeNextHireAgreementNumber();
+  run(`UPDATE claims SET hire_agreement_number = ? WHERE id = ?`, [number, claimId]);
+  return number;
+}
+
+/** The next number in the agreement sequence. A swap's new agreement takes one of its own (R29). */
+export function takeNextHireAgreementNumber(): string {
   const row = get<{ value: string }>(`SELECT value FROM settings WHERE key = ?`, [SETTING_NEXT_HIRE_AGREEMENT_NUMBER]);
   const sequence = Math.max(1, Number(row?.value || "1") || 1);
-  const number = formatHireAgreementNumber(sequence);
-  run(`UPDATE claims SET hire_agreement_number = ? WHERE id = ?`, [number, claimId]);
   const next = String(sequence + 1);
   if (row) run(`UPDATE settings SET value = ? WHERE key = ?`, [next, SETTING_NEXT_HIRE_AGREEMENT_NUMBER]);
   else run(`INSERT INTO settings(key, value) VALUES (?, ?)`, [SETTING_NEXT_HIRE_AGREEMENT_NUMBER, next]);
-  return number;
+  return formatHireAgreementNumber(sequence);
 }
 
 export function buildHireAgreementView(
@@ -424,6 +437,7 @@ export function buildHireAgreementView(
     hireReason: pack.parts.hire.reason,
     storageReason: pack.parts.storageRecovery.reason,
     termsReason: pack.parts.termsAndCancel.reason,
+    noBankAccount: noBankAccountRecorded(claimId),
   };
 }
 

@@ -5,4 +5,6 @@ export async function register() {
   startWaitReleaseSchedule();
   const { startRetentionSchedule } = await import("./lib/db/retention-schedule");
   startRetentionSchedule();
+  const { startAutomaticChasers } = await import("./lib/db/auto-chasers");
+  startAutomaticChasers();
 }

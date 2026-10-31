@@ -1011,6 +1011,14 @@ async function runHireJourneys(session: BrowserSession, origin: string, dbPath: 
     return "The car details entered on the hire screen were not saved to the fleet record.";
   }
 
+  // R27: the client's own car has no group on the file, so the agreement waits for it (or a reason) on the Hire tab.
+  await gotoPath(session, origin, `/claims/${repairable.claimId}/hire`);
+  const noClientGroup = refusedWith(await submitForm(session, 'form[action$="/hire/agreement"]', {}), /client's own car group/i, "Agreement with no client car group");
+  if (noClientGroup) return noClientGroup;
+  await gotoPath(session, origin, `/claims/${repairable.claimId}/hire`);
+  const groupSaved = followed(await submitForm(session, 'form[action$="/hire/group-check"]', { clientGroup: "S3" }), "group check");
+  if (groupSaved) return groupSaved;
+
   await gotoPath(session, origin, `/claims/${repairable.claimId}/hire`);
   // R1: mileage and fuel out, and the licence date of issue, go on the agreement before the client signs.
   const readings = await fillBeforeSigning(session, { mileage: "1500", fuelLevel: "full", licenceIssuedOn: "2015-06-01" });
@@ -1199,10 +1207,13 @@ async function runLettersJourney(session: BrowserSession, origin: string, dbPath
   if (instructed) return instructed;
   await gotoPath(session, origin, `/claims/${repairable.claimId}`);
   if ((await stepState(session, "engineer")) !== "done") return "Step 5 was not done after one click.";
-  const report = followed(await submitForm(session, 'form[action$="/steps/report"]', {}), "Report received");
+  const report = followed(await submitForm(session, 'form[action$="/steps/report"]', { outcome: "repairable", estimateNet: "1250.00", estimateVat: "250.00", estimateGross: "1500.00" }), "Report received");
   if (report) return report;
   await gotoPath(session, origin, `/claims/${repairable.claimId}`);
   if ((await stepState(session, "engineer_report")) !== "done") return "Step 6 was not done after the report was recorded.";
+  // R32: the estimate given at step 6 is the amount claimed on the Repairs head.
+  const repairsClaimed = readDb(dbPath, (db) => (db.prepare(`SELECT claimed_pence FROM financial_lines WHERE claim_id = ? AND head_of_loss = 'repairs'`).get(repairable.claimId) as { claimed_pence: number } | undefined)?.claimed_pence);
+  if (repairsClaimed !== 150000) return `Step 6 estimate was not put on the Repairs head (${repairsClaimed}).`;
   const forwarded = await oneClick(session, "report_sent");
   if (forwarded) return forwarded;
   await gotoPath(session, origin, `/claims/${repairable.claimId}`);

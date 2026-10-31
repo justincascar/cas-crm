@@ -1,6 +1,6 @@
 ﻿import type { DatabaseSync } from "node:sqlite";
 import { isMechanicRole, isOfficeRole } from "../auth/roles";
-import { formatUkDate, nowUtcIso, utcFromLondonDateTime } from "../dates";
+import { formatUkDate, nowUtcIso, occurredOnDay, utcFromLondonDateTime } from "../dates";
 import { eventLabel } from "../domain/events";
 import {
   REPAIR_PROGRESS_GAP_DAYS_DEFAULT,
@@ -404,7 +404,7 @@ function requireDay(value: string, label: string): string {
 }
 
 function atNine(day: string): string {
-  return utcFromLondonDateTime(`${day}T09:00`);
+  return occurredOnDay(day);
 }
 
 function uk(day: string): string {

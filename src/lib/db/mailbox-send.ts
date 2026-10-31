@@ -23,6 +23,8 @@ import {
   CORRESPONDENCE_SENDING,
   ENGINEER_INSTRUCTION_MARKED_SENT,
   ENGINEER_INSTRUCTION_PREPARED,
+  isLiveOnlyEngineerEmail,
+  LIVE_ONLY_ENGINEER_REFUSAL,
 } from "./engineers";
 import { documentChaseTemplateKey, markDocumentChaseSent, markTotalLossPaymentChaseSent, totalLossPaymentChaseTemplateKey } from "./follow-up-chases";
 import { markTotalLossNoticeSent, TOTAL_LOSS_NOTICE_TEMPLATE } from "./total-loss";
@@ -67,6 +69,8 @@ export async function sendPreparedCorrespondence(input: {
   const subject = String(row.subject || "").trim();
   let body = String(row.body || "").trim();
   if (!to || !subject || !body) throw new Error("This prepared email is missing a recipient, subject or message. Nothing was sent.");
+  // R40: CAS's real engineer is kept for live use only. Nothing goes to him from the test CRM.
+  if (isLiveOnlyEngineerEmail(to)) throw new Error(LIVE_ONLY_ENGINEER_REFUSAL);
   const unapproved = sendBlockedForUnapproved({ templateKey: row.template_key, body });
   if (unapproved) throw new Error(unapproved);
   const notNow = chaseSendRefusal({ claimId: input.claimId, templateKey: row.template_key, live: emailSendMode() === "live" });

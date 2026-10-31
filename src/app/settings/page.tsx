@@ -34,14 +34,16 @@ import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import { currentCasInsuranceDocument } from "@/lib/db/company-insurance";
 import { PAYMENT_REQUEST_PACK_MISSING } from "@/lib/email/payment-request-pack";
 import { DEV_WEBSITE_ORIGINS, isDevelopment, savedWebsiteOrigins } from "@/lib/db/website-enquiries";
+import { canApproveChasers, chaseRuleApprovals, describeRun, lastChaserRuns } from "@/lib/db/auto-chasers";
+import { COMPANY_DETAIL_LABELS, companyFooterLines, getCompanyDetails } from "@/lib/db/company-details";
 
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string; mailboxCheck?: string; mailboxCheckError?: string; clash?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; mailboxCheck?: string; mailboxCheckError?: string; clash?: string; chaserRun?: string }>;
 }) {
   const staffUser = await requireStaff();
-  const { error, saved, mailboxCheck, mailboxCheckError, clash: clashId } = await searchParams;
+  const { error, saved, mailboxCheck, mailboxCheckError, clash: clashId, chaserRun } = await searchParams;
   const clash = loadClash(clashId);
   const versionFor = (scope: string) => (clash?.scope === scope ? clash.expectedVersion : sectionVersion(scope, "office"));
   const settings = getSettings();
@@ -70,6 +72,10 @@ export default async function SettingsPage({
   const casInsurance = currentCasInsuranceDocument();
   const websiteOrigins = savedWebsiteOrigins();
   const websiteDev = isDevelopment();
+  const chaserApprovals = chaseRuleApprovals();
+  const chaserRuns = lastChaserRuns();
+  const mayApproveChasers = canApproveChasers(staffUser.id);
+  const company = getCompanyDetails();
   return (
     <div className="max-w-3xl space-y-6">
       <PageHeader
@@ -252,11 +258,77 @@ export default async function SettingsPage({
           </form>
         ) : null}
       </section>
+      <section id="company-details" className="scroll-mt-24 rounded-xl border border-line bg-card p-5" data-company-details>
+        <h2 className="font-serif text-xl text-navy-deep">Company details</h2>
+        <p className="mt-2 text-sm">
+          The footer of CAS&apos;s headed paper on every printed letter, invoice, pack and chronology reads these. They started as the details on
+          Justin&apos;s headed paper. Footer now: {companyFooterLines(company).join(" / ")}
+        </p>
+        {admin ? (
+          <form method="post" action="/settings/company-details" className="mt-4 grid gap-3 sm:grid-cols-2">
+            {(Object.keys(COMPANY_DETAIL_LABELS) as Array<keyof typeof COMPANY_DETAIL_LABELS>).map((field) => (
+              <label key={field} className={`text-sm ${field === "address" ? "sm:col-span-2" : ""}`}>
+                {COMPANY_DETAIL_LABELS[field]}
+                <input name={field} required defaultValue={company[field]} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" />
+              </label>
+            ))}
+            <div className="sm:col-span-2">
+              <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
+                Save company details
+              </button>
+            </div>
+          </form>
+        ) : (
+          <p className="mt-2 text-sm text-slate">An administrator can change them.</p>
+        )}
+      </section>
+      <section id="automatic-chasers"className="scroll-mt-24 rounded-xl border border-line bg-card p-5" data-automatic-chasers>
+        <h2 className="font-serif text-xl text-navy-deep">Automatic chasers</h2>
+        <p className="mt-2 text-sm">
+          The server checks the due chases every five minutes, whether or not anyone has the CRM open, inside the sending hours below. Only a
+          chaser whose wording Justin has approved goes. Email is simulated until CAS&apos;s mailbox is connected, so each chaser is filed on the
+          claim and in Communications marked simulated. Chasers due to the same recipient on the same file go in one email.
+        </p>
+        {chaserRun ? <p className="mt-2 rounded-md border border-ok/40 bg-[#eef6ee] px-3 py-2 text-sm text-ok">Run now: {chaserRun}</p> : null}
+        <ul className="mt-3 divide-y divide-line text-sm">
+          {chaserApprovals.map((rule) => (
+            <li key={rule.kind} className="flex flex-wrap items-center justify-between gap-2 py-2" data-chaser-rule={rule.kind} data-approved={rule.approved ? "yes" : "no"}>
+              <span>
+                <span className="font-semibold">{rule.title}</span> ·{" "}
+                {rule.approved
+                  ? `Approved by Justin${rule.changedAt ? ` on ${formatUkDateTime(rule.changedAt)}` : ""}: sends automatically`
+                  : "Not approved: waits for Justin, nothing is sent automatically"}
+              </span>
+              {mayApproveChasers ? (
+                <form method="post" action="/settings/automatic-chasers">
+                  <input type="hidden" name="kind" value={rule.kind} />
+                  <input type="hidden" name="intent" value={rule.approved ? "withdraw" : "approve"} />
+                  <button type="submit" className="rounded-md border border-line bg-white px-3 py-1 text-sm font-semibold text-navy">
+                    {rule.approved ? "Switch off" : "Approve the wording"}
+                  </button>
+                </form>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+        <p className="mt-3 text-sm text-slate" data-chaser-last-run>
+          Last check: {describeRun(chaserRuns.latest)} Last chaser produced: {describeRun(chaserRuns.lastSent)}
+        </p>
+        {mayApproveChasers ? (
+          <form method="post" action="/settings/automatic-chasers" className="mt-3">
+            <input type="hidden" name="intent" value="run" />
+            <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white">
+              Check the chases now
+            </button>
+          </form>
+        ) : null}
+      </section>
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-xl text-navy-deep">Chaser sending hours</h2>
         <p className="mt-2 text-sm">
-          Now: {describeSendingHours(sendingHours)}, UK time. A chase email is only sent inside these hours, once the
-          mailbox is live. Justin confirmed Monday to Friday, 09:00 to 17:00 UK time on 29/10/2026.
+          Now: {describeSendingHours(sendingHours)}, UK time. The automatic chaser works only inside these hours, and a
+          chase email sent by hand from CAS&apos;s mailbox is refused outside them.
+          Justin confirmed Monday to Friday, 09:00 to 17:00 UK time on 29/10/2026.
         </p>
         <form method="post" action="/settings/sending-hours" className="mt-4 flex flex-wrap items-end gap-3">
           <RecordVersionField version={versionFor("settings-sending-hours")} />

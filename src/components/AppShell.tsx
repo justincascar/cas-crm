@@ -44,11 +44,10 @@ export function AppShell({
   return (
     <div className="app-shell min-h-screen md:grid md:grid-cols-[240px_1fr]">
       <aside className="sticky top-0 hidden h-screen overflow-y-auto bg-navy-deep text-[#e8efe9] md:block">
-        <div className="border-b border-white/10 px-5 py-5">
-          <p className="font-serif text-xl tracking-tight text-white">CAS</p>
-          <p className="mt-1 text-[11px] uppercase tracking-[0.18em] text-white/55">
-            Complete Accident Solutions
-          </p>
+        <div className="border-b border-white/10 px-4 py-4" data-brand>
+          {/* R41: CAS's own logo, from the supplied headed paper. */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/headed-paper/cas-logo.jpg" alt="Complete Accident Solutions" className="block h-auto w-full rounded-md bg-white px-2 py-1.5" />
         </div>
         <nav className="px-2 py-3 space-y-0.5">
           {nav.map((item) => {
@@ -75,7 +74,11 @@ export function AppShell({
       </aside>
       <div className="min-w-0">
         <details className="border-b border-white/10 bg-navy-deep text-[#e8efe9] print:hidden md:hidden">
-          <summary className="cursor-pointer px-4 py-3 text-base font-semibold text-white">Menu</summary>
+          <summary className="flex cursor-pointer items-center justify-between gap-3 px-4 py-3 text-base font-semibold text-white">
+            <span>Menu</span>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/headed-paper/cas-logo.jpg" alt="Complete Accident Solutions" className="h-7 w-auto rounded bg-white px-1.5 py-0.5" />
+          </summary>
           <nav className="space-y-0.5 px-2 pb-3">
             {nav.map((item) => {
               const active = item.href === "/" ? path === "/" : path.startsWith(item.href);

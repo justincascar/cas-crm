@@ -36,8 +36,10 @@ import {
 } from "./hire-readiness";
 import { all, get, newId, run } from "./connection";
 import { latestEsign, type EsignView } from "./esign";
+import { swapAgreementLines, type SwapAgreementLine } from "./vehicle-swap";
 import { beforeSigningFor, type BeforeSigning } from "./hire-out-readings";
 import { withImmediateTransaction } from "./record-version";
+import { hireGroupCheck, type HireGroupCheck } from "./hire-group-check";
 import { replaySubmit, storeSubmit } from "./submit-key";
 
 export type HireCarChoice = {
@@ -80,6 +82,8 @@ export type HireArea = {
   signed: SignedAgreementFile | null;
   signedOverride: SignedAgreementOverride | null;
   esign: EsignView | null;
+  /** Agreements for replacement cars, each with its own signature state. */
+  swapAgreements: SwapAgreementLine[];
   windowDays: number;
   chosen: {
     fleetVehicleId: string;
@@ -107,8 +111,12 @@ export type HireArea = {
   clientVehicle: string;
   /** Groups in the GTA table in force today, for the group charged list. */
   rateGroups: string[];
+  /** R27: the client's own car group (or why not classified) and any charge above the car supplied. */
+  groupCheck: HireGroupCheck | null;
   cars: HireCarChoice[];
   carsMissingDetails: HireCarChoice[];
+  /** Free vans, motorbikes, campervans, taxis and the like: offered apart from the cars. */
+  otherVehicles: HireCarChoice[];
   filters: HireCarFilters;
   delivery: {
     method: "deliver" | "collect";
@@ -181,6 +189,22 @@ function carChoice(car: FleetCarDetails): Omit<HireCarChoice, "label" | "version
     gtaGroup: car.gtaGroup,
     vehicleClass: car.vehicleClass,
   };
+}
+
+/** A car by the fleet's vehicle type. A record with no type is treated as a car (the demonstration cars have none). */
+export function isCar(car: { vehicleClass: string }): boolean {
+  const type = car.vehicleClass.trim().toLowerCase();
+  return !type || type === "car";
+}
+
+/** How far a car is from the client's own: 0 is the same gearbox, at least the seats, and the same group. */
+function carDistance(car: HireCarChoice, client: { transmission: string; seats: number | null; group: string | null }): number {
+  let distance = 0;
+  const gearbox = knownTransmission(car.transmission);
+  if (client.transmission) distance += !gearbox ? 2 : gearbox === client.transmission ? 0 : 4;
+  if (client.seats != null) distance += car.seats == null ? 2 : car.seats >= client.seats ? 0 : 4;
+  if (client.group) distance += !car.gtaGroup ? 2 : car.gtaGroup === client.group ? 0 : 1;
+  return distance;
 }
 
 function knownTransmission(value: string | null | undefined): string {
@@ -825,15 +849,21 @@ export function loadHireArea(
       version: car.version,
     }))
     .sort((a, b) => a.registration.localeCompare(b.registration, "en-GB", { numeric: true }));
+  // R36: cars first, closest to the client's own car (gearbox, seats, group); vans, motorbikes and the rest apart.
+  const clientCar = { transmission: knownTransmission(claim.transmission), seats: claim.seats ? Number(claim.seats) : null, group: normaliseGtaGroup(claim.gta_group) };
+  const byCloseness = (a: HireCarChoice, b: HireCarChoice) =>
+    carDistance(a, clientCar) - carDistance(b, clientCar) || a.registration.localeCompare(b.registration, "en-GB", { numeric: true });
+  const otherVehicles = free.filter((car) => !isCar(car)).sort(byCloseness);
   const missingDetails = (car: HireCarChoice) => !knownTransmission(car.transmission) || car.seats == null;
-  const cars = free.filter((car) => {
+  const freeCars = free.filter(isCar).sort(byCloseness);
+  const cars = freeCars.filter((car) => {
     if (missingDetails(car)) return false;
     if (wantTransmission && knownTransmission(car.transmission) !== wantTransmission) return false;
     if (wantSeats != null && (car.seats ?? 0) < wantSeats) return false;
     if (wantClass && car.vehicleClass.trim().toLowerCase() !== wantClass) return false;
     return true;
   });
-  const carsMissingDetails = free.filter((car) => missingDetails(car) && (!wantClass || !car.vehicleClass || car.vehicleClass.trim().toLowerCase() === wantClass));
+  const carsMissingDetails = freeCars.filter((car) => missingDetails(car) && (!wantClass || !car.vehicleClass || car.vehicleClass.trim().toLowerCase() === wantClass));
   const address = [claim.address_line1, claim.town, claim.postcode].filter(Boolean).join(", ");
   const deliveryJob = get<{
     id: string;
@@ -874,10 +904,12 @@ export function loadHireArea(
         details: fleetCarDetails(String(episode.fleet_vehicle_id)),
       }
     : null;
+  // R29: an agreement for a replacement car is its own agreement, shown on its own line, never as this one.
   const agreementRow = get<{ id: string; title: string | null; created_at: string }>(
     `SELECT id, title, created_at FROM documents WHERE claim_id = ? AND template_key = 'hire_agreement'
+       AND id NOT IN (SELECT agreement_document_id FROM hire_swaps WHERE claim_id = ? AND agreement_document_id IS NOT NULL)
      ORDER BY created_at DESC, rowid DESC LIMIT 1`,
-    [claimId],
+    [claimId, claimId],
   );
   const agreementCount = Number(
     get<{ n: number }>(`SELECT COUNT(*) AS n FROM documents WHERE claim_id = ? AND template_key = 'hire_agreement'`, [claimId])?.n || 0,
@@ -923,7 +955,8 @@ export function loadHireArea(
       : null,
     signed,
     signedOverride,
-    esign: creditHire ? latestEsign(claimId) : null,
+    esign: creditHire && agreementRow ? latestEsign(claimId, String(agreementRow.id)) : null,
+    swapAgreements: creditHire ? swapAgreementLines(claimId) : [],
     windowDays: licenceCheckWindowDays(),
     chosen,
     startedAt,
@@ -938,8 +971,10 @@ export function loadHireArea(
     clientGroup,
     clientVehicle: [claim.make, claim.model, claim.registration].map((part) => String(part || "").trim()).filter((part) => part && !/^unknown$/i.test(part)).join(" "),
     rateGroups: creditHire ? settingsGtaGroups() : [],
+    groupCheck: creditHire && chosen ? hireGroupCheck(claimId) : null,
     cars,
     carsMissingDetails,
+    otherVehicles,
     groupChoices: fleetGroupChoices(),
     filters: used,
     delivery: deliveryJob

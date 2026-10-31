@@ -185,7 +185,7 @@ async function engineerToInsurer(ctx: Ctx, claimId: string): Promise<string | nu
   const instructed = await oneClick(ctx.session, "engineer_instructed");
   if (instructed) return instructed;
   await gotoPath(ctx.session, ctx.origin, page);
-  const report = followed(await submitForm(ctx.session, 'form[action$="/steps/report"]', {}), "Report received");
+  const report = followed(await submitForm(ctx.session, 'form[action$="/steps/report"]', { outcome: "unknown" }), "Report received");
   if (report) return report;
   await gotoPath(ctx.session, ctx.origin, page);
   return oneClick(ctx.session, "report_sent");
@@ -469,10 +469,23 @@ const CASES: Case[] = [
       const swapFields = { date: HIRE_DAY, time: "23:50", oldMileageIn: "15000", oldFuelIn: "half", oldCondition: "No new damage.", newMileageOut: "9000", newFuelOut: "full", newCondition: "No damage." };
       const clash = decoded(await postFields(ctx.session, `/claims/${claimId}/hire/swap`, { ...swapFields, intent: "start", fleetVehicleId: busy.fleet_vehicle_id }));
       if (!/This car has just been booked|not available|not on the fleet/.test(clash)) return `Swapping to a car on hire elsewhere was not refused: ${clash}`;
-      const options = await ctx.session.evaluate<string[]>(`[...document.querySelectorAll('[data-swap-form] [name="fleetVehicleId"] option')].map((o) => o.value).filter(Boolean)`);
+      // The replacement car is chosen first; then its missing details (R28) and the readings are asked for.
+      const options = await ctx.session.evaluate<string[]>(`[...document.querySelectorAll('[data-swap-choose] [name="swapCar"] option')].map((o) => o.value).filter(Boolean)`);
       const next = options.find((id) => id !== before.fleet_vehicle_id && id !== busy.fleet_vehicle_id);
       if (!next) return "No other free car was offered for the swap.";
-      const started = followed(await submitForm(ctx.session, "[data-swap-form]", { ...swapFields, fleetVehicleId: next }), "Start the swap");
+      // R27: the new agreement needs the client's own car group (this file was opened before that check).
+      const groupForm = await ctx.session.evaluate<boolean>(`Boolean(document.querySelector('form[action$="/hire/group-check"] [name="clientGroup"]'))`);
+      if (groupForm) {
+        const group = followed(await submitForm(ctx.session, 'form[action$="/hire/group-check"]', { clientGroup: "S3" }), "Group check");
+        if (group) return group;
+      }
+      await gotoPath(ctx.session, ctx.origin, `/claims/${claimId}/hire?swapCar=${next}`);
+      const asked = await ctx.session.evaluate<string[]>(
+        `[...document.querySelectorAll('[data-swap-form] [name]')].map((field) => field.getAttribute("name") || "")`,
+      );
+      const detailAnswers: Record<string, string> = { transmission: "Manual", seats: "5", gtaGroup: "S3", fuel: "Petrol", colour: "Silver", aboveSuppliedReason: "Fictional test: only this car was free" };
+      const details = Object.fromEntries(Object.entries(detailAnswers).filter(([name]) => asked.includes(name)));
+      const started = followed(await submitForm(ctx.session, "[data-swap-form]", { ...swapFields, ...details }), "Start the swap");
       if (started) return started;
       const waiting = claimRow<Episode>(ctx, `SELECT id, started_at, fleet_vehicle_id FROM hire_episodes WHERE claim_id = ?`, claimId);
       if (waiting?.fleet_vehicle_id !== before.fleet_vehicle_id) return "The car changed before the new agreement was signed.";

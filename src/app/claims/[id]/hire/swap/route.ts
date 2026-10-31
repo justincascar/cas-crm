@@ -1,6 +1,6 @@
 import { withImmediateTransaction } from "@/lib/db/record-version";
 import { replaySubmit, storeSubmit } from "@/lib/db/submit-key";
-import { cancelVehicleSwap, overrideUnsignedSwap, startVehicleSwap, storeSignedSwapAgreement } from "@/lib/db/vehicle-swap";
+import { SWAP_AGREEMENT_FIELDS, cancelVehicleSwap, overrideUnsignedSwap, startVehicleSwap, storeSignedSwapAgreement } from "@/lib/db/vehicle-swap";
 import { officeHirePost } from "@/lib/http/hire-post";
 
 /** A vehicle swap mid-hire (R26): start it, file the signed paper copy, Justin's override, or cancel it. */
@@ -28,6 +28,8 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
           newMileageOut: text("newMileageOut"),
           newFuelOut: text("newFuelOut"),
           newCondition: text("newCondition"),
+          details: Object.fromEntries(SWAP_AGREEMENT_FIELDS.map((field) => [field, text(field)])),
+          aboveSuppliedReason: text("aboveSuppliedReason"),
         });
       } else if (intent === "signed") {
         if (!upload) throw new Error("Choose the signed hire agreement for the replacement car.");

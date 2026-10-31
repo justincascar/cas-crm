@@ -7,6 +7,8 @@ import {
 } from "../domain/claim-steps";
 import { listChasesForClaim } from "../db/chase";
 import { hireChargeForClaim } from "../db/hire-charge";
+import { storageChargeForClaim } from "../db/storage-charge";
+import { DRAFT_INVOICE_TEMPLATE } from "../db/draft-invoice";
 import { hireAgreementPrehireBlock } from "../db/prehire-checks";
 import { get } from "../db/connection";
 import { storageAuthorisationEndForClaim } from "../db/storage-authorisation-end";
@@ -97,6 +99,18 @@ export function loadClaimSteps(claimId: string): ClaimStepView[] | null {
   const recoveryCharge =
     recoveryRecorded && ((byHead.get("recovery")?.claimedPence || 0) > 0 || data.recoveryJobs.some((job) => Number(job.charge_pence) > 0));
 
+  const invoiced = (head: string) =>
+    Boolean(get<{ id: string }>(`SELECT id FROM documents WHERE claim_id = ? AND template_key = ? LIMIT 1`, [id, `${DRAFT_INVOICE_TEMPLATE}_${head}`]));
+  const hireRunning =
+    hireView.handoverDay && !hireView.confirmedEndDay && hireView.creditHire
+      ? { sinceDay: hireView.handoverDay, soFarPence: hireView.charge.status === "calculated" ? hireView.charge.totalPence : null, invoiced: invoiced("hire") }
+      : null;
+  const storageStart = String(claim.storage_started_on || "").slice(0, 10);
+  const storageSoFar = storageStart && !String(claim.storage_billing_end_on || "").trim() ? storageChargeForClaim(id) : null;
+  const storageRunning = storageSoFar
+    ? { sinceDay: storageStart, soFarPence: storageSoFar.status === "calculated" ? storageSoFar.totalPence : null, invoiced: invoiced("storage") }
+    : null;
+
   function pay(key: ClaimPaymentLineInput["key"], head: string, label: string, endConfirmed: boolean | null): ClaimPaymentLineInput {
     const row = byHead.get(head);
     const chaseKind =
@@ -113,6 +127,7 @@ export function loadClaimSteps(claimId: string): ClaimStepView[] | null {
       receivedPence: received,
       paidInFull: Boolean(chase?.payment?.paidInFull),
       partPaid: Boolean(chase?.payment?.partPaid),
+      running: key === "hire" ? hireRunning : key === "storage" ? storageRunning : null,
     };
   }
 

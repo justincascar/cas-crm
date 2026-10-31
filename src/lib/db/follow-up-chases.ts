@@ -153,6 +153,16 @@ export function listFollowUpChases(asAt: string = nowUtcIso(), claimId?: string)
       docClaim.params,
     ).map((row) => row.claim_id),
   );
+  // R37: a client with no bank account recorded is asked only for the statement of means, never bank statements.
+  const noBank = new Set(
+    all<{ claim_id: string; no_bank_explanation: string | null }>(
+      `SELECT f.claim_id, f.no_bank_explanation FROM financial_circumstances f
+       WHERE f.rowid = (SELECT f2.rowid FROM financial_circumstances f2 WHERE f2.claim_id = f.claim_id ORDER BY f2.recorded_at DESC, f2.rowid DESC LIMIT 1)${docClaim.sql.replaceAll("claim_id", "f.claim_id")}`,
+      docClaim.params,
+    )
+      .filter((row) => String(row.no_bank_explanation || "").trim())
+      .map((row) => row.claim_id),
+  );
   const documentSent = latestAfter(
     all<{ key: string; at: string }>(
       `SELECT claim_id || ':' || details AS key, occurred_at AS at FROM claim_events
@@ -168,6 +178,7 @@ export function listFollowUpChases(asAt: string = nowUtcIso(), claimId?: string)
       const meta = metaById.get(id);
       // These are credit-hire documents. A fault file is not chased for them.
       if (meta?.claim_type === "fault") continue;
+      if (paper.documentType === "bank_statements" && noBank.has(id)) continue;
       const received = onFile.has(`${id}:${paper.documentType}`) || (paper.documentType === "bank_statements" && bankTick.has(id));
       const decision = documentChaseDecision({
         requestedAt,

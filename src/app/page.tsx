@@ -10,6 +10,7 @@ import { formatUkDate, formatUkDateTime } from "@/lib/dates";
 import { listAgedDebt } from "@/lib/db/aged-debt";
 import { draftPayload, listOpenClaimDrafts } from "@/lib/db/claim-drafts";
 import { enquiryCounts } from "@/lib/db/website-enquiries";
+import { listFleetDetailsToComplete } from "@/lib/db/fleet-details";
 import { findPreparedChase } from "@/lib/db/chase";
 import { isChaseKind } from "@/lib/domain/chase";
 import { liveEmailSending } from "@/lib/email/send-mode";
@@ -105,6 +106,7 @@ export default async function DashboardPage({
   const courtesy = countClaims("active_hire_courtesy", handlerId);
   const owed = Object.values(listAgedDebt(undefined, handlerId).totals).reduce((sum, pence) => sum + pence, 0);
   const enquiries = enquiryCounts();
+  const fleetToComplete = listFleetDetailsToComplete().length;
   const counts: Count[] = [
     {
       key: "website_enquiries",
@@ -125,6 +127,8 @@ export default async function DashboardPage({
     { key: "storage", label: "In storage", value: String(countClaims("storage", handlerId)), href: withHandler("/claims?queue=storage", handlerId), tone: "info" },
     { key: "money", label: "Money awaited", value: formatGbp(owed), href: "/financials/aged-debt", tone: "warn" },
     { key: "fleet", label: "Fleet free today", value: String(Number(data.fleetMap.available || 0)), href: "/hire?status=available", tone: "ok" },
+    // R36: real fleet cars missing gearbox, seats, group or other details the agreement prints.
+    { key: "fleet_details", label: "Fleet details to complete", value: String(fleetToComplete), href: "/hire#details-to-complete", tone: fleetToComplete ? "warn" : "ok" },
   ];
 
   return (

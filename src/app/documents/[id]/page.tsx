@@ -13,6 +13,9 @@ import { claimDocumentTypeLabel } from "@/lib/domain/claim-documents";
 import { specForTemplate } from "@/lib/documents/catalog";
 import { plainPackFields } from "@/lib/documents/hire-pack-fields";
 import { CAS_LEGAL_SIGNOFF_NOTICE, CAS_TEMPLATE_NOTICE } from "@/lib/documents/correspondence";
+import { HeadedPaper } from "@/components/HeadedPaper";
+import { getCompanyDetails } from "@/lib/db/company-details";
+import { headedPaperVariant } from "@/lib/documents/headed-paper";
 
 export default async function DocumentPage({
   params,
@@ -96,7 +99,11 @@ export default async function DocumentPage({
       ) : storedPath ? (
         <p className="rounded-md border border-line bg-card px-4 py-3 text-sm">This file is stored with the claim. Use Download original to open it.</p>
       ) : doc.body_html ? (
-        <div className="letter-paper rounded-xl border border-line bg-card p-8" dangerouslySetInnerHTML={{ __html: String(doc.body_html) }} />
+        <div className="letter-paper rounded-xl border border-line bg-white" data-letter-paper>
+          <HeadedPaper company={getCompanyDetails()} variant={headedPaperVariant(String(doc.template_key || ""))}>
+            <div dangerouslySetInnerHTML={{ __html: String(doc.body_html) }} />
+          </HeadedPaper>
+        </div>
       ) : (
         <p>No generated body on this document.</p>
       )}

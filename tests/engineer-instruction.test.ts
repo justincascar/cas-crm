@@ -37,7 +37,7 @@ function seeded() {
 }
 
 describe("saved engineers", () => {
-  it("seeds Andy Montgomery and can add further engineers later", () => {
+  it("seeds the fictional engineer for TEST files, keeps CAS's real engineer for live use only, and can add further engineers later", () => {
     const db = seeded();
     withDatabase(db, () => {
       ensureEngineers(db);
@@ -53,7 +53,10 @@ describe("saved engineers", () => {
         email: "reports@example-assessors.test",
       });
       const listed = listAllEngineers();
-      assert.equal(listed.length, 2);
+      // The fictional engineer, CAS's real engineer (live use only, never offered on a file) and the new one.
+      assert.equal(listed.length, 3);
+      assert.equal(listed.filter((row) => row.liveOnly === 1).length, 1);
+      assert.ok(!listActiveEngineers().some((row) => row.liveOnly === 1));
       assert.ok(listed.some((row) => row.id === extra.id));
       assert.ok(listed.some((row) => row.email === SEEDED_ENGINEER.email));
     });
@@ -85,10 +88,10 @@ describe("engineer instruction letter", () => {
       engineerEmail: SEEDED_ENGINEER.email,
       vehicleLocation: "CAS compound, Swansea",
     });
-    assert.match(letter.text, /Andy Montgomery, Montgomery Assessors/);
-    assert.match(letter.text, /Woodlands, Ham Lane South, Llantwit Major, Vale Of Glamorgan, CF61 1RU/);
-    assert.match(letter.text, /Dear Andy Montgomery, Montgomery Assessors/);
-    assert.match(letter.html, /Woodlands, Ham Lane South/);
+    assert.match(letter.text, /Rhodri Testun, Example Assessors \(fictional\)/);
+    assert.match(letter.text, /Unit 1, Example Business Park, Cardiff, CF10 9ZZ/);
+    assert.match(letter.text, /Dear Rhodri Testun, Example Assessors \(fictional\)/);
+    assert.match(letter.html, /Unit 1, Example Business Park/);
     assert.match(letter.text, new RegExp(CAS_CLAIMS_MAILBOX));
     assert.equal(letter.missing.includes("Engineer name"), false);
     assert.equal(letter.missing.includes("Engineer address"), false);
@@ -99,9 +102,9 @@ describe("engineer instruction letter", () => {
     withDatabase(db, () => {
       setClaimEngineer("c3", SEEDED_ENGINEER.id);
       const preview = letterPreview("c3", "engineer_instruction");
-      assert.match(preview.text, /Andy Montgomery, Montgomery Assessors/);
-      assert.match(preview.text, /Woodlands, Ham Lane South, Llantwit Major, Vale Of Glamorgan, CF61 1RU/);
-      assert.match(preview.html, /Andy Montgomery, Montgomery Assessors/);
+      assert.match(preview.text, /Rhodri Testun, Example Assessors \(fictional\)/);
+      assert.match(preview.text, /Unit 1, Example Business Park, Cardiff, CF10 9ZZ/);
+      assert.match(preview.html, /Rhodri Testun, Example Assessors \(fictional\)/);
     });
     db.close();
   });
@@ -121,8 +124,8 @@ describe("instruct engineer — prepared, not auto-sent", () => {
       assert.equal(mailto.to, SEEDED_ENGINEER.email);
       assert.match(mailto.subject, /Engineer instruction/);
       assert.match(mailto.subject, /TEST-0003/);
-      assert.match(mailto.body, /Andy Montgomery, Montgomery Assessors/);
-      assert.match(mailto.body, /Woodlands, Ham Lane South/);
+      assert.match(mailto.body, /Rhodri Testun, Example Assessors \(fictional\)/);
+      assert.match(mailto.body, /Unit 1, Example Business Park/);
       assert.doesNotMatch(mailto.body, /Live sending is not connected/);
 
       const pending = db
@@ -164,7 +167,7 @@ describe("instruct engineer — prepared, not auto-sent", () => {
       assert.match(String(instructed.details), /Not auto-sent|prepared, not auto-sent/i);
       assert.ok(emailed);
       assert.equal(emailed.actor_name, "Justin Roberts");
-      assert.match(String(emailed.details), /andy\.mont@hotmail\.co\.uk/);
+      assert.match(String(emailed.details), /engineer\.test@example\.org/);
     });
     db.close();
   });

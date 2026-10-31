@@ -113,8 +113,7 @@ export function produceDraftInvoice(input: { claimId: string; head: string; acto
   // The customer is liable under the Storage & Recovery terms they signed (R17).
   const agreement = storageRecoveryState(input.claimId);
   const html = `<div class="letter">
-<p class="internal-note"><strong>Draft invoice.</strong> CAS's invoice template, invoice number and VAT number have not been supplied yet. Not sent.${toCustomer && agreement.status === "not_signed" ? " No signed Storage &amp; Recovery Agreement is on the file yet. Get it signed on the Recovery page before this invoice is used." : ""}${toCustomer && agreement.status === "override" ? ` ${escapeHtml(storageRecoverySignedLine(agreement))}` : ""}</p>
-<p>${escapeHtml(CAS_COMPANY.name)}<br>${escapeHtml(CAS_COMPANY.address)}<br>${escapeHtml(CAS_COMPANY.phone)} · ${escapeHtml(CAS_COMPANY.email)}</p>
+<p class="internal-note"><strong>Draft invoice.</strong> CAS's invoice template and invoice numbering have not been supplied yet. Not sent. The company and VAT numbers are on the headed paper footer.${toCustomer && agreement.status === "not_signed" ? " No signed Storage &amp; Recovery Agreement is on the file yet. Get it signed on the Recovery page before this invoice is used." : ""}${toCustomer && agreement.status === "override" ? ` ${escapeHtml(storageRecoverySignedLine(agreement))}` : ""}</p>
 ${toCustomer
     ? `<p>To: ${gap(claim.client_name, "Client name")}<br>${gap([claim.address_line1, claim.town, claim.postcode].filter((part) => part && !/^unknown$/i.test(String(part))).join(", "), "Client's address")}</p>`
     : `<p>To: ${gap(insurer?.insurer_name, "Third-party insurer")}<br>Your reference: ${gap(insurer?.insurer_ref, "Insurer reference")}</p>`}

@@ -1,6 +1,6 @@
 import { isOfficeRole } from "../auth/roles";
 import { faultInvoicePence, isClaimStepKey, type ClaimStepKey } from "../domain/claim-steps";
-import { utcFromLondonDateTime } from "../dates";
+import { occurredOnDay, utcFromLondonDateTime } from "../dates";
 import { formatUkDate, londonDateIso, londonTodayIso, nowUtcIso } from "../dates";
 import { formatGbp } from "../money";
 import { SHARED_HIRE_END, guardSharedFields, hireEndAt } from "./shared-fields";
@@ -17,7 +17,7 @@ function requireDay(value: string, label: string): string {
   if (check.getUTCFullYear() !== year || check.getUTCMonth() !== month - 1 || check.getUTCDate() !== date) {
     throw new Error(`Enter ${label}.`);
   }
-  return utcFromLondonDateTime(`${day}T09:00`);
+  return occurredOnDay(day);
 }
 
 function assertOffice(role: string) {

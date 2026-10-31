@@ -5,13 +5,15 @@ import { PrehireChecksScreen } from "@/app/claims/[id]/prehire/page";
 import { SaveClashNotice } from "@/components/SaveClashNotice";
 import { SubmitKeyInput } from "@/components/SubmitKeyInput";
 import { formatUkDate, formatUkDateTime, londonTodayIso } from "@/lib/dates";
-import type { HireArea, HireCarChoice } from "@/lib/db/hire-choice";
+import type { HireArea } from "@/lib/db/hire-choice";
 import type { SaveClashView } from "@/lib/db/record-version";
 import type { SwapView } from "@/lib/db/vehicle-swap";
 import { SwapStartForm, SwapStatus } from "@/components/claims/VehicleSwap";
+import { CarOptionGroups } from "@/components/claims/CarOptions";
 import { FUEL_LEVELS } from "@/lib/db/handover";
 import { FleetDetailBox } from "@/components/FleetDetailBox";
-import { FLEET_DETAIL_LABELS, fleetDetailLine, formatMileage, type FleetCarDetails } from "@/lib/db/fleet-details";
+import { FLEET_DETAIL_LABELS, fleetCarDetails, fleetDetailLine, formatMileage, type FleetCarDetails } from "@/lib/db/fleet-details";
+import { groupCheckLine, type HireGroupCheck } from "@/lib/db/hire-group-check";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
@@ -38,19 +40,6 @@ function gapHref(claimId: string, href: string) {
   return href.startsWith("#") ? `/claims/${claimId}/hire${href}` : href;
 }
 
-function carOption(car: HireCarChoice) {
-  return [
-    car.label,
-    car.transmission || "gearbox not recorded",
-    car.seats != null ? `${car.seats} seats` : "seats not recorded",
-    car.fuel,
-    car.colour,
-    car.gtaGroup ? `group ${car.gtaGroup}` : "GTA group not recorded",
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
-
 /** A finished step: one line with a Change button. The form opens underneath. */
 function DoneLine({ summary, children, open = false }: { summary: ReactNode; children: ReactNode; open?: boolean }) {
   return (
@@ -74,7 +63,10 @@ export function HireJourney({
   showPack,
   swap,
   mayOverrideSwap,
+  swapCar,
 }: {
+  /** The replacement car chosen for a swap, so its missing details can be asked for. */
+  swapCar?: string;
   swap: SwapView;
   mayOverrideSwap: boolean;
   area: HireArea;
@@ -91,6 +83,8 @@ export function HireJourney({
   const carDone = Boolean(area.chosen);
   const checksDone = area.checksDone;
   const agreementDone = area.agreementCount > 0;
+  // R38: once signed, step 4 folds to one line with Change.
+  const agreementSigned = agreementDone && Boolean(area.signed || area.esign?.status === "signed");
   const started = Boolean(area.startedAt);
   const wait = waitingFor(area.gaps);
   const refusedChecks = checkError(error);
@@ -152,33 +146,16 @@ export function HireJourney({
       <form method="post" action={`/claims/${id}/hire/choose`} className="mt-4 space-y-3">
         <SubmitKeyInput />
         <input type="hidden" name="returnHash" value="#car" />
-        {[...area.cars, ...area.carsMissingDetails].map((car) => (
+        {[...area.cars, ...area.carsMissingDetails, ...area.otherVehicles].map((car) => (
           <input key={car.id} type="hidden" name={`fleetVersion_${car.id}`} value={car.version} />
         ))}
         <label className="block text-sm">
           Car
           <select name="fleetVehicleId" className={field} required defaultValue={area.chosen?.fleetVehicleId || ""}>
             <option value="" disabled>
-              {area.cars.length || area.carsMissingDetails.length ? "Choose one" : "No free car for these dates"}
+              {area.cars.length || area.carsMissingDetails.length || area.otherVehicles.length ? "Choose one" : "No free car for these dates"}
             </option>
-            {area.cars.length ? (
-              <optgroup label="Free and matching">
-                {area.cars.map((car) => (
-                  <option key={car.id} value={car.id}>
-                    {carOption(car)}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
-            {area.carsMissingDetails.length ? (
-              <optgroup label="Details missing – check before offering">
-                {area.carsMissingDetails.map((car) => (
-                  <option key={car.id} value={car.id}>
-                    {carOption(car)}
-                  </option>
-                ))}
-              </optgroup>
-            ) : null}
+            <CarOptionGroups area={area} />
           </select>
         </label>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -234,7 +211,7 @@ export function HireJourney({
             hint={
               area.clientGroup
                 ? `Suggested: ${area.clientGroup}, the group of the client's own car${area.clientVehicle ? ` (${area.clientVehicle})` : ""}. A like-for-like car is charged at that group.`
-                : `The client's own car${area.clientVehicle ? ` (${area.clientVehicle})` : ""} has no group on the file, so no group is suggested. Add it on the client's vehicle details.`
+                : `The client's own car${area.clientVehicle ? ` (${area.clientVehicle})` : ""} has no group on the file, so no group is suggested. Once the rate is set, record it (or why it cannot be classified) in the group check.`
             }
           />
         </div>
@@ -247,6 +224,7 @@ export function HireJourney({
           Daily rate: {area.rate.line}
         </p>
       )}
+      {area.groupCheck && !area.rateMissing ? <GroupCheckBlock claimId={id} check={area.groupCheck} groups={area.rateGroups} /> : null}
     </div>
   ) : null;
 
@@ -319,10 +297,15 @@ export function HireJourney({
                 {area.chosen.details ? <CarDetails claimId={id} car={area.chosen.details} groups={area.groupChoices} /> : null}
                 {started ? (
                   swap.open ? null : (
-                    <details className="mt-2" data-swap-start>
+                    <details id="swap-start" className="mt-2 scroll-mt-16" data-swap-start open={swapCar ? true : undefined}>
                       <summary className="cursor-pointer text-sm text-teal-dark underline">Swap the car</summary>
                       <div className="mt-4">
-                        <SwapStartForm area={area} carOption={carOption} />
+                        <SwapStartForm
+                          area={area}
+                          swapCar={swapCar}
+                          swapCarDetails={swapCar ? fleetCarDetails(swapCar) : null}
+                          groups={area.groupChoices}
+                        />
                       </div>
                     </details>
                   )
@@ -382,10 +365,12 @@ export function HireJourney({
             className={box(Boolean(error && /hire agreement was not produced/i.test(error)))}
           >
             <StepHead n={4} title="Hire agreement" status={agreementDone ? "Done" : "Next"} />
-            <p className="mt-2 text-sm" data-pack-licence>
-              Licence number: {area.licenceNumber || "not on the file yet"}
-            </p>
-            {carDone && !started && !area.signed ? <BeforeSigningForm claimId={id} before={area.beforeSigning} car={area.chosen?.details || null} /> : null}
+            {agreementSigned ? null : (
+              <p className="mt-2 text-sm" data-pack-licence>
+                Licence number: {area.licenceNumber || "not on the file yet"}
+              </p>
+            )}
+            {carDone && !started && !agreementSigned ? <BeforeSigningForm claimId={id} before={area.beforeSigning} car={area.chosen?.details || null} /> : null}
             {agreementDone && area.agreement ? (
               <DoneLine
                 summary={
@@ -403,11 +388,24 @@ export function HireJourney({
                 }
                 open={showPack}
               >
-                <AgreementBody claimId={id} stillNeeded={agreementStillNeeded} showPack={showPack} again />
+                {agreementSigned ? (
+                  <p className="text-sm" data-pack-licence>
+                    Licence number: {area.licenceNumber || "not on the file yet"}
+                  </p>
+                ) : null}
+                <AgreementBody claimId={id} stillNeeded={agreementStillNeeded} showPack={showPack} again signed={agreementSigned} />
               </DoneLine>
             ) : (
-              <AgreementBody claimId={id} stillNeeded={agreementStillNeeded} showPack={showPack} again={false} />
+              <AgreementBody claimId={id} stillNeeded={agreementStillNeeded} showPack={showPack} again={false} signed={false} />
             )}
+            {area.swapAgreements.map((line) => (
+              <p key={line.documentId} className="mt-2 text-sm" data-swap-agreement={line.awaiting ? "awaiting" : "done"}>
+                <Link href={`/documents/${line.documentId}`} className="text-teal-dark underline">
+                  {line.title}
+                </Link>{" "}
+                · filed {formatUkDate(line.createdAt)} · {line.state}
+              </p>
+            ))}
             {agreementDone && !area.signed && !started ? (
               <div className="mt-4 space-y-3 border-t border-line pt-4 text-sm" data-get-signed>
                 <p className="font-semibold">Get it signed</p>
@@ -706,6 +704,71 @@ function RateForm({ claimId, group, groups, label, hint }: { claimId: string; gr
   );
 }
 
+/**
+ * R27: before the agreement, the client's own car group (or why it cannot be classified), and a written reason when
+ * the group charged is above the group of the car supplied. The rate stays on the group charged.
+ */
+function GroupCheckBlock({ claimId, check, groups }: { claimId: string; check: HireGroupCheck; groups: string[] }) {
+  const needed = check.gaps.length > 0;
+  const form = (
+    <form method="post" action={`/claims/${claimId}/hire/group-check`} className="mt-3 grid gap-3 text-sm sm:grid-cols-2" data-group-check-form>
+      <SubmitKeyInput />
+      <input type="hidden" name="returnHash" value="#group-check" />
+      {!check.clientGroup ? (
+        <>
+          <label>
+            Client&apos;s own car group
+            <select name="clientGroup" className={field} defaultValue="">
+              <option value="">Not classified</option>
+              {groups.map((code) => (
+                <option key={code} value={code}>
+                  {code}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Or why it cannot be classified
+            <input name="clientGroupReason" className={field} defaultValue={check.clientGroupReason} maxLength={1000} />
+          </label>
+        </>
+      ) : null}
+      {check.chargedAboveSupplied ? (
+        <label className="sm:col-span-2">
+          Reason for charging group {check.groupCharged} when the car supplied is group {check.suppliedGroup}
+          <textarea name="aboveSuppliedReason" rows={2} className={field} defaultValue={check.aboveSuppliedReason} maxLength={1000} required={!check.aboveSuppliedReason} />
+          <span className="mt-1 block text-slate">Kept on the file and shown in the history. The rate stays on group {check.groupCharged}.</span>
+        </label>
+      ) : null}
+      <div className="sm:col-span-2">
+        <button className={quiet} type="submit">
+          Save
+        </button>
+      </div>
+    </form>
+  );
+  return (
+    <div id="group-check" className={`mt-3 scroll-mt-16 rounded-md p-3 ${needed ? "border border-overdue/40 bg-[#f8ecec]" : "border border-line bg-white"}`} data-group-check={needed ? "needed" : "done"}>
+      {needed ? (
+        <>
+          <p className="text-sm font-semibold text-overdue">Group check before the agreement</p>
+          <ul className="mt-1 list-disc pl-5 text-sm">
+            {check.gaps.map((gap) => (
+              <li key={gap.key}>{gap.label}</li>
+            ))}
+          </ul>
+          {form}
+        </>
+      ) : (
+        <p className="text-sm" data-group-check-line>
+          {groupCheckLine(check)}
+          {check.chargedAboveSupplied ? ` · reason for charging above the car supplied: ${check.aboveSuppliedReason}` : ""}
+        </p>
+      )}
+    </div>
+  );
+}
+
 /** Printed on the agreement the client signs. A changed reading produces a new version of an unsigned agreement. */
 function BeforeSigningForm({ claimId, before, car }: { claimId: string; before: HireArea["beforeSigning"]; car: FleetCarDetails | null }) {
   const done = before.mileage != null && Boolean(before.fuelLevel) && Boolean(before.licenceIssuedOn);
@@ -760,11 +823,14 @@ function AgreementBody({
   stillNeeded,
   showPack,
   again,
+  signed,
 }: {
   claimId: string;
   stillNeeded: Array<{ key: string; label: string; href: string }>;
   showPack: boolean;
   again: boolean;
+  /** Once signed, the instruction to print and sign it is no longer shown. */
+  signed: boolean;
 }) {
   return (
     <div className="mt-3 space-y-3 text-sm">
@@ -784,7 +850,7 @@ function AgreementBody({
       ) : (
         <p className="text-ok">Everything the agreement needs is on the file.</p>
       )}
-      <p>Print it, have it signed, and upload the signed copy at the handover.</p>
+      {signed ? null : <p>Get it signed on screen, by the signing link, or on paper (upload the signed copy).</p>}
       <form method="post" action={`/claims/${claimId}/hire/agreement`}>
         <SubmitKeyInput />
         <input type="hidden" name="returnHash" value="#pack" />

@@ -20,7 +20,12 @@ export async function officeHirePost(
   const form = await request.formData();
   const back = (error?: string) => {
     const url = new URL(`/claims/${id}/hire`, origin);
-    if (error) url.searchParams.set("error", error.slice(0, 500));
+    if (error) {
+      url.searchParams.set("error", error.slice(0, 500));
+      // A refused swap keeps the replacement car chosen, so its form opens again.
+      const swapCar = String(form.get("swapCar") || "");
+      if (swapCar) url.searchParams.set("swapCar", swapCar);
+    }
     else url.searchParams.set("saved", "1");
     const hash = String(form.get("returnHash") || "");
     if (hash.startsWith("#")) url.hash = hash;

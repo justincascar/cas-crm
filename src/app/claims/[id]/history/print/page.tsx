@@ -5,6 +5,8 @@ import { formatUkDate } from "@/lib/dates";
 import { listClaimEvents } from "@/lib/db/chronology";
 import { getClaim } from "@/lib/db/queries";
 import { printChronology } from "@/lib/domain/print-chronology";
+import { HeadedPaper } from "@/components/HeadedPaper";
+import { getCompanyDetails } from "@/lib/db/company-details";
 
 export default async function ClaimChronologyPrintPage({ params }: { params: Promise<{ id: string }> }) {
   await requireStaff();
@@ -20,6 +22,8 @@ export default async function ClaimChronologyPrintPage({ params }: { params: Pro
         <h2 className="font-serif text-xl text-navy-deep">Chronology</h2>
         <PrintButton label="Print / save chronology" />
       </div>
+      <HeadedPaper company={getCompanyDetails()}>
+      <h1 className="font-serif text-xl text-navy-deep">Chronology</h1>
       <header>
         <p className="font-mono text-sm text-teal-dark">{String(claim.file_reference || "")}</p>
         <p className="text-sm">
@@ -41,6 +45,7 @@ export default async function ClaimChronologyPrintPage({ params }: { params: Pro
           ))}
         </ol>
       )}
+      </HeadedPaper>
     </article>
   );
 }

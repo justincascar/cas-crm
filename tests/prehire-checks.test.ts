@@ -37,6 +37,8 @@ function prepared() {
   db.exec(schema);
   migrate(db);
   seed(db);
+  // Fictional files: the client's own car group was never looked up, which the group check (R27) accepts with a reason.
+  db.exec(`UPDATE vehicles SET gta_unclassified_reason = 'Fictional test car: group not looked up' WHERE gta_group IS NULL AND id IN (SELECT client_vehicle_id FROM claims)`);
   return db;
 }
 
@@ -230,6 +232,7 @@ describe("pre-hire check overrides", () => {
       assert.equal(justin.role, "administrator");
       assert.deepEqual(listStaffPermissions("staff-justin"), [
         "acceptPaymentSettlement",
+        "approveChaserTemplates",
         "approveLegalCorrespondence",
         "approveSettlement",
         "exportAndAudit",
@@ -400,7 +403,7 @@ describe("pre-hire check overrides", () => {
       .all() as { permission: string }[];
     assert.deepEqual(
       permissions.map((row) => row.permission),
-      ["acceptPaymentSettlement", "approveLegalCorrespondence", "approveSettlement", "exportAndAudit", "extendedWait", "manageBankDetails", "overridePreHireChecks", "overrideUnsignedStorageRecovery", "overrideUnsignedSwap", "releaseWithoutExcess"],
+      ["acceptPaymentSettlement", "approveChaserTemplates", "approveLegalCorrespondence", "approveSettlement", "exportAndAudit", "extendedWait", "manageBankDetails", "overridePreHireChecks", "overrideUnsignedStorageRecovery", "overrideUnsignedSwap", "releaseWithoutExcess"],
     );
     const sian = db.prepare(`SELECT COUNT(*) AS n FROM staff_permissions WHERE staff_id = 'staff-sian'`).get() as { n: number };
     assert.equal(sian.n, 0);

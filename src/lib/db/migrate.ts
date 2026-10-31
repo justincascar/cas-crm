@@ -13,8 +13,11 @@ import { ensureRetentionTables } from "./retention";
 import { ensurePersonDataColumns } from "./person-data";
 import { ensureBreachTable } from "./breaches";
 import { ensureWebsiteEnquiryTables } from "./website-enquiries";
+import { ensureHireGroupCheckColumns } from "./hire-group-check";
+import { ensureAutoChaserTables } from "./auto-chasers";
+import { ensureCompanyDetails } from "./company-details";
 import { ensureFleetGtaRulesTable } from "./fleet-details";
-import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_LEGAL_CORRESPONDENCE, APPROVE_SETTLEMENT, OVERRIDE_UNSIGNED_STORAGE_RECOVERY, OVERRIDE_UNSIGNED_SWAP, EXPORT_AND_AUDIT, EXTENDED_WAIT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS, RELEASE_WITHOUT_EXCESS } from "../auth/roles";
+import { ACCEPT_PAYMENT_SETTLEMENT, APPROVE_CHASER_TEMPLATES, APPROVE_LEGAL_CORRESPONDENCE, APPROVE_SETTLEMENT, OVERRIDE_UNSIGNED_STORAGE_RECOVERY, OVERRIDE_UNSIGNED_SWAP, EXPORT_AND_AUDIT, EXTENDED_WAIT, MANAGE_BANK_DETAILS, OVERRIDE_PREHIRE_CHECKS, RELEASE_WITHOUT_EXCESS } from "../auth/roles";
 
 const TABLES: Record<string, Array<[string, string]>> = {
   correspondence: [
@@ -808,6 +811,14 @@ export function migrate(db: DatabaseSync) {
   ensurePersonDataColumns(db);
   ensureBreachTable(db);
   ensureWebsiteEnquiryTables(db);
+  ensureHireGroupCheckColumns(db);
+  ensureAutoChaserTables(db);
+  ensureCompanyDetails(db);
+  db.prepare(
+    `INSERT OR IGNORE INTO staff_permissions(staff_id, permission)
+     SELECT ?, ?
+     WHERE EXISTS (SELECT 1 FROM staff WHERE id = ?)`,
+  ).run("staff-justin", APPROVE_CHASER_TEMPLATES, "staff-justin");
   db.exec(`
     CREATE TABLE IF NOT EXISTS repair_gap_explanations (
       id TEXT PRIMARY KEY,

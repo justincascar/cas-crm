@@ -225,6 +225,53 @@ function ReportForm({ claimId, today }: { claimId: string; today: string }) {
         Date report received
         <input name="occurredOn" type="date" required max={today} defaultValue={today} className={field} />
       </label>
+      <fieldset className="grid gap-2 text-sm" data-report-outcome>
+        <legend className="font-semibold">What does the report say?</legend>
+        <label className="flex items-center gap-2">
+          <input type="radio" name="outcome" value="repairable" required /> Repairable
+        </label>
+        <div className="grid gap-2 pl-6 sm:grid-cols-3">
+          <label>
+            Estimate before VAT (£)
+            <input name="estimateNet" inputMode="decimal" className={field} />
+          </label>
+          <label>
+            VAT (£)
+            <input name="estimateVat" inputMode="decimal" className={field} />
+          </label>
+          <label>
+            Including VAT (£)
+            <input name="estimateGross" inputMode="decimal" className={field} />
+          </label>
+        </div>
+        <label className="flex items-center gap-2">
+          <input type="radio" name="outcome" value="total_loss" /> Total loss
+        </label>
+        <div className="grid gap-2 pl-6 sm:grid-cols-3">
+          <label>
+            Pre-accident value (£)
+            <input name="pav" inputMode="decimal" className={field} />
+          </label>
+          <label>
+            Salvage category
+            <select name="salvageCategory" className={field} defaultValue="">
+              <option value="">Choose</option>
+              <option value="A">A</option>
+              <option value="B">B</option>
+              <option value="S">S</option>
+              <option value="N">N</option>
+            </select>
+          </label>
+          <label>
+            Salvage deduction (£)
+            <input name="salvageDeduction" inputMode="decimal" className={field} />
+          </label>
+        </div>
+        <label className="flex items-center gap-2">
+          <input type="radio" name="outcome" value="unknown" /> Not yet known
+        </label>
+        <p className="text-slate">The estimate or the pre-accident value less salvage goes on the Money tab as the amount claimed. Nothing is agreed or received by this.</p>
+      </fieldset>
       <label className="text-sm">
         Upload the report (optional)
         <input name="document" type="file" className={field} />

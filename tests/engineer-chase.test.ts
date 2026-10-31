@@ -245,7 +245,7 @@ describe("engineer instruction chase — seeded TEST-0005 and settings", () => {
     withDatabase(db, () => {
       setClaimEngineer("c5", SEEDED_ENGINEER.id);
       const prepared = prepareEngineerReportChase({ claimId: "c5", actorId: "staff-sian" });
-      assert.match(prepared.to, /andy\.mont@hotmail\.co\.uk/i);
+      assert.match(prepared.to, /engineer\.test@example\.org/i);
       assert.match(prepared.mailto, /^mailto:/);
       assert.match(prepared.body, /TEST-0005/);
       const again = prepareEngineerReportChase({ claimId: "c5", actorId: "staff-sian" });

@@ -2,8 +2,12 @@ import Link from "next/link";
 import { SubmitKeyInput } from "@/components/SubmitKeyInput";
 import { formatUkDateTime, londonTodayIso } from "@/lib/dates";
 import { FUEL_LEVELS } from "@/lib/db/handover";
-import type { HireArea, HireCarChoice } from "@/lib/db/hire-choice";
-import type { SwapView } from "@/lib/db/vehicle-swap";
+import type { HireArea } from "@/lib/db/hire-choice";
+import { CarOptionGroups } from "@/components/claims/CarOptions";
+import { SWAP_AGREEMENT_FIELDS, type SwapView } from "@/lib/db/vehicle-swap";
+import { FleetDetailBox } from "@/components/FleetDetailBox";
+import { fleetDetailLine, type FleetCarDetails } from "@/lib/db/fleet-details";
+import { chargedAboveSupplied } from "@/lib/db/hire-group-check";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 const button = "inline-flex min-h-11 items-center rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white";
@@ -25,33 +29,84 @@ function FuelSelect({ name }: { name: string }) {
   );
 }
 
-/** R26: swapping the car on a running hire. Both cars' readings, then a new hire agreement for the client to sign. */
-export function SwapStartForm({ area, carOption }: { area: HireArea; carOption: (car: HireCarChoice) => string }) {
+/**
+ * R26: swapping the car on a running hire. First the replacement car is chosen. Then any of its details the new
+ * agreement prints and its fleet record lacks are boxes here (R28), with a reason when the group charged is above its
+ * group (R27), both cars' readings, and a new hire agreement for the client to sign.
+ */
+export function SwapStartForm({
+  area,
+  swapCar,
+  swapCarDetails,
+  groups,
+}: {
+  area: HireArea;
+  swapCar?: string;
+  swapCarDetails: FleetCarDetails | null;
+  groups: string[];
+}) {
   const id = area.claimId;
-  const cars = [...area.cars, ...area.carsMissingDetails].filter((car) => car.id !== area.chosen?.fleetVehicleId);
+  const cars = [...area.cars, ...area.carsMissingDetails, ...area.otherVehicles].filter((car) => car.id !== area.chosen?.fleetVehicleId);
+  const picked = swapCar && swapCarDetails && cars.some((car) => car.id === swapCar) ? swapCarDetails : null;
+  if (!picked) {
+    return (
+      <form method="get" action={`/claims/${id}/hire#swap-start`} className="space-y-3" data-swap-choose>
+        <p className="text-sm">
+          {area.creditHire
+            ? "The client signs a new hire agreement for the replacement car. The swap is completed when it is signed. The hire and its day count carry on."
+            : "A courtesy car swap. The hire and its day count carry on."}
+        </p>
+        <label className="block text-sm">
+          Replacement car
+          <select name="swapCar" className={field} required defaultValue="">
+            <option value="" disabled>
+              {cars.length ? "Choose one" : "No free car for these dates"}
+            </option>
+            <CarOptionGroups area={area} exclude={area.chosen?.fleetVehicleId} />
+          </select>
+        </label>
+        <button className={quiet} type="submit">
+          Next
+        </button>
+      </form>
+    );
+  }
+  const missing = area.creditHire ? SWAP_AGREEMENT_FIELDS.filter((key) => picked.missing.includes(key)) : [];
+  const groupUnknown = missing.includes("gtaGroup");
+  const above = area.creditHire && !groupUnknown && chargedAboveSupplied(area.groupCharged, picked.gtaGroup);
+  const askReason = area.creditHire && Boolean(area.groupCharged) && (above || groupUnknown);
   return (
     <form method="post" action={`/claims/${id}/hire/swap`} className="space-y-4" data-swap-form>
       <SubmitKeyInput />
       <input type="hidden" name="intent" value="start" />
-      <p className="text-sm">
-        {area.creditHire
-          ? "The client signs a new hire agreement for the replacement car. The swap is completed when it is signed. The hire and its day count carry on."
-          : "A courtesy car swap. The hire and its day count carry on."}
+      <input type="hidden" name="fleetVehicleId" value={picked.fleetVehicleId} />
+      <input type="hidden" name="swapCar" value={picked.fleetVehicleId} />
+      <input type="hidden" name="returnHash" value="#swap-start" />
+      <p className="text-sm" data-swap-car={picked.registration}>
+        Replacement car: <strong>{[picked.make, picked.model, picked.registration].filter(Boolean).join(" ")}</strong>
+        {fleetDetailLine(picked) ? ` · ${fleetDetailLine(picked)}` : ""}.{" "}
+        <Link href={`/claims/${id}/hire#swap-start`} className="text-teal-dark underline">
+          Choose another car
+        </Link>
       </p>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <label className="text-sm sm:col-span-3">
-          Replacement car
-          <select name="fleetVehicleId" className={field} required defaultValue="">
-            <option value="" disabled>
-              {cars.length ? "Choose one" : "No free car for these dates"}
-            </option>
-            {cars.map((car) => (
-              <option key={car.id} value={car.id}>
-                {carOption(car)}
-              </option>
-            ))}
-          </select>
+      {missing.length ? (
+        <fieldset className="grid gap-3 rounded-md border border-overdue/40 bg-[#f8ecec] p-3 text-sm sm:grid-cols-3" data-swap-car-details>
+          <legend className="px-1 font-semibold">Not on the fleet record. They print on the new agreement and are saved to the fleet record.</legend>
+          {missing.map((key) => (
+            <FleetDetailBox key={key} field={key} car={picked} groups={groups} className={field} />
+          ))}
+        </fieldset>
+      ) : null}
+      {askReason ? (
+        <label className="block text-sm" data-swap-above-reason>
+          {above
+            ? `Reason for charging group ${area.groupCharged} when this car is group ${picked.gtaGroup}`
+            : `Reason, if group ${area.groupCharged} (the group charged) is above the group you enter for this car`}
+          <textarea name="aboveSuppliedReason" rows={2} maxLength={1000} required={above} className={field} />
+          <span className="mt-1 block text-slate">Kept on the file and shown in the history. The rate stays on group {area.groupCharged}.</span>
         </label>
+      ) : null}
+      <div className="grid gap-3 sm:grid-cols-3">
         <label className="text-sm">
           Date of the swap
           <input type="date" name="date" required className={field} defaultValue={londonTodayIso()} />

@@ -19,6 +19,7 @@ import { CAS_HIRE_TERMS_HTML } from "../src/lib/documents/cas-hire-terms.ts";
 import { standardDailyRatePence } from "../src/lib/documents/gta.ts";
 import { prepareAgreementItems, recordPassingPrehireChecks } from "./prehire-setup.ts";
 import { buildHireAgreementView } from "../src/lib/db/hire-agreement.ts";
+import { saveHireGroupCheck } from "../src/lib/db/hire-group-check.ts";
 import { getHirePack } from "../src/lib/db/hire-pack.ts";
 
 /** The rate is taken from Settings when the car is reserved. These seeded hires stand in for that. */
@@ -41,6 +42,8 @@ function prepared() {
   db.exec(schema);
   migrate(db);
   seed(db);
+  // Fictional files: the client's own car group was never looked up, which the group check (R27) accepts with a reason.
+  db.exec(`UPDATE vehicles SET gta_unclassified_reason = 'Fictional test car: group not looked up' WHERE gta_group IS NULL AND id IN (SELECT client_vehicle_id FROM claims)`);
   return db;
 }
 
@@ -210,6 +213,9 @@ describe("hire agreement rating and the four-page document", () => {
         group_override_reason: "Insurer asked for the higher group on this file",
       });
       storeHireRate(db, "c3", rating.dailyRatePence);
+      // R27: charging above the group of the car supplied needs a written reason first.
+      assert.throws(() => generateHireAgreementDocument("c3", "staff-justin"), /reason for charging group S5 when the car supplied is group S3/);
+      saveHireGroupCheck({ claimId: "c3", actorId: "staff-justin", clientGroup: "", clientGroupReason: "", aboveSuppliedReason: "Insurer asked for the higher group on this file" });
       const result = generateHireAgreementDocument("c3", "staff-justin");
       const html = String((db.prepare(`SELECT body_html FROM documents WHERE id = ?`).get(result.documentId) as { body_html: string }).body_html);
       assert.match(html, /above normal CAS policy/);
