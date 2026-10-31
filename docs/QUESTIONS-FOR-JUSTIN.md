@@ -22,7 +22,7 @@ Each open question has a reversible default already in the CRM. Nothing here is 
     - Staff check every box with the client before saving.
 
     Please say if you want different limits, or a different rule for what is pre-filled.
-25. **The website's GitHub repository.** Justin created the private `cas-website` repository under `justincascar` on 31/10/2026. The push was refused with "Repository not found": the GitHub sign-in saved on this PC reaches `cas-crm` but not the new repository (it may be limited to `cas-crm`, or the name differs). Default: the website stays committed on this PC, with the remote set, ready to push. Please give the saved GitHub sign-in access to `cas-website` (or tell Claude Code the exact repository name).
+25. **The website's GitHub repository.** Answered: Justin created the private `cas-website` repository under `justincascar` and gave the saved GitHub sign-in access on 31/10/2026. The website was pushed to `main` (853ba3a) and GitHub confirmed it.
 26. **Website details still in [brackets].** The logo, the company number, the VAT number and the registered office (171 Cwmgarw Road, confirmed by Justin on 31/10/2026) are answered: they came with the headed paper and are on the website's header and footer. Please supply:
     - the three photos;
     - opening hours and recovery hours;

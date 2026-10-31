@@ -429,7 +429,7 @@ Security must be high. Nothing real goes in until every item below is done and e
 
 ## Where I stopped
 
-**31 October 2026 (evening) — Claude Code:** review notes R42–R47 are fixed (4be50b3). The website restyle and registered office are committed on this PC (CAS-Website 853ba3a) but not pushed: the saved GitHub sign-in cannot reach `justincascar/cas-website` (question 25). No other job is open: J9a, J9b and J9 wait for Justin. Open questions: 1–3, 5, 7 (template and numbering), 10, 12, 18, 20, 22–25, 26 (photos, hours, areas, MOT link, reviews), 27, 28 and 29.
+**31 October 2026 (evening) — Claude Code:** review notes R42–R47 are fixed (4be50b3). The website restyle and registered office are pushed to `justincascar/cas-website` (853ba3a, question 25 answered). No other job is open: J9a, J9b and J9 wait for Justin. Open questions: 1–3, 5, 7 (template and numbering), 10, 12, 18, 20, 22–24, 26 (photos, hours, areas, MOT link, reviews), 27, 28 and 29.
 
 **31 October 2026 — Claude Code:** review notes R27–R41 are fixed (df15389) and the website has the logo and company numbers (CAS-Website e640db6, local). No other job is open: J9a, J9b and J9 wait for Justin. Open questions: 1–3, 5, 7 (template and numbering), 10, 12, 18, 20 and 22–28.
 
