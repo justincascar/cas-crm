@@ -62,10 +62,32 @@ export function ukNationalNumber(value: string | null | undefined): string | nul
   return null;
 }
 
+/** R57: the hint under a telephone box that is not a mobile. */
+export const TELEPHONE_HINT = "UK number, for example 01792 341069 or 07700 900123";
+export const MOBILE_HINT = "Mobile, starting 07 or +447, for example 07700 900123";
+
+/** "ext 214", "extension 214", "x214" or "#214" at the end, kept apart from the number itself. */
+export function splitExtension(value: string): { number: string; extension: string } {
+  const match = value.match(/^(.*?)[\s,]*(?:ext\.?|extension|x|#)\s*(\d{1,6})\s*$/i);
+  return match ? { number: match[1]!.trim(), extension: match[2]! } : { number: value.trim(), extension: "" };
+}
+
+/**
+ * R57: any UK number (01, 02, 03, 05, 07 or 08 with the right number of digits, or +44), or an international number
+ * starting +, with spaces and an extension allowed.
+ */
+export function isTelephoneNumber(value: string): boolean {
+  const { number } = splitExtension(value);
+  const compact = number.replace(/[\s().-]/g, "");
+  if (/^\+(?!44)\d{7,15}$/.test(compact) || /^00(?!44)\d{7,15}$/.test(compact)) return true;
+  const national = ukNationalNumber(number);
+  return Boolean(national && /^0[123578]\d{8,9}$/.test(national));
+}
+
 /**
  * One check for every phone box.
- * A mobile must start 07 or +447 and be 11 national digits.
- * A general phone accepts a UK landline or mobile (0 or +44, 10 or 11 digits).
+ * Only a box for a mobile needs 07 or +447 and 11 national digits.
+ * Every other box takes any UK number or an international one (R57).
  * Empty is left alone. A failure is a warning, not a silent block.
  */
 export function phoneFieldError(name: string, value: string | null | undefined): string | null {
@@ -81,12 +103,12 @@ export function phoneFieldError(name: string, value: string | null | undefined):
     const existing = mobileNumberError(raw);
     if (existing) return `${existing}${SAVE_ANYWAY}`;
     if (!national?.startsWith("07")) {
-      return `A mobile number starts with 07 or +447.${SAVE_ANYWAY}`;
+      return `A mobile number starts 07 or +447. ${raw} looks like a landline: put it under Telephone instead.${SAVE_ANYWAY}`;
     }
     return `A mobile number starts with 07 or +447 and has the right length.${SAVE_ANYWAY}`;
   }
-  if (!national || !/^0\d{9,10}$/.test(national)) {
-    return `That does not look like a UK number. It should start with 0 or +44 and be the right length.${SAVE_ANYWAY}`;
+  if (!isTelephoneNumber(raw)) {
+    return `That does not look like a telephone number. Use a ${TELEPHONE_HINT}, or an international number starting +.${SAVE_ANYWAY}`;
   }
   return null;
 }

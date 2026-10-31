@@ -113,7 +113,7 @@ function PersonFields({ prefix, skipOther, kind }: { prefix: string; skipOther?:
             <p className="text-sm text-slate sm:col-span-2">No other number. Nothing is stored for it.</p>
           ) : (
             <label className="block text-sm">
-              Other contact number
+              Other telephone
               <MobileField name={`${prefix}otherTel`} className={field} />
             </label>
           )}

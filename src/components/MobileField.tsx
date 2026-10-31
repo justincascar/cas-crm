@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { isMobileFieldName, phoneFieldError, saveAnywayFieldName } from "@/lib/phone-number";
+import { isMobileFieldName, MOBILE_HINT, phoneFieldError, saveAnywayFieldName, TELEPHONE_HINT } from "@/lib/phone-number";
 
 const fieldClass = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
@@ -38,7 +38,7 @@ export function MobileField({
         }}
       />
       <span className="mt-1 block text-xs text-slate">
-        {mobile ? "A UK mobile starts 07 or +447." : "A UK number starts 0 or +44."}
+        {mobile ? `${MOBILE_HINT}.` : `${TELEPHONE_HINT}.`}
       </span>
       {error ? (
         <span className="field-error" data-field-error={name}>
