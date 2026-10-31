@@ -130,20 +130,6 @@ Fix:
 3. **Payment requests** for recovery and storage stay refused until a signature covers them (R17). Check this is enforced on TEST-0042 once its recovery is recorded.
 4. **Leave TEST-0042 for Justin** to finish as a test: record the recovery, then sign the Storage & Recovery Agreement on screen.
 
-**R62 — Driving licence number accepted with the wrong format (TEST-0042).**
-TEST-0042's licence number is "DSSGXDCBCXB", 11 characters. A GB licence number is 16 characters:
-- the first 5 letters of the surname, padded with 9s
-- 6 digits encoding the date of birth, with the month +5 for women
-- 2 initials, padded with 9
-- 1 digit
-- 2 check characters
-
-Fix:
-- Check the format when the number is entered, and check it against the surname and date of birth on the file. Show a clear message if it doesn't match.
-- Allow a Northern Ireland (8 digits) or foreign licence through an explicit "Not a GB licence" choice, with the issuing country.
-- Never block the licence check result itself; flag the mismatch for review.
-- Test with a valid fictional number, a wrong-length one and a DOB mismatch.
-
 **R63 — Step 4 "Send letter" should prepare the right letters automatically (Justin, 31 October 2026).**
 Today, clicking "Send letter" on step 4 leads to "Choose who this is going to", then "Choose a CAS email template", then "Fill from this file". Justin's rule: the first letters are always the same for a given kind of file, so the CRM should prepare them filled in and addressed. Staff only check and send.
 
@@ -250,10 +236,58 @@ Build:
    - Both
    - a file with no vehicle location is blocked, with the link
 
+**R66 — Steps 5 to 8: every action on the Steps page, no jumping between screens (Justin, 31 October 2026).**
+Justin, on TEST-0042, total loss:
+- **Step 6 figures:** he typed the step 6 figures (pre-accident value £10,000, category S, salvage £1,000). They saved: the history and Money show £9,000 claimed. But the step 6 line only says "Done · 31/10/2026", so he thought they'd gone.
+- **Step 7 "Agree valuation"** opens `/details/assessed-damage`: a long page with a "Viewing pane / File screens" menu, engineer's notes, "Record step", "Correction" and the total-loss panel. Nothing on it is about the client agreeing.
+- **Step 8 "Send valuation"** opens the general Messages page.
+- **Each step's "details" link** goes to a different screen (Details, Messages, Documents, Assessed damage, Money).
+
+Rule for steps 5–9: **each step is a card on the Steps page that does its job in place.** Fill in, one button, done. Its finished line says what happened, in figures. "Details" links are only for history and corrections.
+
+**Step 5, Instruct:** as R65.
+
+**Step 6, Engineer's report received.** The card asks for:
+- the date received
+- the report upload (PDF), filed as "Engineer's report"
+- the outcome: Repairable, Total loss, or Not yet known
+  - **Repairable:** the estimate (net, VAT, gross, checked to add up)
+  - **Total loss:** pre-accident value, salvage category, salvage value, and "What CAS asks the insurer for" (the existing choice)
+  - **Total loss, also:** "Any finance on the vehicle?" (No / Yes + lender)
+
+The finished line shows the figures, for example "Total loss · £10,000 pre-accident · Cat S · salvage £1,000 · claiming £9,000 · report on file". "Change" makes a correction entry, as now.
+
+**Step 7.**
+- **Total loss: "Agree valuation with the client".** One button: "Send valuation to client". It produces Draft 8a from `docs/correspondence-templates/drafts/CAS-document-drafts-31oct2026.md`, with the report attached (on by default, can be unticked). It sends by email with a signing link, or offers on-screen or paper signing.
+  - The client's answer (A accept and release, B accept and keep, C dispute) and the finance answer are recorded on the file when signed.
+  - **A or B:** step 7 is done, and B sets the request to net of salvage.
+  - **C:** step 7 shows "Client disputes valuation". It creates a task, attaches the client's reason or evidence, and stops step 8 until a handler resolves it.
+- **Repairable: "Send report and estimate to the insurer"**, as R63's pack style: one button, the report attached.
+
+**Step 8.**
+- **Total loss: "Send valuation to the insurer".** One button produces Draft 8b, with the report and the client's signed acceptance attached, to the third-party insurer (or agent). It asks for the amount from step 6/7 and starts the chase (R48).
+- **Repairable:** "Repair authorisation or payment agreed", as now, inline on the card.
+
+**Rules for both:**
+- **Drafts 8a and 8b** are "Waiting for Justin's approval" (R64 rules). Until approved, the button shows the preview and "Needs Justin's approval".
+- **Changing outcome mid-claim** (repairable to total loss, or back) keeps the history and swaps the step 7–9 cards, as the step names already do.
+
+**Step 9 and Money.** Step 9 "Payment received and salvage collected" works inline too:
+- record the payment
+- the salvage collection date
+- **the actual salvage proceeds, if any.** Hire end per J5 (7 days after the qualifying payment, confirmed by a handler; a partial payment is flagged).
+
+Money shows the same figures; nothing is entered twice.
+
+**Test on a new total-loss TEST file as `sian`:** step 6 figures show on the line; 7 send → client signs A → done; 8 send → chase starts; 9 payment → hire end proposed. Also run:
+- the client choosing C, which blocks 8
+- repairable to total loss partway
+
 **Not independently verified:** R30 automatic sending. Nothing is sent until Justin approves a chaser's wording (question 27); Settings → Automatic chasers now shows each chaser's full wording beside its switch (R46). Retest when he has.
 
 ## Fixed
 
+- **R62** fixed in 98aba47: a licence number is checked when it is entered (client details, additional drivers, hire pack, licence check card). A GB number must be 16 characters in the GB format; TEST-0042's 11-character number is refused with "A GB licence number is 16 letters and numbers; this one has 11 …". Northern Ireland (8 digits) and foreign licences go through only with the new "Not a GB licence" tick and the issuing country. A GB number in the right format that does not match the surname (Mac is accepted as MC) or the date of birth (the month with or without the +5 for women) is kept and flagged: a warning on the details screen and on the licence check card, with a link to correct it, and a history entry when a check is recorded. The licence check itself is never blocked. Tests: a valid fictional number, a wrong-length one, a date-of-birth mismatch, Northern Ireland and foreign numbers. Checked as `sian` on TEST-0044: the 11-character number was refused, a number with the wrong date-of-birth digits was saved and flagged, and the licence check was recorded with the flag showing. TEST-0042 still holds its 11-character number for Justin to correct.
 - **R60** fixed in c0f8b85: Hire / Fleet → "Complete fleet details" is one table of every car (type, gearbox, fuel, seats, colour, GTA group as drop-downs), each change saved at once, a tick when complete, and "Only cars with details missing". Suggestions show in grey with their source and are saved only when staff press Use: gearbox from the model name (AUTO, S-A, CVT, DSG, a final "A"), fuel and colour from the V5C import, GTA group from the Settings rules. Seats are never suggested: the V5C import read no seating capacity. The hire and swap screens show the chosen car's details read-only with "Fleet record wrong? Edit in Fleet"; only the group charged is editable. A car with details missing is greyed out ("details missing – complete in Fleet") and cannot be chosen; the link returns to the hire with the car chosen. Each change goes in the car's history with who and when; agreements already produced keep their wording. Checked as `sian` on the new TEST-0044: one suggestion used (YT18 VJL gearbox, from "AUTO") and one typed value (TEST car CAS 4), incomplete cars greyed out, CU20 FYT chosen with its details read-only and the group charged editable.
 - **R56** fixed in 4e84bc3: on save, a red box at the top says "3 things to fix before saving" and lists each problem in plain words as a link that opens a folded section and goes to the box; each box is outlined with its message underneath; as each is fixed its line goes and the count drops ("2 left to fix"), with a Next problem → button; when none are left it says "All fixed – save now". The box takes focus so a screen reader announces it. Every form built on the shared form gets this (new claim, Details tab, client form, Hire Pack and the others); the new-claim form and the Details tab get every problem back from the server at once, and a refused new claim goes back to its draft with what was typed.
 - **R57** fixed in 14eade4: only a Mobile box needs 07 or +447. Every other telephone box takes any UK number (01, 02, 03, 05, 07 or 08 with the right digits, or +44) or an international number starting +, with spaces and an extension ("ext 12"). Their hint reads "UK number, for example 01792 341069 or 07700 900123". A landline in a mobile box is refused with "… looks like a landline: put it under Telephone instead". Labels read Mobile or Telephone; the client's second number is Other telephone.
