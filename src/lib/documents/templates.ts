@@ -99,6 +99,8 @@ export const LETTER_TEMPLATES = [
   { key: "draft_split_client", title: "Split liability: explanation to the client (draft)", eventType: "document_generated" as const, channel: "letter" as const },
   { key: "draft_liability_position", title: "Liability disputed or not yet known: letter to the third-party insurer (draft)", eventType: "document_generated" as const, channel: "letter" as const },
   { key: "client_welcome_fault", title: "Client welcome, fault claim (draft)", eventType: "document_generated" as const, channel: "letter" as const },
+  { key: "draft_tl_client", title: "Total loss: valuation to the client (draft)", eventType: "document_generated" as const, channel: "letter" as const },
+  { key: "draft_tl_insurer", title: "Total loss: covering letter to the third-party insurer (draft)", eventType: "document_generated" as const, channel: "letter" as const },
 ] as const;
 
 export type LetterTemplateKey = (typeof LETTER_TEMPLATES)[number]["key"];

@@ -116,7 +116,7 @@ describe("engineer and Audatex steps in one click (J4)", () => {
       assert.deepEqual(step(claim.id, "send_report").forms, []);
       logEngineerReportReceived({ claimId: claim.id, actorId: "staff-sian", occurredAt: isoDateFromNow(-1) });
       assert.equal(step(claim.id, "engineer_report").state, "done");
-      assert.deepEqual(step(claim.id, "send_report").forms, ["report_sent"]);
+      assert.deepEqual(step(claim.id, "send_report").forms, ["repair_report_send", "report_sent"]);
 
       recordReportSentByHand({ claimId: claim.id, ...sian, occurredOn: isoDateFromNow(0) });
       const sent = step(claim.id, "send_report");
@@ -142,7 +142,7 @@ describe("engineer and Audatex steps in one click (J4)", () => {
       assert.equal(step(claim.id, "engineer").state, "done");
       assert.deepEqual(step(claim.id, "engineer_report").forms, ["audatex_received"]);
       recordAudatexEstimate({ claimId: claim.id, ...sian, kind: "received", occurredOn: isoDateFromNow(0), ...blank });
-      assert.deepEqual(step(claim.id, "send_report").forms, ["report_sent"]);
+      assert.deepEqual(step(claim.id, "send_report").forms, ["repair_report_send", "report_sent"]);
     });
     db.close();
   });

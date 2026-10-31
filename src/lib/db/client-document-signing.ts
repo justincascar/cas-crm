@@ -15,9 +15,34 @@ import { isDocumentApproved } from "./document-approvals";
  * CAS's screen, by a link, or on paper. Only once Justin has approved the wording, only the version produced after that
  * approval, and only with the "starting straight away" tick (clause 10 or clause 9) ticked. Nothing is backdated.
  */
-export const SIGNABLE_DRAFTS = ["draft_client_authority", "draft_repair_authority"] as const;
+export const SIGNABLE_DRAFTS = ["draft_client_authority", "draft_repair_authority", "draft_tl_client"] as const;
 export type SignableDraft = (typeof SIGNABLE_DRAFTS)[number];
 const LINK_DAYS = 7;
+
+/** R66 Draft 8a: the client's answer, recorded on the file when it is signed. */
+export type ValuationAnswer = { choice: "A" | "B" | "C"; reason: string; finance: "no" | "yes"; lender: string };
+
+export function readValuationAnswer(input: { choice?: string; reason?: string; finance?: string; lender?: string }): ValuationAnswer {
+  const choice = String(input.choice || "").toUpperCase();
+  if (choice !== "A" && choice !== "B" && choice !== "C") throw new Error("Tick option A, B or C.");
+  const reason = String(input.reason || "").trim().slice(0, 1000);
+  if (choice === "C" && reason.length < 3) throw new Error("Option C: say why the valuation is not accepted.");
+  const finance = String(input.finance || "");
+  if (finance !== "no" && finance !== "yes") throw new Error("Answer whether there is finance outstanding on the vehicle.");
+  const lender = String(input.lender || "").trim().slice(0, 120);
+  if (finance === "yes" && !lender) throw new Error("Enter the finance lender.");
+  return { choice: choice as ValuationAnswer["choice"], reason: choice === "C" ? reason : "", finance: finance as ValuationAnswer["finance"], lender: finance === "yes" ? lender : "" };
+}
+
+export function valuationAnswerWords(answer: ValuationAnswer): string {
+  const choice =
+    answer.choice === "A"
+      ? "A, accepts the valuation and the vehicle can be released for salvage"
+      : answer.choice === "B"
+        ? "B, accepts the valuation and keeps the vehicle (salvage deducted)"
+        : `C, does not accept the valuation: ${answer.reason}`;
+  return `${choice}. Finance outstanding: ${answer.finance === "yes" ? `yes, ${answer.lender}` : "no"}.`;
+}
 const MAX_SIGNATURE_CHARS = 400_000;
 
 export function isSignableDraft(key: string): key is SignableDraft {
@@ -53,6 +78,10 @@ function ready() {
       status TEXT NOT NULL
     );
   `);
+  const columns = new Set((getDb().prepare(`PRAGMA table_info(client_document_signatures)`).all() as Array<{ name: string }>).map((row) => row.name));
+  for (const column of ["answer_choice", "answer_reason", "finance", "finance_lender"]) {
+    if (!columns.has(column)) getDb().exec(`ALTER TABLE client_document_signatures ADD COLUMN ${column} TEXT`);
+  }
 }
 
 const sha256 = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
@@ -78,15 +107,20 @@ function latestProduced(claimId: string, key: SignableDraft): SignableDocument |
   return { id: String(row.id), title: String(row.title), bodyHtml: String(row.body_html || ""), version: Number(row.version) || 1, missing };
 }
 
-export type ClientDocumentSignature = { signedAt: string; signerName: string; route: string; signedDocumentId: string };
+export type ClientDocumentSignature = { signedAt: string; signerName: string; route: string; signedDocumentId: string; answer: ValuationAnswer | null };
 
 export function clientDocumentSignature(claimId: string, key: SignableDraft): ClientDocumentSignature | null {
   ready();
-  const row = get<{ signed_at: string; signer_name: string; route: string; signed_document_id: string }>(
-    `SELECT signed_at, signer_name, route, signed_document_id FROM client_document_signatures WHERE claim_id = ? AND template_key = ? ORDER BY signed_at DESC LIMIT 1`,
+  const row = get<{ signed_at: string; signer_name: string; route: string; signed_document_id: string; answer_choice: string | null; answer_reason: string | null; finance: string | null; finance_lender: string | null }>(
+    `SELECT signed_at, signer_name, route, signed_document_id, answer_choice, answer_reason, finance, finance_lender FROM client_document_signatures WHERE claim_id = ? AND template_key = ? ORDER BY signed_at DESC LIMIT 1`,
     [claimId, key],
   );
-  return row ? { signedAt: String(row.signed_at), signerName: String(row.signer_name), route: String(row.route), signedDocumentId: String(row.signed_document_id) } : null;
+  if (!row) return null;
+  const answer =
+    row.answer_choice === "A" || row.answer_choice === "B" || row.answer_choice === "C"
+      ? { choice: row.answer_choice as ValuationAnswer["choice"], reason: String(row.answer_reason || ""), finance: row.finance === "yes" ? ("yes" as const) : ("no" as const), lender: String(row.finance_lender || "") }
+      : null;
+  return { signedAt: String(row.signed_at), signerName: String(row.signer_name), route: String(row.route), signedDocumentId: String(row.signed_document_id), answer };
 }
 
 /** Why it cannot be signed yet, or null when the produced version can be signed. */
@@ -126,9 +160,41 @@ function signatureBuffer(png: string): Buffer {
   return buffer;
 }
 
-function requireTicks(key: SignableDraft, agreed: boolean, startNow: boolean) {
-  if (!startNow) throw new Error(`The client must tick clause ${tickClause(key)} (starting straight away) to sign.`);
+function requireTicks(key: SignableDraft, agreed: boolean, startNow: boolean, answer?: ValuationAnswer) {
+  if (key === "draft_tl_client") {
+    // Draft 8a has no "starting straight away" clause; its required tick is the client's answer, A, B or C.
+    if (!answer) throw new Error("Tick option A, B or C.");
+  } else if (!startNow) {
+    throw new Error(`The client must tick clause ${tickClause(key)} (starting straight away) to sign.`);
+  }
   if (!agreed) throw new Error("The client must tick the box to say they have read and agree to the document.");
+}
+
+/**
+ * R66: the client's answer to the valuation. A asks the insurer for the pre-accident value (salvage released); B keeps
+ * the vehicle, so the request is net of salvage; C is a dispute: a task for the handler, and step 8 waits until it is
+ * resolved. Nothing here agrees a figure with the insurer.
+ */
+function applyValuationAnswer(claimId: string, answer: ValuationAnswer, actorId: string | null) {
+  const report = get<{ claim_id: string }>(`SELECT claim_id FROM total_loss_reports WHERE claim_id = ?`, [claimId]);
+  if (report && answer.choice !== "C") {
+    run(`UPDATE total_loss_reports SET cas_request = ? WHERE claim_id = ?`, [answer.choice === "A" ? "full_pav" : "net_cas", claimId]);
+  }
+  if (answer.choice === "C") {
+    const claim = get<{ file_reference: string; handler_id: string | null }>(`SELECT file_reference, handler_id FROM claims WHERE id = ?`, [claimId]);
+    run(
+      `INSERT INTO tasks(id, claim_id, handler_id, title, details, type, due_at, status, created_at) VALUES (?, ?, ?, ?, ?, 'other', ?, 'open', ?)`,
+      [newId("task"), claimId, claim?.handler_id || null, `Client disputes valuation – ${claim?.file_reference || ""}`, answer.reason, `${nowUtcIso().slice(0, 10)}T17:00:00.000Z`, nowUtcIso()],
+    );
+  }
+  recordClaimEvent({
+    claimId,
+    eventType: "other",
+    occurredAt: nowUtcIso(),
+    actorId: actorId ?? undefined,
+    details: `Valuation answer from the client: ${valuationAnswerWords(answer)}${answer.choice === "C" ? " Step 8 waits until a handler resolves the dispute." : ""}`,
+    source: actorId ? "staff" : "client",
+  });
 }
 
 async function fileSignedPdf(input: {
@@ -143,6 +209,7 @@ async function fileSignedPdf(input: {
   ip: string;
   actorId: string | null;
   route: "screen" | "link";
+  answer?: ValuationAnswer;
 }) {
   const signedAt = nowUtcIso();
   const title = clientDraftInfo(input.key)?.title || input.doc.title;
@@ -155,7 +222,9 @@ async function fileSignedPdf(input: {
       ["Signed at", `${formatUkDateTime(signedAt)} (UK time)`],
       ["Document", `${input.doc.title}, version ${input.doc.version}`],
       ["Document fingerprint (SHA-256)", sha256(input.doc.bodyHtml)],
-      [`Clause ${tickClause(input.key)} (starting straight away)`, "Ticked by the client"],
+      ...(input.answer
+        ? ([["Client's answer", valuationAnswerWords(input.answer)]] as Array<[string, string]>)
+        : ([[`Clause ${tickClause(input.key)} (starting straight away)`, "Ticked by the client"]] as Array<[string, string]>)),
       ["How", input.how],
       ...(input.witness ? ([["Witnessed by", input.witness]] as Array<[string, string]>) : []),
       ["Device", input.device || "not given"],
@@ -179,9 +248,26 @@ async function fileSignedPdf(input: {
   });
   run(`UPDATE documents SET signed = 1 WHERE id = ?`, [documentId]);
   run(
-    `INSERT INTO client_document_signatures(id, claim_id, template_key, document_id, route, signer_name, signed_at, start_now_ticked, signed_document_id, actor_id, device, ip)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?)`,
-    [newId("cds"), input.claimId, input.key, input.doc.id, input.route, input.name, signedAt, documentId, input.actorId, input.device || null, input.ip || null],
+    `INSERT INTO client_document_signatures(id, claim_id, template_key, document_id, route, signer_name, signed_at, start_now_ticked, signed_document_id, actor_id, device, ip, answer_choice, answer_reason, finance, finance_lender)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      newId("cds"),
+      input.claimId,
+      input.key,
+      input.doc.id,
+      input.route,
+      input.name,
+      signedAt,
+      input.answer ? 0 : 1,
+      documentId,
+      input.actorId,
+      input.device || null,
+      input.ip || null,
+      input.answer?.choice || null,
+      input.answer?.reason || null,
+      input.answer?.finance || null,
+      input.answer?.lender || null,
+    ],
   );
   recordClaimEvent({
     claimId: input.claimId,
@@ -189,9 +275,10 @@ async function fileSignedPdf(input: {
     occurredAt: signedAt,
     actorId: input.actorId ?? undefined,
     documentId,
-    details: `${input.doc.title} (version ${input.doc.version}) signed by ${input.name} (${input.how}${input.witness ? `, witnessed by ${input.witness}` : ""}). Clause ${tickClause(input.key)} ticked. Filed as Signed ${title}.`,
+    details: `${input.doc.title} (version ${input.doc.version}) signed by ${input.name} (${input.how}${input.witness ? `, witnessed by ${input.witness}` : ""}). ${input.answer ? `Answer: ${valuationAnswerWords(input.answer)}` : `Clause ${tickClause(input.key)} ticked.`} Filed as Signed ${title}.`,
     source: input.route === "link" ? "client" : "staff",
   });
+  if (input.answer) applyValuationAnswer(input.claimId, input.answer, input.actorId);
   return { documentId };
 }
 
@@ -206,13 +293,14 @@ export async function signClientDocumentOnScreen(input: {
   startNow: boolean;
   device: string;
   ip: string;
+  answer?: ValuationAnswer;
 }) {
   ready();
   const actor = get<{ id: string; name: string }>(`SELECT id, name FROM staff WHERE id = ? AND active = 1`, [input.actorId]);
   if (!actor) throw new Error("Sign in again.");
   if (clientDocumentSignature(input.claimId, input.key)) throw new Error("This is already signed.");
   const doc = requireSignable(input.claimId, input.key);
-  requireTicks(input.key, input.agreed, input.startNow);
+  requireTicks(input.key, input.agreed, input.startNow, input.answer);
   return fileSignedPdf({
     claimId: input.claimId,
     key: input.key,
@@ -225,6 +313,7 @@ export async function signClientDocumentOnScreen(input: {
     ip: input.ip,
     actorId: actor.id,
     route: "screen",
+    answer: input.answer,
   });
 }
 
@@ -236,11 +325,14 @@ export function storeSignedClientDocumentPaper(input: {
   signerName: string;
   startNowTicked: boolean;
   file: { buffer: Buffer; filename: string; mimeType: string };
+  /** Draft 8a: the answer ticked on the paper copy. */
+  answer?: ValuationAnswer;
 }) {
   ready();
   if (clientDocumentSignature(input.claimId, input.key)) throw new Error("This is already signed.");
   const doc = requireSignable(input.claimId, input.key);
-  if (!input.startNowTicked) throw new Error(`Confirm the client ticked clause ${tickClause(input.key)} (starting straight away) on the paper copy. It cannot be filed as signed without it.`);
+  if (input.key === "draft_tl_client" && !input.answer) throw new Error("Record the answer the client ticked on the paper copy (A, B or C).");
+  if (input.key !== "draft_tl_client" && !input.startNowTicked) throw new Error(`Confirm the client ticked clause ${tickClause(input.key)} (starting straight away) on the paper copy. It cannot be filed as signed without it.`);
   const name = signerName(input.signerName);
   if (!input.file.buffer || input.file.buffer.length < 1) throw new Error("Choose the signed copy to upload.");
   if (input.file.buffer.length > MAX_CLAIM_DOCUMENT_BYTES) throw new Error("Each document must be 12 MB or smaller.");
@@ -265,9 +357,9 @@ export function storeSignedClientDocumentPaper(input: {
   });
   run(`UPDATE documents SET signed = 1 WHERE id = ?`, [documentId]);
   run(
-    `INSERT INTO client_document_signatures(id, claim_id, template_key, document_id, route, signer_name, signed_at, start_now_ticked, signed_document_id, actor_id)
-     VALUES (?, ?, ?, ?, 'paper', ?, ?, 1, ?, ?)`,
-    [newId("cds"), input.claimId, input.key, doc.id, name, signedAt, documentId, input.actorId],
+    `INSERT INTO client_document_signatures(id, claim_id, template_key, document_id, route, signer_name, signed_at, start_now_ticked, signed_document_id, actor_id, answer_choice, answer_reason, finance, finance_lender)
+     VALUES (?, ?, ?, ?, 'paper', ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [newId("cds"), input.claimId, input.key, doc.id, name, signedAt, input.answer ? 0 : 1, documentId, input.actorId, input.answer?.choice || null, input.answer?.reason || null, input.answer?.finance || null, input.answer?.lender || null],
   );
   recordClaimEvent({
     claimId: input.claimId,
@@ -275,14 +367,15 @@ export function storeSignedClientDocumentPaper(input: {
     occurredAt: signedAt,
     actorId: input.actorId,
     documentId,
-    details: `Signed paper copy of ${doc.title} (version ${doc.version}) uploaded, signed by ${name}. Clause ${tickClause(input.key)} ticked on the paper copy. The date recorded is the upload.`,
+    details: `Signed paper copy of ${doc.title} (version ${doc.version}) uploaded, signed by ${name}. ${input.answer ? `Answer on the paper copy: ${valuationAnswerWords(input.answer)}` : `Clause ${tickClause(input.key)} ticked on the paper copy.`} The date recorded is the upload.`,
     source: "staff",
   });
+  if (input.answer) applyValuationAnswer(input.claimId, input.answer, input.actorId);
   return { documentId };
 }
 
 /** A signing link by email (simulated until the mailbox is live). It works once and expires after seven days. */
-export async function sendClientDocumentLink(input: { claimId: string; key: SignableDraft; actorId: string; to: string; origin: string }) {
+export async function sendClientDocumentLink(input: { claimId: string; key: SignableDraft; actorId: string; to: string; origin: string; attachmentIds?: string[] }) {
   ready();
   if (clientDocumentSignature(input.claimId, input.key)) throw new Error("This is already signed.");
   const doc = requireSignable(input.claimId, input.key);
@@ -301,6 +394,7 @@ export async function sendClientDocumentLink(input: { claimId: string; key: Sign
     to,
     subject: `${title} to sign – ${claim?.file_reference || ""}`,
     body: [`Dear ${claim?.client_name || "client"},`, "", `Please read and sign your ${title.toLowerCase()} using this link:`, url, "", `The link works once and stops working after ${LINK_DAYS} days.`, "", "Complete Accident Solutions Ltd"].join("\n"),
+    attachmentIds: input.attachmentIds || [],
   });
   if (!sent.ok) throw new Error(sent.error || "The signing link was not sent.");
   const now = nowUtcIso();
@@ -313,7 +407,7 @@ export async function sendClientDocumentLink(input: { claimId: string; key: Sign
   return { url, simulated: sent.status === "simulated_sent" };
 }
 
-export type ClientDocumentLinkView = { fileReference: string; clientName: string; title: string; key: SignableDraft; bodyHtml: string; tickClause: string };
+export type ClientDocumentLinkView = { fileReference: string; clientName: string; title: string; key: SignableDraft; bodyHtml: string; tickClause: string; valuation: boolean };
 
 function linkRow(token: string) {
   ready();
@@ -336,15 +430,15 @@ export function openClientDocumentLink(token: string): ClientDocumentLinkView {
     `SELECT c.file_reference, p.full_name AS client_name FROM claims c LEFT JOIN people p ON p.id = c.client_person_id WHERE c.id = ?`,
     [row.claim_id],
   );
-  return { fileReference: String(claim?.file_reference || ""), clientName: String(claim?.client_name || ""), title: clientDraftInfo(row.template_key)?.title || doc.title, key: row.template_key, bodyHtml: doc.bodyHtml, tickClause: tickClause(row.template_key) };
+  return { fileReference: String(claim?.file_reference || ""), clientName: String(claim?.client_name || ""), title: clientDraftInfo(row.template_key)?.title || doc.title, key: row.template_key, bodyHtml: doc.bodyHtml, tickClause: tickClause(row.template_key), valuation: row.template_key === "draft_tl_client" };
 }
 
-export async function signClientDocumentWithLink(input: { token: string; name: string; signaturePng: string; agreed: boolean; startNow: boolean; device: string; ip: string }) {
+export async function signClientDocumentWithLink(input: { token: string; name: string; signaturePng: string; agreed: boolean; startNow: boolean; device: string; ip: string; answer?: ValuationAnswer }) {
   const view = openClientDocumentLink(input.token);
   const row = linkRow(input.token)!;
   const key = row.template_key as SignableDraft;
   const doc = requireSignable(row.claim_id, key);
-  requireTicks(key, input.agreed, input.startNow);
+  requireTicks(key, input.agreed, input.startNow, input.answer);
   const result = await fileSignedPdf({
     claimId: row.claim_id,
     key,
@@ -357,6 +451,7 @@ export async function signClientDocumentWithLink(input: { token: string; name: s
     ip: input.ip,
     actorId: null,
     route: "link",
+    answer: input.answer,
   });
   run(`UPDATE client_document_links SET status = 'signed' WHERE id = ?`, [row.id]);
   return { ...result, title: view.title };

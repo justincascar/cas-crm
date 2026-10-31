@@ -64,7 +64,14 @@ export type ClaimStepForm =
   | "car_returned"
   | "hire_end"
   | "storage_end"
-  | "tl_off_hire";
+  | "tl_off_hire"
+  // R66: steps 6 to 9 done on the Steps page.
+  | "report_change"
+  | "tl_valuation"
+  | "tl_dispute"
+  | "tl_send_insurer"
+  | "tl_step9"
+  | "repair_report_send";
 
 /** A date the CRM proposes for a handler to confirm, with a short reason. */
 export type ClaimStepProposal = { day: string; note: string };
@@ -158,6 +165,10 @@ export type ClaimStepInput = {
   /** Total loss: 7 days after the qualifying payment, or the reasons a person must review first. */
   offHire?: { day: string | null; reasons: string[] } | null;
   audatex?: AudatexFacts | null;
+  /** R66: step 6's finished line in figures. */
+  reportSummary?: string;
+  /** R66: the client's answer to the valuation (Draft 8a) and any open dispute. */
+  valuation?: { answer: "A" | "B" | "C" | null; answeredAt: string | null; disputeOpen: boolean; linkSentAt: string | null } | null;
   events: ClaimStepEvent[];
   chases: ClaimStepChase[];
   payments: ClaimPaymentLineInput[];
@@ -798,7 +809,7 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
       state: received ? "to_do" : "not_started",
       statusText: received ? "To do" : "Not started",
       detailsHref: href,
-      forms: received ? ["report_sent"] : [],
+      forms: received ? ["repair_report_send", "report_sent"] : [],
     });
     if (reportSent && counts) {
       view = {
@@ -893,7 +904,7 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
       forms: instructed ? ["report"] : [],
     });
     if (reportOnFile) {
-      view = { ...view, state: "done", statusText: doneText(reportOnFile.occurred_at), forms: [] };
+      view = { ...view, state: "done", statusText: doneText(reportOnFile.occurred_at), detail: input.reportSummary || null, forms: ["report_change"] };
     } else if (input.reportFlagged) {
       view = {
         ...view,
@@ -913,19 +924,35 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
 
   function agreeValuationStep(): ClaimStepView {
     const href = path(input.claimId, "details/assessed-damage");
+    const valuation = input.valuation;
     let view = shell({
       key: "agree",
       title: "Agree valuation with the client",
       state: "not_started",
       statusText: "Not started",
-      buttonLabel: "Agree valuation",
-      buttonHref: href,
+      buttonLabel: null,
+      buttonHref: null,
       detailsHref: href,
     });
-    if (agreedValuation) {
-      view = { ...view, state: "done", statusText: doneText(agreedValuation.occurred_at), buttonLabel: null, buttonHref: null };
+    const accepted = valuation && (valuation.answer === "A" || valuation.answer === "B") ? valuation : null;
+    if (accepted && accepted.answeredAt) {
+      view = {
+        ...view,
+        state: "done",
+        statusText: doneText(accepted.answeredAt),
+        detail: accepted.answer === "A" ? "Client accepted (A): the vehicle can be released for salvage." : "Client accepted (B): keeps the vehicle; the request is net of salvage.",
+      };
+    } else if (agreedValuation) {
+      view = { ...view, state: "done", statusText: doneText(agreedValuation.occurred_at) };
+    } else if (valuation?.disputeOpen) {
+      view = { ...view, state: "waiting", statusText: "Client disputes valuation", detail: "A task is set for the handler. Step 8 waits until the dispute is resolved.", forms: ["tl_dispute"] };
     } else if (reportOnFile || input.totalLoss) {
-      view = { ...view, state: "to_do", statusText: "To do" };
+      view = {
+        ...view,
+        state: valuation?.linkSentAt ? "waiting" : "to_do",
+        statusText: valuation?.linkSentAt ? "Waiting on the client's signed answer" : "To do",
+        forms: ["tl_valuation"],
+      };
     }
     return applyNotNeeded("agree", view);
   }
@@ -939,9 +966,11 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
       title: "Send valuation to the insurer",
       state: "to_do",
       statusText: "To do",
-      buttonLabel: "Send valuation",
-      buttonHref: href,
+      buttonLabel: null,
+      buttonHref: null,
       detailsHref: href,
+      forms: input.valuation?.disputeOpen ? [] : ["tl_send_insurer"],
+      detail: input.valuation?.disputeOpen ? "Waits until the client's valuation dispute is resolved (step 7)." : null,
     });
     if (valuationSent) {
       view = {
@@ -951,6 +980,7 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
         detail: phrase ? `Waiting on the insurer, ${phrase}` : null,
         buttonLabel: null,
         buttonHref: null,
+        forms: [],
       };
     }
     return applyNotNeeded("send_report", view);
@@ -992,6 +1022,7 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
           view = { ...view, detail: `Hire end needs a person to review: ${input.offHire.reasons.join(" ")}` };
         }
       }
+      if (!paymentReceived || !salvageEvent) view = { ...view, forms: [...view.forms, "tl_step9"] };
       if (paymentReceived && salvageEvent) {
         view = { ...view, state: "done", statusText: doneText(paymentReceived.occurred_at), detail: null, buttonHref: null };
       } else if (paymentReceived) {

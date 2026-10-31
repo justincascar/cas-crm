@@ -3,6 +3,7 @@ import { isOfficeRole } from "@/lib/auth/roles";
 import { getRequestStaff } from "@/lib/auth/session";
 import {
   isSignableDraft,
+  readValuationAnswer,
   sendClientDocumentLink,
   signClientDocumentOnScreen,
   storeSignedClientDocumentPaper,
@@ -21,6 +22,11 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   try {
     if (!isSignableDraft(key)) throw new Error("That document is not signed by the client.");
     const intent = String(form.get("intent") || "");
+    // R66 Draft 8a: the client's answer (A, B or C) and the finance question.
+    const answer =
+      key === "draft_tl_client" && (intent === "screen" || intent === "paper")
+        ? readValuationAnswer({ choice: String(form.get("choice") || ""), reason: String(form.get("reason") || ""), finance: String(form.get("finance") || ""), lender: String(form.get("lender") || "") })
+        : undefined;
     if (intent === "screen") {
       const { device, ip } = requestDevice(request);
       await signClientDocumentOnScreen({
@@ -33,6 +39,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         startNow: form.get("startNow") === "yes",
         device,
         ip,
+        answer,
       });
       back.searchParams.set("done", "Signed. The signed copy is filed on the claim.");
     } else if (intent === "link" && isOfficeRole(staff.role)) {
@@ -47,6 +54,7 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
         actorId: staff.id,
         signerName: String(form.get("signerName") || ""),
         startNowTicked: form.get("startNowTicked") === "yes",
+        answer,
         file: { buffer: Buffer.from(await file.arrayBuffer()), filename: file.name, mimeType: file.type },
       });
       back.searchParams.set("done", "Signed paper copy filed. The date recorded is today.");

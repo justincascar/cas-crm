@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { signClientDocumentWithLink } from "@/lib/db/client-document-signing";
+import { openClientDocumentLink, readValuationAnswer, signClientDocumentWithLink } from "@/lib/db/client-document-signing";
 import { browserOrigin } from "@/lib/http/browser-origin";
 import { requestDevice } from "@/lib/http/request-device";
 
@@ -11,7 +11,11 @@ export async function POST(request: Request, context: { params: Promise<{ token:
   try {
     const form = await request.formData();
     const { device, ip } = requestDevice(request);
+    const valuation = openClientDocumentLink(token).valuation;
     await signClientDocumentWithLink({
+      answer: valuation
+        ? readValuationAnswer({ choice: String(form.get("choice") || ""), reason: String(form.get("reason") || ""), finance: String(form.get("finance") || ""), lender: String(form.get("lender") || "") })
+        : undefined,
       token,
       name: String(form.get("signerName") || ""),
       signaturePng: String(form.get("signaturePng") || ""),

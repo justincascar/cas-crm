@@ -75,6 +75,7 @@ export const THIRD_PARTY_ONLY_TEMPLATES: readonly string[] = [
   "draft_liability_position",
   "draft_own_insurer_notice",
   "draft_client_authority",
+  "draft_tl_insurer",
 ];
 
 export function emailTemplatesForRole(role: string, fault = false) {

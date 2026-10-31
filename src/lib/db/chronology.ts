@@ -36,6 +36,7 @@ import { THIRD_PARTY_ONLY_TEMPLATES, generateEmail, isEmailTemplateKey } from ".
 import { generateLetter, isLetterTemplateKey, type LetterTemplateKey } from "../documents/templates";
 import { generateClientDraft, isClientDraftKey, midBlockLines, MID_BLOCK_KEY, type ClientDraftKey } from "../documents/client-drafts";
 import { clientDraftExtras, isDocumentApproved, latestMidSearch } from "./document-approvals";
+import { totalLossDraftFacts } from "./total-loss-steps";
 import { addCalendarDaysIso, formatUkDate, londonDateIso, londonTodayIso, nowUtcIso, occurredFromForm } from "../dates";
 import { blankInsurerField } from "../insurers";
 import { textAssertsImpecuniosity, templateReliesOnImpecuniosity } from "../domain/impecuniosity";
@@ -480,7 +481,10 @@ export function correspondenceContextForClaim(claimId: string, letterDate: strin
 
 /** R64: one of the reviewer's drafts, filled from the file, marked as a draft until Justin approves it. */
 function draftFromFile(claimId: string, templateKey: ClientDraftKey, ctx: CorrespondenceContext, accountLine = "") {
-  return generateClientDraft(templateKey, ctx, clientDraftExtras(claimId, accountLine), isDocumentApproved(templateKey));
+  const extras = clientDraftExtras(claimId, accountLine);
+  // R66: Drafts 8a and 8b print the engineer's total-loss figures and the client's answer.
+  if (templateKey === "draft_tl_client" || templateKey === "draft_tl_insurer") extras.totalLoss = totalLossDraftFacts(claimId);
+  return generateClientDraft(templateKey, ctx, extras, isDocumentApproved(templateKey));
 }
 
 function impecuniosityRefusal(claimId: string, templateKey: string | undefined, text: string): string | null {

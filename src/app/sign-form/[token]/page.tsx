@@ -1,4 +1,5 @@
 import { SigningFields } from "@/components/esign/SigningFields";
+import { ValuationAnswerFields } from "@/components/esign/ValuationAnswerFields";
 import { openClientDocumentLink } from "@/lib/db/client-document-signing";
 
 /** R64: the client signs Draft 1 or Draft 2 from the emailed link. No CAS sign-in. */
@@ -41,7 +42,7 @@ export default async function ClientDocumentLinkPage({
       <div>
         <p className="text-sm text-slate">Complete Accident Solutions Ltd · {view.fileReference}</p>
         <h1 className="font-serif text-2xl text-navy-deep">{view.title}</h1>
-        <p className="mt-1 text-base">Please read it, tick clause {view.tickClause}, then sign at the bottom.</p>
+        <p className="mt-1 text-base">Please read it, {view.valuation ? "tick A, B or C" : `tick clause ${view.tickClause}`}, then sign at the bottom.</p>
       </div>
       {error ? (
         <p data-form-error className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-base text-overdue">
@@ -51,10 +52,14 @@ export default async function ClientDocumentLinkPage({
       {/* The document exactly as CAS produced it. Its text is escaped when it is built. */}
       <div className="letter max-h-[60vh] overflow-y-auto rounded-xl border border-line bg-white p-4 text-sm" dangerouslySetInnerHTML={{ __html: view.bodyHtml }} />
       <form method="post" action={`/sign-form/${token}/submit`} className="space-y-5 rounded-xl border border-line bg-card p-4">
-        <label className="flex items-start gap-3 text-base">
-          <input type="checkbox" name="startNow" value="yes" required className="mt-1 h-5 w-5" />
-          Clause {view.tickClause}: I ask CAS to start immediately, within the cancellation period. I have been given CAS&apos;s cancellation notice.
-        </label>
+        {view.valuation ? (
+          <ValuationAnswerFields />
+        ) : (
+          <label className="flex items-start gap-3 text-base">
+            <input type="checkbox" name="startNow" value="yes" required className="mt-1 h-5 w-5" />
+            Clause {view.tickClause}: I ask CAS to start immediately, within the cancellation period. I have been given CAS&apos;s cancellation notice.
+          </label>
+        )}
         <SigningFields defaultName={view.clientName} agreementName={view.title.toLowerCase()} />
         <button type="submit" className="min-h-12 w-full rounded-md bg-navy px-4 py-3 text-base font-semibold text-white sm:w-auto">
           Sign

@@ -3,6 +3,14 @@ import { SubmitKeyInput } from "@/components/SubmitKeyInput";
 import { formatUkDate, londonTodayIso } from "@/lib/dates";
 import type { ClaimStepForm, ClaimStepProposal, ClaimStepView } from "@/lib/domain/claim-steps";
 import { InstructStepCard, type InstructStepData } from "@/components/claims/InstructStepCard";
+import {
+  RepairReportSendForm,
+  TotalLossDisputeForm,
+  TotalLossSendInsurerForm,
+  TotalLossStepNineForm,
+  TotalLossValuationForm,
+  type TotalLossStepData,
+} from "@/components/claims/TotalLossStepForms";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
@@ -20,6 +28,7 @@ export function ClaimStepsPanel({
   saved,
   done,
   instruct,
+  tl,
 }: {
   claimId: string;
   steps: ClaimStepView[];
@@ -30,6 +39,8 @@ export function ClaimStepsPanel({
   done?: string;
   /** R65: step 5's engineer and Audatex instruction, sent from the card. */
   instruct?: InstructStepData;
+  /** R66: what the step 7–9 cards need. */
+  tl?: TotalLossStepData;
 }) {
   const today = londonTodayIso();
   return (
@@ -100,7 +111,7 @@ export function ClaimStepsPanel({
               />
             ) : null}
             {step.forms.map((form) => (
-              <StepForm key={form} claimId={claimId} form={form} today={today} proposal={step.proposals[form]} />
+              <StepForm key={form} claimId={claimId} form={form} today={today} proposal={step.proposals[form]} tl={tl} />
             ))}
             {step.state !== "done" && step.state !== "not_needed" ? (
               <details className="mt-3">
@@ -115,7 +126,22 @@ export function ClaimStepsPanel({
   );
 }
 
-function StepForm({ claimId, form, today, proposal }: { claimId: string; form: ClaimStepForm; today: string; proposal?: ClaimStepProposal }) {
+function StepForm({ claimId, form, today, proposal, tl }: { claimId: string; form: ClaimStepForm; today: string; proposal?: ClaimStepProposal; tl?: TotalLossStepData }) {
+  // R66: steps 6 to 9 on the card.
+  if (form === "report_change") {
+    return (
+      <details className="mt-3">
+        <summary className="cursor-pointer text-sm text-teal-dark underline">Change (a correction entry)</summary>
+        <ReportForm claimId={claimId} today={today} />
+      </details>
+    );
+  }
+  if (form === "tl_dispute") return <TotalLossDisputeForm claimId={claimId} />;
+  if (form === "tl_step9") return <TotalLossStepNineForm claimId={claimId} today={today} />;
+  if (tl && form === "tl_valuation") return <TotalLossValuationForm claimId={claimId} data={tl} />;
+  if (tl && form === "tl_send_insurer") return <TotalLossSendInsurerForm claimId={claimId} data={tl} />;
+  if (tl && form === "repair_report_send") return <RepairReportSendForm claimId={claimId} data={tl} />;
+  if (form === "tl_valuation" || form === "tl_send_insurer" || form === "repair_report_send") return null;
   if (form === "authorisation") return <AuthorisationForm claimId={claimId} today={today} />;
   if (form === "repairs_started") return <DatedClick claimId={claimId} intent="repairs_started" label="Repairs started" today={today} />;
   if (form === "repairs_complete") return <DatedClick claimId={claimId} intent="repairs_complete" label="Repairs complete" today={today} />;
@@ -290,6 +316,30 @@ function ReportForm({ claimId, today }: { claimId: string; today: string }) {
           <label>
             Salvage deduction (£)
             <input name="salvageDeduction" inputMode="decimal" className={field} />
+          </label>
+          <label>
+            Inspection date
+            <input name="inspectedOn" type="date" max={today} className={field} />
+          </label>
+          <label className="sm:col-span-2">
+            What CAS asks the insurer for
+            <select name="casRequest" className={field} defaultValue="">
+              <option value="">Decide after the client answers (step 7)</option>
+              <option value="full_pav">The pre-accident value (salvage released)</option>
+              <option value="net_cas">The pre-accident value less salvage (client keeps the vehicle)</option>
+            </select>
+          </label>
+          <label>
+            Any finance on the vehicle?
+            <select name="finance" className={field} defaultValue="">
+              <option value="">Not known yet</option>
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </label>
+          <label className="sm:col-span-2">
+            Lender (if finance)
+            <input name="financeLender" className={field} />
           </label>
         </div>
         <label className="flex items-center gap-2">

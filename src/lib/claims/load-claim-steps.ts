@@ -1,3 +1,4 @@
+import { totalLossStepSixLine, valuationState } from "@/lib/db/total-loss-steps";
 import {
   deriveClaimSteps,
   type AudatexFacts,
@@ -194,6 +195,8 @@ export function loadClaimSteps(claimId: string): ClaimStepView[] | null {
     hireEndedOn: hireStatus === "ended" && hireView.confirmedEndDay ? hireView.confirmedEndDay : null,
     salvageRecorded: false,
     audatex,
+    reportSummary: totalLoss ? totalLossStepSixLine(id) : undefined,
+    valuation: totalLoss ? valuationState(id) : null,
     hireEndProposedOn,
     storageEndProposal,
     offHire,

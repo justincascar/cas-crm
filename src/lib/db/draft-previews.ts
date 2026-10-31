@@ -21,6 +21,10 @@ const SPLIT_DRAFTS = new Set<string>(["draft_split_tp", "draft_split_client"]);
 
 /** A TEST file to show each draft on: a fault file for fault letters, a split file for split ones, otherwise non-fault. */
 function exampleFile(key: string): { id: string; reference: string } | null {
+  if (key.startsWith("draft_tl_")) {
+    const row = all<{ id: string; file_reference: string }>(`SELECT id, file_reference FROM claims WHERE file_reference LIKE 'TEST-%' AND total_loss = 1 ORDER BY file_reference LIMIT 1`)[0];
+    return row ? { id: String(row.id), reference: String(row.file_reference) } : null;
+  }
   const wanted = FAULT_DRAFTS.has(key) ? ["fault"] : SPLIT_DRAFTS.has(key) ? ["split", "non_fault"] : key === "draft_liability_position" ? ["disputed", "", "non_fault"] : ["non_fault"];
   for (const type of wanted) {
     const row = all<{ id: string; file_reference: string }>(

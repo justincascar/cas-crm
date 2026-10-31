@@ -4,6 +4,7 @@ import { getRequestStaff } from "@/lib/auth/session";
 import { storeClaimDocument } from "@/lib/db/claim-documents";
 import { logEngineerReportReceived } from "@/lib/db/chronology";
 import { readReportOutcome, saveReportOutcome } from "@/lib/db/report-outcome";
+import { saveTotalLossStepSix } from "@/lib/db/total-loss-steps";
 import { formSubmitKey, replaySubmit, storeSubmit } from "@/lib/db/submit-key";
 import { browserOrigin } from "@/lib/http/browser-origin";
 
@@ -54,6 +55,10 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
     }
     logEngineerReportReceived({ claimId: id, actorId: staff.id, occurredAt: occurredOn });
     saveReportOutcome({ ...outcome, occurredOn });
+    // R66: the inspection date, finance and what CAS asks for, on a total loss.
+    if (outcome.outcome === "total_loss") {
+      saveTotalLossStepSix({ claimId: id, inspectedOn: text("inspectedOn"), finance: text("finance"), lender: text("financeLender"), casRequest: text("casRequest") });
+    }
     storeSubmit(key, { ok: true });
     return back();
   } catch (error) {

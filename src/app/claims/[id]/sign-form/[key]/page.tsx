@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { SigningFields } from "@/components/esign/SigningFields";
+import { ValuationAnswerFields } from "@/components/esign/ValuationAnswerFields";
 import { isOfficeRole } from "@/lib/auth/roles";
 import { requireSignedIn } from "@/lib/auth/session";
 import { formatUkDateTime } from "@/lib/dates";
@@ -54,14 +55,20 @@ export default async function ClientDocumentSigningPage({
         </p>
       ) : doc ? (
         <>
-          <p className="text-base font-semibold">Hand the screen to {clientName || "the client"}. They read it, tick clause {info.tickClause} and sign at the bottom.</p>
+          <p className="text-base font-semibold">
+            Hand the screen to {clientName || "the client"}. They read it, {key === "draft_tl_client" ? "tick A, B or C" : `tick clause ${info.tickClause}`} and sign at the bottom.
+          </p>
           <div className="letter max-h-[55vh] overflow-y-auto rounded-xl border border-line bg-white p-4 text-sm" dangerouslySetInnerHTML={{ __html: doc.bodyHtml }} />
           <form method="post" action={action} className="space-y-5 rounded-xl border border-line bg-card p-4">
             <input type="hidden" name="intent" value="screen" />
-            <label className="flex items-start gap-3 text-base">
-              <input type="checkbox" name="startNow" value="yes" required className="mt-1 h-5 w-5" />
-              Clause {info.tickClause}: I ask CAS to start immediately, within the cancellation period. I have been given CAS&apos;s cancellation notice.
-            </label>
+            {key === "draft_tl_client" ? (
+              <ValuationAnswerFields />
+            ) : (
+              <label className="flex items-start gap-3 text-base">
+                <input type="checkbox" name="startNow" value="yes" required className="mt-1 h-5 w-5" />
+                Clause {info.tickClause}: I ask CAS to start immediately, within the cancellation period. I have been given CAS&apos;s cancellation notice.
+              </label>
+            )}
             <SigningFields defaultName={clientName} agreementName={info.title.toLowerCase()} />
             <button type="submit" className="min-h-12 w-full rounded-md bg-navy px-4 py-3 text-base font-semibold text-white sm:w-auto">
               Sign
@@ -92,10 +99,17 @@ export default async function ClientDocumentSigningPage({
                     Signed copy (photo or PDF)
                     <input name="signedCopy" type="file" required accept="image/*,application/pdf" className={field} />
                   </label>
-                  <label className="flex items-start gap-2 sm:col-span-2">
-                    <input type="checkbox" name="startNowTicked" value="yes" required className="mt-1" />
-                    The client ticked clause {info.tickClause} (starting straight away) on the paper copy.
-                  </label>
+                  {key === "draft_tl_client" ? (
+                    <div className="sm:col-span-2">
+                      <p className="font-semibold">The answer the client ticked on the paper copy</p>
+                      <ValuationAnswerFields />
+                    </div>
+                  ) : (
+                    <label className="flex items-start gap-2 sm:col-span-2">
+                      <input type="checkbox" name="startNowTicked" value="yes" required className="mt-1" />
+                      The client ticked clause {info.tickClause} (starting straight away) on the paper copy.
+                    </label>
+                  )}
                   <p className="text-xs text-slate sm:col-span-2">The date recorded is today, the day it is uploaded.</p>
                   <button type="submit" className="rounded-md bg-navy px-3 py-2 font-semibold text-white sm:col-span-2 sm:w-fit">
                     Upload signed copy

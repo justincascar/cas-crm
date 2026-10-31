@@ -28,7 +28,9 @@ export type ClientDraftKey =
   | "draft_split_client"
   | "draft_liability_position"
   | "draft_courtesy_car"
-  | "client_welcome_fault";
+  | "client_welcome_fault"
+  | "draft_tl_client"
+  | "draft_tl_insurer";
 
 export type ClientDraftInfo = {
   key: ClientDraftKey;
@@ -58,6 +60,9 @@ export const CLIENT_DRAFTS: ClientDraftInfo[] = [
   { key: "draft_liability_position", number: "Draft 6", title: "Liability disputed or not yet known: letter to the third-party insurer", recipient: "tp_insurer", solicitor: false, signed: false, sentEvent: "initial_letter_tp_insurer" },
   { key: "draft_courtesy_car", number: "Draft 7", title: "Courtesy car agreement", recipient: "client", solicitor: true, signed: true, outlineOnly: true },
   { key: "client_welcome_fault", number: "Fault welcome", title: "Client welcome (fault claim)", recipient: "client", solicitor: false, signed: false, sentEvent: "client_welcome_sent" },
+  // R66: total loss, steps 7 and 8. The client answers A, B or C on 8a; 8b goes to the third-party insurer.
+  { key: "draft_tl_client", number: "Draft 8a", title: "Total loss: valuation to the client (with reply form)", recipient: "client", solicitor: true, signed: true },
+  { key: "draft_tl_insurer", number: "Draft 8b", title: "Total loss: covering letter to the third-party insurer", recipient: "tp_insurer", solicitor: true, signed: false },
 ];
 
 export function clientDraftInfo(key: string): ClientDraftInfo | undefined {
@@ -81,6 +86,20 @@ export type ClientDraftExtras = {
   accountLine: string;
   /** Draft 3: photographs are attached to the email. */
   photosAttached: boolean;
+  /** R66 Drafts 8a and 8b: the engineer's total-loss figures and the client's answer, as recorded on the file. */
+  totalLoss?: {
+    engineerName: string;
+    inspectionDate: string;
+    pavPence: number | null;
+    salvageCategory: string;
+    salvagePence: number | null;
+    amountRequestedPence: number | null;
+    /** "release" (A), "keep" (B), or "" before the client answers. */
+    clientChoice: "release" | "keep" | "";
+    vehicleLocation: string;
+    financeLender: string;
+    reportEnclosed: boolean;
+  };
 };
 
 const DRAFT_MARK_HTML = `<p class="draft-mark"><strong>${escapeHtml(DRAFT_WORDING_NOT_APPROVED)}.</strong> Waiting for Justin's approval.</p>`;
@@ -404,6 +423,86 @@ export function draftFaultWelcome(ctx: CorrespondenceContext, _extras: ClientDra
   return finish({ key: "client_welcome_fault", ctx, subject, lines, missing, approved });
 }
 
+function pounds(pence: number | null | undefined, label: string, missing: string[]): string {
+  if (pence == null) return claimValueOrGap("", label, missing);
+  return formatGbp(pence).replace(/^£/, "");
+}
+
+/** Draft 8a: total loss, the valuation to the client with a reply form (signed on screen, by link or on paper). */
+export function draftTotalLossClient(ctx: CorrespondenceContext, extras: ClientDraftExtras, approved: boolean): GeneratedLetter {
+  const missing: string[] = [];
+  const tl = extras.totalLoss;
+  const client = claimValueOrGap(ctx.clientName, "Client name", missing);
+  const car = vehicle(ctx, missing);
+  const engineer = claimValueOrGap(tl?.engineerName, "Engineer's name", missing);
+  const inspected = tl?.inspectionDate ? formatUkDate(tl.inspectionDate) : claimValueOrGap("", "Inspection date", missing);
+  const pav = pounds(tl?.pavPence, "Pre-accident value", missing);
+  const category = claimValueOrGap(tl?.salvageCategory, "Salvage category", missing);
+  const salvage = pounds(tl?.salvagePence, "Salvage value", missing);
+  const date = accidentDate(ctx, missing);
+  const subject = `Your vehicle: ${car} — Our reference: ${ctx.fileReference}`;
+  const lines: Line[] = [
+    p(`Dear ${client},`, `Dear ${gap(client)},`),
+    p(subject, `<strong>Your vehicle: ${gap(car)} — Our reference: ${escapeHtml(ctx.fileReference)}</strong>`),
+    p(
+      `Our independent engineer, ${engineer}, inspected your vehicle on ${inspected} and has assessed it as a total loss, which means it is uneconomical to repair.${tl?.reportEnclosed === false ? "" : " A copy of the report is enclosed."}`,
+      `Our independent engineer, ${gap(engineer)}, inspected your vehicle on ${gap(inspected)} and has assessed it as a total loss, which means it is uneconomical to repair.${tl?.reportEnclosed === false ? "" : " A copy of the report is enclosed."}`,
+    ),
+    {
+      text: `Pre-accident value: £${pav}\nSalvage category: ${category}\nSalvage value: £${salvage}`,
+      html: `<table class="figures"><tr><td>Pre-accident value</td><td>£${gap(pav)}</td></tr><tr><td>Salvage category</td><td>${gap(category)}</td></tr><tr><td>Salvage value</td><td>£${gap(salvage)}</td></tr></table>`,
+    },
+    p("We will ask the other driver's insurer to pay the pre-accident value. Please tick one option below, sign and return it so we can do this."),
+    tickBox("A. I accept the valuation. My vehicle can be released for salvage, and I will hand over the logbook (V5C) and keys.", "<strong>A.</strong> I accept the valuation. My vehicle can be released for salvage, and I will hand over the logbook (V5C) and keys."),
+    tickBox(`B. I accept the valuation but want to keep my vehicle. I understand the salvage value of £${salvage} will be deducted.`, `<strong>B.</strong> I accept the valuation but want to keep my vehicle. I understand the salvage value of £${gap(salvage)} will be deducted.`),
+    tickBox(`C. I do not accept the valuation because: ____________. (Adverts for similar vehicles for sale around ${date} help us challenge it.)`, `<strong>C.</strong> I do not accept the valuation because: ____________. (Adverts for similar vehicles for sale around ${gap(date)} help us challenge it.)`),
+    p("Is there any finance outstanding on the vehicle? [ ] No [ ] Yes — lender: ________"),
+    { text: "Signed: ______________ Date: ________", html: '<p class="signature-line">Signed: ______________ Date: ________</p>' },
+    p("We will tell you separately when your replacement vehicle needs to be returned."),
+    p(`Kind regards, ${handler(ctx)}`),
+  ];
+  return finish({ key: "draft_tl_client", ctx, subject, lines, missing, approved, addressee: { name: ctx.clientName, address: extras.clientAddress } });
+}
+
+/** Draft 8b: total loss, the covering letter to the third-party insurer. */
+export function draftTotalLossInsurer(ctx: CorrespondenceContext, extras: ClientDraftExtras, approved: boolean): GeneratedLetter {
+  const missing: string[] = [];
+  const tl = extras.totalLoss;
+  const client = claimValueOrGap(ctx.clientName, "Client name", missing);
+  const tpReg = claimValueOrGap(ctx.tpVehicleReg, "Third-party registration", missing);
+  const date = accidentDate(ctx, missing);
+  const registration = claimValueOrGap(ctx.registration, "Client registration", missing);
+  const pav = pounds(tl?.pavPence, "Pre-accident value", missing);
+  const category = claimValueOrGap(tl?.salvageCategory, "Salvage category", missing);
+  const salvage = pounds(tl?.salvagePence, "Salvage value", missing);
+  const amount = pounds(tl?.amountRequestedPence, "Amount requested", missing);
+  const tpRef = isBlankClaimValue(ctx.tpPolicyOrClaimRef) ? "" : ctx.tpPolicyOrClaimRef.trim();
+  const choice = tl?.clientChoice || "";
+  if (!choice) missing.push("The client's answer to the valuation (A or B)");
+  const where = claimValueOrGap(tl?.vehicleLocation, "Where the vehicle is now", missing);
+  const keeps = choice === "keep";
+  const subject = `Our Client: ${client} — Your Insured's Vehicle: ${tpReg} — Accident Date: ${date}`;
+  const lines: Line[] = [
+    p("Dear Sir / Madam,"),
+    p(subject, `<strong>Our Client: ${gap(client)} — Your Insured's Vehicle: ${gap(tpReg)} — Accident Date: ${gap(date)}</strong>`),
+    tpRef ? p(`Your Reference: ${tpRef} — Our Reference: ${ctx.fileReference}`) : p(`Our Reference: ${ctx.fileReference}`),
+    p(
+      `Please find enclosed the engineer's report for our client's vehicle ${registration}, which has been assessed as a total loss: pre-accident value £${pav}, salvage category ${category}, salvage value £${salvage}.`,
+      `Please find enclosed the engineer's report for our client's vehicle ${gap(registration)}, which has been assessed as a total loss: pre-accident value £${gap(pav)}, salvage category ${gap(category)}, salvage value £${gap(salvage)}.`,
+    ),
+    keeps
+      ? p(`Our client accepts the valuation and our client will retain the vehicle. Please arrange payment of £${amount} by return.`, `Our client accepts the valuation and our client will retain the vehicle. Please arrange payment of £${gap(amount)} by return.`)
+      : p(
+          `Our client accepts the valuation and the vehicle is available for collection by your salvage agent from ${where}. Please arrange payment of £${amount} and collection of the salvage by return.`,
+          `Our client accepts the valuation and the vehicle is available for collection by your salvage agent from ${gap(where)}. Please arrange payment of £${gap(amount)} and collection of the salvage by return.`,
+        ),
+    ...(tl?.financeLender ? [p(`There is outstanding finance with ${tl.financeLender}; please contact us before payment.`)] : []),
+    p("Yours faithfully,"),
+    p(`${handler(ctx)}, ${CAS_COMPANY.name}`),
+  ];
+  return finish({ key: "draft_tl_insurer", ctx, subject, lines, missing, approved, addressee: { name: ctx.tpInsurer, address: ctx.tpInsurerAddress } });
+}
+
 const GENERATORS: Partial<Record<ClientDraftKey, (ctx: CorrespondenceContext, extras: ClientDraftExtras, approved: boolean) => GeneratedLetter>> = {
   draft_client_authority: draftClientAuthority,
   draft_repair_authority: draftRepairAuthority,
@@ -413,6 +512,8 @@ const GENERATORS: Partial<Record<ClientDraftKey, (ctx: CorrespondenceContext, ex
   draft_split_client: draftSplitClient,
   draft_liability_position: draftLiabilityPosition,
   client_welcome_fault: draftFaultWelcome,
+  draft_tl_client: draftTotalLossClient,
+  draft_tl_insurer: draftTotalLossInsurer,
 };
 
 /** Draft 7 is an outline only. Nothing is generated until CAS's wording is in Settings. */

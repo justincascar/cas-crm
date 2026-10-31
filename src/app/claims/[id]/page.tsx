@@ -17,6 +17,7 @@ import { listOpenPaymentReviews, listPaymentsAfterSettlement } from "@/lib/db/pa
 import { isPaymentReviewHead } from "@/lib/domain/payment-review";
 import { headScreenPath } from "@/lib/domain/head-screen";
 import { loadClash } from "@/lib/db/record-version";
+import { totalLossStepData } from "@/lib/db/total-loss-step-data";
 import { dispatchView, instructionContent, instructionGaps } from "@/lib/db/engineer-dispatch";
 import type { InstructStepData } from "@/components/claims/InstructStepCard";
 
@@ -49,6 +50,8 @@ export default async function ClaimDetailPage({
   const settledPayments = listPaymentsAfterSettlement(claimId);
   const bankDetailsMissing = !paymentDetailsComplete(getInsurerPaymentDetails());
   const claimClash = loadClash(query.clash);
+  // R66: steps 7 to 9 on the card.
+  const tlData = totalLossStepData(claimId);
   // R65: step 5 sends the engineer instruction and/or the Audatex hand-off from its card.
   const engineerStep = steps.find((step) => step.key === "engineer");
   let instructData: InstructStepData | undefined;
@@ -98,6 +101,7 @@ export default async function ClaimDetailPage({
         saved={query.stepSaved}
         done={query.stepDone}
         instruct={instructData}
+        tl={tlData}
       />
       <ClaimProblems flags={summary.flags} />
       <ClaimMoneyTable charges={summary.charges} />
