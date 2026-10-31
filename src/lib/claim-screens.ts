@@ -1,3 +1,6 @@
+import { FUEL_OPTIONS } from "./domain/fuel";
+import { JURISDICTIONS } from "./domain/jurisdiction";
+import { SAFE_TO_DRIVE_CHOICES, SAFE_TO_DRIVE_QUESTIONS } from "./domain/file-setup";
 import { DEFAULT_VEHICLE_LOCATION } from "./constants";
 import { JOURNEY_OPTIONS, WEATHER_OPTIONS } from "./domain/intake-choices";
 import { GTA_GROUPS, GTA_NOT_CLASSIFIED } from "./documents/gta";
@@ -64,9 +67,9 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
   },
   {
     key: "general",
-    label: "General details",
+    label: "File set-up",
     group: "case",
-    hint: "File identity, accident headline and who is involved. Liability status and roadworthiness are staff choices — neither defaults to Fault or Roadworthy.",
+    hint: "Decided last, from the facts. Liability status is never decided automatically. Any of liability status, jurisdiction and roadworthiness can be Not yet known: the file then shows File set-up incomplete, and chasers, the storage and recovery agreement and fault or non-fault letters wait.",
     sections: [
       {
         fields: [
@@ -85,13 +88,14 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
           { name: "liabilityAdmitted", label: "Liability admitted", type: "select", options: yesNo },
           { name: "vatRegistered", label: "VAT registered", type: "checkbox" },
           { name: "typeOfClaim", label: "Liability status", type: "select", options: [
-            { value: "", label: "Not yet decided" },
+            { value: "", label: "Not yet known" },
             { value: "non_fault", label: "Non-fault" },
             { value: "fault", label: "Fault" },
             { value: "disputed", label: "Disputed / unclear" },
           ], hint: "Staff working view of this file. Independent of roadworthiness. Disputed / unclear is a valid answer." },
+          { name: "jurisdiction", label: "Jurisdiction", type: "select", options: JURISDICTIONS.map((item) => ({ value: item.value, label: item.label })) },
           { name: "roadworthiness", label: "Roadworthiness", type: "select", options: [
-            { value: "", label: "Not yet decided" },
+            { value: "", label: "Not yet known" },
             { value: "roadworthy", label: "Roadworthy" },
             { value: "unroadworthy", label: "Unroadworthy" },
           ], hint: "Staff working view of the client's vehicle. Independent of liability status. Do not guess." },
@@ -255,6 +259,15 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
     group: "case",
     hint: "Mark panels on the diagram. AI does not certify roadworthiness. Claimed, offered, agreed and received are on the vehicle damage ledger.",
     sections: [
+      {
+        title: "Is it safe to drive?",
+        fields: SAFE_TO_DRIVE_QUESTIONS.map((q) => ({
+          name: q.key,
+          label: q.label,
+          type: "select" as const,
+          options: [{ value: "", label: "Not asked" }, ...SAFE_TO_DRIVE_CHOICES.map((choice) => ({ value: choice.value, label: choice.label }))],
+        })),
+      },
       {
         title: "Initial assessment",
         fields: [
@@ -431,12 +444,12 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
         fields: [
           { name: "clientReg", label: "Client registration" },
           { name: "gearbox", label: "Gearbox", type: "select", options: [
-            { value: "unknown", label: "Unknown — do not guess" },
+            { value: "unknown", label: "Not known" },
             { value: "manual", label: "Manual" },
             { value: "automatic", label: "Automatic" },
           ]},
           { name: "engineSize", label: "Engine size" },
-          { name: "fuelType", label: "Fuel type" },
+          { name: "fuelType", label: "Fuel type", type: "select", options: FUEL_OPTIONS.filter((option) => option.value !== "Other").map((option) => ({ ...option })) },
           { name: "abiGroup", label: "ABI vehicle group" },
           { name: "fee", label: "Fee", type: "gbp" },
           { name: "tpOfferReceived", label: "Offer of a vehicle from the third-party insurer?", type: "checkbox", span: 2 },
@@ -629,7 +642,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
           { name: "warrantyEnd", label: "Warranty end date", type: "date" },
           { name: "dailyFinanceCost", label: "Daily finance cost", type: "gbp" },
           { name: "transmission", label: "Transmission" },
-          { name: "fuel", label: "Fuel" },
+          { name: "fuel", label: "Fuel", type: "select", options: FUEL_OPTIONS.filter((option) => option.value !== "Other").map((option) => ({ ...option })) },
           { name: "notes", label: "Notes", type: "textarea", span: 2 },
         ],
       },
@@ -830,10 +843,21 @@ export function getClaimScreen(key: string) {
   return CLAIM_SCREENS.find((s) => s.key === key) || null;
 }
 
+/** R50: the case screens in the order of the phone call, the same as the new-claim form, with the file set-up last. */
+const CASE_ORDER = ["client", "driver", "owner", "accident", "witnesses", "vehicle", "damage", "tp1", "tp2", "insurer", "general"];
+
+function inCallOrder(screens: ClaimScreenDef[]): ClaimScreenDef[] {
+  const rank = (key: string) => {
+    const at = CASE_ORDER.indexOf(key);
+    return at < 0 ? CASE_ORDER.length - 1 : at;
+  };
+  return [...screens].sort((a, b) => (a.group === "case" && b.group === "case" ? rank(a.key) - rank(b.key) : 0));
+}
+
 export function screensByGroup() {
   return CLAIM_SCREEN_GROUPS.map((group) => ({
     ...group,
-    screens: CLAIM_SCREENS.filter((s) => s.group === group.key && !s.hidden),
+    screens: inCallOrder(CLAIM_SCREENS.filter((s) => s.group === group.key && !s.hidden)),
   })).filter((group) => group.screens.length > 0);
 }
 

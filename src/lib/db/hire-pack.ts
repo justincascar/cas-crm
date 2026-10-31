@@ -1,3 +1,5 @@
+import { fuelLabel } from "../domain/fuel";
+import { fileSetupRefusal } from "./file-setup";
 import { CAS_COMPANY, CAS_HIRE_AGREEMENT_BANNER, CAS_HIRE_TERMS_HTML } from "../documents/cas-hire-terms";
 import {
   HIRE_PACK_MANDATORY,
@@ -300,6 +302,8 @@ export function generateHirePackDocument(claimId: string, actorId: string) {
 export function generateStorageRecoveryDocument(claimId: string, actorId: string) {
   const pack = getHirePack(claimId);
   if (!pack) throw new Error("File not found.");
+  const setup = fileSetupRefusal(claimId, "The Storage & Recovery Agreement is not produced");
+  if (setup) throw new Error(setup);
   const html = renderStorageRecovery(pack);
   const versionRow = get<{ v: number }>(
     `SELECT COALESCE(MAX(version), 0) AS v FROM documents WHERE claim_id = ? AND template_key = 'storage_recovery'`,
@@ -474,7 +478,7 @@ ${impecuniosityMeansHtml(pack)}
 <p>Delivery address: ${escape(v(s.delivery_address || address))}</p>
 <h3>Vehicle details</h3>
 <p>Make: ${escape(v(hire?.hire_make))} &nbsp; Model: ${escape(v(hire?.hire_model))} &nbsp; Reg: ${escape(v(hire?.hire_reg))}<br/>
-Transmission: ${escape(v(car?.transmission || hire?.hire_transmission))} &nbsp; Fuel: ${escape(v(hire?.hire_fuel || s.hire_fuel))} &nbsp; Colour: ${escape(v(car?.colour))} &nbsp; Seats: ${escape(v(car?.seats))}<br/>
+Transmission: ${escape(v(car?.transmission || hire?.hire_transmission))} &nbsp; Fuel: ${escape(fuelLabel(String(hire?.hire_fuel || s.hire_fuel || "")))} &nbsp; Colour: ${escape(v(car?.colour))} &nbsp; Seats: ${escape(v(car?.seats))}<br/>
 Vehicle group: ${escape(v(car?.gtaGroup || s.vehicle_group))} &nbsp; Group charged: ${escape(v(s.group_charged))}<br/>
 Date out: ${escape(dateOut)} &nbsp; Date in: ${escape(chargeableHireEnd)}</p>
 <h3>Charges</h3>

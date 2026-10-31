@@ -189,6 +189,7 @@ function generateLiabilityChaser(ctx: LetterContext): GeneratedLetter {
     "",
     subject,
     "",
+    ...(ctx.chaseHistory ? [ctx.chaseHistory, ""] : []),
     `We refer to our letter of ${lastLetter} regarding ${ctx.clientName} and the accident on ${accident}.`,
     "We should be grateful for your liability response. Please ignore this if you have already replied.",
   ].join("\n");
@@ -196,7 +197,7 @@ function generateLiabilityChaser(ctx: LetterContext): GeneratedLetter {
     ctx,
     subject,
     `<p>Dear Sir / Madam</p>
-<p>We refer to our letter of <strong>${lastLetter}</strong> regarding ${escapeHtml(ctx.clientName)} and the accident on <strong>${accident}</strong>.</p>
+${ctx.chaseHistory ? `<p>${escapeHtml(ctx.chaseHistory)}</p>\n` : ""}<p>We refer to our letter of <strong>${lastLetter}</strong> regarding ${escapeHtml(ctx.clientName)} and the accident on <strong>${accident}</strong>.</p>
 <p>We should be grateful for your liability response. Please ignore this if you have already replied.</p>
 ${operationalClose(ctx)}`,
     letterDate,

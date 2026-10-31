@@ -1,8 +1,10 @@
-/** Where the claim would be heard. England & Wales unless staff choose otherwise at intake. */
+/** Where the claim would be heard. A file with nothing stored is England & Wales, as before R50. */
 export const JURISDICTIONS = [
   { value: "england_wales", label: "England & Wales" },
   { value: "scotland", label: "Scotland" },
   { value: "northern_ireland", label: "Northern Ireland" },
+  // R50: chosen at the file set-up when it cannot yet be told. The file shows "File set-up incomplete" until decided.
+  { value: "not_known", label: "Not yet known" },
 ] as const;
 export type Jurisdiction = (typeof JURISDICTIONS)[number]["value"];
 

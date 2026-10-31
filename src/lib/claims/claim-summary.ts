@@ -184,7 +184,7 @@ export function buildClaimSummaryModel(claimId: string): ClaimSummaryModel | nul
     registration,
     handler: String(claim.handler_name || "Unassigned"),
     insurerLine: `${insurerName || "Insurer not recorded"}${insurerRef ? ` · ${insurerRef}` : ""}`,
-    statusLine: `${String(claim.jurisdiction || "england_wales") !== "england_wales" ? `${jurisdictionLabel(String(claim.jurisdiction))} · ` : ""}${liabilityStatusLabel(String(claim.claim_type))} · ${roadworthinessLabel(String(claim.roadworthiness))} · Insurer ${storedLabel(claim.insurer_liability_position ? String(claim.insurer_liability_position) : "", INSURER_POSITION)}`,
+    statusLine: `${String(claim.jurisdiction || "england_wales") === "not_known" ? "Jurisdiction not yet known · " : String(claim.jurisdiction || "england_wales") !== "england_wales" ? `${jurisdictionLabel(String(claim.jurisdiction))} · ` : ""}${liabilityStatusLabel(String(claim.claim_type))} · ${roadworthinessLabel(String(claim.roadworthiness))} · Insurer ${storedLabel(claim.insurer_liability_position ? String(claim.insurer_liability_position) : "", INSURER_POSITION)}`,
     stageLine: current ? `${current.title} · ${stepStageLabel(current)}` : "Done",
     runningText:
       running.dailyPence > 0

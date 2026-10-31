@@ -19,6 +19,7 @@ import { ensureStepHistoryDemonstration } from "./step-history-demo";
 import { ensureChargeFigureDemonstration } from "./test-charge-figures";
 import { ensureChaseSettings, ensureDemoChases } from "./chase";
 import { ensureRealFleet } from "./fleet";
+import { mapStoredFuelsOn } from "./fuel-mapping";
 import { ensureDemoDayJobs } from "./demo-jobs";
 import { migrate } from "./migrate";
 import { minimiseConvictionText } from "./minimisation";
@@ -55,6 +56,7 @@ function openDatabase(): DatabaseSync {
   ensureStaffAuth(db);
   ensureDemoDayJobs(db);
   ensureRealFleet(db);
+  mapStoredFuelsOn(db);
   clearFalseDemonstrationHireCollection(db);
   closeDeliveriesForStartedHires(db);
   correctUnprovenSentEmails(db);

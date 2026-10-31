@@ -169,6 +169,7 @@ export function loadClaimSteps(claimId: string): ClaimStepView[] | null {
     claimId: id,
     claimType: String(claim.claim_type || ""),
     roadworthiness: String(claim.roadworthiness || ""),
+    jurisdiction: String(claim.jurisdiction || ""),
     needsReplacement: Number(claim.needs_replacement) === 1,
     needsRecovery: Number(claim.needs_recovery) === 1,
     createdAt: claim.created_at ? String(claim.created_at) : null,

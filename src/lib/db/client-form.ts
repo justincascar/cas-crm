@@ -1,3 +1,4 @@
+import { damageZoneLabels, parseDamageZones } from "../domain/file-setup";
 import { createHash, randomBytes } from "node:crypto";
 import type { DatabaseSync } from "node:sqlite";
 import { formatUkDate, nowUtcIso } from "../dates";
@@ -32,6 +33,8 @@ export const CLIENT_FORM_FIELDS = [
   { name: "postcode", label: "Postcode", section: "Your details", applies: "people.postcode", screen: "client.postcode" },
   { name: "accidentWhere", label: "Where did the accident happen?", need: "Where the accident happened", section: "The accident", applies: "claims.accident_location", screen: "accident.location" },
   { name: "accidentWhat", label: "What happened?", need: "What happened", section: "The accident", applies: "claims.circumstances", screen: "accident.details", long: true },
+  // R52: the client taps the damaged areas on the same drawing staff use. It is held on the Vehicle damage screen.
+  { name: "damageZones", label: "Where is your car damaged? Tap each damaged area.", need: "Where your car is damaged", section: "The damage", applies: "screen.damage", screen: "damage.clientZones" },
   { name: "otherDriver", label: "The other driver's name", section: "The other vehicle", applies: null, screen: null },
   { name: "otherRegistration", label: "The other vehicle's registration", section: "The other vehicle", applies: null, screen: null },
   { name: "otherInsurer", label: "The other driver's insurer, if you know it", section: "The other vehicle", applies: null, screen: null },
@@ -338,6 +341,11 @@ export type ClientReview = {
 
 type ClientField = (typeof CLIENT_FORM_FIELDS)[number];
 
+/** The damage drawing is stored as zone keys; people read the zone names. */
+function shownValue(name: string, value: string): string {
+  return name === "damageZones" ? damageZoneLabels(parseDamageZones(value)).join(", ") : value;
+}
+
 /** What the claim holds now: the saved screen if staff have saved it, otherwise the claim record. */
 function currentValue(claimId: string, field: ClientField): string {
   const { applies, screen } = field;
@@ -349,6 +357,7 @@ function currentValue(claimId: string, field: ClientField): string {
     if (value) return value;
   }
   const [table, column] = applies.split(".");
+  if (table === "screen") return "";
   if (table === "people") {
     return String(get<Record<string, string | null>>(`SELECT p.${column} AS v FROM claims c JOIN people p ON p.id = c.client_person_id WHERE c.id = ?`, [claimId])?.v || "");
   }
@@ -378,7 +387,8 @@ export function clientReview(claimId: string): ClientReview {
     proposals: CLIENT_FORM_FIELDS.filter((field) => String(values[field.name] || "").trim()).map((field) => {
       const current = currentValue(claimId, field);
       const proposed = String(values[field.name]).trim();
-      return { name: field.name, label: field.label, current, proposed, applies: Boolean(field.applies), same: current.trim().toLowerCase() === proposed.toLowerCase() };
+      const same = current.trim().toLowerCase() === proposed.toLowerCase();
+      return { name: field.name, label: field.label, current: shownValue(field.name, current), proposed: shownValue(field.name, proposed), applies: Boolean(field.applies), same };
     }),
     uploads: all<{ id: string; kind: string; original_filename: string; uploaded_at: string; decision: string | null; document_id: string | null }>(
       `SELECT id, kind, original_filename, uploaded_at, decision, document_id FROM client_form_uploads WHERE claim_id = ? ORDER BY uploaded_at`,
@@ -420,7 +430,7 @@ export function applyClientProposals(input: { claimId: string; actorId: string; 
     const [table, column] = field.applies.split(".");
     if (table === "people") {
       run(`UPDATE people SET ${column} = ? WHERE id = (SELECT client_person_id FROM claims WHERE id = ?)`, [proposed, input.claimId]);
-    } else {
+    } else if (table !== "screen") {
       run(`UPDATE claims SET ${column} = ? WHERE id = ?`, [proposed, input.claimId]);
     }
     // The saved screen is updated too, through the same versioned save staff use, so the screen shows the new value,
@@ -428,7 +438,7 @@ export function applyClientProposals(input: { claimId: string; actorId: string; 
     const [screenKey, key] = field.screen.split(".");
     (screens[screenKey] ||= { stored: {}, labels: {} }).stored[key] = proposed;
     screens[screenKey].labels[key] = field.label;
-    changes.push(`${plainLabel(field)}: ${before || "blank"} → ${proposed}`);
+    changes.push(`${plainLabel(field)}: ${shownValue(field.name, before) || "blank"} → ${shownValue(field.name, proposed)}`);
   }
   if (!changes.length && !notes.length) throw new Error("Tick at least one of the client's answers that differs from the claim.");
   for (const [screenKey, screen] of Object.entries(screens)) {

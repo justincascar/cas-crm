@@ -1,14 +1,14 @@
 /** Staff-set claim facts that later workflow (letters, recovery, hire) will branch on. */
 
 export const LIABILITY_STATUS_OPTIONS = [
-  { value: "", label: "Not yet decided" },
+  { value: "", label: "Not yet known" },
   { value: "fault", label: "Fault" },
   { value: "non_fault", label: "Non-fault" },
   { value: "disputed", label: "Disputed / unclear" },
 ] as const;
 
 export const ROADWORTHINESS_OPTIONS = [
-  { value: "", label: "Not yet decided" },
+  { value: "", label: "Not yet known" },
   { value: "roadworthy", label: "Roadworthy" },
   { value: "unroadworthy", label: "Unroadworthy" },
 ] as const;
@@ -39,19 +39,19 @@ export function normalizeRoadworthiness(raw: string | null | undefined): Roadwor
 
 export function liabilityStatusLabel(raw: string | null | undefined): string {
   const value = normalizeLiabilityStatus(raw);
-  return LIABILITY_STATUS_OPTIONS.find((row) => row.value === value)?.label || "Not yet decided";
+  return LIABILITY_STATUS_OPTIONS.find((row) => row.value === value)?.label || "Not yet known";
 }
 
 export function roadworthinessLabel(raw: string | null | undefined): string {
   const value = normalizeRoadworthiness(raw);
-  return ROADWORTHINESS_OPTIONS.find((row) => row.value === value)?.label || "Not yet decided";
+  return ROADWORTHINESS_OPTIONS.find((row) => row.value === value)?.label || "Not yet known";
 }
 
 export function statusChangeDetails(label: string, fromRaw: string | null | undefined, toRaw: string | null | undefined): string {
   const from = label === "Liability status" ? liabilityStatusLabel(fromRaw) : roadworthinessLabel(fromRaw);
   const to = label === "Liability status" ? liabilityStatusLabel(toRaw) : roadworthinessLabel(toRaw);
   if (from === to) return "";
-  if (from === "Not yet decided") return `Set to ${to}.`;
+  if (from === "Not yet known") return `Set to ${to}.`;
   return `Changed from ${from} to ${to}.`;
 }
 

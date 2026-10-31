@@ -401,7 +401,7 @@ describe("real CAS fleet", () => {
     assert.equal(registrationFromV5cFilename("CE13 ECX - V5C - Vauxhall Vivaro White.pdf"), "CE13 ECX");
     assert.equal(fuelFromV5c("heavy oil"), "Diesel");
     assert.equal(fuelFromV5c("HEAVY OIL"), "Diesel");
-    assert.equal(fuelFromV5c("petrol"), "petrol");
+    assert.equal(fuelFromV5c("petrol"), "Petrol");
 
     const db = prepared();
     withDatabase(db, () => {

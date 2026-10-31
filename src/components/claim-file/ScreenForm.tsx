@@ -1,5 +1,6 @@
 "use client";
 
+import { CarDamageDiagram } from "@/components/CarDamageDiagram";
 import Link from "next/link";
 import { useRef, useState } from "react";
 import { actionSaveClaimScreen } from "@/app/actions";
@@ -220,7 +221,14 @@ export function ScreenForm({
         </div>
       ) : null}
 
-      {def.key === "damage" ? <DamageDiagram clientPanels={values.clientPanels} tpPanels={values.tpPanels} /> : null}
+      {def.key === "damage" ? (
+        <div className="space-y-3 rounded-xl border border-line bg-card p-5" data-damage-drawing>
+          <p className="text-sm font-semibold">The client&apos;s vehicle: tap each damaged area. Tap again to remove it.</p>
+          <CarDamageDiagram name="clientZones" initial={values.clientZones || ""} />
+          {values.clientPanels ? <p className="text-xs text-slate">Panels ticked before the drawing was added: {values.clientPanels.replaceAll("_", " ").replaceAll(",", ", ")}.</p> : null}
+        </div>
+      ) : null}
+      {def.key === "damage" ? <DamageDiagram clientPanels={values.clientPanels} tpPanels={values.tpPanels} thirdPartyOnly /> : null}
 
       {def.key === "assessed-damage" ? (
         <p className="rounded-md border border-line bg-paper px-4 py-3 text-sm">

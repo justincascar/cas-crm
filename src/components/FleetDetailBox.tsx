@@ -1,3 +1,4 @@
+import { FuelSelect } from "@/components/FuelSelect";
 import { FLEET_DETAIL_LABELS, GEARBOXES, type FleetCarDetails, type FleetDetailField } from "@/lib/db/fleet-details";
 
 /**
@@ -38,6 +39,8 @@ export function FleetDetailBox({
         ))}
       </select>
     );
+  } else if (field === "fuel") {
+    input = <FuelSelect name="fuel" className={className} />;
   } else if (field === "seats" || field === "mileage") {
     input = <input name={field} inputMode="numeric" className={className} />;
   } else {

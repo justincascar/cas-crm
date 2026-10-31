@@ -1,3 +1,5 @@
+import { jurisdictionLabel, normaliseJurisdiction } from "../domain/jurisdiction";
+import { recordClaimEvent } from "./chronology";
 import { accidentDateError, nowUtcIso, londonDateIso, occurredFromForm, utcFromLondonDateTime } from "../dates";
 import { closeRepairStepsForTotalLoss } from "./total-loss-switch";
 import { recordRecoveryCompletedOnce, recordStorageEndedOnce } from "./claim-step-record";
@@ -409,6 +411,21 @@ function applySideEffects(claimId: string, screenKey: string, values: ScreenValu
       },
       actorId,
     );
+    if (values.jurisdiction !== undefined && values.jurisdiction !== "") {
+      const next = normaliseJurisdiction(values.jurisdiction);
+      const before = get<{ jurisdiction: string | null }>(`SELECT jurisdiction FROM claims WHERE id = ?`, [claimId]);
+      if (normaliseJurisdiction(before?.jurisdiction) !== next) {
+        run(`UPDATE claims SET jurisdiction = ? WHERE id = ?`, [next, claimId]);
+        recordClaimEvent({
+          claimId,
+          eventType: "other",
+          occurredAt: nowUtcIso(),
+          actorId,
+          details: `Jurisdiction set to ${jurisdictionLabel(next)} (was ${jurisdictionLabel(before?.jurisdiction)}).`,
+          source: "staff",
+        });
+      }
+    }
   }
 
   if (screenKey === "client" && claim.client_person_id) {
@@ -742,6 +759,7 @@ export function seedScreenDefaults(claimId: string, screenKey: string): ScreenVa
     fill("caseStatus", claim.current_position);
     defaults.typeOfClaim = normalizeLiabilityStatus(defaults.typeOfClaim || String(claim.claim_type || ""));
     defaults.roadworthiness = normalizeRoadworthiness(defaults.roadworthiness || String(claim.roadworthiness || ""));
+    defaults.jurisdiction = normaliseJurisdiction(String(claim.jurisdiction || defaults.jurisdiction || ""));
   }
   if (screenKey === "client") {
     fill("title", claim.title);

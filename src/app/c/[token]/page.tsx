@@ -1,3 +1,4 @@
+import { CarDamageDiagram } from "@/components/CarDamageDiagram";
 import type { Metadata } from "next";
 import { formatUkDateTime } from "@/lib/dates";
 import { CLIENT_FORM_FIELDS, CLIENT_UPLOAD_KINDS, clientFormView } from "@/lib/db/client-form";
@@ -78,7 +79,11 @@ export default async function ClientFormPage({
             {CLIENT_FORM_FIELDS.filter((field) => field.section === section).map((field) => (
               <label key={field.name} className="block text-base font-medium">
                 {field.label}
-                {"long" in field && field.long ? (
+                {field.name === "damageZones" ? (
+                  <div className="mt-2">
+                    <CarDamageDiagram name="damageZones" initial={view.values.damageZones || ""} />
+                  </div>
+                ) : "long" in field && field.long ? (
                   <textarea name={field.name} defaultValue={view.values[field.name] || ""} rows={4} autoComplete={autocomplete[field.name]} className={box} />
                 ) : (
                   <input

@@ -1,3 +1,4 @@
+import { withChaseHistory } from "../domain/chase-history";
 import { formatUkDate } from "../dates";
 import { privacyNoticeLine } from "./privacy-notice";
 import { CAS_CLAIMS_MAILBOX } from "../constants";
@@ -48,6 +49,8 @@ export type LetterContext = {
   lossHeadsOnFile?: string[];
   creditHire?: boolean;
   courtesyAllocated?: boolean;
+  /** R48: when we first wrote and how often we have chased, for a chaser made from a template. */
+  chaseHistory?: string | null;
 };
 
 export type CorrespondenceContext = LetterContext & {
@@ -447,7 +450,8 @@ export function generateFromSpec(spec: CorrespondenceSpec, ctx: CorrespondenceCo
   const missing = missingFromSpec(spec.required, vars);
   const subject = fillPlaceholders(spec.subject, vars);
   const filled = fillPlaceholders(spec.body, vars);
-  const body = ctx.includeGtaStatement && offersGtaStatement(spec.key) ? withGtaStatement(filled) : filled;
+  const withGta = ctx.includeGtaStatement && offersGtaStatement(spec.key) ? withGtaStatement(filled) : filled;
+  const body = withChaseHistory(withGta, ctx.chaseHistory || null);
   const letterDate = formatUkDate(ctx.letterDate);
   // R42: the notes about where the wording came from are shown on the screen above the sheet, never in the letter.
   const addressee =

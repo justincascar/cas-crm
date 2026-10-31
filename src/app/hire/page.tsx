@@ -1,3 +1,4 @@
+import { fuelLabel } from "@/lib/domain/fuel";
 import Link from "next/link";
 import { PageHeader } from "@/components/ClaimTable";
 import { ReserveForm } from "@/components/ReserveForm";
@@ -17,7 +18,7 @@ function specLine(v: Record<string, string | number | null>) {
     [v.make, v.model].filter(Boolean).join(" ").trim() || "Make/model not on file",
     vehicleClassLabel(v.vehicle_class ? String(v.vehicle_class) : "") || null,
     v.colour ? String(v.colour) : null,
-    v.fuel ? String(v.fuel) : null,
+    v.fuel ? fuelLabel(String(v.fuel)) : null,
     v.transmission ? String(v.transmission) : null,
     v.seats ? `${v.seats} seats` : null,
   ].filter(Boolean);

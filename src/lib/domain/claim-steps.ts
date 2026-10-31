@@ -1,3 +1,4 @@
+import { fileSetupGaps } from "./file-setup";
 import { formatUkDate } from "../dates";
 import { formatGbp } from "../money";
 import { hireNeedReason, NOT_YET_OWN_CAR, parseHireNeed } from "./hire-availability";
@@ -125,6 +126,8 @@ export type ClaimStepInput = {
   claimId: string;
   claimType: string;
   roadworthiness: string;
+  /** R50: "not_known" until the file set-up is decided. Missing on older callers, which is a decided jurisdiction. */
+  jurisdiction?: string;
   needsReplacement: boolean;
   needsRecovery: boolean;
   createdAt: string | null;
@@ -517,6 +520,21 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
 
   function detailsStep(): ClaimStepView {
     const detailsDate = opened?.occurred_at || input.createdAt;
+    // R50: until liability, jurisdiction and roadworthiness are decided, this is the file's next step.
+    const setup = fileSetupGaps({ claimType: input.claimType, jurisdiction: input.jurisdiction, roadworthiness: input.roadworthiness });
+    if (setup.length) {
+      return shell({
+        key: "details",
+        title: "Basic details",
+        state: "to_do",
+        statusText: `File set-up incomplete: ${setup.join(", ")} not yet known`,
+        buttonLabel: "File set-up incomplete",
+        buttonHref: path(input.claimId, "details/general"),
+        detailsHref: path(input.claimId, "details"),
+        missingCount: missing.length,
+        missingHref: missing.length ? path(input.claimId, "details") : null,
+      });
+    }
     return shell({
       key: "details",
       title: "Basic details",

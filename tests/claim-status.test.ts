@@ -31,13 +31,13 @@ describe("liability status and roadworthiness", () => {
     assert.equal(normalizeLiabilityStatus("fault"), "fault");
     assert.equal(normalizeLiabilityStatus("non_fault"), "non_fault");
     assert.equal(normalizeLiabilityStatus("disputed"), "disputed");
-    assert.equal(liabilityStatusLabel("unknown"), "Not yet decided");
+    assert.equal(liabilityStatusLabel("unknown"), "Not yet known");
     assert.equal(liabilityStatusLabel("disputed"), "Disputed / unclear");
     assert.equal(normalizeRoadworthiness("awaiting_assessment"), "");
     assert.equal(normalizeRoadworthiness("needs_review"), "");
     assert.equal(normalizeRoadworthiness("roadworthy"), "roadworthy");
     assert.equal(normalizeRoadworthiness("unroadworthy"), "unroadworthy");
-    assert.equal(roadworthinessLabel(""), "Not yet decided");
+    assert.equal(roadworthinessLabel(""), "Not yet known");
     assert.equal(roadworthinessLabel("unroadworthy"), "Unroadworthy");
   });
 
@@ -118,8 +118,8 @@ describe("liability status and roadworthiness", () => {
     const byRef = Object.fromEntries(rows.map((row) => [row.file_reference, row]));
     assert.equal(byRef["TEST-0001"]?.claim_type, "unknown");
     assert.equal(byRef["TEST-0001"]?.roadworthiness, "awaiting_assessment");
-    assert.equal(liabilityStatusLabel(byRef["TEST-0001"]?.claim_type), "Not yet decided");
-    assert.equal(roadworthinessLabel(byRef["TEST-0001"]?.roadworthiness), "Not yet decided");
+    assert.equal(liabilityStatusLabel(byRef["TEST-0001"]?.claim_type), "Not yet known");
+    assert.equal(roadworthinessLabel(byRef["TEST-0001"]?.roadworthiness), "Not yet known");
     assert.equal(byRef["TEST-0003"]?.claim_type, "non_fault");
     assert.equal(byRef["TEST-0003"]?.roadworthiness, "unroadworthy");
     assert.equal(byRef["TEST-0004"]?.claim_type, "fault");

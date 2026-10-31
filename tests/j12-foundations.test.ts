@@ -94,7 +94,7 @@ describe("J12 — foundations", () => {
       const saves = listAudit({ claim: reference, kind: "save" });
       assert.equal(saves.length, 2);
       assert.equal(saves[0].who, "Tom Hughes");
-      assert.equal(saves[0].what, "Saved the General details screen");
+      assert.equal(saves[0].what, "Saved the File set-up screen");
       assert.equal(saves[0].detail, "Our policy / source: Broker policy → Client's own policy");
       assert.equal(saves[0].reference, reference);
       assert.equal(listAudit({ claim: reference, kind: "save", staffId: "staff-sian" }).length, 1);

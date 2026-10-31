@@ -1,3 +1,4 @@
+import { normaliseFuel } from "../domain/fuel";
 import fs from "node:fs";
 import path from "node:path";
 import type { DatabaseSync, SQLInputValue } from "node:sqlite";
@@ -95,10 +96,8 @@ export function registrationFromV5cFilename(sourceFile: string): string | null {
 
 /** V5C field P.3 "HEAVY OIL" is diesel. Other fuel words are stored as read. */
 export function fuelFromV5c(value: string | null | undefined): string | null {
-  const text = blank(value);
-  if (!text) return null;
-  if (text.toLowerCase() === "heavy oil") return "Diesel";
-  return text;
+  // R51: stored as the fuel list's label; HEAVY OIL is Diesel.
+  return normaliseFuel(value) || null;
 }
 
 export const SF16_AWC_UNCONFIRMED_MAKE = "PEUGEOT";

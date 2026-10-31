@@ -88,9 +88,9 @@ describe("claim file screens", () => {
     const liability = general?.sections[0]?.fields.find((field) => field.name === "typeOfClaim");
     const roadworthiness = general?.sections[0]?.fields.find((field) => field.name === "roadworthiness");
     assert.equal(liability?.label, "Liability status");
-    assert.ok(liability?.options?.some((option) => option.value === "" && option.label === "Not yet decided"));
+    assert.ok(liability?.options?.some((option) => option.value === "" && option.label === "Not yet known"));
     assert.ok(liability?.options?.some((option) => option.value === "disputed"));
-    assert.ok(roadworthiness?.options?.some((option) => option.value === "" && option.label === "Not yet decided"));
+    assert.ok(roadworthiness?.options?.some((option) => option.value === "" && option.label === "Not yet known"));
     assert.equal(roadworthiness?.options?.some((option) => option.value === "awaiting_assessment"), false);
   });
 });

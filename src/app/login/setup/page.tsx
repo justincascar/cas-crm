@@ -43,6 +43,10 @@ export default async function LoginSetupPage({ searchParams }: { searchParams: P
                 Switch it on and continue
               </button>
             </form>
+            <p className="mt-3 rounded-md border border-warn/40 bg-[#fff6e8] px-3 py-2 text-sm" data-new-key-warning>
+              Each new set-up gives a new key. This happens if you sign in again or press &quot;Set up an authenticator app&quot; again, and after 5
+              minutes this step expires. Before adding a new key, remove the old CAS CRM entry from your app.
+            </p>
             <p className="mt-3 text-xs text-slate">The key is shown only during this set-up. If you lose your phone, Justin resets it in Settings.</p>
           </>
         ) : (

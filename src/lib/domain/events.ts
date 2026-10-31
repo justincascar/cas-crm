@@ -52,6 +52,7 @@ export const CLAIM_EVENT_TYPES = [
   { key: "hire_car_collected", label: "Hire car collected" },
   { key: "hire_car_readings_recorded", label: "Hire car readings recorded" },
   { key: "hire_car_details_saved", label: "Hire car details saved to the fleet record" },
+  { key: "damage_recorded", label: "Damage and safe-to-drive answers recorded" },
   { key: "legal_letter_approved", label: "Letter approved by Justin" },
   { key: "storage_recovery_agreement_override", label: "Storage & Recovery Agreement not signed: Justin's override" },
   { key: "card_fee_recorded", label: "Card fee recorded on a card payment" },

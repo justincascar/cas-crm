@@ -1,3 +1,4 @@
+import { fileSetupRefusal } from "./file-setup";
 import type { DatabaseSync } from "node:sqlite";
 import { APPROVE_CHASER_TEMPLATES } from "../auth/roles";
 import { CAS_CLAIMS_MAILBOX } from "../constants";
@@ -13,6 +14,7 @@ import { all, get, getDb, newId, run } from "./connection";
 import { isLiveOnlyEngineerEmail, ENGINEER_INSTRUCTION_MARKED_SENT, ENGINEER_INSTRUCTION_PREPARED } from "./engineers";
 import { getInsurerPaymentDetails } from "./payment-details";
 import { paymentRequestCopy } from "../domain/payment-chase";
+import { chaseHistorySentence, withChaseHistory } from "../domain/chase-history";
 import { listStaffPermissions } from "./permissions";
 import { getSendingHours } from "./sending-hours";
 
@@ -149,6 +151,8 @@ function holdReason(view: ChaseView, asAt: string): string | null {
   if (!isChaseRuleApproved(kind)) return "Waiting for Justin to approve this chaser's wording.";
   const stop = fileState(view.claimId);
   if (stop) return stop;
+  const setup = fileSetupRefusal(view.claimId, "Chasers do not start");
+  if (setup) return setup;
   const fresh = chaseForClaim(kind, view.claimId, asAt);
   if (!fresh || !fresh.due) return "No longer due when the file was checked again.";
   if (fresh.outcomeOnFile) return "The answer is on the file.";
@@ -415,7 +419,20 @@ function paymentIllustration(kind: ChaseKind, fileReference: string): { subject:
       handlerName: "[handler's name]",
     });
   const first = copy("first");
-  const reminder = copy("reminder");
+  // R48: the reminder carries when we first wrote and how often we have chased. Example dates here.
+  const words = copy("reminder");
+  const reminder = {
+    ...words,
+    body: withChaseHistory(
+      words.body,
+      chaseHistorySentence({
+        firstRequestAt: addCalendarDaysIso(at, -21),
+        requesting: `payment of the ${head === "repairs" ? "repair invoice" : head === "vehicle_damage" ? "agreed total-loss settlement" : `${head} charge`}`,
+        replyAt: null,
+        chasesSent: [addCalendarDaysIso(at, -14), addCalendarDaysIso(at, -7)],
+      }),
+    ),
+  };
   return {
     subject: first.subject,
     body: `First request:
@@ -427,7 +444,7 @@ ${first.body}
 Reminder (Subject: ${reminder.subject}):
 
 ${reminder.body}`,
-    note: "Illustration with example figures (£1,000.00 agreed and outstanding), because no TEST file has this chaser due to a recipient with an email address. On a real file the figures, references and dates are that file's.",
+    note: "Illustration with example figures (£1,000.00 agreed and outstanding) and example dates in the 'We first wrote to you' sentence, because no TEST file has this chaser due to a recipient with an email address. On a real file the figures, references and dates are that file's.",
   };
 }
 
@@ -492,7 +509,7 @@ function buildChaserWordingPreviews(): ChaserWordingPreviews {
         fileReference: null,
         to: null,
         ...fallback,
-        note: `Illustration with example figures on ${claims[0].file_reference}'s details, because no TEST file has this chaser due to a recipient with an email address. On a real file the names, references and dates are that file's.`,
+        note: `Illustration with example figures and example dates in the 'We first wrote to you' sentence, on ${claims[0].file_reference}'s details, because no TEST file has this chaser due to a recipient with an email address. On a real file the names, references and dates are that file's.`,
       };
     }
     return { kind, title, fileReference: null, to: null, subject: null, body: null, note: "No TEST file has this chaser due to a recipient with an email address, so there is no example to show yet." };

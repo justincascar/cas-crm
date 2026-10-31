@@ -1,3 +1,5 @@
+import { normaliseFuel } from "../domain/fuel";
+import { damageZoneLabels, parseDamageZones, SAFE_TO_DRIVE_QUESTIONS, safeToDriveReasons, suggestRoadworthiness, type SafeToDriveAnswers } from "../domain/file-setup";
 import { INDICATIVE_DEFAULTS } from "../constants";
 import { normaliseJurisdiction } from "../domain/jurisdiction";
 import { accidentDateError, nowUtcIso, occurredFromForm, londonDateIso } from "../dates";
@@ -96,6 +98,12 @@ export type IntakeInput = {
   counterpart?: IntakePerson;
   vehicle: IntakeVehicle;
   damageDescription?: string;
+  /** R52: zones marked on the drawing, as zone keys. */
+  damageZones?: string[];
+  /** R52: "Is it safe to drive?" answers: yes, no or not_known. */
+  safeToDrive?: SafeToDriveAnswers;
+  /** R52: why staff chose a roadworthiness other than the one suggested by the answers. */
+  roadworthinessChangeReason?: string;
   requestPhotosWhatsapp?: boolean;
   accidentDate?: string;
   accidentTime?: string;
@@ -292,7 +300,7 @@ function insertVehicle(usage: string, vehicle: IntakeVehicle, provenance: string
       blank(vehicle.make),
       blank(vehicle.model),
       gearbox || "unknown",
-      blank(vehicle.fuel),
+      usage === "third_party" ? blank(vehicle.fuel) : normaliseFuel(vehicle.fuel) || null,
       blank(vehicle.colour),
       vehicle.lookupIncomplete ? "simulated" : "manual",
       incomplete ? 1 : 0,
@@ -381,6 +389,16 @@ async function simulateWhatsApp(claimId: string, handlerId: string, to: string, 
 }
 
 export async function createClaimFromIntake(input: IntakeInput) {
+  // R52: the answers suggest a roadworthiness. Choosing another needs a reason, which is kept on the file.
+  const suggestedRoad = suggestRoadworthiness(input.safeToDrive || {});
+  const chosenRoad = normalizeRoadworthiness(input.roadworthiness);
+  const roadChanged = suggestedRoad.value !== "" && chosenRoad !== suggestedRoad.value;
+  if (roadChanged && !String(input.roadworthinessChangeReason || "").trim()) {
+    throw new FieldValidationError(
+      "roadworthinessChangeReason",
+      `The answers suggest ${suggestedRoad.text}. Say why you chose ${roadworthinessLabel(chosenRoad)} instead.`,
+    );
+  }
   const clientName = personFullName(input.client);
   if (!input.client.forename?.trim() && !input.client.surname?.trim() && clientName === "Unknown") {
     throw new Error("Client forename or surname is required.");
@@ -504,6 +522,19 @@ export async function createClaimFromIntake(input: IntakeInput) {
     run(`UPDATE vehicles SET gta_group = ? WHERE id = ?`, [hire.gtaGroup, vehicleId]);
   }
   run(`UPDATE claims SET jurisdiction = ? WHERE id = ?`, [normaliseJurisdiction(input.jurisdiction), id]);
+  // R52: the drawing and the answers are stored as data on the Details tab's Vehicle damage screen.
+  const zones = input.damageZones || [];
+  const answers = input.safeToDrive || {};
+  if (zones.length || Object.values(answers).some(Boolean)) {
+    run(
+      `INSERT INTO claim_screen_data(claim_id, screen_key, data_json, updated_at, updated_by) VALUES (?, 'damage', ?, ?, ?)`,
+      [id, JSON.stringify({ clientZones: zones.join(","), ...answers }), nowUtcIso(), input.handlerId],
+    );
+  }
+  if (chosenRoad) {
+    const why = roadChanged ? `Changed from the suggestion (${suggestedRoad.text}): ${String(input.roadworthinessChangeReason).trim()}` : suggestedRoad.value ? suggestedRoad.text : "";
+    if (why) run(`UPDATE claims SET roadworthiness_reasons = ? WHERE id = ?`, [why, id]);
+  }
 
   run(`INSERT INTO claim_parties(id, claim_id, person_id, role, is_primary) VALUES (?, ?, ?, 'client', 1)`, [
     newId("party"),
@@ -836,13 +867,27 @@ export async function createClaimFromIntake(input: IntakeInput) {
       source: "staff",
     });
   }
+  const damageWords = damageZoneLabels(input.damageZones || []);
+  const yesReasons = safeToDriveReasons(input.safeToDrive || {});
+  if (damageWords.length || Object.values(input.safeToDrive || {}).some(Boolean)) {
+    recordClaimEvent({
+      claimId: id,
+      eventType: "damage_recorded",
+      occurredAt: now,
+      details: `Damage marked: ${damageWords.join(", ") || "no areas marked"}. Safe to drive – Yes to: ${yesReasons.join(", ") || "nothing"}.`,
+      actorId: input.handlerId,
+      source: "staff",
+    });
+  }
   const roadworthiness = normalizeRoadworthiness(input.roadworthiness);
   if (roadworthiness) {
     recordClaimEvent({
       claimId: id,
       eventType: "roadworthiness_changed",
       occurredAt: now,
-      details: `Set to ${roadworthinessLabel(roadworthiness)}.`,
+      details: `Set to ${roadworthinessLabel(roadworthiness)}.${
+        roadChanged ? ` Changed from the suggestion (${suggestedRoad.text}). Reason: ${String(input.roadworthinessChangeReason).trim()}` : suggestedRoad.value ? ` As suggested: ${suggestedRoad.text}.` : ""
+      }`,
       actorId: input.handlerId,
       source: "staff",
     });
@@ -1113,6 +1158,11 @@ export function intakeFromFormData(formData: FormData): IntakeInput {
     counterpart: personFromForm(formData, "counterpart_"),
     vehicle: vehicleFromForm(formData, "veh_"),
     damageDescription: readFormText(formData, "damageDescription"),
+    damageZones: parseDamageZones(String(formData.get("damageZones") || "")),
+    safeToDrive: Object.fromEntries(
+      SAFE_TO_DRIVE_QUESTIONS.map((q) => [q.key, ["yes", "no", "not_known"].includes(String(formData.get(q.key) || "")) ? String(formData.get(q.key)) : ""]),
+    ) as SafeToDriveAnswers,
+    roadworthinessChangeReason: readFormText(formData, "roadworthinessChangeReason"),
     requestPhotosWhatsapp: formFlag(formData, "requestPhotosWhatsapp"),
     accidentDate: String(formData.get("accidentDate") || ""),
     accidentTime: String(formData.get("accidentTime") || ""),

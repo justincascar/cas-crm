@@ -1,3 +1,9 @@
+import { damagePrintHtml } from "../domain/damage-drawing";
+import { escapeHtml } from "../documents/correspondence";
+import { damageZoneLabels, parseDamageZones, SAFE_TO_DRIVE_QUESTIONS, safeToDriveReasons, type SafeToDriveAnswers } from "../domain/file-setup";
+import { fileSetupRefusal, liabilityUnknownRefusal } from "./file-setup";
+import { chaseHistoryLine, chaseHistoryLineForTemplate } from "./chase-history";
+import { chaseHistorySentence, withChaseHistory } from "../domain/chase-history";
 import { unapprovedLegalAttachment } from "./legal-approval";
 import {
   ENGINEER_REPORT_DOCUMENT_TYPE,
@@ -471,7 +477,14 @@ function impecuniosityRefusal(claimId: string, templateKey: string | undefined, 
 }
 
 /** Third-party insurer wording does not apply on a fault file. Returns the reason, or null. */
+/** R50: these letters choose fault or non-fault wording, so they wait until the liability status is decided. */
+const LIABILITY_WORDING_TEMPLATES: readonly string[] = [...THIRD_PARTY_ONLY_TEMPLATES, "fault_own_insurer"];
+
 export function thirdPartyTemplateOnFault(claimId: string, templateKey: string | undefined): string | null {
+  if (templateKey && LIABILITY_WORDING_TEMPLATES.includes(templateKey)) {
+    const unknown = liabilityUnknownRefusal(claimId, "Letters that choose fault or non-fault wording wait");
+    if (unknown) return unknown;
+  }
   if (!templateKey || !THIRD_PARTY_ONLY_TEMPLATES.includes(templateKey)) return null;
   const liability = get<{ claim_type: string | null }>(`SELECT claim_type FROM claims WHERE id = ?`, [claimId]);
   if (liability?.claim_type !== "fault") return null;
@@ -493,14 +506,20 @@ export function generateClaimDocument(input: {
     throw new Error("Unknown document template.");
   }
   const notOnFault = thirdPartyTemplateOnFault(input.claimId, input.templateKey);
-  if (notOnFault) throw new Error(`${notOnFault} It was not created.`);
+  if (notOnFault) throw new Error(/^File set-up incomplete/.test(notOnFault) ? notOnFault : `${notOnFault} It was not created.`);
   const blocked = impecuniosityRefusal(input.claimId, input.templateKey, "");
   if (blocked) throw new Error(blocked);
   const letterDate = occurredFromForm(input.letterDate);
-  const ctx = { ...letterContext(input.claimId, letterDate), includeGtaStatement: Boolean(input.includeGtaStatement) };
-  const generated = isEmailTemplateKey(input.templateKey)
-    ? generateEmail(input.templateKey, ctx)
-    : generateLetter(input.templateKey, ctx);
+  const ctx = {
+    ...letterContext(input.claimId, letterDate),
+    includeGtaStatement: Boolean(input.includeGtaStatement),
+    chaseHistory: chaseHistoryLineForTemplate(input.claimId, input.templateKey),
+  };
+  const generated = withEngineerDamage(
+    input.claimId,
+    input.templateKey,
+    isEmailTemplateKey(input.templateKey) ? generateEmail(input.templateKey, ctx) : generateLetter(input.templateKey, ctx),
+  );
   const versionRow = get<{ v: number }>(
     `SELECT COALESCE(MAX(version), 0) AS v FROM documents WHERE claim_id = ? AND template_key = ?`,
     [input.claimId, input.templateKey],
@@ -1007,10 +1026,46 @@ export function letterPreview(
 ) {
   const blocked = impecuniosityRefusal(claimId, templateKey, "");
   if (blocked) throw new Error(blocked);
-  const ctx = { ...letterContext(claimId, occurredFromForm(letterDate), engineerId), includeGtaStatement };
-  if (isEmailTemplateKey(templateKey)) return generateEmail(templateKey, ctx);
-  if (isLetterTemplateKey(templateKey)) return generateLetter(templateKey, ctx);
+  const unknown = thirdPartyTemplateOnFault(claimId, templateKey);
+  if (unknown && /^File set-up incomplete/.test(unknown)) throw new Error(unknown);
+  const ctx = {
+    ...letterContext(claimId, occurredFromForm(letterDate), engineerId),
+    includeGtaStatement,
+    chaseHistory: chaseHistoryLineForTemplate(claimId, templateKey),
+  };
+  if (isEmailTemplateKey(templateKey)) return withEngineerDamage(claimId, templateKey, generateEmail(templateKey, ctx));
+  if (isLetterTemplateKey(templateKey)) return withEngineerDamage(claimId, templateKey, generateLetter(templateKey, ctx));
   throw new Error("Unknown document template.");
+}
+
+/**
+ * R52: the engineer instruction carries a small printed copy of the damage drawing and the safe-to-drive Yes answers,
+ * read from the file's data. Nothing is added when none were recorded.
+ */
+function withEngineerDamage<T extends { html: string; text: string }>(claimId: string, templateKey: string, generated: T): T {
+  if (templateKey !== "engineer_instruction") return generated;
+  const row = get<{ data_json: string }>(`SELECT data_json FROM claim_screen_data WHERE claim_id = ? AND screen_key = 'damage'`, [claimId]);
+  let data: Record<string, string> = {};
+  try {
+    data = row?.data_json ? (JSON.parse(row.data_json) as Record<string, string>) : {};
+  } catch {
+    data = {};
+  }
+  const zones = parseDamageZones(data.clientZones);
+  const answers: SafeToDriveAnswers = {};
+  for (const q of SAFE_TO_DRIVE_QUESTIONS) answers[q.key] = String(data[q.key] || "");
+  const yes = safeToDriveReasons(answers);
+  if (!zones.length && !yes.length) return generated;
+  const labels = damageZoneLabels(zones);
+  const zoneLine = `Damage reported by the client: ${labels.join(", ") || "no areas marked"}.`;
+  const safeLine = `Is it safe to drive – Yes to: ${yes.join(", ") || "nothing"}.`;
+  const block = `<section class="damage-summary"><h3>Damage reported by the client</h3>${damagePrintHtml(zones)}<p>${escapeHtml(safeLine)}</p></section>`;
+  const html = generated.html.includes("</article>") ? generated.html.replace("</article>", `${block}\n</article>`) : `${generated.html}\n${block}`;
+  const lines = generated.text.split("\n");
+  const signOff = lines.findIndex((line) => /^(Kind regards|Yours (faithfully|sincerely))/i.test(line.trim()));
+  const extra = [zoneLine, safeLine, ""];
+  const text = signOff >= 0 ? [...lines.slice(0, signOff), ...extra, ...lines.slice(signOff)].join("\n") : [generated.text, "", zoneLine, safeLine].join("\n");
+  return { ...generated, html, text };
 }
 
 function letterTextForMailto(text: string): string {
@@ -1217,7 +1272,7 @@ export function prepareEngineerReportChase(input: { claimId: string; actorId: st
   const fileRef = String(ctx.fileReference);
   const subject = `Chase — ${fileRef} — engineer's report outstanding`;
   const handlerName = String(ctx.handlerName || "Claims handler");
-  const body = [
+  const plainBody = [
     `Dear ${engineerName},`,
     "",
     `We instructed you on ${fileRef} on ${instructedOn} and ${outstanding}. We have not yet received the engineer's report.`,
@@ -1229,6 +1284,7 @@ export function prepareEngineerReportChase(input: { claimId: string; actorId: st
     "Complete Accident Solutions Ltd",
     `01792 341069 · ${CAS_CLAIMS_MAILBOX}`,
   ].join("\n");
+  const body = withChaseHistory(plainBody, chaseHistoryLine(input.claimId, "engineer_report"));
   if (existing) {
     run(`UPDATE correspondence SET subject = ?, preview = ?, body = ?, to_address = ?, from_address = ? WHERE id = ?`, [
       subject,
@@ -1371,7 +1427,30 @@ export function markEngineerReportChaseSent(input: {
 export function chaseWordingIllustration(kind: ChaseKind, claimId: string): { subject: string; body: string } | null {
   if (kind === "engineer_report" || kind === "hire_agreement_renewal" || isPaymentChaseKind(kind)) return null;
   const ctx = letterContext(claimId, nowUtcIso());
-  return chaseEmailCopy(kind, ctx, "[recipient's name]", nowUtcIso(), vehicleOutcome(claimId));
+  const outcome = vehicleOutcome(claimId);
+  return chaseEmailCopy(kind, ctx, "[recipient's name]", nowUtcIso(), outcome, exampleChaseHistory(kind, outcome, claimId));
+}
+
+/** R48: the sentence with example dates, for a chaser shown as an illustration. The note says the dates are examples. */
+function exampleChaseHistory(kind: ChaseKind, outcome: VehicleOutcome, claimId: string): string | null {
+  const now = nowUtcIso();
+  const real = chaseHistoryLine(claimId, kind, outcome);
+  if (real) return real;
+  const requesting = exampleRequesting(kind, outcome);
+  return chaseHistorySentence({
+    firstRequestAt: addCalendarDaysIso(now, -12),
+    requesting,
+    replyAt: null,
+    chasesSent: [addCalendarDaysIso(now, -9), addCalendarDaysIso(now, -6), addCalendarDaysIso(now, -3)],
+  });
+}
+
+function exampleRequesting(kind: ChaseKind, outcome: VehicleOutcome): string {
+  if (kind === "liability_response") return "your decision on liability";
+  if (kind === "engineer_report") return "your engineer's report";
+  if (outcome === "repairable") return "repair authorisation";
+  if (outcome === "total_loss") return "the total-loss payment (the pre-accident value less salvage)";
+  return "your decision on the vehicle damage claim";
 }
 
 function chaseEmailCopy(
@@ -1380,6 +1459,18 @@ function chaseEmailCopy(
   contactName: string,
   clockAt: string | null,
   outcome: VehicleOutcome = "unknown",
+  history: string | null = null,
+) {
+  const copy = chaseEmailWords(kind, ctx, contactName, clockAt, outcome);
+  return { subject: copy.subject, body: withChaseHistory(copy.body, history) };
+}
+
+function chaseEmailWords(
+  kind: ChaseKind,
+  ctx: CorrespondenceContext,
+  contactName: string,
+  clockAt: string | null,
+  outcome: VehicleOutcome,
 ) {
   const fileRef = String(ctx.fileReference);
   const handlerName = String(ctx.handlerName || "Claims handler");
@@ -1456,7 +1547,7 @@ function preparePaymentRequestChase(input: { claimId: string; actorId: string; k
   if (view.contactMissing || !view.contactEmail) throw new Error(view.contactMissingMessage || NO_INSURER_CONTACT_MESSAGE);
   const ctx = letterContext(input.claimId, nowUtcIso());
   const firstAt = paymentHistorySent(input.claimId, def.paymentHead, "payment_chase_1_sent");
-  const copy = paymentRequestCopy({
+  const words = paymentRequestCopy({
     stage: firstAt ? "reminder" : "first",
     fileReference: String(ctx.fileReference),
     theirRef: String(ctx.tpPolicyOrClaimRef || ""),
@@ -1473,6 +1564,7 @@ function preparePaymentRequestChase(input: { claimId: string; actorId: string; k
     firstChaseOn: firstAt,
     handlerName: String(ctx.handlerName || "Claims handler"),
   });
+  const copy = firstAt ? { ...words, body: withChaseHistory(words.body, chaseHistoryLine(input.claimId, input.kind)) } : words;
   const to = view.contactEmail;
   const attachmentIds = JSON.stringify(view.payment.packSelectedIds);
   const existing = findPreparedChase(input.kind, input.claimId);
@@ -1519,6 +1611,8 @@ function preparePaymentRequestChase(input: { claimId: string; actorId: string; k
 }
 
 export function prepareOutstandingChase(input: { claimId: string; actorId: string; kind: ChaseKind }) {
+  const setup = fileSetupRefusal(input.claimId, "Chasers do not start");
+  if (setup) throw new Error(setup);
   if (input.kind === "engineer_report") {
     return prepareEngineerReportChase({ claimId: input.claimId, actorId: input.actorId });
   }
@@ -1536,7 +1630,8 @@ export function prepareOutstandingChase(input: { claimId: string; actorId: strin
   }
   const existing = findPreparedChase(input.kind, input.claimId);
   const ctx = letterContext(input.claimId, nowUtcIso());
-  const { subject, body } = chaseEmailCopy(input.kind, ctx, view.contactName, view.clockAt, vehicleOutcome(input.claimId));
+  const outcome = vehicleOutcome(input.claimId);
+  const { subject, body } = chaseEmailCopy(input.kind, ctx, view.contactName, view.clockAt, outcome, chaseHistoryLine(input.claimId, input.kind, outcome));
   const to = view.contactEmail;
   if (existing) {
     run(`UPDATE correspondence SET subject = ?, preview = ?, body = ?, to_address = ?, from_address = ? WHERE id = ?`, [

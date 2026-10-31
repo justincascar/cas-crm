@@ -69,9 +69,12 @@ function Car({
 export function DamageDiagram({
   clientPanels,
   tpPanels,
+  thirdPartyOnly = false,
 }: {
   clientPanels?: string;
   tpPanels?: string;
+  /** R52: the client's car is on the bird's-eye drawing; older client ticks are kept as they were. */
+  thirdPartyOnly?: boolean;
 }) {
   const [client, setClient] = useState(() => parse(clientPanels));
   const [tp, setTp] = useState(() => parse(tpPanels));
@@ -91,7 +94,7 @@ export function DamageDiagram({
     <div className="space-y-3 rounded-xl border border-line bg-card p-5">
       <p className="text-sm text-slate">Tick damaged panels. This is a staff record, not a roadworthiness certificate.</p>
       <div className="flex flex-wrap justify-center gap-10">
-        <Car title="Client" selected={client} onToggle={toggle(setClient)} />
+        {thirdPartyOnly ? null : <Car title="Client" selected={client} onToggle={toggle(setClient)} />}
         <Car title="Third party" selected={tp} onToggle={toggle(setTp)} />
       </div>
       <input type="hidden" name="clientPanels" value={clientValue} />

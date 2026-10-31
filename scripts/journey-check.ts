@@ -280,6 +280,8 @@ async function fillJourney(session: BrowserSession, journey: ClaimJourney): Prom
     notes.push(setControl("client_surname", spec.surname));
     notes.push(setControl("claimType", spec.claimType));
     notes.push(setControl("roadworthiness", spec.roadworthiness));
+    // R50: no postcode in "Cardiff", so the suggestion is Not yet known; staff choose England & Wales here.
+    notes.push(setControl("jurisdiction", "england_wales"));
     notes.push(setControl("accidentDate", spec.accidentDate));
     notes.push(setControl("accidentTime", "14:30"));
     notes.push(setControl("location", "Cardiff"));

@@ -1,3 +1,4 @@
+import { FuelSelect } from "@/components/FuelSelect";
 import { VEHICLE_CLASSES, VEHICLE_CLASS_LABELS } from "@/lib/fleet/classes";
 import { GTA_GROUPS, GTA_NOT_CLASSIFIED } from "@/lib/documents/gta";
 
@@ -66,7 +67,7 @@ export function FleetVehicleFields({
       </label>
       <label className="text-sm">
         Fuel
-        <input name="fuel" className={field} defaultValue={String(values?.fuel || "")} placeholder="As on the V5C, e.g. Diesel" />
+        <FuelSelect name="fuel" defaultValue={String(values?.fuel || "")} className={field} />
       </label>
       <label className="text-sm">
         Date of first registration

@@ -1,3 +1,4 @@
+import { safeToDriveReasonsForClaim } from "@/lib/db/file-setup";
 import { recoveryCardFeePercent } from "@/lib/db/recovery-fee-settings";
 import Link from "next/link";
 import { VehicleMovements } from "@/components/claims/VehicleMovements";
@@ -66,6 +67,8 @@ export async function RecoveryHeadScreen({
   const decision = recoveryClaimForClaim(id);
   const recorded = Boolean(recoveryLineForClaim(id));
   const job = recoveryJobForClaim(id);
+  // R52: the safe-to-drive Yes answers fill in why it could not be driven. Staff can change them.
+  const safeYes = safeToDriveReasonsForClaim(id);
   const screen = getScreenData(id, "recovery");
   const storage = getScreenData(id, "storage");
   const storedTo = [storage.name, storage.address, storage.postcode].map((part) => String(part || "").trim()).filter(Boolean).join(", ");
@@ -110,7 +113,7 @@ export async function RecoveryHeadScreen({
       <div className="grid gap-3 sm:grid-cols-2">
         <label className="block text-sm">
           Why it could not be driven safely
-          <select name="notDriveable" required defaultValue={String(job?.not_driveable_reason || "")} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm">
+          <select name="notDriveable" required defaultValue={String(job?.not_driveable_reason || (safeYes.length ? "unsafe" : ""))} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm">
             <option value="" disabled>
               Choose
             </option>
@@ -123,7 +126,7 @@ export async function RecoveryHeadScreen({
         </label>
         <label className="block text-sm">
           Details (optional)
-          <input name="notDriveableDetail" defaultValue={String(job?.not_driveable_detail || "")} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" />
+          <input name="notDriveableDetail" defaultValue={String(job?.not_driveable_detail || safeYes.join(", "))} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" />
         </label>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">

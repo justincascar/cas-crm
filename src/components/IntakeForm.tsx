@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { FuelSelect } from "@/components/FuelSelect";
+import { normaliseFuel } from "@/lib/domain/fuel";
+import { CarDamageDiagram } from "@/components/CarDamageDiagram";
+import { callFactsFrom, FileSetupFields, readCallFacts, SafeToDriveQuestions, type CallFacts } from "@/components/FileSetupFields";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { restoreDraftBoxes } from "@/lib/form-restore";
-import { JURISDICTIONS } from "@/lib/domain/jurisdiction";
 import {
   actionCreateClaim,
   actionLookupCompliance,
@@ -153,14 +156,36 @@ function PersonFields({ prefix, skipOther, kind }: { prefix: string; skipOther?:
   );
 }
 
+/** R53: the lookup's tax or MOT wording as Yes, No or Not known. */
+function yesNoFromLookup(text: string): string {
+  const t = String(text || "").toLowerCase();
+  if (/untaxed|sorn|not taxed|expired|no mot|invalid|fail|no\b/.test(t)) return "No";
+  if (/taxed|valid|current|in date|pass|yes/.test(t)) return "Yes";
+  return "";
+}
+
+function YesNoNotKnown({ name, label, value, onChange }: { name: string; label: string; value: string; onChange: (value: string) => void }) {
+  return (
+    <label className="block text-sm">
+      {label}
+      <select name={name} className={field} value={value} onChange={(e) => onChange(e.target.value)}>
+        <option value="">Not known</option>
+        <option value="Yes">Yes</option>
+        <option value="No">No</option>
+      </select>
+    </label>
+  );
+}
+
 function VehicleFields({
   prefix,
   matchLabel,
-  includeInsuranceRecord,
+  thirdParty = false,
 }: {
   prefix: string;
   matchLabel: string;
-  includeInsuranceRecord?: boolean;
+  /** R53: only registration, make, model, colour, taxed and MOT. Gearbox and fuel are not needed for the other vehicle. */
+  thirdParty?: boolean;
 }) {
   const [reg, setReg] = useState("");
   const [make, setMake] = useState("");
@@ -187,7 +212,7 @@ function VehicleFields({
       if (v.make) setMake(toStartCase(v.make));
       if (v.model) setModel(toStartCase(v.model));
       if (v.colour) setColour(toStartCase(v.colour));
-      if (v.fuel) setFuel(toStartCase(v.fuel));
+      if (v.fuel) setFuel(normaliseFuel(v.fuel));
       if (v.transmission) setGearbox(v.transmission);
       setIncomplete(true);
       setWarnings(v.warnings.length ? v.warnings : [VEHICLE_MANUAL_HINT]);
@@ -199,8 +224,8 @@ function VehicleFields({
 
   async function checkCompliance() {
     const res = await actionLookupCompliance(reg);
-    setTaxStatus(res.result.taxStatus);
-    setMotStatus(res.result.motStatus);
+    setTaxStatus(thirdParty ? yesNoFromLookup(res.result.taxStatus) : res.result.taxStatus);
+    setMotStatus(thirdParty ? yesNoFromLookup(res.result.motStatus) : res.result.motStatus);
     setInsuranceStatus(res.result.insuranceStatus);
     setWarnings(res.result.warnings);
   }
@@ -258,24 +283,29 @@ function VehicleFields({
             className={field}
           />
         </label>
+        {thirdParty ? null : (
         <label className="block text-sm">
           Gearbox
           <select name={`${prefix}gearbox`} className={field} value={gearbox} onChange={(e) => setGearbox(e.target.value)}>
-            <option value="unknown">Unknown — do not guess</option>
+            <option value="unknown">Not known</option>
             <option value="manual">Manual</option>
             <option value="automatic">Automatic</option>
           </select>
         </label>
+        )}
+        {thirdParty ? null : (
         <label className="block text-sm">
           Fuel
-          <input
-            name={`${prefix}fuel`}
-            value={fuel}
-            onChange={(e) => setFuel(toStartCaseLive(e.target.value))}
-            onBlur={() => setFuel(toStartCase(fuel))}
-            className={field}
-          />
+          <FuelSelect name={`${prefix}fuel`} value={fuel} onChange={setFuel} className={field} />
         </label>
+        )}
+        {thirdParty ? (
+          <>
+            <YesNoNotKnown name={`${prefix}taxStatus`} label="Taxed?" value={taxStatus} onChange={setTaxStatus} />
+            <YesNoNotKnown name={`${prefix}motStatus`} label="MOT?" value={motStatus} onChange={setMotStatus} />
+          </>
+        ) : (
+        <>
         <label className="block text-sm">
           Tax
           <input
@@ -306,6 +336,8 @@ function VehicleFields({
             className={field}
           />
         </label>
+        </>
+        )}
       </div>
       <p className="text-xs text-slate">
         {VEHICLE_MANUAL_HINT} Transmission is never filled in unless the lookup actually returned it. Confirm tax/MOT
@@ -323,16 +355,6 @@ function VehicleFields({
         </a>{" "}
         then type the result here. The CRM does not scrape MID.
       </p>
-      {includeInsuranceRecord ? (
-        <label className="block text-sm">
-          AskMID insurer recorded
-          <input
-            name={`${prefix.replace("veh_", "")}midInsurer`}
-            {...casingInputProps(`${prefix.replace("veh_", "")}midInsurer`, "text", field)}
-            placeholder="Insurer name from authorised lookup"
-          />
-        </label>
-      ) : null}
       <label className="flex items-center gap-2 text-sm">
         <input name={`${prefix}detailsMatch`} type="checkbox" value="yes" />
         {matchLabel}
@@ -343,6 +365,66 @@ function VehicleFields({
             <li key={w}>{w}</li>
           ))}
         </ul>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * R53: the MID check sits with the third party's vehicle. The first third party keeps the full askMID record; the
+ * others record the insurer the check named. "Use this insurer" fills the insurer fields only when staff press it, and
+ * only while no insurer is entered, so it never overwrites one.
+ */
+function MidCheck({ prefix, insurerEntered, onUse }: { prefix: string; insurerEntered: boolean; onUse: (name: string) => void }) {
+  const [midName, setMidName] = useState("");
+  const first = prefix === "tp1_";
+  return (
+    <div className="space-y-3 rounded-md border border-dashed border-line p-3" data-mid-check={prefix}>
+      <h4 className="font-serif text-base text-navy-deep">Insurance (MID) check</h4>
+      {first ? (
+          <>
+            <p className="text-sm text-slate">Lookup not connected yet – please type the details. This records a manual askMID check. It does not look the vehicle up.</p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <label className="block text-sm">
+                Date checked
+                <input name="midCheckedOn" type="date" className={field} />
+              </label>
+              <label className="block text-sm">
+                Accident date searched
+                <input name="midAccidentOn" type="date" className={field} />
+              </label>
+              <label className="block text-sm">
+                Registration searched
+                <input name="midRegistration" className={field} />
+              </label>
+              <label className="block text-sm">
+                Result
+                <select name="midResult" className={field} defaultValue="">
+                  <option value="">Not recorded</option>
+                  <option value="insurer">Insurer found</option>
+                  <option value="no_record">No record found</option>
+                </select>
+              </label>
+              <label className="block text-sm">
+                Insurer
+                <input name="midInsurerName" className={field} onChange={(e) => setMidName(e.target.value)} />
+              </label>
+              <label className="block text-sm">
+                Policy number
+                <input name="midPolicy" className={field} />
+              </label>
+            </div>
+          </>
+      ) : (
+        <label className="block text-sm">
+          Insurer named by the MID check
+          <input name={`${prefix}midInsurer`} className={field} onChange={(e) => setMidName(e.target.value)} placeholder="Insurer name from authorised lookup" />
+        </label>
+      )}
+      {midName.trim() && !insurerEntered ? (
+        <button type="button" className="rounded-md border border-line bg-white px-3 py-2 text-sm font-semibold text-navy" onClick={() => onUse(midName)} data-use-mid-insurer>
+          Use this insurer ({midName.trim()})
+        </button>
       ) : null}
     </div>
   );
@@ -461,7 +543,16 @@ function ThirdPartyBlock({
     <div className="space-y-4 rounded-lg border border-line p-4">
       <h3 className="font-serif text-lg text-navy-deep">{title}</h3>
       <PersonFields prefix={prefix} kind="client" />
-      <VehicleFields prefix={`${prefix}veh_`} matchLabel="Details match the third-party vehicle described" includeInsuranceRecord />
+      <VehicleFields prefix={`${prefix}veh_`} matchLabel="Details match the third-party vehicle described" thirdParty />
+      <MidCheck
+        prefix={prefix}
+        insurerEntered={insurerName.trim() !== ""}
+        onUse={(name) => {
+          const known = insurers.find((item) => item.name.trim().toLowerCase() === name.trim().toLowerCase());
+          if (known) applyInsurer(known, "empty-only");
+          else setInsurerName(name.trim());
+        }}
+      />
       <h4 className="font-serif text-base text-navy-deep">TP insurance</h4>
       <p className="text-xs text-slate">
         Start typing the insurer name. Saved telephone, email and address fill in. Policy number and claim reference stay
@@ -648,7 +739,9 @@ export function IntakeForm({
   defaults = {},
   draftId: initialDraftId = "",
   draftVersion: initialDraftVersion = "",
+  currentStaffId = "",
 }: {
+  currentStaffId?: string;
   staff: Staff[];
   nextRef: string;
   error?: string;
@@ -670,15 +763,18 @@ export function IntakeForm({
   const [tp2, setTp2] = useState(defaults.includeTp2 === "yes");
   const [tp3, setTp3] = useState(defaults.includeTp3 === "yes");
   const [location, setLocation] = useState(defaults.location || "");
+  const [facts, setFacts] = useState<CallFacts>(() => callFactsFrom(defaults));
   const [draftId, setDraftId] = useState(initialDraftId);
   const [draftVersion, setDraftVersion] = useState(initialDraftVersion);
-  const [savedLabel, setSavedLabel] = useState("");
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "failed">("idle");
+  const [savedAt, setSavedAt] = useState("");
+  const savedKeyRef = useRef("");
+  const submittingRef = useRef(false);
   const [draftClash, setDraftClash] = useState("");
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const maps = useMemo(() => googleMapsSearchUrl(location), [location]);
   const versionRef = useRef(initialDraftVersion);
   const idRef = useRef(initialDraftId);
-  const timerRef = useRef(0);
   const anchorRef = useRef<HTMLInputElement>(null);
   const restoredRef = useRef(false);
 
@@ -693,42 +789,95 @@ export function IntakeForm({
     return () => window.clearTimeout(timer);
   }, [defaults]);
 
-  function scheduleDraftSave(event: FormEvent<HTMLFormElement>) {
-    const form = event.currentTarget;
-    window.clearTimeout(timerRef.current);
-    timerRef.current = window.setTimeout(() => {
-      const data = new FormData(form);
-      const fields: Record<string, string> = {};
-      for (const [key, value] of data.entries()) {
-        if (typeof value !== "string") continue;
-        fields[key] = value;
+  /** Every named box in the form as it is now, however it was filled. */
+  function snapshot(form: HTMLFormElement): { key: string; fields: Record<string, string> } {
+    const fields: Record<string, string> = {};
+    for (const [name, value] of new FormData(form).entries()) {
+      if (typeof value !== "string" || name === "submitKey" || name.startsWith("$ACTION")) continue;
+      fields[name] = name in fields ? `${fields[name]},${value}` : value;
+    }
+    return { key: JSON.stringify(fields), fields };
+  }
+
+  // R54: the draft is saved after any change: typing, a drop-down, a tick, a picked suggestion, a lookup filling boxes,
+  // or the damage drawing. The form is read every moment; 1.5 seconds after the last change it is saved. A failed save
+  // says so and is tried again.
+  useEffect(() => {
+    const form = anchorRef.current?.form;
+    if (!form) return;
+    let lastSeen = "";
+    let changedAt = 0;
+    let inFlight = false;
+    let retryAt = 0;
+    const settle = window.setTimeout(() => {
+      savedKeyRef.current = snapshot(form).key;
+      lastSeen = savedKeyRef.current;
+    }, 300);
+    const tick = window.setInterval(() => {
+      if (submittingRef.current) return;
+      const now = Date.now();
+      const current = snapshot(form);
+      if (current.key !== lastSeen) {
+        lastSeen = current.key;
+        changedAt = now;
+        setFacts(readCallFacts(form));
       }
-      void fetch("/claims/drafts", {
+      if (inFlight || current.key === savedKeyRef.current || now - changedAt < 1500 || now < retryAt) return;
+      inFlight = true;
+      setSaveState("saving");
+      fetch("/claims/drafts", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ draftId: idRef.current, version: versionRef.current, fields }),
+        body: JSON.stringify({ draftId: idRef.current, version: versionRef.current, fields: current.fields }),
       })
         .then(async (response) => {
-          const body = (await response.json()) as { id?: string; version?: string; savedLabel?: string; error?: string };
+          const body = (await response.json()) as { id?: string; version?: string; error?: string };
           if (response.status === 409) {
             setDraftClash(body.error || "Someone else saved this draft. Your entries are still on this page.");
+            setSaveState("failed");
+            retryAt = Number.POSITIVE_INFINITY;
             return;
           }
-          if (!response.ok || !body.id || !body.version) return;
+          if (!response.ok || !body.id || !body.version) throw new Error("not saved");
           idRef.current = body.id;
           versionRef.current = body.version;
           setDraftId(body.id);
           setDraftVersion(body.version);
-          setSavedLabel(body.savedLabel || "");
+          savedKeyRef.current = current.key;
+          setSavedAt(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/London", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23" }).format(new Date()));
+          setSaveState("saved");
           setDraftClash("");
         })
-        .catch(() => undefined);
-    }, 700);
-  }
+        .catch(() => {
+          setSaveState("failed");
+          retryAt = Date.now() + 5000;
+        })
+        .finally(() => {
+          inFlight = false;
+        });
+    }, 500);
+    // Leaving with changes that are not saved yet asks first.
+    const leaving = (event: BeforeUnloadEvent) => {
+      if (submittingRef.current || snapshot(form).key === savedKeyRef.current) return;
+      event.preventDefault();
+      event.returnValue = "";
+    };
+    window.addEventListener("beforeunload", leaving);
+    const submitted = () => {
+      submittingRef.current = true;
+    };
+    form.addEventListener("submit", submitted);
+    return () => {
+      window.clearTimeout(settle);
+      window.clearInterval(tick);
+      window.removeEventListener("beforeunload", leaving);
+      form.removeEventListener("submit", submitted);
+    };
+  }, []);
 
   return (
     <>
-    <ValidatedForm action={actionCreateClaim} className="space-y-6" initialError={error} initialErrorField={errorField} onInput={scheduleDraftSave} onChange={scheduleDraftSave} encType="multipart/form-data">
+    <ValidatedForm action={actionCreateClaim} className="space-y-6" initialError={error} initialErrorField={errorField} encType="multipart/form-data">
       {error ? (
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
       ) : null}
@@ -740,7 +889,9 @@ export function IntakeForm({
       <input type="hidden" name="draftVersion" value={draftVersion} />
       <input type="hidden" name="recoveryFormVersion" value="fees" />
       <input type="hidden" name="agreementChannel" value="none" />
-      {savedLabel ? <p className="text-sm text-teal-dark">{savedLabel}</p> : null}
+      <p className={`text-sm ${saveState === "failed" ? "font-semibold text-overdue" : "text-teal-dark"}`} role="status" aria-live="polite" data-draft-status={saveState}>
+        {saveState === "saving" ? "Saving…" : saveState === "failed" ? "Not saved – check your connection. Trying again." : saveState === "saved" ? `Saved ${savedAt}` : ""}
+      </p>
       {draftClash ? (
         <p className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm">
           {draftClash} Your entries are still in the boxes.{" "}
@@ -773,71 +924,7 @@ export function IntakeForm({
         ) : null}
       </Section>
 
-      <section className="space-y-3 rounded-xl border border-line bg-card p-5">
-        <h2 className="font-serif text-xl text-navy-deep">File setup</h2>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <label className="block text-sm">
-            Liability status
-            <select name="claimType" className={field} defaultValue={defaults.claimType || ""}>
-              <option value="">Not yet decided</option>
-              <option value="non_fault">Non-fault</option>
-              <option value="fault">Fault</option>
-              <option value="disputed">Disputed / unclear</option>
-            </select>
-          </label>
-          <label className="block text-sm">
-            Jurisdiction
-            <select name="jurisdiction" className={field} defaultValue={defaults.jurisdiction || "england_wales"}>
-              {JURISDICTIONS.map((item) => (
-                <option key={item.value} value={item.value}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-sm">
-            Roadworthiness
-            <select name="roadworthiness" className={field} defaultValue={defaults.roadworthiness || ""}>
-              <option value="">Not yet decided</option>
-              <option value="roadworthy">Roadworthy</option>
-              <option value="unroadworthy">Unroadworthy</option>
-            </select>
-          </label>
-          <label className="block text-sm">
-            Handler
-            <select name="handlerId" className={field} defaultValue={defaults.handlerId || "staff-sian"}>
-              {staff.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-        <p className="text-xs text-slate">
-          Leave liability status and roadworthiness as not yet decided if you do not yet know. Do not guess Fault or
-          Roadworthy. Disputed / unclear is a valid liability status. The two answers are independent. AI does not certify
-          roadworthiness.
-        </p>
-      </section>
-
-      <Section n={2} title="Vehicle details">
-        <VehicleFields prefix="veh_" matchLabel="Details match the client" />
-      </Section>
-
-      <Section n={3} title="Vehicle damage">
-        <label className="block text-sm">
-          Description
-          <textarea name="damageDescription" rows={3} {...casingInputProps("damageDescription", "textarea", field)} />
-        </label>
-        <label className="flex items-center gap-2 text-sm">
-          <input name="requestPhotosWhatsapp" type="checkbox" value="yes" />
-          Ask the client to send photographs via WhatsApp (simulated — not sent to a live number)
-        </label>
-        <p className="text-xs text-slate">Photo files can also be added on the file after it is created.</p>
-      </Section>
-
-      <Section n={4} title="Accident details">
+      <Section n={2} title="The accident">
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="block text-sm">
             Date
@@ -973,6 +1060,24 @@ export function IntakeForm({
             <input name="tpSpeed" className={field} />
           </label>
         </div>
+      </Section>
+
+      <Section n={3} title="The client's vehicle and damage">
+        <VehicleFields prefix="veh_" matchLabel="Details match the client" />
+        <div className="space-y-2" data-damage-drawing>
+          <p className="text-sm font-semibold">Where is the damage? Tap each damaged area. Tap again to remove it.</p>
+          <CarDamageDiagram name="damageZones" initial={defaults.damageZones || ""} />
+        </div>
+        <label className="block text-sm">
+          Description
+          <textarea name="damageDescription" rows={3} {...casingInputProps("damageDescription", "textarea", field)} />
+        </label>
+        <label className="flex items-center gap-2 text-sm">
+          <input name="requestPhotosWhatsapp" type="checkbox" value="yes" />
+          Ask the client to send photographs via WhatsApp (simulated — not sent to a live number)
+        </label>
+        <p className="text-xs text-slate">Photo files can also be added on the file after it is created.</p>
+        <SafeToDriveQuestions defaults={defaults} />
         <label className="flex items-center gap-2 text-sm">
           <input
             name="needsRecovery"
@@ -996,7 +1101,7 @@ export function IntakeForm({
       </Section>
 
       {needsReplacement ? (
-        <Section n={5} title="Replacement vehicle">
+        <Section n={4} title="Replacement vehicle">
           <p className="text-xs text-slate">This records what is needed. It does not book a car or start hire.</p>
           <div className="grid gap-3 sm:grid-cols-2">
             <label className="block text-sm">
@@ -1038,7 +1143,7 @@ export function IntakeForm({
       ) : null}
 
       {needsRecovery ? (
-        <Section n={6} title="Recovery">
+        <Section n={5} title="Recovery">
           <label className="block text-sm">
             Recovery location
             <input name="recoveryLocation" defaultValue={defaults.recoveryLocation || location} {...casingInputProps("recoveryLocation", "text", field)} />
@@ -1118,40 +1223,7 @@ export function IntakeForm({
         {tp3 ? <ThirdPartyBlock prefix="tp3_" title="Third party 3" insurers={insurers} agents={agents} /> : null}
       </Section>
 
-      <section className="space-y-3 rounded-xl border border-line bg-card p-5">
-        <h2 className="font-serif text-xl text-navy-deep">Insurance (MID) check</h2>
-        <p className="text-sm text-slate">Lookup not connected yet – please type the details. This records a manual askMID check. It does not look the vehicle up.</p>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <label className="block text-sm">
-            Date checked
-            <input name="midCheckedOn" type="date" defaultValue={defaults.midCheckedOn || ""} className={field} />
-          </label>
-          <label className="block text-sm">
-            Accident date searched
-            <input name="midAccidentOn" type="date" defaultValue={defaults.midAccidentOn || ""} className={field} />
-          </label>
-          <label className="block text-sm">
-            Registration searched
-            <input name="midRegistration" defaultValue={defaults.midRegistration || ""} className={field} />
-          </label>
-          <label className="block text-sm">
-            Result
-            <select name="midResult" className={field} defaultValue={defaults.midResult || ""}>
-              <option value="">Not recorded</option>
-              <option value="insurer">Insurer found</option>
-              <option value="no_record">No record found</option>
-            </select>
-          </label>
-          <label className="block text-sm">
-            Insurer
-            <input name="midInsurerName" defaultValue={defaults.midInsurerName || ""} className={field} />
-          </label>
-          <label className="block text-sm">
-            Policy number
-            <input name="midPolicy" defaultValue={defaults.midPolicy || ""} className={field} />
-          </label>
-        </div>
-      </section>
+      <FileSetupFields staff={staff} defaults={defaults} currentStaffId={currentStaffId} facts={facts} n={9} />
 
       <div className="flex flex-wrap items-center gap-3">
         <button className="rounded-md bg-teal px-5 py-3 text-sm font-semibold text-white" type="submit">

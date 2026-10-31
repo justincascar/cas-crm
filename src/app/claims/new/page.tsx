@@ -12,7 +12,7 @@ export default async function NewClaimPage({
 }: {
   searchParams: Promise<{ error?: string; field?: string; draft?: string }>;
 }) {
-  await requireStaff();
+  const me = await requireStaff();
   const { error, field, draft } = await searchParams;
   const draftRow = draft ? getClaimDraft(draft) : undefined;
   const openDraft = draftRow && !draftRow.discarded_at && !draftRow.claim_id ? draftRow : undefined;
@@ -42,6 +42,7 @@ export default async function NewClaimPage({
         defaults={draftPayload(openDraft)}
         draftId={openDraft?.id || ""}
         draftVersion={openDraft?.updated_at || ""}
+        currentStaffId={me.id}
       />
     </div>
   );

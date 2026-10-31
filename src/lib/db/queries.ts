@@ -294,6 +294,7 @@ function currentStepRows(handlerId: string | null, chases: ChaseView[], claimIds
     handler_name: string | null;
     claim_type: string | null;
     roadworthiness: string | null;
+    jurisdiction: string | null;
     needs_replacement: number | null;
     needs_recovery: number | null;
     created_at: string | null;
@@ -315,7 +316,7 @@ function currentStepRows(handlerId: string | null, chases: ChaseView[], claimIds
     agreement_count: number | null;
   }>(
     `SELECT c.id, c.file_reference, p.full_name AS client_name, s.name AS handler_name,
-            c.claim_type, c.roadworthiness, c.needs_replacement, c.needs_recovery, c.created_at, c.accident_at,
+            c.claim_type, c.roadworthiness, c.jurisdiction, c.needs_replacement, c.needs_recovery, c.created_at, c.accident_at,
             v.registration, c.own_insurer_name, c.total_loss, c.later_declared_total_loss, c.hire_status,
             c.recovery_status, c.engineering_status, c.storage_status, c.storage_started_on, c.storage_billing_end_on,
             c.payment_qualifies_off_hire, c.off_hire_scheduled_on,
@@ -368,6 +369,7 @@ function currentStepRows(handlerId: string | null, chases: ChaseView[], claimIds
       claimId: id,
       claimType,
       roadworthiness: String(row.roadworthiness || ""),
+      jurisdiction: String(row.jurisdiction || ""),
       needsReplacement: Number(row.needs_replacement) === 1,
       needsRecovery: Number(row.needs_recovery) === 1,
       createdAt: row.created_at ? String(row.created_at) : null,

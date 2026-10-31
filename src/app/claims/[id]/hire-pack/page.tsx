@@ -1,3 +1,5 @@
+import { FuelSelect } from "@/components/FuelSelect";
+import { fuelLabel } from "@/lib/domain/fuel";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { actionGenerateHireAgreement, actionGenerateHirePack, actionGenerateStorageRecovery, actionSaveHirePack } from "@/app/actions";
@@ -236,12 +238,12 @@ export async function HirePackScreen({
           <div className="grid gap-3 sm:grid-cols-2">
             {pack.hire?.hire_fuel ? (
               <p className="text-sm">
-                Fuel: {String(pack.hire.hire_fuel)} (from the fleet record)
+                Fuel: {fuelLabel(String(pack.hire.hire_fuel))} (from the fleet record)
               </p>
             ) : (
               <label className="text-sm">
                 Fuel
-                <input name="hire_fuel" className={field} defaultValue={String(s.hire_fuel || "")} />
+                <FuelSelect name="hire_fuel" defaultValue={String(s.hire_fuel || "")} className="mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm" />
               </label>
             )}
             <label className="text-sm">

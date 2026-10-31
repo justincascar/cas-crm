@@ -1,3 +1,4 @@
+import { normaliseFuel } from "../domain/fuel";
 import type { DatabaseSync } from "node:sqlite";
 import { formatUkDate, nowUtcIso } from "../dates";
 import { GTA_GROUPS, normaliseGtaGroup } from "../documents/gta";
@@ -208,7 +209,7 @@ function toDetails(row: DetailRow, rules: FleetGtaRule[]): FleetCarDetails {
     make: text(row.make),
     model: realModel(row.model),
     transmission: gearbox(row.transmission),
-    fuel: text(row.fuel),
+    fuel: normaliseFuel(row.fuel),
     seats: row.seats == null || Number(row.seats) <= 0 ? null : Number(row.seats),
     colour: text(row.colour),
     gtaGroup: normaliseGtaGroup(row.gta_group),
@@ -316,6 +317,11 @@ export function saveMissingFleetDetailsNow(input: Parameters<typeof saveMissingF
       if (!value) throw new Error("Choose manual or automatic for the gearbox.");
       vehicleSets.push(["transmission", value]);
       words.push(`gearbox ${value.toLowerCase()}`);
+    } else if (field === "fuel") {
+      const value = normaliseFuel(raw);
+      if (!value) throw new Error("Choose the fuel, or leave it as Not known.");
+      vehicleSets.push(["fuel", value]);
+      words.push(`fuel ${value}`);
     } else if (field === "seats") {
       if (!/^\d{1,2}$/.test(raw) || Number(raw) < 1 || Number(raw) > 20) throw new Error("Enter the number of seats, from 1 to 20.");
       vehicleSets.push(["seats", Number(raw)]);

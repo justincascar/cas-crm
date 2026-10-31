@@ -1,3 +1,5 @@
+import { normaliseFuel } from "../domain/fuel";
+import { fileSetupRefusal } from "./file-setup";
 import { CAS_HIRE_AGREEMENT_BANNER, CAS_HIRE_TERMS_HTML } from "../documents/cas-hire-terms";
 import { cancelNoticeHtml, storageRecoveryPageHtml } from "../documents/storage-recovery-agreement";
 import { describeHireAgreementParts, type AgreementPart, type HireAgreementParts } from "../documents/hire-agreement-parts";
@@ -387,7 +389,7 @@ export function buildHireAgreementView(
     hireRegistration: String(hire?.hire_reg || ""),
     // The car's details come from its fleet record, so they are never typed again for the agreement.
     hireTransmission: gearbox(hire?.hire_transmission) || gearbox(before.transmission),
-    hireFuel: String(hire?.hire_fuel || s.hire_fuel || ""),
+    hireFuel: normaliseFuel(String(hire?.hire_fuel || s.hire_fuel || "")),
     hireColour: String(hire?.hire_colour || ""),
     hireSeats: Number(hire?.hire_seats) > 0 ? String(hire?.hire_seats) : "",
     suppliedGroup: normaliseGtaGroup(String(hire?.supplied_gta_group || "")),
@@ -448,6 +450,8 @@ export function buildHireAgreementView(
 export function generateHireAgreementDocument(claimId: string, actorId: string) {
   const pack = getHirePack(claimId);
   if (!pack) throw new Error("File not found.");
+  const setup = fileSetupRefusal(claimId, "The hire agreement and its Storage & Recovery page are not produced");
+  if (setup) throw new Error(setup);
   const blocked = hireAgreementPrehireBlock(claimId);
   if (blocked) throw new Error(blocked);
   if (String(pack.claim.claim_type) === "fault") {
