@@ -349,6 +349,41 @@ DONE — CAS-Website commit 6730c22 (local only: GitHub is not signed in on this
 - **Report:** where it is, how to open it locally, and what's still placeholder.
 - **Hosting goes with the CRM at J9,** and needs Justin's approval and costs first.
 
+### J18 — Full office-day retest after the rebuilds (do after the Open review notes)
+Once R49–R66 are fixed, run every kind of claim end to end in the browser as `sian` (and as the driver on a phone-width screen). Fix what breaks. Every claim is made new, through the new-claim form in call order:
+1. **Non-fault, repairable:** urgent roadside recovery, then hire with a signed agreement, then first letters, engineer, report, repair authorisation, repairs, return, hire and storage ended, payment pack, payments.
+2. **Non-fault, total loss:** valuation signed by the client (option A), then sent to the insurer, a partial payment (flagged), the full payment, salvage collected, and the hire end proposed 7 days after.
+3. **Fault:** own-insurer letter (network code), repair authority, courtesy car (shows "waiting for wording"), repairs.
+4. **Split 50/50 and disputed:** the right letters, and the Hire tab warning.
+5. **The awkward cases:**
+   - repairable changed to total loss
+   - a car swap
+   - an agreement renewal at day 80
+   - a reply arriving just before a chaser
+   - two staff editing the same claim at once
+   - a mistake on every form (nothing wiped)
+
+Add each as a journey in `npm run test:journeys`. Write the results in progress.md, with what a person would find confusing, and fix those too.
+
+### J19 — Payment requests and invoices from draft templates
+Build the payment request pack for each head (repairs, recovery, storage, hire):
+- **Draft invoice:** quantity × rate, net, VAT, gross, with the card fee line when paid by card. Use a plain draft layout on the headed paper, marked "Draft – invoice template and numbering to be confirmed (question 7)".
+- **Covering letter:** in the style of the existing hire pack cover letter.
+- **The evidence:** signed agreements, engineer's report, chronology, photos, licence check, and the statement of means where relied on, with an evidence index.
+
+One button produces the pack as one PDF and an email to the insurer (simulated), and starts the payment chase. Invoice numbers use a temporary "DRAFT-" series until Justin confirms numbering. Nothing is marked sent or issued as a final invoice until question 7 is answered.
+
+### J20 — Get ready for hosting, without buying anything
+Hosting is undecided (Azure UK South recommended; Fly.io London as fallback). Both use Postgres. Prepare the CRM so moving takes days, not weeks:
+- **Postgres:** make the database layer run on Postgres as well as SQLite, with the same tests passing on both, against a local Postgres in Docker.
+- **Docker:** a Dockerfile and a docker-compose for running locally.
+- **Settings from the environment:** every setting from environment variables, with no secrets in code.
+- **Files:** document storage behind one interface, so files can move to cloud storage later.
+- **Backups:** restore tested on Postgres.
+- **Write it up:** `docs/HOSTING-READINESS.md`, covering what's done, what Justin must approve (costs, accounts), and the steps on the day.
+
+Don't create any cloud accounts, buy anything, or deploy anywhere.
+
 ### J9a — Template and wording review by Justin (MUST be done before going live)
 This is a gate. The CRM must not be used with real clients until it is complete.
 
