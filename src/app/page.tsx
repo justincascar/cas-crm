@@ -128,7 +128,7 @@ export default async function DashboardPage({
     { key: "money", label: "Money awaited", value: formatGbp(owed), href: "/financials/aged-debt", tone: "warn" },
     { key: "fleet", label: "Fleet free today", value: String(Number(data.fleetMap.available || 0)), href: "/hire?status=available", tone: "ok" },
     // R36: real fleet cars missing gearbox, seats, group or other details the agreement prints.
-    { key: "fleet_details", label: "Fleet details to complete", value: String(fleetToComplete), href: "/hire#details-to-complete", tone: fleetToComplete ? "warn" : "ok" },
+    { key: "fleet_details", label: "Fleet details to complete", value: String(fleetToComplete), href: "/hire/fleet-details?missing=1", tone: fleetToComplete ? "warn" : "ok" },
   ];
 
   return (

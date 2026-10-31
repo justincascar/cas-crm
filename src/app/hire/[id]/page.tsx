@@ -1,3 +1,4 @@
+import { fleetDetailHistory } from "@/lib/db/fleet-details";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { actionRemoveFleetVehicle, actionUpdateFleetVehicle } from "@/app/fleet-actions";
@@ -26,6 +27,7 @@ export default async function FleetVehiclePage({
   const vehicle = getFleetVehicle(id);
   if (!vehicle) notFound();
   const documents = listFleetVehicleDocuments(id);
+  const history = fleetDetailHistory(id);
   const blocking = vehicle.removed_at ? [] : listBlockingReservations(id);
   const missing = vehicle.v5c_missing_json ? (JSON.parse(String(vehicle.v5c_missing_json)) as string[]) : [];
   const registration = vehicle.registration ? formatVehicleRegistration(String(vehicle.registration)) : "No registration on V5C";
@@ -92,6 +94,27 @@ export default async function FleetVehiclePage({
             Save details
           </button>
         </ValidatedForm>
+      </section>
+
+      <section className="rounded-xl border border-line bg-card p-5" data-fleet-history>
+        <h2 className="font-serif text-xl text-navy-deep">Changes to this car&apos;s record</h2>
+        <p className="mt-1 text-sm text-slate">
+          Who changed what, and when. An agreement already produced or signed keeps what it was produced with.{" "}
+          <Link href={`/hire/fleet-details?car=${id}`} className="text-teal-dark underline">
+            Complete fleet details
+          </Link>
+        </p>
+        {history.length ? (
+          <ul className="mt-3 space-y-1 text-sm">
+            {history.map((entry, index) => (
+              <li key={`${entry.at}-${index}`}>
+                <span className="text-slate">{formatUkDateTime(entry.at)} · {entry.who}:</span> {entry.details}
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="mt-3 text-sm">No changes recorded yet.</p>
+        )}
       </section>
 
       {!removed ? (

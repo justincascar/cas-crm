@@ -48,6 +48,7 @@ export default async function ClaimHirePage({
       swap={swapView(id, londonTodayIso())}
       mayOverrideSwap={canOverrideUnsignedSwap(staff.id)}
       swapCar={query.swapCar}
+      carFromFleet={query.car}
     />
   );
 }

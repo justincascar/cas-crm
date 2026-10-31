@@ -2,7 +2,7 @@ import { DatabaseSync, type SQLInputValue } from "node:sqlite";
 import fs from "node:fs";
 import path from "node:path";
 import { ensureStaffAuth } from "../auth/ensure";
-import { backfillChronologyIfEmpty, seedIfEmpty } from "./seed";
+import { backfillChronologyIfEmpty, ensureTestFleetGroups, seedIfEmpty } from "./seed";
 import { ensureEngineers } from "./engineers";
 import { ensureKnownInsurers } from "./insurers";
 import { ensureDefaultVehicleLocationSetting } from "./vehicle-location";
@@ -57,6 +57,7 @@ function openDatabase(): DatabaseSync {
   ensureDemoDayJobs(db);
   ensureRealFleet(db);
   mapStoredFuelsOn(db);
+  ensureTestFleetGroups(db);
   clearFalseDemonstrationHireCollection(db);
   closeDeliveriesForStartedHires(db);
   correctUnprovenSentEmails(db);

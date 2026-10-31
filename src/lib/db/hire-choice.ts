@@ -14,7 +14,7 @@ import { activeReservationFor, startHireFromHandover } from "./hire-start";
 import { recordClaimEvent } from "./chronology";
 import { touchFleetVersion } from "./fleet";
 import { fleetAvailability } from "./fleet-availability";
-import { allFleetCarDetails, fleetCarDetails, fleetGroupChoices, missingWords, type FleetCarDetails } from "./fleet-details";
+import { allFleetCarDetails, FLEET_DETAIL_LABELS, fleetCarDetails, fleetGroupChoices, hireDetailsMissing, missingWords, type FleetCarDetails } from "./fleet-details";
 import {
   agreementMandatoryGaps,
   currentHireEpisode,
@@ -53,6 +53,8 @@ export type HireCarChoice = {
   colour: string;
   gtaGroup: string | null;
   vehicleClass: string;
+  /** R60: details a hire needs that its fleet record lacks. A car with any cannot be chosen. */
+  missing: string[];
   label: string;
   version: string;
 };
@@ -188,6 +190,7 @@ function carChoice(car: FleetCarDetails): Omit<HireCarChoice, "label" | "version
     colour: car.colour,
     gtaGroup: car.gtaGroup,
     vehicleClass: car.vehicleClass,
+    missing: hireDetailsMissing(car).map((field) => (field === "gtaGroup" ? "GTA group" : FLEET_DETAIL_LABELS[field].toLowerCase())),
   };
 }
 
@@ -443,6 +446,10 @@ export function chooseHireCar(input: {
     if (!availability.free) throw new Error(carNotFreeMessage(availability));
     const car = fleetCarDetails(input.fleetVehicleId);
     if (!car) throw new Error("That car is not on the fleet.");
+    const lacking = hireDetailsMissing(car);
+    if (lacking.length) {
+      throw new Error(`${car.registration || "That car"}'s fleet record has no ${missingWords(lacking)}. Complete it in Fleet (Complete fleet details), then choose it.`);
+    }
     touchFleetVersion({
       fleetVehicleId: input.fleetVehicleId,
       actorId: input.actorId,
@@ -854,7 +861,7 @@ export function loadHireArea(
   const byCloseness = (a: HireCarChoice, b: HireCarChoice) =>
     carDistance(a, clientCar) - carDistance(b, clientCar) || a.registration.localeCompare(b.registration, "en-GB", { numeric: true });
   const otherVehicles = free.filter((car) => !isCar(car)).sort(byCloseness);
-  const missingDetails = (car: HireCarChoice) => !knownTransmission(car.transmission) || car.seats == null;
+  const missingDetails = (car: HireCarChoice) => car.missing.length > 0;
   const freeCars = free.filter(isCar).sort(byCloseness);
   const cars = freeCars.filter((car) => {
     if (missingDetails(car)) return false;

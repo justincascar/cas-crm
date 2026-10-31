@@ -5,8 +5,7 @@ import { FUEL_LEVELS } from "@/lib/db/handover";
 import type { HireArea } from "@/lib/db/hire-choice";
 import { CarOptionGroups } from "@/components/claims/CarOptions";
 import { SWAP_AGREEMENT_FIELDS, type SwapView } from "@/lib/db/vehicle-swap";
-import { FleetDetailBox } from "@/components/FleetDetailBox";
-import { fleetDetailLine, type FleetCarDetails } from "@/lib/db/fleet-details";
+import { fleetDetailLine, type FleetCarDetails, missingWords } from "@/lib/db/fleet-details";
 import { chargedAboveSupplied } from "@/lib/db/hire-group-check";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
@@ -90,12 +89,13 @@ export function SwapStartForm({
         </Link>
       </p>
       {missing.length ? (
-        <fieldset className="grid gap-3 rounded-md border border-overdue/40 bg-[#f8ecec] p-3 text-sm sm:grid-cols-3" data-swap-car-details>
-          <legend className="px-1 font-semibold">Not on the fleet record. They print on the new agreement and are saved to the fleet record.</legend>
-          {missing.map((key) => (
-            <FleetDetailBox key={key} field={key} car={picked} groups={groups} className={field} />
-          ))}
-        </fieldset>
+        <p className="rounded-md border border-overdue/40 bg-[#f8ecec] p-3 text-sm" data-swap-car-details>
+          This car&apos;s fleet record has no {missingWords(missing)}, so it cannot be chosen yet.{" "}
+          <Link href={`/hire/fleet-details?car=${picked.fleetVehicleId}&back=${encodeURIComponent(`/claims/${id}/hire?swapCar=${picked.fleetVehicleId}#swap-start`)}`} className="font-semibold underline">
+            Complete it in Fleet
+          </Link>{" "}
+          and come back to this swap.
+        </p>
       ) : null}
       {askReason ? (
         <label className="block text-sm" data-swap-above-reason>

@@ -1,3 +1,4 @@
+import { saveFleetDetail } from "../src/lib/db/fleet-details.ts";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
@@ -90,15 +91,20 @@ describe("R27 — the group checks before an agreement", () => {
 });
 
 describe("R28 and R29 — the swap agreement", () => {
-  it("asks for the replacement car's gearbox, seats and group, then produces a new agreement with its own number", () => {
+  it("R60: refuses a replacement car missing details until it is completed in Fleet, then produces a new agreement with its own number", () => {
     const db = prepared();
     withDatabase(db, () => {
       db.prepare(`UPDATE vehicles SET gta_unclassified_reason = 'Fictional test car' WHERE id = (SELECT client_vehicle_id FROM claims WHERE id = 'c3')`).run();
       const car = freeCarMissingDetails(db, "c3");
       const base = { claimId: "c3", actorId: "staff-sian", newFleetVehicleId: car, date: londonTodayIso(), time: "10:30", ...readings };
-      assert.throws(() => startVehicleSwap(base), /Enter the replacement car's gearbox/);
+      assert.throws(() => startVehicleSwap(base), /fleet record has no .*Complete it in Fleet/);
+      // Typed details on the swap are not used: the fleet record is the only place they are entered.
+      assert.throws(() => startVehicleSwap({ ...base, details: { transmission: "Automatic", seats: "5", gtaGroup: "S3" } }), /Complete it in Fleet/);
+      for (const [field, value] of [["transmission", "Automatic"], ["seats", "5"], ["gtaGroup", "S3"], ["fuel", "Petrol"], ["colour", "Blue"]] as const) {
+        saveFleetDetail({ fleetVehicleId: car, field, value, actorId: "staff-sian" });
+      }
       const before = get<{ hire_agreement_number: string | null }>(`SELECT hire_agreement_number FROM claims WHERE id = 'c3'`)?.hire_agreement_number;
-      const result = startVehicleSwap({ ...base, details: { transmission: "Automatic", seats: "5", gtaGroup: "S3", fuel: "Petrol", colour: "Blue" }, aboveSuppliedReason: "Test" });
+      const result = startVehicleSwap({ ...base, aboveSuppliedReason: "Test" });
       const saved = get<{ transmission: string; seats: number; gta_group: string }>(
         `SELECT v.transmission, v.seats, v.gta_group FROM fleet_vehicles fv JOIN vehicles v ON v.id = fv.vehicle_id WHERE fv.id = ?`,
         [car],

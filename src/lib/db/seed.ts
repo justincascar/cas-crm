@@ -34,6 +34,22 @@ export function seedIfEmpty(db: DatabaseSync) {
   seed(db);
 }
 
+/**
+ * R60: the fictional TEST cars (CAS 1–10) have fictional GTA groups, so a demonstration hire can choose them now that a
+ * car without its details cannot be chosen. Only TEST cars with no group are touched; the real fleet is never filled.
+ */
+const TEST_FLEET_GROUPS: Record<string, string> = Object.fromEntries(
+  Array.from({ length: 10 }, (_, index) => [`v-fleet-${index + 1}`, "S3"]),
+);
+
+export function ensureTestFleetGroups(db: DatabaseSync) {
+  const update = db.prepare(
+    `UPDATE vehicles SET gta_group = ? WHERE id = ? AND (gta_group IS NULL OR trim(gta_group) = '')
+       AND id IN (SELECT vehicle_id FROM fleet_vehicles WHERE is_real = 0)`,
+  );
+  for (const [vehicleId, group] of Object.entries(TEST_FLEET_GROUPS)) update.run(group, vehicleId);
+}
+
 export function seed(db: DatabaseSync) {
   const now = nowUtcIso();
 
@@ -166,6 +182,7 @@ export function seed(db: DatabaseSync) {
   for (const f of fleet) {
     run(db, "INSERT INTO fleet_vehicles(id, vehicle_id, status, location, notes) VALUES (?, ?, ?, ?, ?)", f);
   }
+  ensureTestFleetGroups(db);
 
   type ClaimSeed = {
     id: string;

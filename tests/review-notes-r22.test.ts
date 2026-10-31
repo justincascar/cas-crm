@@ -9,14 +9,16 @@ import { ensureRealFleet } from "../src/lib/db/fleet.ts";
 import {
   fleetCarDetails,
   listFleetDetailsToComplete,
+  fleetDetailHistory,
+  saveFleetDetail,
   saveFleetGtaRule,
   saveMissingFleetDetails,
+  suggestGearbox,
   suggestFleetGtaGroup,
 } from "../src/lib/db/fleet-details.ts";
 import { generateHireAgreementDocument } from "../src/lib/db/hire-agreement.ts";
 import { chooseHireCar, loadHireArea, saveHireNeed } from "../src/lib/db/hire-choice.ts";
 import { getHirePack, renderHirePack } from "../src/lib/db/hire-pack.ts";
-import { saveHireCarDetails } from "../src/lib/db/hire-out-readings.ts";
 import { agreementMandatoryGaps } from "../src/lib/db/hire-readiness.ts";
 import { listDriverJobs } from "../src/lib/db/jobs.ts";
 import { migrate } from "../src/lib/db/migrate.ts";
@@ -109,41 +111,41 @@ describe("R22 — a chosen hire car shows and carries all of its details", () =>
     db.close();
   });
 
-  it("asks for missing details on the hire screen, saves them to the fleet record once, and puts them on the agreement", () => {
+  it("R60: a car missing details cannot be chosen; completed in Fleet, it can, and the details print on the agreement", () => {
     const db = prepared();
     withDatabase(db, () => {
-      readyForAgreement();
+      saveHireNeed({ claimId: "c1", choice: "yes", reason: "Car cannot be driven.", actorId: "staff-sian", submitKey: "need-c1" });
       run(`UPDATE vehicles SET transmission = NULL, seats = NULL, colour = NULL, gta_group = NULL WHERE id = ?`, [vehicleOf(FLEET_ID)]);
+      const listed = loadHireArea("c1", { transmission: "", seats: "" });
+      const offered = [...(listed?.cars || []), ...(listed?.carsMissingDetails || [])].find((car) => car.id === FLEET_ID);
+      assert.deepEqual(offered?.missing, ["gearbox", "seats", "colour", "GTA group"]);
+      assert.ok(listed?.carsMissingDetails.some((car) => car.id === FLEET_ID), "shown with the cars that have details missing");
+      const choose = () =>
+        chooseHireCar({
+          claimId: "c1",
+          fleetVehicleId: FLEET_ID,
+          method: "deliver",
+          date: londonTodayIso(),
+          time: "10:00",
+          address: "1 Test Street, Cardiff",
+          actorId: "staff-sian",
+          submitKey: `choose-c1-${Math.random()}`,
+          driverId: "staff-driver",
+        });
+      assert.throws(choose, /fleet record has no gearbox, seats, colour, GTA group\. Complete it in Fleet/);
 
-      const before = loadHireArea("c1")?.chosen?.details;
-      assert.ok(before);
-      for (const field of ["transmission", "seats", "colour", "gtaGroup"] as const) assert.ok(before.missing.includes(field), field);
-      assert.equal(before.suggestedGroup, null, "no Settings rule, so no group is suggested");
-      const keys = agreementMandatoryGaps("c1").map((gap) => gap.key);
-      assert.ok(keys.includes("transmission"));
-      assert.ok(keys.includes("car-details"));
-      assert.throws(() => generateHireAgreementDocument("c1", "staff-sian"), /hire car seats, colour, GTA group/);
+      // Completed once, in the fleet table (one suggestion used, the rest typed).
+      for (const [field, value] of [["transmission", "Automatic"], ["seats", "5"], ["colour", "blue"], ["gtaGroup", "M2"]] as const) {
+        saveFleetDetail({ fleetVehicleId: FLEET_ID, field, value, actorId: "staff-sian" });
+      }
+      const history = fleetDetailHistory(FLEET_ID);
+      assert.equal(history.length, 4);
+      assert.match(history.map((entry) => entry.details).join(" "), /Gearbox was blank, now Automatic/);
+      assert.equal(history[0]!.who, "Sian Evans");
 
-      const result = saveHireCarDetails({
-        claimId: "c1",
-        actorId: "staff-sian",
-        actorRole: "staff",
-        values: { transmission: "Automatic", seats: "5", colour: "Blue", gtaGroup: "M2", fuel: "Diesel" },
-        expectedVersion: before.version,
-      });
-      assert.deepEqual([...result.saved].sort(), ["colour", "gtaGroup", "seats", "transmission"]);
-      const saved = get<{ transmission: string; seats: number; colour: string; gta_group: string; fuel: string }>(
-        `SELECT transmission, seats, colour, gta_group, fuel FROM vehicles WHERE id = ?`,
-        [vehicleOf(FLEET_ID)],
-      );
-      assert.equal(saved?.transmission, "Automatic");
-      assert.equal(saved?.seats, 5);
-      assert.equal(saved?.colour, "Blue");
-      assert.equal(saved?.gta_group, "M2");
-      assert.equal(saved?.fuel, "petrol", "a detail already on the record is not changed from the hire screen");
-      const event = get<{ details: string }>(`SELECT details FROM claim_events WHERE claim_id = 'c1' AND event_type = 'hire_car_details_saved'`);
-      assert.match(String(event?.details), /Saved to the fleet record for CAS 10: gearbox automatic, 5 seats, colour Blue, GTA group M2/);
-
+      choose();
+      recordPassingPrehireChecks("c1");
+      prepareAgreementItems("c1");
       assert.deepEqual(agreementMandatoryGaps("c1"), []);
       const html = agreementHtml(generateHireAgreementDocument("c1", "staff-sian").documentId);
       assert.match(html, /Transmission: Automatic/);
@@ -151,24 +153,22 @@ describe("R22 — a chosen hire car shows and carries all of its details", () =>
       assert.match(html, /Seats: 5/);
       assert.match(html, /Group of vehicle supplied \(not used for the rate\): M2/);
 
-      // The next hire of this car has them: nothing is asked again.
-      assert.deepEqual(fleetCarDetails(FLEET_ID)?.missing.filter((field) => field !== "mileage"), []);
+      // A later correction in Fleet does not change the agreement already produced.
+      const before = agreementHtml(get<{ id: string }>(`SELECT id FROM documents WHERE claim_id = 'c1' AND template_key = 'hire_agreement' ORDER BY rowid DESC LIMIT 1`)!.id);
+      saveFleetDetail({ fleetVehicleId: FLEET_ID, field: "colour", value: "Green", actorId: "staff-sian" });
+      const after = agreementHtml(get<{ id: string }>(`SELECT id FROM documents WHERE claim_id = 'c1' AND template_key = 'hire_agreement' ORDER BY rowid DESC LIMIT 1`)!.id);
+      assert.equal(after, before);
     });
     db.close();
   });
 
-  it("produces the unsigned agreement again when details are saved after it was produced", () => {
-    const db = prepared();
-    withDatabase(db, () => {
-      readyForAgreement();
-      generateHireAgreementDocument("c1", "staff-sian");
-      run(`UPDATE fleet_vehicles SET location = NULL WHERE id = ?`, [FLEET_ID]);
-      const out = saveHireCarDetails({ claimId: "c1", actorId: "staff-sian", actorRole: "staff", values: { location: "Brynamman yard" } });
-      assert.equal(out.reproduced, true);
-      const count = get<{ n: number }>(`SELECT COUNT(*) AS n FROM documents WHERE claim_id = 'c1' AND template_key = 'hire_agreement'`);
-      assert.equal(Number(count?.n), 2);
-    });
-    db.close();
+  it("R60: suggests a gearbox only where the model name says so", () => {
+    assert.deepEqual(suggestGearbox("AYGO X ICON HEV AUTO"), { value: "Automatic", source: "the model name says AUTO" });
+    assert.equal(suggestGearbox("A5 SPORT TDI ULTRA S-A")?.value, "Automatic");
+    assert.equal(suggestGearbox("COROLLA ICON HEV CVT")?.value, "Automatic");
+    assert.equal(suggestGearbox("C220 D SE EXECUTIVE A")?.value, "Automatic");
+    assert.equal(suggestGearbox("YARIS ICON D-4D"), null, "never Manual from the name");
+    assert.equal(suggestGearbox(""), null);
   });
 
   it("refuses a gearbox, seats or GTA group that is not a real choice", () => {

@@ -147,12 +147,13 @@ export function agreementMandatoryGaps(claimId: string): HireGapLink[] {
   // These print on the agreement the client signs, so they are needed before it is produced.
   const before = beforeSigningFor(claimId);
   if (before.vehicleId && !before.started) {
-    if (!before.transmission) add("transmission", "Hire car gearbox", `${base}/hire#car-details`);
+    const inFleet = `/hire/fleet-details?car=${before.fleetVehicleId}&back=${encodeURIComponent(`${base}/hire#pack`)}`;
+    if (!before.transmission) add("transmission", "Hire car gearbox (complete in Fleet)", inFleet);
     // Fuel, seats, colour and the supplied car's GTA group print on the agreement. They are saved to the fleet record.
     const car = before.fleetVehicleId ? fleetCarDetails(before.fleetVehicleId) : null;
     const missing = car ? AGREEMENT_FLEET_FIELDS.filter((field) => car.missing.includes(field)) : [];
     if (missing.length) {
-      add("car-details", `Hire car ${missingWords(missing)}`, `${base}/hire#car-details`);
+      add("car-details", `Hire car ${missingWords(missing)} (complete in Fleet)`, inFleet);
     }
     if (before.mileage == null || !before.fuelLevel) add("readings-out", "Mileage and fuel out", `${base}/hire#before-signing`);
   }

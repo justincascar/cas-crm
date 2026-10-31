@@ -11,7 +11,6 @@ import type { SwapView } from "@/lib/db/vehicle-swap";
 import { SwapStartForm, SwapStatus } from "@/components/claims/VehicleSwap";
 import { CarOptionGroups } from "@/components/claims/CarOptions";
 import { FUEL_LEVELS } from "@/lib/db/handover";
-import { FleetDetailBox } from "@/components/FleetDetailBox";
 import { FLEET_DETAIL_LABELS, fleetCarDetails, fleetDetailLine, formatMileage, type FleetCarDetails } from "@/lib/db/fleet-details";
 import { groupCheckLine, type HireGroupCheck } from "@/lib/db/hire-group-check";
 
@@ -64,7 +63,10 @@ export function HireJourney({
   swap,
   mayOverrideSwap,
   swapCar,
+  carFromFleet,
 }: {
+  /** R60: back from completing a car in Fleet, it is chosen in the list. */
+  carFromFleet?: string;
   /** The replacement car chosen for a swap, so its missing details can be asked for. */
   swapCar?: string;
   swap: SwapView;
@@ -78,6 +80,7 @@ export function HireJourney({
   showPack: boolean;
 }) {
   const id = area.claimId;
+  const preselect = carFromFleet && [...area.cars, ...area.otherVehicles].some((car) => car.id === carFromFleet && !car.missing.length) ? carFromFleet : "";
   const carLabel = area.creditHire ? "hire car" : "courtesy car";
   const yes = area.need === "yes";
   const carDone = Boolean(area.chosen);
@@ -167,13 +170,22 @@ export function HireJourney({
         ))}
         <label className="block text-sm">
           Car
-          <select name="fleetVehicleId" className={field} required defaultValue={area.chosen?.fleetVehicleId || ""}>
+          <select name="fleetVehicleId" className={field} required defaultValue={preselect || area.chosen?.fleetVehicleId || ""}>
             <option value="" disabled>
               {area.cars.length || area.carsMissingDetails.length || area.otherVehicles.length ? "Choose one" : "No free car for these dates"}
             </option>
             <CarOptionGroups area={area} />
           </select>
         </label>
+        {area.carsMissingDetails.length || area.otherVehicles.some((car) => car.missing.length) ? (
+          <p className="text-sm" data-complete-in-fleet>
+            Greyed-out cars have details missing on their fleet record and cannot be chosen.{" "}
+            <Link href={`/hire/fleet-details?missing=1&back=${encodeURIComponent(`/claims/${id}/hire`)}`} className="text-teal-dark underline">
+              Complete them in Fleet
+            </Link>{" "}
+            and come back here with the car chosen.
+          </p>
+        ) : null}
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="text-sm">
             How the client gets the car
@@ -310,7 +322,7 @@ export function HireJourney({
                       : ` · reserved for ${plannedWords || "a date not set"} · ${deliveryWords}`}
                   </span>
                 </div>
-                {area.chosen.details ? <CarDetails claimId={id} car={area.chosen.details} groups={area.groupChoices} /> : null}
+                {area.chosen.details ? <CarDetails claimId={id} car={area.chosen.details} /> : null}
                 {started ? (
                   swap.open ? null : (
                     <details id="swap-start" className="mt-2 scroll-mt-16" data-swap-start open={swapCar ? true : undefined}>
@@ -911,10 +923,10 @@ function StepHead({ n, title, status }: { n: number; title: string; status: "Don
 }
 
 /**
- * The chosen car as its fleet record holds it (R22). A detail missing on the record is a box here. What is entered is
- * saved to the fleet record once, so the next hire has it. Gearbox, seats and GTA group are never guessed.
+ * R60: the chosen car as its fleet record holds it, read-only. Gearbox, fuel, seats, colour and the car's own group are
+ * entered once in Fleet; only the group charged is set on the hire. Office staff can correct the record in Fleet.
  */
-function CarDetails({ claimId, car, groups }: { claimId: string; car: FleetCarDetails; groups: string[] }) {
+function CarDetails({ claimId, car }: { claimId: string; car: FleetCarDetails }) {
   const missing = new Set(car.missing);
   const rows: Array<{ key: keyof typeof FLEET_DETAIL_LABELS; value: string }> = [
     { key: "make", value: car.make },
@@ -927,40 +939,23 @@ function CarDetails({ claimId, car, groups }: { claimId: string; car: FleetCarDe
     { key: "mileage", value: car.mileage != null ? `${formatMileage(car.mileage)}${car.mileageOn ? ` (${formatUkDate(car.mileageOn)})` : ""}` : "" },
     { key: "location", value: car.location },
   ];
+  const back = encodeURIComponent(`/claims/${claimId}/hire#car`);
   return (
     <div id="car-details" className="mt-3 scroll-mt-16 rounded-lg border border-line bg-white p-3 text-sm" data-car-details={car.missing.length ? "missing" : "complete"}>
-      <p className="font-semibold">
-        {car.registration}
-        {car.missing.length ? " · some details are not on the fleet record" : ""}
-      </p>
+      <p className="font-semibold">{car.registration} · from the fleet record</p>
       <dl className="mt-2 grid gap-x-4 gap-y-1 sm:grid-cols-3" data-car-detail-list>
-        {rows
-          .filter((row) => !missing.has(row.key))
-          .map((row) => (
-            <div key={row.key} data-car-detail={row.key}>
-              <dt className="text-slate">{FLEET_DETAIL_LABELS[row.key]}</dt>
-              <dd>{row.value}</dd>
-            </div>
-          ))}
-      </dl>
-      {car.missing.length ? (
-        <form method="post" action={`/claims/${claimId}/hire/car-details`} className="mt-3 border-t border-line pt-3" data-car-details-form>
-          <SubmitKeyInput />
-          <input type="hidden" name="returnHash" value="#car" />
-          <input type="hidden" name="fleetVersion" value={car.version} />
-          <p>Not on the fleet record yet. What you enter is saved to the fleet record, so the next hire has it.</p>
-          <div className="mt-2 grid gap-3 sm:grid-cols-3">
-            {rows
-              .filter((row) => missing.has(row.key))
-              .map((row) => (
-                <FleetDetailBox key={row.key} field={row.key} car={car} groups={groups} className={field} />
-              ))}
+        {rows.map((row) => (
+          <div key={row.key} data-car-detail={row.key}>
+            <dt className="text-slate">{FLEET_DETAIL_LABELS[row.key]}</dt>
+            <dd>{missing.has(row.key) ? <span className="text-overdue">not on the fleet record</span> : row.value}</dd>
           </div>
-          <button className={`${quiet} mt-3`} type="submit">
-            Save to the fleet record
-          </button>
-        </form>
-      ) : null}
+        ))}
+      </dl>
+      <p className="mt-2 text-xs">
+        <Link href={`/hire/fleet-details?car=${car.fleetVehicleId}&back=${back}`} className="text-teal-dark underline" data-edit-in-fleet>
+          Fleet record wrong? Edit in Fleet
+        </Link>
+      </p>
     </div>
   );
 }

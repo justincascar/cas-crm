@@ -10,7 +10,7 @@ import { storeFileCopy } from "../storage/files";
 import { recordClaimEvent } from "./chronology";
 import { all, get, getDb, newId, run } from "./connection";
 import { fleetAvailability } from "./fleet-availability";
-import { fleetCarDetails, missingWords, saveMissingFleetDetailsNow, SWAP_AGREEMENT_FIELDS, type FleetDetailField } from "./fleet-details";
+import { fleetCarDetails, missingWords, SWAP_AGREEMENT_FIELDS, type FleetDetailField } from "./fleet-details";
 import { hireGroupCheck } from "./hire-group-check";
 import { describeHireAgreementParts } from "../documents/hire-agreement-parts";
 import { FUEL_LEVELS } from "./handover";
@@ -284,15 +284,12 @@ function swapAgreementChecks(input: {
   details?: Partial<Record<FleetDetailField, string>>;
   aboveSuppliedReason?: string;
 }): string {
-  const before = fleetCarDetails(input.newFleetVehicleId);
-  if (!before) throw new Error("That car is not on the fleet.");
-  const entered = Object.fromEntries(Object.entries(input.details || {}).filter(([, value]) => String(value || "").trim()));
-  if (before.missing.some((field) => field in entered)) {
-    saveMissingFleetDetailsNow({ fleetVehicleId: input.newFleetVehicleId, actorId: input.actorId, values: entered, claimId: input.claimId });
-  }
-  const car = fleetCarDetails(input.newFleetVehicleId)!;
+  // R60: the replacement car's details are on its fleet record, entered once in Fleet. They are not typed on the swap.
+  void input.details;
+  const car = fleetCarDetails(input.newFleetVehicleId);
+  if (!car) throw new Error("That car is not on the fleet.");
   const missing = SWAP_AGREEMENT_FIELDS.filter((field) => car.missing.includes(field));
-  if (missing.length) throw new Error(`Enter the replacement car's ${missingWords(missing)}. They print on the new agreement and are saved to the fleet record.`);
+  if (missing.length) throw new Error(`The replacement car's fleet record has no ${missingWords(missing)}. Complete it in Fleet (Complete fleet details), then choose it.`);
   const check = hireGroupCheck(input.claimId, { suppliedGroup: car.gtaGroup, aboveSuppliedReason: input.aboveSuppliedReason || "" });
   if (check.gaps.some((gap) => gap.key === "client-group")) {
     throw new Error("Record the client's own car group, or why it cannot be classified, before the new agreement (group check on the Hire tab).");

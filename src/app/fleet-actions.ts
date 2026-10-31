@@ -89,7 +89,7 @@ export async function actionUpdateFleetVehicle(formData: FormData) {
         make: String(formData.get("make") || ""),
         model: String(formData.get("model") || ""),
       },
-      write: () => updateFleetVehicle(id, fieldsFromForm(formData)),
+      write: () => updateFleetVehicle(id, fieldsFromForm(formData), staff.id),
     });
     const vehicle = getFleetVehicle(id);
     const v5c = await v5cFromForm(formData);

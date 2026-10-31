@@ -1,3 +1,6 @@
+import { isVehicleClass, vehicleClassLabel } from "../fleet/classes";
+import { toStartCase } from "../text";
+import { loadRealFleetCatalog } from "./fleet";
 import { normaliseFuel } from "../domain/fuel";
 import type { DatabaseSync } from "node:sqlite";
 import { formatUkDate, nowUtcIso } from "../dates";
@@ -244,11 +247,11 @@ export function allFleetCarDetails(): Map<string, FleetCarDetails> {
   return new Map(rows.map((row) => [String(row.id), toDetails(row, rules)]));
 }
 
-/** The real CAS fleet cars with something missing, for "Fleet details to complete" on Hire / Fleet. */
+/** The real CAS fleet cars missing a detail a hire needs (R60), for "Fleet details to complete". */
 export function listFleetDetailsToComplete(): FleetCarDetails[] {
   const real = new Set(all<{ id: string }>(`SELECT id FROM fleet_vehicles WHERE is_real = 1 AND removed_at IS NULL`).map((row) => String(row.id)));
   return [...allFleetCarDetails().values()]
-    .filter((car) => real.has(car.fleetVehicleId) && car.missing.length > 0)
+    .filter((car) => real.has(car.fleetVehicleId) && hireDetailsMissing(car).length > 0)
     .sort((a, b) => a.registration.localeCompare(b.registration, "en-GB", { numeric: true }));
 }
 
@@ -378,4 +381,111 @@ export function saveMissingFleetDetailsNow(input: Parameters<typeof saveMissingF
 /** A mileage read from the car (before signing) is its current mileage. */
 export function noteFleetMileage(fleetVehicleId: string, miles: number) {
   run(`UPDATE fleet_vehicles SET current_mileage = ?, current_mileage_on = ? WHERE id = ?`, [miles, nowUtcIso(), fleetVehicleId]);
+}
+
+/**
+ * R60: what a car needs on its fleet record before it can be chosen for a hire. Entered once in Fleet and then simply
+ * there on every hire; the hire screen shows them read-only.
+ */
+export const HIRE_DETAIL_FIELDS: FleetDetailField[] = SWAP_AGREEMENT_FIELDS;
+
+export function hireDetailsMissing(car: Pick<FleetCarDetails, "missing">): FleetDetailField[] {
+  return HIRE_DETAIL_FIELDS.filter((field) => car.missing.includes(field));
+}
+
+/**
+ * R60: a gearbox suggested from the model name only where it says so (AUTO, S-A, CVT, DSG, or a final "A"). Never
+ * Manual: a name without those words leaves it blank. Staff confirm a suggestion before it is saved.
+ */
+export function suggestGearbox(model: string | null | undefined): { value: string; source: string } | null {
+  const words = String(model || "").toUpperCase().split(/[\s/]+/).filter(Boolean);
+  const hit = words.find((word) => ["AUTO", "AUTOMATIC", "S-A", "CVT", "DSG"].includes(word));
+  if (hit) return { value: "Automatic", source: `the model name says ${hit}` };
+  if (words.length > 1 && words[words.length - 1] === "A") return { value: "Automatic", source: "the model name ends in A" };
+  return null;
+}
+
+/** R60: fuel and colour read from the V5C import, offered when the record has none. Seats were not read from the V5Cs. */
+export function v5cSuggestions(registration: string): { fuel?: string; colour?: string } {
+  try {
+    const key = registration.replace(/\s+/g, "").toUpperCase();
+    const row = loadRealFleetCatalog().find((item) => String(item.registration || "").replace(/\s+/g, "").toUpperCase() === key);
+    if (!row) return {};
+    return { fuel: normaliseFuel(row.fuel) || undefined, colour: row.colour ? toStartCase(String(row.colour).toLowerCase()) : undefined };
+  } catch {
+    return {};
+  }
+}
+
+const FLEET_FIELD_COLUMNS: Partial<Record<FleetDetailField | "vehicleClass", { table: "vehicles" | "fleet_vehicles"; column: string }>> = {
+  make: { table: "vehicles", column: "make" },
+  model: { table: "vehicles", column: "model" },
+  transmission: { table: "vehicles", column: "transmission" },
+  fuel: { table: "vehicles", column: "fuel" },
+  seats: { table: "vehicles", column: "seats" },
+  colour: { table: "vehicles", column: "colour" },
+  gtaGroup: { table: "vehicles", column: "gta_group" },
+  vehicleClass: { table: "vehicles", column: "vehicle_class" },
+};
+
+/**
+ * R60: one detail on the fleet record, from the Complete fleet details table (saved as it changes). It may correct a
+ * detail already there. The change goes in the car's history with who and when. Agreements already produced keep the
+ * wording they were produced with.
+ */
+export function saveFleetDetail(input: { fleetVehicleId: string; field: FleetDetailField | "vehicleClass"; value: string; actorId: string }) {
+  return withImmediateTransaction(() => {
+    const car = fleetCarDetails(input.fleetVehicleId);
+    if (!car) throw new Error("That car is not on the fleet.");
+    const target = FLEET_FIELD_COLUMNS[input.field];
+    if (!target) throw new Error("That detail is not kept on the fleet record here.");
+    const raw = String(input.value ?? "").trim();
+    let stored: string | number | null = raw || null;
+    let shown = raw;
+    if (input.field === "transmission") {
+      stored = raw ? gearbox(raw) || null : null;
+      if (raw && !stored) throw new Error("Choose manual or automatic for the gearbox.");
+      shown = String(stored || "Not known");
+    } else if (input.field === "fuel") {
+      stored = normaliseFuel(raw) || null;
+      shown = stored ? String(stored) : "Not known";
+    } else if (input.field === "seats") {
+      if (raw && (!/^\d{1,2}$/.test(raw) || Number(raw) < 1 || Number(raw) > 20)) throw new Error("Enter the number of seats, from 1 to 20.");
+      stored = raw ? Number(raw) : null;
+      shown = raw || "Not known";
+    } else if (input.field === "gtaGroup") {
+      stored = raw ? normaliseGtaGroup(raw) : null;
+      if (raw && !stored) throw new Error("Choose the GTA group from the list.");
+      shown = String(stored || "not classified");
+    } else if (input.field === "vehicleClass") {
+      if (raw && !isVehicleClass(raw)) throw new Error("Choose the type of vehicle.");
+      shown = raw ? vehicleClassLabel(raw) : "Not known";
+    } else if (input.field === "colour") {
+      stored = raw ? toStartCase(raw) : null;
+      shown = String(stored || "blank");
+    } else if (raw.length > 120) {
+      throw new Error("Keep it short.");
+    }
+    const before = get<{ v: string | number | null }>(`SELECT ${target.column} AS v FROM ${target.table} WHERE id = ?`, [target.table === "vehicles" ? car.vehicleId : car.fleetVehicleId])?.v ?? null;
+    if (String(before ?? "") === String(stored ?? "")) return fleetCarDetails(input.fleetVehicleId) as FleetCarDetails;
+    run(`UPDATE ${target.table} SET ${target.column} = ? WHERE id = ?`, [stored, target.table === "vehicles" ? car.vehicleId : car.fleetVehicleId]);
+    const label = input.field === "vehicleClass" ? "Type" : FLEET_DETAIL_LABELS[input.field];
+    touchFleetVersion({ fleetVehicleId: input.fleetVehicleId, actorId: input.actorId, change: `${label}: ${shown}` });
+    run(
+      `INSERT INTO audit_log(id, at, actor_id, action, entity, entity_id, details) VALUES (?, ?, ?, 'fleet_detail_changed', 'fleet_vehicle', ?, ?)`,
+      [newId("audit"), nowUtcIso(), input.actorId, input.fleetVehicleId, `${car.registration || "Car"}: ${label} ${before == null || before === "" ? "was blank" : `was ${before}`}, now ${shown}.`],
+    );
+    return fleetCarDetails(input.fleetVehicleId) as FleetCarDetails;
+  });
+}
+
+export type FleetHistoryEntry = { at: string; who: string; details: string };
+
+/** R60: the car's history of fleet-record changes, newest first, with who made each one. */
+export function fleetDetailHistory(fleetVehicleId: string): FleetHistoryEntry[] {
+  return all<{ at: string; name: string | null; actor_id: string | null; details: string | null }>(
+    `SELECT a.at, s.name, a.actor_id, a.details FROM audit_log a LEFT JOIN staff s ON s.id = a.actor_id
+     WHERE a.entity = 'fleet_vehicle' AND a.entity_id = ? ORDER BY a.at DESC LIMIT 100`,
+    [fleetVehicleId],
+  ).map((row) => ({ at: String(row.at), who: row.name ? String(row.name) : row.actor_id ? String(row.actor_id) : "The CRM", details: String(row.details || "") }));
 }

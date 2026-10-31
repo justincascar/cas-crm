@@ -581,7 +581,7 @@ export function createFleetVehicle(input: FleetVehicleInput): string {
   return fleetId;
 }
 
-export function updateFleetVehicle(id: string, input: FleetVehicleInput) {
+export function updateFleetVehicle(id: string, input: FleetVehicleInput, actorId?: string) {
   const existing = getFleetVehicle(id);
   if (!existing) throw new Error("Vehicle not found.");
   const data = normalizeInput({ ...input, isReal: Number(existing.is_real) === 1 });
@@ -614,6 +614,22 @@ export function updateFleetVehicle(id: string, input: FleetVehicleInput) {
     blank(data.notes),
     id,
   ]);
+  // R60: what changed goes in the car's history, with who changed it.
+  const after = getFleetVehicle(id);
+  if (!after) return;
+  const labels: Record<string, string> = {
+    registration: "Registration", make: "Make", model: "Model", transmission: "Gearbox", fuel: "Fuel", seats: "Seats", colour: "Colour",
+    engine_cc: "Engine size", first_registered_on: "First registered", vehicle_class: "Type", gta_group: "GTA group", location: "Where it is",
+  };
+  const changes = Object.entries(labels)
+    .filter(([key]) => String(existing[key] ?? "") !== String(after[key] ?? ""))
+    .map(([key, label]) => `${label} ${existing[key] == null || existing[key] === "" ? "was blank" : `was ${existing[key]}`}, now ${after[key] == null || after[key] === "" ? "blank" : after[key]}`);
+  if (changes.length) {
+    run(
+      `INSERT INTO audit_log(id, at, actor_id, action, entity, entity_id, details) VALUES (?, ?, ?, 'fleet_detail_changed', 'fleet_vehicle', ?, ?)`,
+      [newId("audit"), nowUtcIso(), actorId || null, id, `${after.registration || "Car"}: ${changes.join("; ")}.`],
+    );
+  }
 }
 
 export function touchFleetVersion(input: {

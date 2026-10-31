@@ -732,21 +732,27 @@ async function fillBeforeSigning(session: BrowserSession, values: Record<string,
   return followed(result, "before signing");
 }
 
-/** R22: the boxes for details missing on the chosen car's fleet record. Only the boxes on the page are filled. */
-async function fillCarDetails(session: BrowserSession, values: Record<string, string>): Promise<string | null> {
-  const spec = JSON.stringify(values);
-  const result = await session.evaluate<Submitted>(`(() => {
-    const values = ${spec};
-    const form = document.querySelector('form[action$="/hire/car-details"]');
-    if (!(form instanceof HTMLFormElement)) return { status: 0, location: "", problem: "No car details form" };
-    const body = new FormData(form);
-    for (const [name, value] of Object.entries(values)) {
-      if (form.querySelector('[name="' + name + '"]')) body.set(name, value);
+/**
+ * R60: a car's missing details are completed in the Complete fleet details table, not on the hire screen. Each value is
+ * saved as the row's own control saves it. The hire screen links there.
+ */
+async function completeInFleetTable(session: BrowserSession, origin: string, claimId: string, fleetVehicleId: string, values: Record<string, string>): Promise<string | null> {
+  await gotoPath(session, origin, `/claims/${claimId}/hire`);
+  const linked = await session.evaluate<boolean>(`Boolean(document.querySelector('a[href*="/hire/fleet-details?car=${fleetVehicleId}"]'))`);
+  if (!linked) return "The hire screen did not link to the fleet table for the chosen car.";
+  const editable = await session.evaluate<number>(`document.querySelectorAll('#car-details input, #car-details select').length`);
+  if (editable) return "The hire screen still has boxes for the car's details.";
+  await gotoPath(session, origin, `/hire/fleet-details?car=${fleetVehicleId}&missing=1`);
+  const spec = JSON.stringify({ fleetVehicleId, values });
+  const result = await session.evaluate<string>(`(async () => {
+    const { fleetVehicleId, values } = ${spec};
+    for (const [field, value] of Object.entries(values)) {
+      const r = await fetch("/hire/fleet-details/save", { method: "POST", headers: { "content-type": "application/json" }, credentials: "same-origin", body: JSON.stringify({ fleetVehicleId, field, value }) });
+      if (!r.ok) return field + ": " + ((await r.json()).error || r.status);
     }
-    body.set("submitKey", crypto.randomUUID());
-    return fetch(form.action, { method: "POST", body, credentials: "same-origin", redirect: "follow" }).then((r) => ({ status: r.status, location: r.url }));
+    return "";
   })()`);
-  return followed(result, "car details");
+  return result || null;
 }
 
 function fleetCarRecord(dbPath: string, fleetVehicleId: string) {
@@ -997,20 +1003,19 @@ async function runHireJourneys(session: BrowserSession, origin: string, dbPath: 
   const stored = hireFacts(dbPath, repairable.claimId).episode;
   if (!stored?.rate_pence_per_day || stored.rate_taken_on !== HIRE_DAY) return "The daily rate was not stored on the hire with today's date.";
 
-  // R22: the chosen car has no gearbox, seats or GTA group on its fleet record. Staff enter them on the hire screen once.
+  // R60: the chosen car has no gearbox, seats or GTA group on its fleet record. Staff complete it once in the fleet table.
   const carId = stored.fleet_vehicle_id;
   readDb(dbPath, (db) => {
     db.prepare(`UPDATE vehicles SET transmission = NULL, seats = NULL, gta_group = NULL WHERE id = (SELECT vehicle_id FROM fleet_vehicles WHERE id = ?)`).run(carId);
   });
   await gotoPath(session, origin, `/claims/${repairable.claimId}/hire`);
-  const missingCar = refusedWith(await submitForm(session, 'form[action$="/hire/agreement"]', {}), /hire car gearbox.*seats.*GTA group/i, "Agreement with car details missing");
+  const missingCar = refusedWith(await submitForm(session, 'form[action$="/hire/agreement"]', {}), /hire car gearbox \(complete in Fleet\).*seats.*GTA group \(complete in Fleet\)/i, "Agreement with car details missing");
   if (missingCar) return missingCar;
-  await gotoPath(session, origin, `/claims/${repairable.claimId}/hire`);
-  const carDetailsSaved = await fillCarDetails(session, { transmission: "Manual", seats: "5", gtaGroup: "S3", fuel: "Petrol", colour: "Grey", location: "CAS yard" });
+  const carDetailsSaved = await completeInFleetTable(session, origin, repairable.claimId, carId, { transmission: "Manual", seats: "5", gtaGroup: "S3" });
   if (carDetailsSaved) return `Car details: ${carDetailsSaved}`;
   const record = fleetCarRecord(dbPath, carId);
   if (record?.transmission !== "Manual" || record?.seats !== 5 || record?.gta_group !== "S3") {
-    return "The car details entered on the hire screen were not saved to the fleet record.";
+    return "The car details entered in the fleet table were not saved to the fleet record.";
   }
 
   // R27: the client's own car has no group on the file, so the agreement waits for it (or a reason) on the Hire tab.
@@ -1035,7 +1040,7 @@ async function runHireJourneys(session: BrowserSession, origin: string, dbPath: 
     ),
   );
   if (!/Transmission: Manual/.test(agreementBody) || !/Seats: 5/.test(agreementBody) || !/Group of vehicle supplied \(not used for the rate\): S3/.test(agreementBody)) {
-    return "The car details saved on the hire screen are not on the agreement.";
+    return "The car details saved in the fleet table are not on the agreement.";
   }
 
   // 7. Handover is refused without a signed agreement. The client signs through the link, then the handover completes.

@@ -1,7 +1,7 @@
 import { londonTodayIso, nowUtcIso } from "../dates";
 import { recordClaimEvent } from "./chronology";
 import { get, run } from "./connection";
-import { noteFleetMileage, saveMissingFleetDetails, type FleetDetailField } from "./fleet-details";
+import { noteFleetMileage } from "./fleet-details";
 import { FUEL_LEVELS } from "./handover";
 import { generateHireAgreementDocument, HIRE_AGREEMENT_TEMPLATE_KEY } from "./hire-agreement";
 import { currentHireEpisode, signedHireAgreementOnFile } from "./hire-readiness";
@@ -137,35 +137,3 @@ export function saveBeforeSigningAndRefresh(input: {
   return { reproduced: true };
 }
 
-function reproduceUnsignedAgreement(claimId: string, actorId: string): boolean {
-  if (signedHireAgreementOnFile(claimId)) return false;
-  const produced = get<{ id: string }>(`SELECT id FROM documents WHERE claim_id = ? AND template_key = ? LIMIT 1`, [claimId, HIRE_AGREEMENT_TEMPLATE_KEY]);
-  if (!produced) return false;
-  generateHireAgreementDocument(claimId, actorId);
-  return true;
-}
-
-/**
- * Details missing on the chosen car's fleet record, entered on the Hire tab (R22). They are saved to the fleet record,
- * so the next hire of the car has them. An agreement produced but not yet signed is produced again with them on it.
- */
-export function saveHireCarDetails(input: {
-  claimId: string;
-  actorId: string;
-  actorRole: string;
-  values: Partial<Record<FleetDetailField, string>>;
-  expectedVersion?: string;
-}): { saved: FleetDetailField[]; reproduced: boolean } {
-  const episode = currentHireEpisode(input.claimId);
-  if (!episode?.fleet_vehicle_id) throw new Error("Choose the hire car first.");
-  assertCanRecordHandover({ id: input.actorId, role: input.actorRole }, input.claimId, String(episode.id));
-  const result = saveMissingFleetDetails({
-    fleetVehicleId: String(episode.fleet_vehicle_id),
-    actorId: input.actorId,
-    values: input.values,
-    claimId: input.claimId,
-    expectedVersion: input.expectedVersion,
-  });
-  const reproduced = result.saved.length > 0 && !episode.started_at && reproduceUnsignedAgreement(input.claimId, input.actorId);
-  return { saved: result.saved, reproduced };
-}
