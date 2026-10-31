@@ -17,6 +17,8 @@ import { listOpenPaymentReviews, listPaymentsAfterSettlement } from "@/lib/db/pa
 import { isPaymentReviewHead } from "@/lib/domain/payment-review";
 import { headScreenPath } from "@/lib/domain/head-screen";
 import { loadClash } from "@/lib/db/record-version";
+import { dispatchView, instructionContent, instructionGaps } from "@/lib/db/engineer-dispatch";
+import type { InstructStepData } from "@/components/claims/InstructStepCard";
 
 export default async function ClaimDetailPage({
   params,
@@ -27,6 +29,7 @@ export default async function ClaimDetailPage({
     error?: string;
     stepError?: string;
     stepSaved?: string;
+    stepDone?: string;
     clash?: string;
     paymentDecision?: string;
     nextWarning?: string;
@@ -46,6 +49,19 @@ export default async function ClaimDetailPage({
   const settledPayments = listPaymentsAfterSettlement(claimId);
   const bankDetailsMissing = !paymentDetailsComplete(getInsurerPaymentDetails());
   const claimClash = loadClash(query.clash);
+  // R65: step 5 sends the engineer instruction and/or the Audatex hand-off from its card.
+  const engineerStep = steps.find((step) => step.key === "engineer");
+  let instructData: InstructStepData | undefined;
+  if (engineerStep?.detail?.startsWith("Chosen:")) {
+    const view = dispatchView(claimId, engineerStep.detail);
+    let preview: InstructStepData["preview"] = null;
+    try {
+      preview = view.defaultEngineerId ? instructionContent(claimId, view.defaultEngineerId) : null;
+    } catch {
+      preview = null;
+    }
+    instructData = { ...view, gaps: instructionGaps(claimId, view.defaultEngineerId), preview };
+  }
 
   return (
     <div className="space-y-6">
@@ -80,6 +96,8 @@ export default async function ClaimDetailPage({
         fault={String(data.claim.claim_type || "") === "fault"}
         error={query.stepError}
         saved={query.stepSaved}
+        done={query.stepDone}
+        instruct={instructData}
       />
       <ClaimProblems flags={summary.flags} />
       <ClaimMoneyTable charges={summary.charges} />

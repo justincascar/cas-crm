@@ -74,6 +74,7 @@ export type MailboxAttachment = {
 
 export async function sendMailboxMessage(message: {
   to: string;
+  cc?: string[];
   subject: string;
   body: string;
   attachments?: MailboxAttachment[];
@@ -108,7 +109,7 @@ export async function sendMailboxMessage(message: {
 
   const attachments = message.attachments ?? [];
   if (attachments.length === 0) {
-    await postSendMail(token, { to, subject, body });
+    await postSendMail(token, { to, cc: message.cc, subject, body });
     return;
   }
   const total = attachments.reduce((sum, item) => sum + item.content.length, 0);
@@ -118,7 +119,7 @@ export async function sendMailboxMessage(message: {
 
   let draftId = "";
   try {
-    draftId = await createDraft(token, { to, subject, body });
+    draftId = await createDraft(token, { to, cc: message.cc, subject, body });
     for (const item of attachments) {
       if (item.content.length < GRAPH_INLINE_ATTACHMENT_LIMIT_BYTES) await addInlineAttachment(token, draftId, item);
       else await addUploadSessionAttachment(token, draftId, item);
@@ -161,7 +162,7 @@ async function graphFetch(url: string, init: RequestInit, timeoutMs = 20_000): P
   }
 }
 
-async function postSendMail(token: string, message: { to: string; subject: string; body: string }): Promise<void> {
+async function postSendMail(token: string, message: { to: string; cc?: string[]; subject: string; body: string }): Promise<void> {
   const response = await graphFetch(`https://graph.microsoft.com/v1.0/users/${encodeURIComponent(CAS_CLAIMS_MAILBOX)}/sendMail`, {
     method: "POST",
     headers: graphHeaders(token),
@@ -170,6 +171,7 @@ async function postSendMail(token: string, message: { to: string; subject: strin
         subject: message.subject,
         body: { contentType: "Text", content: message.body },
         toRecipients: [{ emailAddress: { address: message.to } }],
+        ...(message.cc?.length ? { ccRecipients: message.cc.map((address) => ({ emailAddress: { address } })) } : {}),
       },
       saveToSentItems: true,
     }),
@@ -178,7 +180,7 @@ async function postSendMail(token: string, message: { to: string; subject: strin
   throw failureForStatus(response.status, false);
 }
 
-async function createDraft(token: string, message: { to: string; subject: string; body: string }): Promise<string> {
+async function createDraft(token: string, message: { to: string; cc?: string[]; subject: string; body: string }): Promise<string> {
   const response = await graphFetch(messagesCollectionUrl(), {
     method: "POST",
     headers: graphHeaders(token),
@@ -186,6 +188,7 @@ async function createDraft(token: string, message: { to: string; subject: string
       subject: message.subject,
       body: { contentType: "Text", content: message.body },
       toRecipients: [{ emailAddress: { address: message.to } }],
+      ...(message.cc?.length ? { ccRecipients: message.cc.map((address) => ({ emailAddress: { address } })) } : {}),
     }),
   });
   if (response.status !== 201 && response.status !== 200) throw failureForStatus(response.status, true);

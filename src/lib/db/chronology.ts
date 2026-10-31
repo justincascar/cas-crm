@@ -615,6 +615,8 @@ export async function sendClaimEmail(input: {
   templateKey?: string;
   occurredAt?: string;
   attachmentIds?: string[];
+  /** R65: addresses copied in. Kept on the email filed on the claim. */
+  cc?: string[];
 }) {
   const fingerprint = [input.claimId, input.to.trim(), input.subject.trim(), input.body.trim(), ...(input.attachmentIds || []).slice().sort()].join("\n");
   if (sendingFingerprints.has(fingerprint)) {
@@ -641,6 +643,7 @@ async function deliverClaimEmail(input: {
   templateKey?: string;
   occurredAt?: string;
   attachmentIds?: string[];
+  cc?: string[];
 }) {
   const blocked = impecuniosityRefusal(input.claimId, input.templateKey, `${input.subject}\n${input.body}`);
   if (blocked) return { ok: false as const, status: "failed" as const, error: blocked };
@@ -652,8 +655,10 @@ async function deliverClaimEmail(input: {
   const loaded = loadClaimEmailAttachments(input.claimId, input.attachmentIds || []);
   if (!loaded.ok) return { ok: false as const, status: "failed" as const, error: loaded.error };
   const live = emailSendMode() === "live";
+  const cc = [...new Set((input.cc || []).map((address) => address.trim()).filter((address) => address && address.toLowerCase() !== input.to.trim().toLowerCase()))];
   const result = await emailGateway.send({
     to: input.to,
+    cc,
     subject: input.subject,
     body: input.body,
     attachments: loaded.attachments.map((item) => ({ name: item.name, contentType: item.contentType, content: item.content })),
@@ -670,14 +675,14 @@ async function deliverClaimEmail(input: {
       input.subject,
       input.body.slice(0, 180),
       input.body,
-      input.to,
+      cc.length ? `${input.to}; cc ${cc.join(", ")}` : input.to,
       fromAddress,
       result.status,
       attachmentNote.length ? JSON.stringify(attachmentNote) : null,
       when,
     ],
   );
-  const attachedText = attachmentNote.length ? ` Attached: ${attachmentNote.join("; ")}.` : "";
+  const attachedText = `${cc.length ? ` Copied to ${cc.join(", ")}.` : ""}${attachmentNote.length ? ` Attached: ${attachmentNote.join("; ")}.` : ""}`;
   const sentDetails =
     result.ok && result.status === "sent"
       ? `${input.subject} sent to ${input.to} from ${CAS_CLAIMS_MAILBOX}. ${result.warning}${attachedText}`

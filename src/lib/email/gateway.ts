@@ -10,6 +10,8 @@ export type OutgoingAttachment = {
 
 export type OutgoingMessage = {
   to: string;
+  /** R65: copied in (for example the file's handler on an engineer instruction). */
+  cc?: string[];
   subject: string;
   body: string;
   attachments?: OutgoingAttachment[];
@@ -49,6 +51,7 @@ export async function sendOutboundEmail(message: OutgoingMessage): Promise<SendR
   try {
     await sendMailboxMessage({
       to: message.to,
+      cc: message.cc,
       subject: message.subject,
       body: message.body,
       attachments: message.attachments,

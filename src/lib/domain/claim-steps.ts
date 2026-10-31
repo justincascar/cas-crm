@@ -861,9 +861,12 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
       title: "Instruct engineer",
       state: "to_do",
       statusText: "To do",
-      buttonLabel: "Instruct",
-      buttonHref: href,
+      buttonLabel: null,
+      buttonHref: null,
       detailsHref: href,
+      // R65: sent from the card in one click; this is the "instructed by phone" fallback.
+      forms: ["engineer_instructed"],
+      detail: "Chosen: engineer.",
     });
     if (instructed) {
       view = {
@@ -872,6 +875,7 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
         statusText: doneText(instructed.occurred_at, letterWords(instructed)),
         buttonLabel: null,
         buttonHref: null,
+        forms: [],
       };
     }
     return applyNotNeeded("engineer", view);

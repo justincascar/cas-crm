@@ -2,6 +2,7 @@ import Link from "next/link";
 import { SubmitKeyInput } from "@/components/SubmitKeyInput";
 import { formatUkDate, londonTodayIso } from "@/lib/dates";
 import type { ClaimStepForm, ClaimStepProposal, ClaimStepView } from "@/lib/domain/claim-steps";
+import { InstructStepCard, type InstructStepData } from "@/components/claims/InstructStepCard";
 
 const field = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
@@ -17,12 +18,18 @@ export function ClaimStepsPanel({
   steps,
   error,
   saved,
+  done,
+  instruct,
 }: {
   claimId: string;
   steps: ClaimStepView[];
   fault: boolean;
   error?: string;
   saved?: string;
+  /** What a one-click step did (R65), in plain words. */
+  done?: string;
+  /** R65: step 5's engineer and Audatex instruction, sent from the card. */
+  instruct?: InstructStepData;
 }) {
   const today = londonTodayIso();
   return (
@@ -30,6 +37,7 @@ export function ClaimStepsPanel({
       <h2 className="font-serif text-xl text-navy-deep">Steps</h2>
       {error ? <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p> : null}
       {saved ? <p className="rounded-md border border-ok/40 bg-[#eef6ef] px-4 py-3 text-sm">Saved on the file history.</p> : null}
+      {done ? <p className="rounded-md border border-ok/40 bg-[#eef6ef] px-4 py-3 text-sm" data-step-done>{done}</p> : null}
       <ol className="space-y-3">
         {steps.map((step, index) => (
           <li key={step.key} id={`step-${step.key}`} className="rounded-xl border border-line bg-card px-4 py-3" data-step={step.key} data-state={step.state}>
@@ -83,6 +91,14 @@ export function ClaimStepsPanel({
                 details
               </Link>
             </div>
+            {step.key === "engineer" && instruct && step.detail?.startsWith("Chosen:") ? (
+              <InstructStepCard
+                claimId={claimId}
+                data={instruct}
+                wantsEngineer={/engineer/.test(step.detail)}
+                wantsAudatex={/Audatex/.test(step.detail)}
+              />
+            ) : null}
             {step.forms.map((form) => (
               <StepForm key={form} claimId={claimId} form={form} today={today} proposal={step.proposals[form]} />
             ))}
@@ -108,7 +124,16 @@ function StepForm({ claimId, form, today, proposal }: { claimId: string; form: C
   if (form === "storage_end" || form === "tl_off_hire") return <ConfirmProposal claimId={claimId} intent={form} proposal={proposal} />;
   if (form === "report") return <ReportForm claimId={claimId} today={today} />;
   if (form === "route") return <RouteForm claimId={claimId} today={today} />;
-  if (form === "engineer_instructed") return <DatedClick claimId={claimId} intent="engineer_instructed" label="Engineer instructed" today={today} />;
+  if (form === "engineer_instructed") {
+    // R65: kept as the fallback when the engineer was instructed by phone. The one-click send is on the card above.
+    return (
+      <details className="mt-3">
+        <summary className="cursor-pointer text-sm text-slate">Instructed by phone instead?</summary>
+        <p className="mt-2 text-xs text-slate">Records the date only. Nothing is sent, and the engineer has no written instruction from the CRM.</p>
+        <DatedClick claimId={claimId} intent="engineer_instructed" label="Mark as instructed by phone" today={today} />
+      </details>
+    );
+  }
   if (form === "report_sent") return <DatedClick claimId={claimId} intent="report_sent" label="Sent to the insurer" today={today} />;
   if (form === "audatex_sent") return <AudatexForm claimId={claimId} intent="audatex_sent" today={today} />;
   if (form === "audatex_received") return <ReceivedForm claimId={claimId} today={today} />;
