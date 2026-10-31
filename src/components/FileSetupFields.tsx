@@ -104,7 +104,8 @@ export function FileSetupFields({
             <option value="">Not yet known</option>
             <option value="non_fault">Non-fault</option>
             <option value="fault">Fault</option>
-            <option value="disputed">Disputed / unclear</option>
+            <option value="split">Split (shared liability)</option>
+            <option value="disputed">Disputed</option>
           </select>
         </label>
       </div>

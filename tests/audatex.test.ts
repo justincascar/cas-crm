@@ -105,7 +105,7 @@ describe("Audatex code suggestions from earlier files", () => {
     db.close();
   });
 
-  it("does not auto-suggest on Disputed / unclear even when an Aviva name is on the file", () => {
+  it("does not auto-suggest on Disputed even when an Aviva name is on the file", () => {
     const db = seeded();
     withDatabase(db, () => {
       updateClaimAudatexCodes("c4", { audatexNetworkCode: "NET-4410" }, "staff-megan");

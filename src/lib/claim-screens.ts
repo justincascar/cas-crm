@@ -91,8 +91,10 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
             { value: "", label: "Not yet known" },
             { value: "non_fault", label: "Non-fault" },
             { value: "fault", label: "Fault" },
-            { value: "disputed", label: "Disputed / unclear" },
-          ], hint: "Staff working view of this file. Independent of roadworthiness. Disputed / unclear is a valid answer." },
+            { value: "split", label: "Split (shared liability)" },
+            { value: "disputed", label: "Disputed" },
+          ], hint: "Staff working view of this file. Independent of roadworthiness. Disputed is a valid answer." },
+          { name: "splitTpPercent", label: "Split only: the third party's share (%)", type: "number", hint: "For example 50 for 50/50. Leave blank until it is proposed or agreed." },
           { name: "jurisdiction", label: "Jurisdiction", type: "select", options: JURISDICTIONS.map((item) => ({ value: item.value, label: item.label })) },
           { name: "roadworthiness", label: "Roadworthiness", type: "select", options: [
             { value: "", label: "Not yet known" },

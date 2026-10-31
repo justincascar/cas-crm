@@ -140,6 +140,7 @@ export async function ClaimDetailsBody({
         claimId={String(claim.id)}
         liabilityStatus={String(claim.claim_type || "")}
         roadworthiness={String(claim.roadworthiness || "")}
+        splitTpPercent={claim.split_tp_percent == null ? null : Number(claim.split_tp_percent)}
         recordVersion={
           claimClash?.scope === "screen" && claimClash.recordKey === `${id}:general`
             ? claimClash.expectedVersion

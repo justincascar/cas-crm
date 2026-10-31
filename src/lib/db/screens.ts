@@ -434,6 +434,7 @@ function applySideEffects(claimId: string, screenKey: string, values: ScreenValu
       claimId,
       {
         liabilityStatus: values.typeOfClaim,
+        splitTpPercent: values.splitTpPercent,
         roadworthiness: values.roadworthiness,
       },
       actorId,

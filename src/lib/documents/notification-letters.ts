@@ -34,7 +34,7 @@ export function letterSuggestionNote(liabilityStatus: string | null | undefined)
     return "This file is Non-fault, so the initial letter to the third-party insurer is offered. You can still pick another document.";
   }
   if (value === "disputed") {
-    return "Liability is Disputed / unclear, so neither letter is offered automatically. Pick the document once you know which insurer this is going to.";
+    return "Liability is Disputed, so neither letter is offered automatically. Pick the document once you know which insurer this is going to.";
   }
   return "Liability is not yet decided, so neither letter is offered automatically. Pick the document if you know which insurer this is going to.";
 }

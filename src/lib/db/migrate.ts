@@ -118,6 +118,7 @@ const TABLES: Record<string, Array<[string, string]>> = {
     ["own_insurer_address", "TEXT"],
     ["own_insurer_postcode", "TEXT"],
     ["audatex_network_code", "TEXT"],
+    ["split_tp_percent", "INTEGER"],
     ["audatex_work_provider_code", "TEXT"],
     ["engineer_id", "TEXT"],
     ["hire_agreement_number", "TEXT"],

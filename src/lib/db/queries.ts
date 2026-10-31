@@ -34,6 +34,8 @@ import {
   normalizeLiabilityStatus,
   normalizeRoadworthiness,
   statusChangeDetails,
+  parseSplitPercent,
+  splitShareWords,
 } from "../domain/claim-status";
 import {
   audatexInsurerNameForClaim,
@@ -1192,11 +1194,11 @@ export function completeTask(id: string) {
 
 export function updateClaimWorkflowStatus(
   claimId: string,
-  patch: { liabilityStatus?: string; roadworthiness?: string },
+  patch: { liabilityStatus?: string; roadworthiness?: string; splitTpPercent?: string },
   actorId: string,
 ) {
-  const current = get<{ claim_type: string | null; roadworthiness: string | null }>(
-    `SELECT claim_type, roadworthiness FROM claims WHERE id = ?`,
+  const current = get<{ claim_type: string | null; roadworthiness: string | null; split_tp_percent: number | null }>(
+    `SELECT claim_type, roadworthiness, split_tp_percent FROM claims WHERE id = ?`,
     [claimId],
   );
   if (!current) throw new Error("File not found.");
@@ -1209,7 +1211,19 @@ export function updateClaimWorkflowStatus(
     const next = normalizeLiabilityStatus(patch.liabilityStatus);
     sets.push("claim_type = ?");
     params.push(next);
-    const details = statusChangeDetails("Liability status", previous, next);
+    let details = statusChangeDetails("Liability status", previous, next);
+    // R64: a Split file keeps the third party's share; any other status clears it.
+    if (next === "split" && "splitTpPercent" in patch) {
+      const percent = parseSplitPercent(patch.splitTpPercent);
+      sets.push("split_tp_percent = ?");
+      params.push(percent);
+      const shares = splitShareWords(percent);
+      if (percent !== (current.split_tp_percent ?? null)) {
+        details = `${details ? `${details} ` : ""}${shares ? `Third party ${shares.tp}, client ${shares.client}.` : "Shares not yet known."}`;
+      }
+    } else if (next !== "split" && current.split_tp_percent != null) {
+      sets.push("split_tp_percent = NULL");
+    }
     if (details) events.push({ eventType: "liability_status_changed", details });
   }
   if ("roadworthiness" in patch) {

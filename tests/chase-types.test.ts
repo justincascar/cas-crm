@@ -123,7 +123,7 @@ describe("liability response chase", () => {
     db.close();
   });
 
-  it("does not treat Disputed / unclear or not yet decided as a liability decision", () => {
+  it("does not treat Disputed or not yet decided as a liability decision", () => {
     const db = seeded();
     withDatabase(db, () => {
       db.prepare(`UPDATE claims SET claim_type = 'disputed', cas_liability_assessment = 'disputed' WHERE id = 'c5'`).run();

@@ -197,6 +197,7 @@ export async function actionUpdateClaimStatus(formData: FormData) {
   const field = String(formData.get("field") || "");
   const liabilityStatus = String(formData.get("liabilityStatus") || "");
   const roadworthiness = String(formData.get("roadworthiness") || "");
+  const splitTpPercent = String(formData.get("splitTpPercent") || "");
   try {
     withImmediateTransaction(() => {
       if (field === "liability") {
@@ -205,10 +206,10 @@ export async function actionUpdateClaimStatus(formData: FormData) {
           screenKey: "general",
           expected: formVersion(formData),
           actorId: staff.id,
-          stored: { typeOfClaim: liabilityStatus },
-          labels: { typeOfClaim: "Liability status" },
+          stored: { typeOfClaim: liabilityStatus, splitTpPercent: liabilityStatus === "split" ? splitTpPercent : "" },
+          labels: { typeOfClaim: "Liability status", splitTpPercent: "Third party's share" },
         });
-        updateClaimWorkflowStatus(id, { liabilityStatus }, staff.id);
+        updateClaimWorkflowStatus(id, { liabilityStatus, splitTpPercent }, staff.id);
       } else if (field === "roadworthiness") {
         writeScreenIfCurrent({
           claimId: id,

@@ -66,7 +66,7 @@ describe("notification letters from seeded TEST claims", () => {
     db.close();
   });
 
-  it("does not auto-suggest either letter on a Disputed / unclear file", () => {
+  it("does not auto-suggest either letter on a Disputed file", () => {
     const db = seeded();
     withDatabase(db, () => {
       assert.equal(suggestedLetterTemplateKey("disputed"), null);

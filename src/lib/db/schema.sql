@@ -121,6 +121,7 @@ CREATE TABLE IF NOT EXISTS claims (
   own_insurer_postcode TEXT,
   own_excess_pence INTEGER,
   audatex_network_code TEXT,
+  split_tp_percent INTEGER,
   audatex_work_provider_code TEXT,
   incomplete_client_submission INTEGER NOT NULL DEFAULT 0,
   is_new_enquiry INTEGER NOT NULL DEFAULT 0,

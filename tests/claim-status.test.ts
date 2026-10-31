@@ -32,7 +32,8 @@ describe("liability status and roadworthiness", () => {
     assert.equal(normalizeLiabilityStatus("non_fault"), "non_fault");
     assert.equal(normalizeLiabilityStatus("disputed"), "disputed");
     assert.equal(liabilityStatusLabel("unknown"), "Not yet known");
-    assert.equal(liabilityStatusLabel("disputed"), "Disputed / unclear");
+    assert.equal(liabilityStatusLabel("disputed"), "Disputed");
+    assert.equal(liabilityStatusLabel("split"), "Split (shared liability)");
     assert.equal(normalizeRoadworthiness("awaiting_assessment"), "");
     assert.equal(normalizeRoadworthiness("needs_review"), "");
     assert.equal(normalizeRoadworthiness("roadworthy"), "roadworthy");
@@ -91,6 +92,33 @@ describe("liability status and roadworthiness", () => {
     db.close();
   });
 
+  it("R64: a Split file keeps the third party's share, refuses a share outside 1 to 99, and clears it when the status changes", async () => {
+    const db = seeded();
+    await withDatabaseAsync(db, async () => {
+      const created = await createClaimFromIntake({
+        handlerId: "staff-sian",
+        clientRole: "owner_driver",
+        client: { forename: "Gwen", surname: "Rhannu", dob: "1990-02-01" },
+        vehicle: {},
+        thirdParties: [],
+        accidentDate: "2026-09-01",
+      });
+      updateClaimWorkflowStatus(created.id, { liabilityStatus: "split", splitTpPercent: "50" }, "staff-sian");
+      const split = getClaim(created.id);
+      assert.equal(String(split?.claim.claim_type), "split");
+      assert.equal(Number(split?.claim.split_tp_percent), 50);
+      const event = listClaimEvents(created.id).find((item) => item.event_type === "liability_status_changed");
+      assert.equal(String(event?.details), "Set to Split (shared liability). Third party 50%, client 50%.");
+      assert.throws(() => updateClaimWorkflowStatus(created.id, { liabilityStatus: "split", splitTpPercent: "100" }, "staff-sian"), /from 1 to 99/);
+      updateClaimWorkflowStatus(created.id, { liabilityStatus: "split", splitTpPercent: "" }, "staff-sian");
+      assert.equal(getClaim(created.id)?.claim.split_tp_percent, null, "blank means the shares are not yet known");
+      updateClaimWorkflowStatus(created.id, { liabilityStatus: "split", splitTpPercent: "60" }, "staff-sian");
+      updateClaimWorkflowStatus(created.id, { liabilityStatus: "disputed" }, "staff-sian");
+      assert.equal(getClaim(created.id)?.claim.split_tp_percent, null, "another status clears the share");
+    });
+    db.close();
+  });
+
   it("changes liability on an existing test claim without touching roadworthiness, and records who changed it", () => {
     const db = seeded();
     withDatabase(db, () => {
@@ -104,7 +132,7 @@ describe("liability status and roadworthiness", () => {
       const event = listClaimEvents("c3").find((row) => row.event_type === "liability_status_changed");
       assert.ok(event);
       assert.match(String(event.details), /Non-fault/);
-      assert.match(String(event.details), /Disputed \/ unclear/);
+      assert.match(String(event.details), /to Disputed\./);
       assert.equal(event.actor_name, "Justin Roberts");
     });
     db.close();

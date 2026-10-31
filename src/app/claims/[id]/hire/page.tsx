@@ -8,6 +8,7 @@ import { loadClash } from "@/lib/db/record-version";
 import { listStaff } from "@/lib/db/queries";
 import { canOverrideUnsignedSwap, swapView } from "@/lib/db/vehicle-swap";
 import { londonTodayIso } from "@/lib/dates";
+import { get } from "@/lib/db/connection";
 
 export default async function ClaimHirePage({
   params,
@@ -36,7 +37,17 @@ export default async function ClaimHirePage({
   const handlers = listStaff()
     .filter((person) => canDoFieldJob(person.role))
     .map((person) => ({ id: String(person.id), name: String(person.name) }));
+  // R64: on a Split file Justin decides per file whether credit hire continues.
+  const liability = get<{ claim_type: string | null; split_tp_percent: number | null }>(`SELECT claim_type, split_tp_percent FROM claims WHERE id = ?`, [id]);
+  const split = liability?.claim_type === "split";
   return (
+    <>
+      {split ? (
+        <p className="mb-4 rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm font-semibold text-overdue" role="alert" data-split-warning>
+          Split liability – check with Justin before continuing credit hire.
+          {liability?.split_tp_percent != null ? ` Third party ${liability.split_tp_percent}%, client ${100 - liability.split_tp_percent}%.` : ""}
+        </p>
+      ) : null}
     <HireJourney
       area={area}
       error={query.error}
@@ -50,5 +61,6 @@ export default async function ClaimHirePage({
       swapCar={query.swapCar}
       carFromFleet={query.car}
     />
+    </>
   );
 }

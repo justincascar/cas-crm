@@ -16,11 +16,14 @@ export function ClaimWorkflowStatus({
   liabilityStatus,
   roadworthiness,
   recordVersion = "",
+  splitTpPercent = null,
 }: {
   claimId: string;
   liabilityStatus: string | null | undefined;
   roadworthiness: string | null | undefined;
   recordVersion?: string;
+  /** R64: on a Split file, the third party's share of liability. */
+  splitTpPercent?: number | null;
 }) {
   const liability = normalizeLiabilityStatus(liabilityStatus);
   const vehicle = normalizeRoadworthiness(roadworthiness);
@@ -29,8 +32,8 @@ export function ClaimWorkflowStatus({
     <section className="rounded-xl border-2 border-navy bg-[#e8eef4] p-5">
       <h2 className="font-serif text-xl text-navy-deep">Liability and roadworthiness</h2>
       <p className="mt-1 text-sm text-slate">
-        These two facts are independent. Leave either as not yet decided rather than guessing. Disputed / unclear is a
-        valid liability status. Changing one does not change the other. Hire charges still do not start just because this
+        These two facts are independent. Leave either as not yet decided rather than guessing. Disputed is a valid
+        liability status. Changing one does not change the other. Hire charges still do not start just because this
         file is open.
       </p>
       <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -48,7 +51,14 @@ export function ClaimWorkflowStatus({
               ))}
             </select>
           </label>
-          <p className="text-xs text-slate">Current: {liabilityStatusLabel(liability)}</p>
+          <label className="block text-sm">
+            Split only: the third party&apos;s share (%)
+            <input name="splitTpPercent" inputMode="numeric" className={field} defaultValue={splitTpPercent ?? ""} placeholder="For example 50" />
+          </label>
+          <p className="text-xs text-slate">
+            Current: {liabilityStatusLabel(liability)}
+            {liability === "split" ? (splitTpPercent != null ? ` · third party ${splitTpPercent}%, client ${100 - splitTpPercent}%` : " · shares not yet known") : ""}
+          </p>
           <button className="rounded-md bg-navy px-3 py-2 text-sm text-white" type="submit">
             Save liability status
           </button>

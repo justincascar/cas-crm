@@ -4,7 +4,8 @@ export const LIABILITY_STATUS_OPTIONS = [
   { value: "", label: "Not yet known" },
   { value: "fault", label: "Fault" },
   { value: "non_fault", label: "Non-fault" },
-  { value: "disputed", label: "Disputed / unclear" },
+  { value: "split", label: "Split (shared liability)" },
+  { value: "disputed", label: "Disputed" },
 ] as const;
 
 export const ROADWORTHINESS_OPTIONS = [
@@ -40,6 +41,25 @@ export function normalizeRoadworthiness(raw: string | null | undefined): Roadwor
 export function liabilityStatusLabel(raw: string | null | undefined): string {
   const value = normalizeLiabilityStatus(raw);
   return LIABILITY_STATUS_OPTIONS.find((row) => row.value === value)?.label || "Not yet known";
+}
+
+/**
+ * R64: on a Split file, the third party's share of liability as a whole percentage (1–99), or null when not yet agreed
+ * or proposed. Blank is allowed: the letters then show the percentages as still needed.
+ */
+export function parseSplitPercent(raw: string | number | null | undefined): number | null {
+  const text = String(raw ?? "").trim().replace(/%$/, "");
+  if (!text) return null;
+  if (!/^\d{1,2}$/.test(text) || Number(text) < 1 || Number(text) > 99) {
+    throw new Error("Enter the third party's share of liability as a whole percentage from 1 to 99, for example 50.");
+  }
+  return Number(text);
+}
+
+/** "50 / 50": the third party's share, then the client's. */
+export function splitShareWords(tpPercent: number | null | undefined): { tp: string; client: string } | null {
+  if (tpPercent == null) return null;
+  return { tp: `${tpPercent}%`, client: `${100 - tpPercent}%` };
 }
 
 export function roadworthinessLabel(raw: string | null | undefined): string {
