@@ -1418,3 +1418,15 @@ Finish on 31 October 2026: 721 tests passed, 0 failed. Type check: 0 errors. Pro
 Checked in the CRM as Sian: a new claim with a landline in Mobile, a bad email and a future date of birth showed "3 things to fix before saving" with focus on the box; fixing the email changed it to "2 left to fix"; Next problem → went to Mobile, then Date of birth; after fixing both it said "All fixed – save now".
 
 Finish on 31 October 2026: 727 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 80 passed, 0 failed, database unchanged. Journey, awkward-journey, permissions and security checks passed.
+
+## Review notes R59–R64 (31 October 2026, evening)
+
+Another Claude Code session had fixed R48, R50–R54, R56 and R57 and was part-way through R60; Justin asked for it to be stopped and this session carried on from its unfinished work.
+
+- **R60 (c0f8b85):** Hire / Fleet → Complete fleet details is one table of every car; suggestions (gearbox from the model name, fuel and colour from the V5C, group from the Settings rules) are saved only when staff press Use; the hire and swap screens show the car's details read-only; a car with details missing cannot be chosen.
+- **R62 (98aba47):** licence numbers are checked against the GB format when entered, with a "Not a GB licence" tick for Northern Ireland and foreign licences; a number that does not match the surname or date of birth is kept and flagged for review, never blocking the check.
+- **R59 (cdb9a03):** every form keeps what was typed when it comes back with a mistake (a form keeper in the app shell); amounts are checked before sending; the payment form shows refusals in red; a refused swap keeps its car; an offer cannot be dated after today.
+- **R61 (2f5a558):** recovery or storage recorded after a hire agreement signed without the Storage & Recovery page is flagged on the Recovery page, the claim and the dashboard; producing a hire agreement while recovery is needed but unrecorded asks first.
+- **R64 (7c8e6b1, e2512a6) and R63 (e2512a6):** Split liability status with shares; First letters page (step 4) with the pack per liability status; the reviewer's drafts as templates waiting for Justin's approval in Settings (solicitor date for Drafts 1, 2, 4, 5); Drafts 1 and 2 signed on screen, by link or on paper; the MID block for the initial letter once approved; Send email fills the template when the recipient is chosen.
+- Checks for each: unit tests (743 at the end), type check, production build, page check and security, journeys, awkward cases (now including a mistake on every form type), permissions and security journeys, all passed. Walk-throughs as `sian` on the new TEST-0044 (Mr Gethin Prawf) and TEST-0045 (Mrs Eira Adfer), both fictional.
+- Still open: R49 (QR code: needs Justin's yes to install a QR package, question 30), R55 and R58 (Recovery rebuild and urgent roadside recovery), R65 and R66 (steps 5 to 9 in place).

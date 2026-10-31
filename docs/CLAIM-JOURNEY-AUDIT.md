@@ -162,6 +162,8 @@ Five stages. Each later stage extends the same three journeys one step further: 
 72. **Fixed (R33).** Steps entered with today's date were stamped 09:00, which put them before things done earlier that day. They now take the time recorded.
 73. **Fixed (R42).** Found while fixing R42: notes for staff inside documents (the draft invoice's "not supplied yet, not sent" note, the agreement's and pack's notes) printed, and went out in attachments. They now show on screen only. Older draft invoices printed as "Invoice — …" once that note stopped printing, so every draft invoice now prints headed "Draft invoice — …".
 74. **Fixed (R44).** Step 10 relied on the payment chase to say "Paid in full", so a head paid without a payment request (TEST-0039's recovery, paid by card) never read as paid. It now compares the money received with the agreed, confirmed claimed or recorded recovery figure (never claimed and agreed added together).
+75. **Fixed (R59).** Found while fixing R59: the payment form showed a refusal in a plain grey line that was easy to miss, and checked nothing before sending; an offer could be dated after today; a refused vehicle swap came back without its replacement car, so its form was not shown again.
+76. **Fixed (R63).** Found while fixing R63: the intake records a "MID result" row from the third-party insurer name even when no MID search was done; the letters now prefer the MID search staff recorded (with its policy number).
 
 ## How to try hire on a demonstration file
 
