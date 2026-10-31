@@ -1,4 +1,5 @@
 import { jurisdictionLabel, normaliseJurisdiction } from "../domain/jurisdiction";
+import { LICENCE_BOXES, licenceFormatError, licenceOrigin } from "../domain/licence-number";
 import { recordClaimEvent } from "./chronology";
 import { accidentDateError, nowUtcIso, londonDateIso, occurredFromForm, utcFromLondonDateTime } from "../dates";
 import { closeRepairStepsForTotalLoss } from "./total-loss-switch";
@@ -123,6 +124,11 @@ export function screenSaveFieldErrors(
   const def = getClaimScreen(screenKey);
   if (!def) return [];
   const problems: Array<{ field: string; message: string }> = [];
+  // R62: a licence number is checked against its format when it is entered.
+  for (const box of LICENCE_BOXES.filter((item) => item.screen === screenKey)) {
+    const err = licenceFormatError(values[box.number], licenceOrigin(values[box.notGb], values[box.country]), values[box.country]);
+    if (err) problems.push({ field: box.number, message: err });
+  }
   const claim = get<{ client_role: string | null }>(`SELECT client_role FROM claims WHERE id = ?`, [claimId]);
   for (const section of def.sections) {
     for (const field of section.fields) {

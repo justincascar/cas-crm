@@ -68,6 +68,13 @@ export async function PrehireChecksScreen({
               <label className="text-sm sm:col-span-2" data-licence-number-box>
                 Licence number
                 <input name="licenceNumber" required autoComplete="off" className={field} />
+                <span className="mt-1 block text-xs text-slate">
+                  {driver.licenceOrigin === "gb"
+                    ? "A GB licence number is 16 characters. For a Northern Ireland or foreign licence, tick “Not a GB licence” on the person’s details first."
+                    : driver.licenceOrigin === "ni"
+                      ? "Northern Ireland licence: 8 digits."
+                      : "Licence from another country: as printed on the licence."}
+                </span>
               </label>
             )}
             <label className="text-sm">
@@ -122,6 +129,14 @@ export async function PrehireChecksScreen({
             className="scroll-mt-16 space-y-3 rounded-lg border border-line p-4"
             data-licence-card={done ? "done" : "open"}
           >
+            {driver.licenceReview ? (
+              <p className="rounded-md border border-warn bg-[#fff6e8] px-3 py-2 text-sm" data-licence-review>
+                {driver.licenceReview}{" "}
+                <a href={driver.licenceHref} className="font-semibold text-teal-dark underline">
+                  Correct the number or the details
+                </a>
+              </p>
+            ) : null}
             {done && latest ? (
               <details>
                 <summary className="flex cursor-pointer flex-wrap items-baseline justify-between gap-2 text-sm">

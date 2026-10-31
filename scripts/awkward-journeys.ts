@@ -97,7 +97,7 @@ async function startHire(ctx: Ctx, claimId: string): Promise<string | null> {
   const noBank = await saveNoBank(session, origin, claimId);
   if (noBank) return noBank;
   licenceSerial += 1;
-  const licence = await saveLicenceCheck(session, origin, claimId, `AWKWD850412A${String(licenceSerial).padStart(2, "0")}C`);
+  const licence = await saveLicenceCheck(session, origin, claimId, `AWKWD850412AW9${String(licenceSerial).padStart(2, "0")}`);
   if (licence) return licence;
   const rate = await setDailyRate(session, origin, claimId, "S2");
   if (rate) return rate;

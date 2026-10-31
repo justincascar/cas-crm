@@ -11,6 +11,7 @@ import { formatUkDate, formatUkDateTime, nowUtcIso } from "../dates";
 import { describeHireAgreementParts } from "../documents/hire-agreement-parts";
 import { formatHandoverMileage, handoverReadingsForClaim, type HandoverReading } from "./handover";
 import { dobSaveError } from "../age";
+import { licenceFormatError, licenceOrigin } from "../domain/licence-number";
 import { FieldValidationError } from "../form-validation";
 import { mobileNumberError } from "../phone-number";
 import { chargeableHireEndLabel } from "../domain/rules";
@@ -206,7 +207,21 @@ export function getHirePack(claimId: string) {
   };
 }
 
-export function hirePackSaveFieldError(input: HirePackData): { field: string; message: string } | null {
+/** R62: the "Not a GB licence" tick and issuing country on a screen of the file, for checking a licence number typed in the pack. */
+function screenLicenceOrigin(claimId: string, screenKey: string, prefix = "") {
+  const row = get<{ data_json: string }>(`SELECT data_json FROM claim_screen_data WHERE claim_id = ? AND screen_key = ?`, [claimId, screenKey]);
+  let values: Record<string, string> = {};
+  try {
+    values = row?.data_json ? (JSON.parse(row.data_json) as Record<string, string>) : {};
+  } catch {
+    values = {};
+  }
+  const notGb = prefix ? values[`${prefix}LicenceNotGb`] : values.licenceNotGb;
+  const country = prefix ? values[`${prefix}IssuingCountry`] : values.issuingCountry;
+  return { origin: licenceOrigin(notGb, country), country: String(country || "") };
+}
+
+export function hirePackSaveFieldError(input: HirePackData, claimId?: string): { field: string; message: string } | null {
   const confirmed = (key: string) => {
     const value = input[key];
     return value === "yes" || value === 1;
@@ -221,6 +236,23 @@ export function hirePackSaveFieldError(input: HirePackData): { field: string; me
     confirmed("additional_dob_confirmed"),
   );
   if (additionalErr) return { field: "additional_dob", message: additionalErr };
+  if (claimId) {
+    const client = screenLicenceOrigin(claimId, "client");
+    const hirerLicence = licenceFormatError(String(input.licence_number || ""), client.origin, client.country);
+    if (hirerLicence) return { field: "licence_number", message: hirerLicence };
+    const extras = get<{ data_json: string }>(`SELECT data_json FROM claim_screen_data WHERE claim_id = ? AND screen_key = 'additional-drivers'`, [claimId]);
+    const named = String(input.additional_name || "").trim().toLowerCase();
+    let slot = "";
+    try {
+      const values = extras?.data_json ? (JSON.parse(extras.data_json) as Record<string, string>) : {};
+      slot = ["d1", "d2"].find((key) => named && String(values[`${key}Name`] || "").trim().toLowerCase() === named) || "";
+    } catch {
+      slot = "";
+    }
+    const additional = slot ? screenLicenceOrigin(claimId, "additional-drivers", slot) : { origin: "gb" as const, country: "" };
+    const additionalLicence = licenceFormatError(String(input.additional_licence || ""), additional.origin, additional.country);
+    if (additionalLicence) return { field: "additional_licence", message: additionalLicence };
+  }
   return null;
 }
 
@@ -229,7 +261,7 @@ export function hirePackSaveError(input: HirePackData): string | null {
 }
 
 export function saveHirePack(claimId: string, input: HirePackData) {
-  const blocked = hirePackSaveFieldError(input);
+  const blocked = hirePackSaveFieldError(input, claimId);
   if (blocked) throw new FieldValidationError(blocked.field, blocked.message);
   const existing = get(`SELECT claim_id FROM hire_pack_data WHERE claim_id = ?`, [claimId]);
   const columns = Object.keys(EMPTY_PACK);

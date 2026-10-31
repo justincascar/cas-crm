@@ -1,4 +1,5 @@
 import { readProblems } from "@/lib/form-validation";
+import { LICENCE_BOXES, licenceMismatches, licenceMismatchSentence, licenceOrigin, surnameFromFullName } from "@/lib/domain/licence-number";
 import Link from "next/link";
 import { loadClaimSteps } from "@/lib/claims/load-claim-steps";
 import { currentClaimStep } from "@/lib/domain/claim-steps";
@@ -91,6 +92,15 @@ export async function ClaimWorkScreen({
     if (tokenName) extraHidden[tokenName] = clashForScreen.expectedVersion;
   }
   const actorId = String(data.claim.handler_id || "staff-sian");
+  // R62: a licence number that does not match the surname or date of birth is kept, and shown here for a person to check.
+  const licenceReviews = LICENCE_BOXES.filter((box) => box.screen === screen)
+    .map((box) => {
+      const v = values as Record<string, string | undefined>;
+      const name = box.name ? String(v[box.name] || "") : [v.forename, v.surname].filter(Boolean).join(" ") || "the client";
+      const surname = box.surname ? String(v[box.surname] || "") : surnameFromFullName(name);
+      return licenceMismatchSentence(name || "this driver", licenceMismatches({ number: v[box.number], origin: licenceOrigin(v[box.notGb], v[box.country]), surname, dateOfBirth: v[box.dob] }));
+    })
+    .filter(Boolean);
   const justSaved = saved === "1";
   const preparedRow = findPreparedEngineerInstruction(String(data.claim.id));
   const preparedEngineerInstruction = preparedRow
@@ -129,6 +139,11 @@ export async function ClaimWorkScreen({
         <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-4 py-3 text-sm text-overdue">{error}</p>
       ) : null}
       <SaveClashNotice clash={clashForScreen} reloadHref={`/claims/${data.claim.id}/work/${screen}`} />
+      {licenceReviews.map((line) => (
+        <p key={line} className="rounded-md border border-warn bg-[#fff6e8] px-4 py-3 text-sm" data-licence-review>
+          {line}
+        </p>
+      ))}
       <EmailSendModeBanner />
       <MailboxSendNotice sent={mailboxSent} simulated={mailboxSimulated} error={mailboxError} reportNotice={mailboxReport} />
       {screen === "storage" || screen === "recovery" ? (

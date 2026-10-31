@@ -11,6 +11,15 @@ import {
   type PrehireCheckKind,
 } from "../domain/prehire-checks";
 import { MAX_CLAIM_DOCUMENT_BYTES, claimDocumentMime } from "../domain/claim-documents";
+import {
+  compactLicenceNumber,
+  licenceFormatError,
+  licenceMismatches,
+  licenceMismatchSentence,
+  licenceOrigin,
+  surnameFromFullName,
+  type LicenceOrigin,
+} from "../domain/licence-number";
 import { recordClaimEvent } from "./chronology";
 import { all, get, getDb, newId, run } from "./connection";
 import { storeClaimDocument, type ClaimDocumentFile } from "./claim-documents";
@@ -33,6 +42,10 @@ export type HireDriver = NamedHireDriver & {
   basis: string;
   licenceNumber: string;
   licenceHref: string;
+  /** R62: GB, Northern Ireland or another country, from the "Not a GB licence" tick. */
+  licenceOrigin: LicenceOrigin;
+  /** R62: where a GB number does not match the surname or date of birth on the file, for a person to check. "" when it matches. */
+  licenceReview: string;
 };
 
 export type LicenceCheckRow = {
@@ -194,39 +207,67 @@ export function listHireDrivers(claimId: string): HireDriver[] {
   return drivers.map((driver) => ({ ...driver, ...licencePlacement(claimId, driver, client?.person_id || "") }));
 }
 
-function licencePlacement(claimId: string, driver: NamedHireDriver, clientPersonId: string): { licenceNumber: string; licenceHref: string } {
+type LicencePlacement = { licenceNumber: string; licenceHref: string; licenceOrigin: LicenceOrigin; licenceReview: string };
+
+function placed(name: string, number: string, href: string, origin: LicenceOrigin, surname: string, dateOfBirth: string): LicencePlacement {
+  const licenceNumber = number.trim();
+  const review = licenceMismatchSentence(name, licenceMismatches({ number: licenceNumber, origin, surname, dateOfBirth }));
+  return { licenceNumber, licenceHref: href, licenceOrigin: origin, licenceReview: review };
+}
+
+function licencePlacement(claimId: string, driver: NamedHireDriver, clientPersonId: string): LicencePlacement {
   const base = `/claims/${claimId}`;
   if (driver.key.startsWith("person:")) {
     const personId = driver.key.slice("person:".length);
-    const row = get<{ licence_number: string | null }>(`SELECT licence_number FROM people WHERE id = ?`, [personId]);
-    return {
-      licenceNumber: String(row?.licence_number || "").trim(),
-      licenceHref: personId === clientPersonId ? `${base}/details/client` : `${base}/details/driver`,
-    };
+    const row = get<{ licence_number: string | null; surname: string | null; full_name: string | null; date_of_birth: string | null }>(
+      `SELECT licence_number, surname, full_name, date_of_birth FROM people WHERE id = ?`,
+      [personId],
+    );
+    const isClient = personId === clientPersonId;
+    const client = isClient ? screenValues(claimId, "client") : {};
+    return placed(
+      driver.name,
+      String(row?.licence_number || ""),
+      isClient ? `${base}/details/client` : `${base}/details/driver`,
+      licenceOrigin(client.licenceNotGb, client.issuingCountry),
+      String(row?.surname || "") || surnameFromFullName(row?.full_name),
+      String(row?.date_of_birth || ""),
+    );
   }
   const extras = screenValues(claimId, "additional-drivers");
   const norm = normName(driver.name);
-  if (normName(extras.d1Name || "") === norm) {
-    return { licenceNumber: String(extras.d1LicenceNumber || "").trim(), licenceHref: `${base}/details/additional-drivers` };
+  const href = `${base}/details/additional-drivers`;
+  for (const slot of ["d1", "d2"] as const) {
+    if (normName(extras[`${slot}Name`] || "") === norm) {
+      return placed(
+        driver.name,
+        String(extras[`${slot}LicenceNumber`] || ""),
+        href,
+        licenceOrigin(extras[`${slot}LicenceNotGb`], extras[`${slot}IssuingCountry`]),
+        surnameFromFullName(driver.name),
+        String(extras[`${slot}Dob`] || ""),
+      );
+    }
   }
-  if (normName(extras.d2Name || "") === norm) {
-    return { licenceNumber: String(extras.d2LicenceNumber || "").trim(), licenceHref: `${base}/details/additional-drivers` };
-  }
-  const pack = get<{ additional_name: string | null; additional_licence: string | null }>(
-    `SELECT additional_name, additional_licence FROM hire_pack_data WHERE claim_id = ?`,
+  const pack = get<{ additional_name: string | null; additional_licence: string | null; additional_dob: string | null }>(
+    `SELECT additional_name, additional_licence, additional_dob FROM hire_pack_data WHERE claim_id = ?`,
     [claimId],
   );
   if (normName(String(pack?.additional_name || "")) === norm) {
-    return { licenceNumber: String(pack?.additional_licence || "").trim(), licenceHref: `${base}/details/additional-drivers` };
+    return placed(driver.name, String(pack?.additional_licence || ""), href, "gb", surnameFromFullName(driver.name), String(pack?.additional_dob || ""));
   }
-  return { licenceNumber: "", licenceHref: `${base}/details/additional-drivers` };
+  return placed(driver.name, "", href, "gb", "", "");
 }
 
-/** Licence numbers are kept without spaces, in capitals. The format is not guessed beyond that. */
-export function cleanLicenceNumber(value: string): string {
-  const text = value.replace(/\s+/g, "").toUpperCase();
+/**
+ * Licence numbers are kept without spaces, in capitals. R62: a GB number must be in the GB format; a Northern Ireland
+ * number is 8 digits; another country's is taken as printed. Nothing is corrected or guessed.
+ */
+export function cleanLicenceNumber(value: string, origin: LicenceOrigin = "gb", issuingCountry = "another country"): string {
+  const text = compactLicenceNumber(value);
   if (!text) return "";
-  if (!/^[A-Z0-9]{5,20}$/.test(text)) throw new Error("Enter the licence number as it is printed on the licence, letters and numbers only.");
+  const problem = licenceFormatError(text, origin, issuingCountry);
+  if (problem) throw new Error(problem);
   return text;
 }
 
@@ -235,7 +276,7 @@ export function cleanLicenceNumber(value: string): string {
  * the client or driver record, Additional drivers, or the hire pack's additional driver.
  */
 export function saveDriverLicenceNumber(claimId: string, driver: HireDriver, licenceNumber: string): void {
-  const number = cleanLicenceNumber(licenceNumber);
+  const number = cleanLicenceNumber(licenceNumber, driver.licenceOrigin);
   if (!number) return;
   if (driver.key.startsWith("person:")) {
     run(`UPDATE people SET licence_number = ? WHERE id = ?`, [number, driver.key.slice("person:".length)]);
@@ -311,7 +352,7 @@ export function recordLicenceCheck(input: {
   const checkedOn = requireYmd(input.checkedOn, "the date the check was done");
   if (checkedOn > londonTodayIso()) throw new Error("The date of the check cannot be after today.");
   const result = input.result === "problem" ? "problem" : "ok";
-  const typedNumber = cleanLicenceNumber(String(input.licenceNumber || ""));
+  const typedNumber = cleanLicenceNumber(String(input.licenceNumber || ""), driver.licenceOrigin);
   if (result === "ok" && !driver.licenceNumber && !typedNumber) {
     throw new Error(`Enter ${driver.name}'s licence number. The check cannot be saved as OK to drive without it.`);
   }
@@ -354,6 +395,18 @@ export function recordLicenceCheck(input: {
       input.documentId || null,
     ],
   );
+  // R62: a licence number that does not match the surname or date of birth never blocks the check. It is flagged.
+  const review = listHireDrivers(input.claimId).find((item) => item.key === driver.key)?.licenceReview || "";
+  if (review) {
+    recordClaimEvent({
+      claimId: input.claimId,
+      eventType: "other",
+      occurredAt: nowUtcIso(),
+      actorId: input.actorId,
+      details: `Licence check recorded. For review: ${review}`,
+      source: "staff",
+    });
+  }
   return { id, driverName: driver.name, result };
 }
 
