@@ -49,6 +49,8 @@ export type LetterContext = {
   lossHeadsOnFile?: string[];
   creditHire?: boolean;
   courtesyAllocated?: boolean;
+  /** R63: the MID search as a short block for the initial letter, only once Justin has approved its wording. */
+  midBlock?: { text: string; html: string } | null;
   /** R48: when we first wrote and how often we have chased, for a chaser made from a template. */
   chaseHistory?: string | null;
 };

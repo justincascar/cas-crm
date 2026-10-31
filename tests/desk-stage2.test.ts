@@ -237,7 +237,7 @@ describe("stage 2 desk", () => {
         const blank = [row.lead, ...row.rest].find((item) => item.id === `next-${claim.id}`);
         assert.ok(blank);
         assert.equal(blank.tier, 3);
-        assert.equal(blank.item, "Open messages");
+        assert.equal(blank.item, "Send letter");
         assert.equal(blank.wording, "No due date");
         assert.equal(blank.item.includes("Call the client"), false);
       });

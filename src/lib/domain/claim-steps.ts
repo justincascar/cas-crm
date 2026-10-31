@@ -665,7 +665,8 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
   }
 
   function letterStep(): ClaimStepView {
-    const href = path(input.claimId, "messages");
+    // R63: the first letters are prepared together, filled in and addressed, on their own page.
+    const href = path(input.claimId, "first-letters");
     const chase = chaseFor(input.chases, "liability_response");
     const phrase = chasePhrase(chase);
     let view = shell({
@@ -1064,13 +1065,14 @@ export function deriveClaimSteps(input: ClaimStepInput): ClaimStepView[] {
   }
 
   function ownInsurerStep(): ClaimStepView {
-    const href = path(input.claimId, "messages");
+    // R63: on a fault file the first letters (own insurer, welcome, repair authority) are prepared together.
+    const href = path(input.claimId, "first-letters");
     let view = shell({
       key: "own_insurer",
       title: "Notify the client's own insurer",
       state: "to_do",
       statusText: "To do",
-      buttonLabel: "Open messages",
+      buttonLabel: "Send letter",
       buttonHref: href,
       detailsHref: href,
       forms: ["own_insurer"],

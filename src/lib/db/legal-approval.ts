@@ -2,6 +2,7 @@ import { APPROVE_LEGAL_CORRESPONDENCE } from "../auth/roles";
 import { formatUkDateTime, nowUtcIso } from "../dates";
 import { eventTypeForTemplate } from "../documents/catalog";
 import { GTA_DRAFT_MARK } from "../documents/gta-statement";
+import { DRAFT_WORDING_NOT_APPROVED } from "../documents/template-approval";
 import { recordClaimEvent } from "./chronology";
 import { all, get, run } from "./connection";
 import { listStaffPermissions } from "./permissions";
@@ -104,6 +105,9 @@ export function unapprovedLegalAttachment(claimId: string, documentIds: string[]
   );
   const draftGta = rows.find((row) => String(row.body_html || "").includes(GTA_DRAFT_MARK));
   if (draftGta) return `${draftGta.title}: the GTA paragraph is waiting for Justin's approval of the wording. Nothing was sent.`;
+  // R64: a draft document produced before Justin approved its wording carries the draft mark and never goes out.
+  const draftWording = rows.find((row) => String(row.body_html || "").includes(DRAFT_WORDING_NOT_APPROVED));
+  if (draftWording) return `${draftWording.title}: waiting for Justin's approval of the wording. Nothing was sent.`;
   const blocked = rows.find((row) => needsLegalApproval(row.template_key) && !row.legal_approved_at);
   return blocked ? `${blocked.title}: ${NEEDS_JUSTIN_APPROVAL} before it is emailed. Nothing was sent.` : null;
 }

@@ -38,7 +38,7 @@ export function AppShell({
   emailBannerText: string;
 }) {
   const path = usePathname();
-  if (path === "/login" || path.startsWith("/login/") || path.startsWith("/sign/") || path.startsWith("/c/") || path === "/privacy") {
+  if (path === "/login" || path.startsWith("/login/") || path.startsWith("/sign/") || path.startsWith("/sign-form/") || path.startsWith("/c/") || path === "/privacy") {
     return children;
   }
   const nav = office ? NAV : [{ href: "/jobs", label: "My jobs today" }];

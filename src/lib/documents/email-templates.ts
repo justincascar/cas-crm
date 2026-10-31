@@ -69,6 +69,12 @@ export const THIRD_PARTY_ONLY_TEMPLATES: readonly string[] = [
   "rebuttal_need",
   "rebuttal_duration",
   "total_loss_cessation",
+  // R64: the drafts addressed to the third-party insurer, and the non-fault own-insurer notification and authority.
+  "draft_split_tp",
+  "draft_split_client",
+  "draft_liability_position",
+  "draft_own_insurer_notice",
+  "draft_client_authority",
 ];
 
 export function emailTemplatesForRole(role: string, fault = false) {

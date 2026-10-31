@@ -41,6 +41,7 @@ export function proxy(request: NextRequest) {
     pathname === "/privacy" ||
     pathname === WEBSITE_ENQUIRY_PATH ||
     /^\/sign\/[A-Za-z0-9_-]+(\/submit)?$/.test(pathname) ||
+    /^\/sign-form\/[A-Za-z0-9_-]+(\/submit)?$/.test(pathname) ||
     /^\/c\/[A-Za-z0-9_-]+(\/save)?$/.test(pathname);
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-cas-pathname", pathname);

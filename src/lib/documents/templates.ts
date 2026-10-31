@@ -1,5 +1,6 @@
 import { formatUkDate } from "../dates";
 import { CAS_LETTER_SPECS } from "./cas-wording";
+import { isClientDraftKey } from "./client-drafts";
 import {
   generateFaultOwnInsurerLetter,
   generateNonFaultTpInsurerLetter,
@@ -89,6 +90,15 @@ export const LETTER_TEMPLATES = [
     eventType: "internal_chase_sent" as const,
     channel: "letter" as const,
   },
+  // R64: the reviewer's drafts, waiting for Justin's approval. Generating one records nothing but the document.
+  { key: "draft_client_authority", title: "Client instruction and authority (draft)", eventType: "document_generated" as const, channel: "letter" as const },
+  { key: "draft_repair_authority", title: "Client repair authority (draft)", eventType: "document_generated" as const, channel: "letter" as const },
+  { key: "draft_own_insurer_network", title: "Letter to the client's own insurer: claim reference and network code (draft)", eventType: "document_generated" as const, channel: "letter" as const },
+  { key: "draft_own_insurer_notice", title: "Notification to the client's own insurer (draft)", eventType: "document_generated" as const, channel: "letter" as const },
+  { key: "draft_split_tp", title: "Split liability: letter to the third-party insurer (draft)", eventType: "document_generated" as const, channel: "letter" as const },
+  { key: "draft_split_client", title: "Split liability: explanation to the client (draft)", eventType: "document_generated" as const, channel: "letter" as const },
+  { key: "draft_liability_position", title: "Liability disputed or not yet known: letter to the third-party insurer (draft)", eventType: "document_generated" as const, channel: "letter" as const },
+  { key: "client_welcome_fault", title: "Client welcome, fault claim (draft)", eventType: "document_generated" as const, channel: "letter" as const },
 ] as const;
 
 export type LetterTemplateKey = (typeof LETTER_TEMPLATES)[number]["key"];
@@ -214,6 +224,8 @@ ${operationalClose(ctx)}`,
 }
 
 export function generateLetter(templateKey: LetterTemplateKey, ctx: LetterContext | CorrespondenceContext): GeneratedLetter {
+  // The drafts need the file's extras and Justin's approval; they are made where the file is read (chronology).
+  if (isClientDraftKey(templateKey)) throw new Error("This draft is produced from the claim file.");
   if (templateKey === "fault_own_insurer") return generateFaultOwnInsurerLetter(ctx);
   if (templateKey === "initial_tp_insurer") return generateNonFaultTpInsurerLetter(ctx);
   if (templateKey === "repair_commencement") return generateRepairCommencement(ctx);

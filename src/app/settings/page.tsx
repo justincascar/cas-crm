@@ -1,4 +1,7 @@
 import { PageHeader } from "@/components/ClaimTable";
+import { DraftDocumentApprovals } from "@/components/DraftDocumentApprovals";
+import { draftDocumentRows } from "@/lib/db/draft-previews";
+import { canApproveDocuments } from "@/lib/db/document-approvals";
 import { RecordVersionField, SaveClashNotice } from "@/components/SaveClashNotice";
 import { ValidatedForm } from "@/components/ValidatedForm";
 import Link from "next/link";
@@ -40,10 +43,10 @@ import { COMPANY_DETAIL_LABELS, companyFooterLines, getCompanyDetails } from "@/
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; saved?: string; mailboxCheck?: string; mailboxCheckError?: string; clash?: string; chaserRun?: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; mailboxCheck?: string; mailboxCheckError?: string; clash?: string; chaserRun?: string; draftError?: string }>;
 }) {
   const staffUser = await requireStaff();
-  const { error, saved, mailboxCheck, mailboxCheckError, clash: clashId, chaserRun } = await searchParams;
+  const { error, saved, mailboxCheck, mailboxCheckError, clash: clashId, chaserRun, draftError } = await searchParams;
   const clash = loadClash(clashId);
   const versionFor = (scope: string) => (clash?.scope === scope ? clash.expectedVersion : sectionVersion(scope, "office"));
   const settings = getSettings();
@@ -75,6 +78,8 @@ export default async function SettingsPage({
   const chaserApprovals = chaseRuleApprovals();
   // R46: Justin reads exactly what each chaser sends before switching it on.
   const chaserWording = chaserWordingPreviews();
+  // R64: the reviewer's draft documents, each waiting for Justin's approval.
+  const draftRows = draftDocumentRows();
   const chaserRuns = lastChaserRuns();
   const mayApproveChasers = canApproveChasers(staffUser.id);
   const company = getCompanyDetails();
@@ -284,6 +289,8 @@ export default async function SettingsPage({
           <p className="mt-2 text-sm text-slate">An administrator can change them.</p>
         )}
       </section>
+      <DraftDocumentApprovals rows={draftRows} mayApprove={canApproveDocuments(staffUser.id)} error={draftError} />
+
       <section id="automatic-chasers"className="scroll-mt-24 rounded-xl border border-line bg-card p-5" data-automatic-chasers>
         <h2 className="font-serif text-xl text-navy-deep">Automatic chasers</h2>
         <p className="mt-2 text-sm">

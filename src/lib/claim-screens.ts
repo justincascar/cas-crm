@@ -206,7 +206,7 @@ export const CLAIM_SCREENS: ClaimScreenDef[] = [
           { name: "email", label: "Email" },
           { name: "claimReference", label: "Claim reference" },
           { name: "policyNumber", label: "Policy number" },
-          { name: "audatexNetworkCode", label: "Audatex network code", hint: "Only once the insurer has confirmed it. Leave blank until then. If another file for this insurer already has a code, it is pre-filled as a suggestion — overwrite if this file is different." },
+          { name: "audatexNetworkCode", label: "Network code (approved repairer, Audatex)", hint: "Fill it in when the insurer replies with it (the fault-claim letter asks for it). Only once the insurer has confirmed it. Leave blank until then. If another file for this insurer already has a code, it is pre-filled as a suggestion — overwrite if this file is different." },
           { name: "audatexWorkProviderCode", label: "Audatex work provider code", hint: "Only once the insurer has confirmed it. Leave blank until then. If another file for this insurer already has a code, it is pre-filled as a suggestion — overwrite if this file is different." },
           { name: "cover", label: "Cover" },
           { name: "amountPaidToUs", label: "Amount paid to us", type: "gbp" },

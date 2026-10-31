@@ -121,6 +121,7 @@ export function CommsDesk({
   const [emailBody, setEmailBody] = useState("Dear Sir / Madam\n\n");
   const [emailTemplate, setEmailTemplate] = useState("");
   const [fillMsg, setFillMsg] = useState<string | null>(null);
+  const [filledBody, setFilledBody] = useState("");
   const [waMsg, setWaMsg] = useState<string | null>(null);
   const [callMsg, setCallMsg] = useState<string | null>(null);
   const sendToOptions = buildSendToOptions({
@@ -153,7 +154,44 @@ export function CommsDesk({
     setEmailTo(decision.address);
     setFilledAddress(decision.filledAddress);
     setSendToNote(decision.missingMessage);
-    applyTemplate(templateKeyForRole(role, emailTemplate, liabilityStatus === "fault"));
+    const template = templateKeyForRole(role, emailTemplate, liabilityStatus === "fault");
+    applyTemplate(template);
+    // R63: the matching template is filled from the file straight away; there is no separate Fill button.
+    void fillFromFile(template, role, decision.address);
+  }
+
+  /** Fills subject and body (and To, if the template knows the address) from the file. */
+  async function fillFromFile(template: string, role: string, currentTo: string) {
+    if (!template) {
+      setFillMsg(role ? "No template is available for this recipient. Type the message instead." : null);
+      return;
+    }
+    const typedBody = emailBody.trim() !== "" && emailBody !== filledBody && emailBody !== "Dear Sir / Madam\n\n";
+    if (typedBody && !window.confirm("Replace the message you have typed with the template filled from this file?")) return;
+    const form = new FormData();
+    form.set("claimId", claimId);
+    form.set("templateKey", template);
+    const preview = await actionPreviewCorrespondence(form);
+    if ("error" in preview && preview.error) {
+      setFillMsg(preview.error);
+      return;
+    }
+    const to = "to" in preview && typeof preview.to === "string" ? preview.to : "";
+    const subject = "subject" in preview && typeof preview.subject === "string" ? preview.subject : "";
+    const body = "body" in preview && typeof preview.body === "string" ? preview.body : "";
+    if (to && !currentTo.trim()) {
+      setEmailTo(to);
+      setFilledAddress(to);
+    }
+    setEmailSubject(subject);
+    setEmailBody(body);
+    setFilledBody(body);
+    const missing = "missing" in preview && Array.isArray(preview.missing) ? preview.missing : [];
+    const legalSignOffRequired = "legalSignOffRequired" in preview && Boolean(preview.legalSignOffRequired);
+    const parts = [];
+    if (missing.length) parts.push(`Missing from the file: ${missing.join(", ")}.`);
+    if (legalSignOffRequired) parts.push("Legal wording needs solicitor sign-off before it is used live.");
+    setFillMsg(parts.join(" ") || "Filled from this file. Check it before sending.");
   }
 
   const visibleTemplates = emailTemplatesForRole(sendTo, liabilityStatus === "fault");
@@ -307,7 +345,10 @@ export function CommsDesk({
           <select
             className={field}
             value={emailTemplate}
-            onChange={(event) => applyTemplate(event.target.value)}
+            onChange={(event) => {
+              applyTemplate(event.target.value);
+              void fillFromFile(event.target.value, sendTo, emailTo);
+            }}
           >
             {visibleTemplates.length === 0 ? (
               <option value="">
@@ -337,57 +378,6 @@ export function CommsDesk({
             No saved email template is written for the client's own insurer. Type the message here. The fault claim letter stays under Generate a document.
           </p>
         ) : null}
-        <button
-          className="rounded-md border border-line bg-white px-3 py-2 text-sm md:col-span-2"
-          type="button"
-          onClick={async () => {
-            if (!emailTemplate) {
-              setFillMsg(sendTo ? "No template is available for this recipient. Type the message instead." : "Choose who this is going to first.");
-              return;
-            }
-            const form = new FormData();
-            form.set("claimId", claimId);
-            form.set("templateKey", emailTemplate);
-            const preview = await actionPreviewCorrespondence(form);
-            if ("error" in preview && preview.error) {
-              setFillMsg(preview.error);
-              return;
-            }
-            const to = "to" in preview && typeof preview.to === "string" ? preview.to : "";
-            const subject = "subject" in preview && typeof preview.subject === "string" ? preview.subject : "";
-            const body = "body" in preview && typeof preview.body === "string" ? preview.body : "";
-            if (to && to.trim() !== emailTo.trim()) {
-              const typed = emailTo.trim() !== "" && emailTo.trim() !== filledAddress.trim();
-              if (typed && !window.confirm("Replace the address already typed in To?")) {
-                setEmailSubject(subject);
-                setEmailBody(body);
-              } else {
-                setEmailTo(to);
-                setFilledAddress(to);
-                setEmailSubject(subject);
-                setEmailBody(body);
-              }
-            } else {
-              if (to) {
-                setEmailTo(to);
-                setFilledAddress(to);
-              }
-              setEmailSubject(subject);
-              setEmailBody(body);
-            }
-            const missing = "missing" in preview && Array.isArray(preview.missing) ? preview.missing : [];
-            const legalSignOffRequired =
-              "legalSignOffRequired" in preview && Boolean(preview.legalSignOffRequired);
-            const parts = [];
-            if (missing.length) parts.push(`Missing from the file: ${missing.join(", ")}.`);
-            if (legalSignOffRequired) {
-              parts.push("Legal wording needs solicitor sign-off before it is used live.");
-            }
-            setFillMsg(parts.join(" ") || "Filled from this file.");
-          }}
-        >
-          Fill from this file
-        </button>
         {fillMsg ? <p className="text-sm text-slate md:col-span-2">{fillMsg}</p> : null}
         <label className="text-sm">
           Date of sending

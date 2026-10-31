@@ -229,6 +229,7 @@ export function generateNonFaultTpInsurerLetter(ctx: LetterContext | Corresponde
     `Accident Date: ${accidentDate}`,
     `Accident Time: ${accidentTime}`,
     `Accident Location: ${location}`,
+    ...(ctx.midBlock ? [ctx.midBlock.text] : []),
   ];
   const text = [
     insurer,
@@ -273,7 +274,7 @@ ${driverRow}<p>Our Insured's Vehicle: ${markGapHtml(ownVehicle)}</p>
 <p>Accident Date: ${markGapHtml(accidentDate)}</p>
 <p>Accident Time: ${markGapHtml(accidentTime)}</p>
 <p>Accident Location: ${markGapHtml(location)}</p>
-<p>We act on behalf of ${markGapHtml(client)} in respect of uninsured losses arising from the above road traffic accident.</p>
+${ctx.midBlock ? `${ctx.midBlock.html}\n` : ""}<p>We act on behalf of ${markGapHtml(client)} in respect of uninsured losses arising from the above road traffic accident.</p>
 <p>Accordingly, we place you on notice of our client's claim.</p>
 <p>Our client's losses include ${escapeHtml(losses)}. Full supporting documentation is being provided with our covering email.</p>
 <p>Please confirm by return:</p>

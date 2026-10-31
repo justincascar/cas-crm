@@ -34,6 +34,8 @@ import {
 } from "../documents/correspondence";
 import { THIRD_PARTY_ONLY_TEMPLATES, generateEmail, isEmailTemplateKey } from "../documents/email-templates";
 import { generateLetter, isLetterTemplateKey, type LetterTemplateKey } from "../documents/templates";
+import { generateClientDraft, isClientDraftKey, midBlockLines, MID_BLOCK_KEY, type ClientDraftKey } from "../documents/client-drafts";
+import { clientDraftExtras, isDocumentApproved, latestMidSearch } from "./document-approvals";
 import { addCalendarDaysIso, formatUkDate, londonDateIso, londonTodayIso, nowUtcIso, occurredFromForm } from "../dates";
 import { blankInsurerField } from "../insurers";
 import { textAssertsImpecuniosity, templateReliesOnImpecuniosity } from "../domain/impecuniosity";
@@ -467,7 +469,18 @@ function letterContext(claimId: string, letterDate: string = nowUtcIso(), engine
     ].filter(Boolean),
     creditHire,
     courtesyAllocated: Boolean(courtesyReservation),
+    midBlock: isDocumentApproved(MID_BLOCK_KEY) ? midBlockLines(latestMidSearch(claimId)) : null,
   };
+}
+
+/** R63: the letter context for a claim, for pages that show a letter before it is produced. */
+export function correspondenceContextForClaim(claimId: string, letterDate: string = nowUtcIso()): CorrespondenceContext {
+  return letterContext(claimId, letterDate);
+}
+
+/** R64: one of the reviewer's drafts, filled from the file, marked as a draft until Justin approves it. */
+function draftFromFile(claimId: string, templateKey: ClientDraftKey, ctx: CorrespondenceContext, accountLine = "") {
+  return generateClientDraft(templateKey, ctx, clientDraftExtras(claimId, accountLine), isDocumentApproved(templateKey));
 }
 
 function impecuniosityRefusal(claimId: string, templateKey: string | undefined, text: string): string | null {
@@ -501,6 +514,8 @@ export function generateClaimDocument(input: {
   markSent?: boolean;
   /** Add the "not a GTA subscriber" paragraph (rebuttals and the payment pack cover letter only). */
   includeGtaStatement?: boolean;
+  /** R64 Draft 6: the client's account in one line, typed or checked by the handler. */
+  accountLine?: string;
 }) {
   if (!isDocumentTemplateKey(input.templateKey)) {
     throw new Error("Unknown document template.");
@@ -518,8 +533,15 @@ export function generateClaimDocument(input: {
   const generated = withEngineerDamage(
     input.claimId,
     input.templateKey,
-    isEmailTemplateKey(input.templateKey) ? generateEmail(input.templateKey, ctx) : generateLetter(input.templateKey, ctx),
+    isClientDraftKey(input.templateKey)
+      ? draftFromFile(input.claimId, input.templateKey, ctx, input.accountLine)
+      : isEmailTemplateKey(input.templateKey)
+        ? generateEmail(input.templateKey, ctx)
+        : generateLetter(input.templateKey, ctx),
   );
+  if (input.markSent && isClientDraftKey(input.templateKey) && !isDocumentApproved(input.templateKey)) {
+    throw new Error(`${generated.title}: waiting for Justin's approval. It cannot be marked as sent yet.`);
+  }
   const versionRow = get<{ v: number }>(
     `SELECT COALESCE(MAX(version), 0) AS v FROM documents WHERE claim_id = ? AND template_key = ?`,
     [input.claimId, input.templateKey],
@@ -1033,6 +1055,7 @@ export function letterPreview(
     includeGtaStatement,
     chaseHistory: chaseHistoryLineForTemplate(claimId, templateKey),
   };
+  if (isClientDraftKey(templateKey)) return draftFromFile(claimId, templateKey, ctx);
   if (isEmailTemplateKey(templateKey)) return withEngineerDamage(claimId, templateKey, generateEmail(templateKey, ctx));
   if (isLetterTemplateKey(templateKey)) return withEngineerDamage(claimId, templateKey, generateLetter(templateKey, ctx));
   throw new Error("Unknown document template.");
