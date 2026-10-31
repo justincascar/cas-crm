@@ -157,6 +157,9 @@ Five stages. Each later stage extends the same three journeys one step further: 
 67. **Fixed (J15).** npm audit found 1 critical and 4 high vulnerabilities (Next.js, sharp, source-map-js, undici, zod). All were fixed by non-breaking updates (Next.js 16.3.5 to 16.4.3); the finish routine now fails on any high or critical one.
 68. **Fixed (J15).** An unused sign-in action could have signed someone in without the new lockout or authenticator step. It was removed.
 69. **Fixed (J16).** Continuing a saved new-claim draft put back only some boxes: the client's name, mobile, registration and accident date came back empty. Every saved box is put back now, which the website enquiry pre-fill relies on.
+70. **Fixed (R27–R41).** Found while fixing the review notes: the agreement to sign was chosen by the highest version number, so a swap agreement with its own number (version 1) would have lost to an older agreement's version 2. The latest produced agreement is the one signed now.
+71. **Fixed (R30).** The automatic chaser is new: chases due on approved rules are sent (simulated) by the server; before, every chase waited for a person to prepare and mark it.
+72. **Fixed (R33).** Steps entered with today's date were stamped 09:00, which put them before things done earlier that day. They now take the time recorded.
 
 ## How to try hire on a demonstration file
 

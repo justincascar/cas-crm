@@ -429,6 +429,8 @@ Security must be high. Nothing real goes in until every item below is done and e
 
 ## Where I stopped
 
+**31 October 2026 — Claude Code:** review notes R27–R41 are fixed (df15389) and the website has the logo and company numbers (CAS-Website e640db6, local). No other job is open: J9a, J9b and J9 wait for Justin. Open questions: 1–3, 5, 7 (template and numbering), 10, 12, 18, 20 and 22–28.
+
 **30 October 2026 (late evening) — Claude Code:** J16 (138a8c7) and J17 (CAS-Website 6730c22, local) are done. Everything on the list is done except J9a, J9b and J9, which wait for Justin. Open questions: 1–3, 5, 7, 10, 12, 18, 20 and 22–26.
 
 **30 October 2026 (evening) — reviewer:** next are J16, then J17.

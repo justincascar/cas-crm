@@ -8,7 +8,7 @@ Each open question has a reversible default already in the CRM. Nothing here is 
 2. **Check the GTA table in Settings.** The table in force (from 01/07/2026) is the supplied 2026–27 table that was already in the CRM. Please check its figures against the published GTA table. A new year's table is added in Settings with its own date; earlier hires keep their rate.
 3. **Courtesy-car agreement.** You will supply an approved template later. Until then a fault courtesy car has no agreement.
 5. **Recovery mileage.** Still undecided how mileage is charged. The mileage box stays off the new-claim form.
-7. **Invoice template.** J6 asks for invoices from CAS templates. No CAS invoice template, invoice numbering or VAT number has been supplied. Default: the Money tab produces a plain draft invoice per head from the figures on the file (quantity × rate, net, VAT, gross, received, balance), marked draft and not sent. Please send the template, how invoices are numbered, and the VAT number to show.
+7. **Invoice template.** J6 asks for invoices from CAS templates. No CAS invoice template or invoice numbering has been supplied. Default: the Money tab produces a plain draft invoice per head from the figures on the file (quantity × rate, net, VAT, gross, received, balance), on CAS's headed paper, marked draft and not sent. The company number and VAT number are answered: they came with the headed paper and print in its footer (Settings → Company details). Please send the template and how invoices are numbered. The VAT treatment of the card fee stays with CAS's accountant.
 10. **Recovery and storage terms the customer signs.** The wording comes from your supplied Hire Pack. The standalone Storage & Recovery Agreement is the Hire Pack's Storage & Recovery page, the relevant definitions and clauses from the same terms (definitions You, We, Parties, Your Own Vehicle, Accident, Third Party, Recovery, Storage Period, Storage & Recovery Charges, Total Charges, Engineer, Credit Period, Claim, Appointed Representative; clauses 1.1, 1.2, 1.5, 2.1, 2.2, 2.3, 2.17, 2.18, 4.1 to 4.6, 4.8, 4.10, 4.11, 4.12 and 5.1 to 5.8), and the Hire Pack's notice of the right to cancel. Nothing is reworded. A client with recovery or storage but no hire car signs it on screen or on paper before recovery or storage is claimed. Please check the selection of clauses, and send a newer Hire Pack only if one exists.
 12. **Northern Ireland evidence.** Files now carry a jurisdiction (England & Wales, Scotland or Northern Ireland). A Northern Ireland file shows a short reminder that the court expects extra evidence and to check with you. Default: that reminder only. Please send the checklist of what a Northern Ireland file needs, so the reminder can list it.
 18. **An overpayment.** When more than is outstanding arrives on a head, staff confirm it and it is recorded on that head, shown as overpaid, flagged for review, and never set against any other head. Default: a person decides whether to refund it or hold it. Is there a rule you want (for example, refund within so many days)?
@@ -23,16 +23,17 @@ Each open question has a reversible default already in the CRM. Nothing here is 
 
     Please say if you want different limits, or a different rule for what is pre-filled.
 25. **The website's GitHub repository.** The new website (`Code\CAS-Website`) has its own git repository on this PC only, because GitHub is not signed in here, so no private repository could be created. Default: kept local. To put it on GitHub, create an empty **private** repository called `cas-website` under CAS's GitHub account (the one the CRM uses, `justincascar`), and Claude Code will push it.
-26. **Website details still in [brackets].** Please supply:
-    - the logo (the green "CAS" tile stands in);
+26. **Website details still in [brackets].** The logo, the company number and the VAT number are answered: they came with the headed paper and are on the website's header and footer. Please supply:
     - the three photos;
     - opening hours and recovery hours;
     - the areas you cover;
-    - the company number and registered office;
+    - the registered office (the headed paper gives 171 Cwmgarw Road as CAS's address but does not say it is the registered office);
     - the MOT booking link;
     - real reviews and the Google rating, when you have them.
 
     The five gold stars beside the rating placeholder came with the mock-up. They should come off if there are no real reviews by launch. The complaints, privacy, cookies and terms wording is part of J9a.
+27. **Approve the chaser wording for automatic sending.** The CRM now sends chasers on its own (simulated until the mailbox is connected), but only for the chasers whose wording you approve, one switch each in Settings → Automatic chasers (Justin only). All are off. Default: nothing is sent automatically; staff prepare and mark chasers by hand as before. Please read each chaser's wording (the liability response, engineer report, repair authorisation and each payment chase) and switch on the ones you approve. Chasers due to the same recipient on the same file go in one email listing each item.
+28. **CAS's engineer.** The engineer seeded in the CRM (Andy Montgomery, Montgomery Assessors) looks like CAS's real engineer, so he is kept in Settings for live use only: he cannot be chosen on a TEST file and nothing is sent to him. TEST files use a fictional engineer. Default: as above. Please confirm he is CAS's engineer and that his details are right.
 
 ## For your solicitor
 
