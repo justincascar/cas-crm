@@ -1,7 +1,7 @@
 import { applicableVehicleHead } from "../domain/head-screen";
 import { dayRateMismatchesOffer } from "../domain/figure-resolution";
 import { formatGbp } from "../money";
-import { nowUtcIso } from "../dates";
+import { londonTodayIso, nowUtcIso } from "../dates";
 import { HEAD_LABELS } from "../constants";
 import { get, all, newId, run } from "./connection";
 import { recordClaimEvent } from "./chronology";
@@ -127,6 +127,7 @@ export function recordVehicleOffer(input: {
     throw new Error("Enter the amount the insurer offered. It is not taken from the claimed or agreed figure.");
   }
   const offeredOn = requireCalendarDate(input.offeredOn, "the date of the offer");
+  if (offeredOn > londonTodayIso()) throw new Error("The date of the offer cannot be after today. Enter the date the insurer made it.");
   const note = input.note.trim();
   if (note.length > NOTE_LIMIT) throw new Error("The note is too long.");
   const offeredDays = optionalPositiveInt(input.offeredDays, "offered days");

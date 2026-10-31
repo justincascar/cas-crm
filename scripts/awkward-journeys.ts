@@ -342,6 +342,79 @@ async function recordTotalLossPayment(ctx: Ctx, claimId: string, pounds: string)
   );
 }
 
+/**
+ * R59: fills a form, including one deliberate mistake, sends it with its own button, and checks that every value is
+ * still in the form afterwards, whether the browser caught the mistake or the server sent the page back with an error.
+ */
+async function keptAfterMistake(ctx: Ctx, pagePath: string, formSelector: string, values: Record<string, string | boolean>): Promise<string | null> {
+  const { session, origin } = ctx;
+  await gotoPath(session, origin, pagePath);
+  // The page has started up in the browser (the form keeper is listening) before anything is typed.
+  for (let i = 0; i < 50 && !(await session.evaluate<boolean>("Boolean(window.__casFormKeeper)")); i += 1) await new Promise((resolve) => setTimeout(resolve, 100));
+  const spec = JSON.stringify({ formSelector, values });
+  const filled = await session.evaluate<string>(`(() => {
+    const { formSelector, values } = ${spec};
+    const form = document.querySelector(formSelector);
+    if (!(form instanceof HTMLFormElement)) return "no form " + formSelector;
+    for (let node = form; node; node = node.parentElement) if (node instanceof HTMLDetailsElement) node.open = true;
+    const missing = [];
+    for (const [name, value] of Object.entries(values)) {
+      const el = form.querySelector('[name="' + name + '"]:not([type=hidden])');
+      if (!el) { missing.push(name); continue; }
+      if (el instanceof HTMLInputElement && el.type === "checkbox") {
+        if (el.checked !== Boolean(value)) el.click();
+        continue;
+      }
+      const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+      const tracker = el._valueTracker;
+      if (tracker) tracker.setValue("");
+      Object.getOwnPropertyDescriptor(proto, "value").set.call(el, String(value));
+      el.dispatchEvent(new Event("input", { bubbles: true }));
+      el.dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    if (missing.length) return "missing boxes " + missing.join(", ");
+    const buttons = [...form.querySelectorAll("button")].filter((b) => b.type === "submit");
+    const button = buttons.find((b) => !b.name) || buttons[0];
+    if (!button) return "no submit button";
+    window.__keepProbe = true;
+    button.click();
+    return "";
+  })()`);
+  if (filled) return filled;
+  const deadline = Date.now() + 15_000;
+  let outcome = "";
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    outcome = await session
+      .evaluate<string>(`(() => {
+        if (document.readyState !== "complete") return "";
+        if (/[?&]([a-zA-Z]*Error|error|problems)=/.test(location.search)) return "server";
+        if (window.__keepProbe && document.querySelector("[data-form-error]")) return "browser";
+        const sent = document.querySelector(${JSON.stringify(formSelector)});
+        if (window.__keepProbe && sent instanceof HTMLFormElement && !sent.noValidate && !sent.checkValidity()) return "browser";
+        return "";
+      })()`)
+      .catch(() => "");
+    if (outcome) break;
+  }
+  if (!outcome) return "the mistake was not reported";
+  await new Promise((resolve) => setTimeout(resolve, 2000));
+  const lost = await session.evaluate<string[]>(`(() => {
+    const { formSelector, values } = ${spec};
+    const form = document.querySelector(formSelector);
+    if (!(form instanceof HTMLFormElement)) return ["the form is not on the page after the error"];
+    const lost = [];
+    for (const [name, value] of Object.entries(values)) {
+      const el = form.querySelector('[name="' + name + '"]:not([type=hidden])');
+      if (!el) { lost.push(name + " (box gone)"); continue; }
+      const now = el instanceof HTMLInputElement && el.type === "checkbox" ? el.checked : el.value;
+      if (String(now) !== String(value)) lost.push(name + "=" + JSON.stringify(now));
+    }
+    return lost;
+  })()`);
+  return lost.length ? `lost after a ${outcome} error: ${lost.join(", ")}` : null;
+}
+
 const CASES: Case[] = [
   {
     title: "1. Partial total-loss payment",
@@ -867,6 +940,27 @@ const CASES: Case[] = [
         if (!afterAdd.files.includes("front-bumper.jpg")) return "The photo is not listed for the client.";
         await gotoPath(session, origin, `/c/${token}`);
         if ((await session.evaluate<string>(`document.querySelector('[name="accidentWhere"]').value`)) !== "Fictional Lane junction") return "Coming back to the link lost the answers.";
+        // R59: a mobile that is not a mobile is refused; the other answers stay.
+        await session.evaluate(`(() => {
+          const el = document.querySelector('[name="mobile"]');
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, "0123");
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+          const b = document.querySelector('button[value="send"]');
+          b.click();
+        })()`);
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+        const afterMistake = await session.evaluate<{ where: string; reg: string; sent: boolean }>(`({
+          where: document.querySelector('[name="accidentWhere"]')?.value || "",
+          reg: document.querySelector('[name="otherRegistration"]')?.value || "",
+          sent: Boolean(document.querySelector("[data-client-sent]")),
+        })`);
+        if (afterMistake.sent) return "The client form was sent with a mobile of 0123.";
+        if (afterMistake.where !== "Fictional Lane junction" || afterMistake.reg !== "YY22 YYY") return `A mistake on the client form lost the answers: ${JSON.stringify(afterMistake)}`;
+        await session.evaluate(`(() => {
+          const el = document.querySelector('[name="mobile"]');
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(el, "07700 900456");
+          el.dispatchEvent(new Event("input", { bubbles: true }));
+        })()`);
         await session.evaluate(`(() => { const b = document.querySelector('button[value="send"]'); b.form.requestSubmit(b); })()`);
         const sendDeadline = Date.now() + 15_000;
         while (Date.now() < sendDeadline && !(await session.evaluate<boolean>(`Boolean(document.querySelector("[data-client-sent]"))`))) {
@@ -914,6 +1008,137 @@ const CASES: Case[] = [
       if (!after.photo) return "The accepted photo is not on the claim.";
       if (!/Mobile number: .* → 07700 900456/.test(String(after.history?.details))) return "The history does not show the old and new mobile number.";
       return null;
+    },
+  },
+  {
+    title: "12. R59: a form sent with a mistake keeps everything typed",
+    async run(ctx) {
+      const { session, origin } = ctx;
+      const tomorrow = addDays(HIRE_DAY, 1);
+      const problems: string[] = [];
+      const check = async (label: string, outcome: Promise<string | null>) => {
+        const problem = await outcome;
+        if (problem) problems.push(`${label}: ${problem}`);
+      };
+
+      // New claim: a wrong mobile is caught before sending; nothing typed is lost.
+      await check(
+        "new claim",
+        keptAfterMistake(ctx, "/claims/new", 'form:has([name="client_forename"])', {
+          client_forename: "Keep",
+          client_surname: "Typed",
+          location: "Fictional Road, Ammanford",
+          circumstances: "Fictional: hit from behind at lights.",
+          client_mobile: "0123",
+        }),
+      );
+
+      const made = await newClaim(ctx, "Kept", { needsRecovery: true, needsReplacement: true });
+      if (typeof made === "string") return made;
+      const id = made.claimId;
+
+      // Client details: a licence number in the wrong format is refused by the server.
+      await check(
+        "client details",
+        keptAfterMistake(ctx, `/claims/${id}/details/client`, 'form:has([name="licenceNumber"])', {
+          occupation: "Fictional baker",
+          licenceHeldYears: "12",
+          correspondenceByEmail: true,
+          licenceNumber: "DSSGXDCBCXB",
+        }),
+      );
+
+      // Licence check card: the same wrong number typed on the card.
+      await check(
+        "licence check",
+        keptAfterMistake(ctx, `/claims/${id}/hire`, 'form[action$="/prehire/save"]:has([name="licenceNumber"])', {
+          category: "B, BE",
+          licenceExpiresOn: "2031-01-01",
+          checkCode: "FICT1234",
+          licenceNumber: "DSSGXDCBCXB",
+        }),
+      );
+
+      // Recovery: an arrival tomorrow is refused by the server; every other box stays.
+      await check(
+        "recovery",
+        keptAfterMistake(ctx, `/claims/${id}/money/recovery`, 'form:has([name="recoveryLocation"])', {
+          recoveryLocation: "Roadside, A474 (fictional)",
+          carCondition: "Rear crushed (fictional)",
+          notDriveable: "unsafe",
+          arrivedDate: tomorrow,
+          arrivedTime: "19:30",
+          recoveryTick_winching: true,
+          recoveryAmount_winching: "120.00",
+          recoveryReason_winching: "In a ditch (fictional)",
+        }),
+      );
+
+      // Offer: an offer dated tomorrow is refused.
+      await check(
+        "offer",
+        keptAfterMistake(ctx, `/claims/${id}/money/recovery`, 'form[action*="/vehicle-offers"]:has([name="offeredOn"])', {
+          amount: "350.00",
+          note: "Fictional phone offer",
+          offeredOn: tomorrow,
+        }),
+      );
+
+      // Payment: an amount in the wrong form is caught before sending; the reason stays.
+      await check(
+        "payment",
+        keptAfterMistake(ctx, `/claims/${id}/money/recovery`, 'form:has([name="insurerReason"])', {
+          insurerReason: "Fictional part payment",
+          amount: "12x",
+        }),
+      );
+
+      // Handover sent without the signed agreement is refused; the readings typed stay.
+      const handoverFile = await newClaim(ctx, "KeptHandover", { needsRecovery: false, needsReplacement: true });
+      if (typeof handoverFile === "string") problems.push(`handover set-up: ${handoverFile}`);
+      else {
+        const hid = handoverFile.claimId;
+        await gotoPath(session, origin, `/claims/${hid}/hire`);
+        const need = followed(await submitForm(session, 'form[action$="/hire/need"]', { choice: "yes", reason: "Fictional: car cannot be driven." }), "Hire needed");
+        const car = need ? { problem: need } : await chooseFirstCar(session, origin, hid, "");
+        if ("problem" in car) problems.push(`handover set-up: ${car.problem}`);
+        else {
+          await check(
+            "handover",
+            keptAfterMistake(ctx, `/claims/${hid}/hire`, 'form[action$="/hire/handover"]', {
+              mileage: "1500",
+              date: HIRE_DAY,
+              time: "09:15",
+              fuelLevel: "half",
+            }),
+          );
+        }
+      }
+
+      // Hire running, then a swap with a mileage in lower than the mileage out.
+      const hire = await startHire(ctx, id);
+      if (hire) problems.push(`hire set-up: ${hire}`);
+      else {
+        await gotoPath(session, origin, `/claims/${id}/hire`);
+        const next = await session.evaluate<string>(`[...document.querySelectorAll('[data-swap-choose] [name="swapCar"] option')].map((o) => o.value).filter(Boolean)[0] || ""`);
+        if (!next) problems.push("swap: no other free car was offered");
+        else {
+          await check(
+            "swap",
+            keptAfterMistake(ctx, `/claims/${id}/hire?swapCar=${next}`, "[data-swap-form]", {
+              date: HIRE_DAY,
+              time: "09:00",
+              oldFuelIn: "half",
+              oldCondition: "Fictional: small scuff, rear bumper.",
+              newMileageOut: "9000",
+              newFuelOut: "full",
+              newCondition: "No damage.",
+              oldMileageIn: "100",
+            }),
+          );
+        }
+      }
+      return problems.length ? problems.join(" | ") : null;
     },
   },
 ];

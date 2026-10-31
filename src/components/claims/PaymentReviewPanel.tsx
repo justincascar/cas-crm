@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { actionLogHeadPayment } from "@/app/chase-actions";
+import { ValidatedForm } from "@/components/ValidatedForm";
 import type { PayableHead } from "@/lib/db/payment-review";
 import { paymentComparisonLabel } from "@/lib/domain/storage-charge";
 
@@ -23,6 +24,7 @@ export function PaymentReviewPanel({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
+  const [refused, setRefused] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
   const paymentKey = useRef("");
   if (!paymentKey.current) paymentKey.current = crypto.randomUUID();
@@ -45,6 +47,7 @@ export function PaymentReviewPanel({
   async function submit(form: FormData, confirm = false) {
     setBusy(true);
     setMessage(null);
+    setRefused(null);
     form.set("claimId", claimId);
     form.set("payingByCard", form.get("payingByCard") ? "yes" : "");
     form.set("submitKey", confirm ? crypto.randomUUID() : paymentKey.current);
@@ -58,7 +61,8 @@ export function PaymentReviewPanel({
       return;
     }
     if (result.error) {
-      setMessage(result.error);
+      // R59: said plainly as a problem; what was typed stays in the boxes.
+      setRefused(result.error);
       return;
     }
     setWarning(null);
@@ -78,6 +82,11 @@ export function PaymentReviewPanel({
       </div>
 
       {message ? <p className="rounded-md border border-line bg-white px-3 py-2 text-sm">{message}</p> : null}
+      {refused ? (
+        <p className="rounded-md border border-overdue/40 bg-[#f8ecec] px-3 py-2 text-sm text-overdue" role="alert" data-form-error>
+          Not recorded: {refused}
+        </p>
+      ) : null}
       {warning ? (
         <div className="rounded-md border border-warn/40 bg-[#fff6e8] px-4 py-3 text-sm" role="alert">
           <p>{warning}</p>
@@ -106,7 +115,7 @@ export function PaymentReviewPanel({
         </div>
       ) : null}
 
-      <form
+      <ValidatedForm
         className="grid gap-2 rounded-md border border-line bg-white p-3"
         onSubmit={(event) => {
           event.preventDefault();
@@ -158,7 +167,7 @@ export function PaymentReviewPanel({
         <button type="submit" className="rounded-md bg-navy px-4 py-2 text-sm font-semibold text-white" disabled={busy}>
           Record payment received
         </button>
-      </form>
+      </ValidatedForm>
     </section>
   );
 }

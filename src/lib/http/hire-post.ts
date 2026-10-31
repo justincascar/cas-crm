@@ -23,11 +23,11 @@ export async function officeHirePost(
     if (error) {
       url.searchParams.set("error", error.slice(0, 500));
       // A refused swap keeps the replacement car chosen, so its form opens again.
-      const swapCar = String(form.get("swapCar") || "");
+      const swapCar = String(form.get("swapCar") || (form.get("intent") === "start" ? form.get("fleetVehicleId") : "") || "");
       if (swapCar) url.searchParams.set("swapCar", swapCar);
     }
     else url.searchParams.set("saved", "1");
-    const hash = String(form.get("returnHash") || "");
+    const hash = String(form.get("returnHash") || "") || (error && url.searchParams.has("swapCar") ? "#swap-start" : "");
     if (hash.startsWith("#")) url.hash = hash;
     return NextResponse.redirect(url, 303);
   };

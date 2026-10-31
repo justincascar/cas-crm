@@ -75,7 +75,18 @@ export function namedFieldError(
   if (isDobFieldName(name)) {
     return dobSaveError(value, options?.dobKind || dobKindForField("", name), Boolean(options?.dobConfirmed));
   }
+  // R59: an amount is checked before sending, so it is listed with every other problem at once.
+  if (isAmountBoxName(name) && String(value || "").trim() && !MONEY_TYPED.test(String(value).trim())) {
+    return "Enter an amount in pounds and pence, for example 125.00.";
+  }
   return null;
+}
+
+const MONEY_TYPED = /^£?\s?(\d{1,3}(,\d{3})+|\d+)(\.\d{1,2})?$/;
+
+/** Boxes that hold an amount of money: "amount", "…Amount…" and "…Fee". */
+export function isAmountBoxName(name: string): boolean {
+  return name === "amount" || /Amount(_|$)/.test(name) || (/Fee$/.test(name) && !/^reason/i.test(name));
 }
 
 export function nativeValidityMessage(el: FormControl): string {

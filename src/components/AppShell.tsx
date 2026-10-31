@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import { Suspense } from "react";
 import { usePathname } from "next/navigation";
+import { FormKeeper } from "@/components/FormKeeper";
 import { actionLogout } from "@/app/auth-actions";
 
 const NAV = [
@@ -123,7 +125,13 @@ export function AppShell({
             </form>
           </div>
         </div>
-        <main className="px-4 py-6 sm:px-8">{children}</main>
+        <main className="px-4 py-6 sm:px-8">
+          {/* R59: what was typed comes back when a form is sent with a mistake. */}
+          <Suspense fallback={null}>
+            <FormKeeper />
+          </Suspense>
+          {children}
+        </main>
       </div>
     </div>
   );

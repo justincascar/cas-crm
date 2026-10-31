@@ -110,6 +110,8 @@ export function ValidatedForm({
   function revalidate(event: FormEvent<HTMLFormElement>) {
     const target = event.target;
     if (!isFormControl(target) || !target.form) return;
+    // R59: a typed value being put back after an error is not a fix.
+    if (target.form.getAttribute("data-restoring") === "yes") return;
     const control = relatedControl(target, target.form);
     const custom = customErrorForControl(control, target.form);
     control.setCustomValidity(custom || "");
