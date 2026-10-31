@@ -68,28 +68,6 @@ Justin set up his authenticator by typing the key, and was caught out when the p
   - "recovery not needed"
   - check the driver job is created and phone-width works for the driver
 
-**R56 — Errors: take staff to each problem in turn (Justin, 31 October 2026).**
-Justin saved a new claim with deliberate mistakes, such as a missing email. The form took him to the first problem only, and he had to hunt for the rest.
-
-Fix, on the new-claim form, the Details tab, the client form and every other long form:
-- **List every problem at the top.** On save, show a red box at the top: "3 things to fix before saving", listing each problem in plain words as a link, for example "Client's email: enter an email address, or tick 'No email'". Clicking one jumps to the field and opens its section if it's folded.
-- **Mark each field.** Each problem field gets a red message under it, with the field outlined.
-- **Move on to the next problem.** Once a field is fixed, its message and its line in the top box clear straight away, and a "Next problem →" button jumps to the next one. The counter updates: "2 left".
-- **Say when it's done.** When none are left, the box says "All fixed – save now".
-- **Keep the draft.** Fixing errors never loses what's typed (see R54).
-- **Make it accessible.** The top box gets focus on save so screen readers announce it, and the links work by keyboard.
-- **Check the server agrees.** The server checks the same rules and returns all problems at once, not one at a time.
-
-**R57 — Phone numbers: only mobile boxes need 07 (Justin, 31 October 2026).**
-Third-party, insurer, agent, handler, recoverer and repairer numbers are usually landlines (01, 02, 03) or 0800/0845-type numbers. Only a box labelled **Mobile** should require 07 or +447.
-
-Fix:
-- **Every other phone box** accepts any UK number: 01, 02, 03, 05, 07 or 08, with the right number of digits, or +44, plus international numbers starting +. Allow spaces and an extension, for example "ext 214".
-- **The hint under those boxes** says "UK number, for example 01792 341069 or 07700 900123". Never "a UK mobile starts 07".
-- **Label boxes clearly:** "Mobile" for mobiles, "Telephone" for everything else.
-- **The client's main number** is "Mobile" (it's used for WhatsApp), with "Other telephone" as now.
-- **Test:** a third party with 01792 341069, an insurer with 0345 000 1234, an agent with "+44 29 2000 0000 ext 12". All must be accepted. A client mobile of 01792… must be refused, with a clear message.
-
 **R58 — Urgent roadside recovery: send the truck first, and the client signs on the driver's phone (Justin approved, 31 October 2026). Build it together with R55.**
 
 Example: a caller is stuck on the A467 roundabout and needs recovery now. Nobody knows the extras (oil granules, winching, skates) until the driver arrives.
@@ -122,10 +100,56 @@ Example: a caller is stuck on the A467 roundabout and needs recovery now. Nobody
    - the driver adds an environmental extra with a photo, and the client signs, then collected → CAS yard: storage starts at arrival
    - a second run where the client can't sign (reason recorded, link offered, claim blocked without Justin's override)
 
+**R59 — A form with a mistake wipes everything typed (Justin, 31 October 2026).**
+Justin recorded a recovery with deliberate mistakes. The page came back with the error, and every box was empty, so he had to type everything again.
+
+The reviewer saw the same pattern elsewhere. Forms that post to a route and redirect with `?error=…` lose the input. One example is the swap form (`/hire/swap` → `/hire?error=…`).
+
+Fix, for every form in the CRM, not just Recovery:
+- **Never lose what was typed.** On any error, show the form again with every value the person entered, including:
+  - ticks and drop-downs
+  - amounts and reasons
+  - dates and times
+  - chosen files where the browser allows; otherwise say "please choose the file again"
+- **Show every error at once,** in the R56 style: a top box listing each problem with links, a message under each field, and "Next problem →".
+- **Find every form that can lose input.** Search for every route handler that redirects with an error, and every server action that returns an error without the submitted values. Fix them the same way: return the values, or keep them in the R54 draft.
+- **Add a test per form type** (recovery, swap, licence check, payment, offer, handover, new claim, client form). Submit with one deliberate mistake and assert the other values are still there.
+- **Check it as `sian`:** do the recovery with a missing time and a wrong amount. Fix only those two, save, and nothing else should need retyping.
+
+**R60 — Hire car details come from the fleet record and can't be changed on the hire (Justin, 31 October 2026).**
+Choosing a hire car shows a list of faults: hire car gearbox, fuel and so on. Justin's rule:
+- A fleet car's gearbox, fuel, seats, colour and GTA group are entered **once**, on the fleet record, and are simply there on every hire.
+- On the hire, staff can change only the **group charged**, with the R27 reason when it's above the car's group.
+- Gearbox, fuel, seats and the car's own group are **not editable on the hire screen**.
+
+The cause: the dashboard shows "Fleet details to complete: 42". Almost every fleet record lacks gearbox, seats and group, so every hire asks again.
+
+Fix:
+1. **One-page fleet table.** Hire / Fleet → "Complete fleet details": one table of every car, with a row per car:
+   - registration, make and model
+   - type (car, van, motorbike, campervan, taxi)
+   - gearbox, fuel (R51 list), seats, colour and GTA group, as drop-downs
+   - Each row saves on change (R54 style) and shows a tick when complete.
+   - Filter: "Only cars with details missing".
+   - Office staff can fill all 42 in one sitting.
+2. **Suggestions, never silent.** Pre-fill a suggestion, shown in grey with its source, which staff confirm with one click:
+   - **Fuel and seats** from the V5C data already imported. The V5C shows seating capacity; use it where it was read.
+   - **Gearbox** from the model name: AUTO, S-A, CVT, DSG, "A" suffix → Automatic. Otherwise leave it blank.
+   - **GTA group** from the Settings make-and-model rules, where they agree.
+3. **Read-only on the hire.** On the Hire tab and the swap form, the chosen car's details show read-only with a small "Fleet record wrong? Edit in Fleet" link (office staff). Remove the gearbox, fuel, seats and group boxes from the hire and swap screens. **Group charged** stays editable (defaults per R10, reason per R27).
+4. **A car with details missing can't be chosen.** In the choose-car and swap lists it shows "details missing – complete in Fleet" and is greyed out. Office staff get a link to complete it there and come straight back to the hire with the car chosen.
+5. **Change history.** Fleet record changes show in the car's history with who and when. A change never alters an agreement already produced or signed.
+6. **Test:**
+   - complete two cars in the fleet table, using one suggestion and one typed value
+   - start a hire as `sian` and choose one of them: no faults, details read-only, group charged editable
+   - try to choose an incomplete car: greyed out, with the link
+
 **Not independently verified:** R30 automatic sending. Nothing is sent until Justin approves a chaser's wording (question 27); Settings → Automatic chasers now shows each chaser's full wording beside its switch (R46). Retest when he has.
 
 ## Fixed
 
+- **R56** fixed in 4e84bc3: on save, a red box at the top says "3 things to fix before saving" and lists each problem in plain words as a link that opens a folded section and goes to the box; each box is outlined with its message underneath; as each is fixed its line goes and the count drops ("2 left to fix"), with a Next problem → button; when none are left it says "All fixed – save now". The box takes focus so a screen reader announces it. Every form built on the shared form gets this (new claim, Details tab, client form, Hire Pack and the others); the new-claim form and the Details tab get every problem back from the server at once, and a refused new claim goes back to its draft with what was typed.
+- **R57** fixed in 14eade4: only a Mobile box needs 07 or +447. Every other telephone box takes any UK number (01, 02, 03, 05, 07 or 08 with the right digits, or +44) or an international number starting +, with spaces and an extension ("ext 12"). Their hint reads "UK number, for example 01792 341069 or 07700 900123". A landline in a mobile box is refused with "… looks like a landline: put it under Telephone instead". Labels read Mobile or Telephone; the client's second number is Other telephone.
 - **R48** fixed in 14f366d: every chaser (liability, engineer report, repair authorisation, each payment reminder, the combined email once per item, the liability chaser letter and the supplied payment chases, and the Read the wording preview) has one sentence near the top: when we first wrote (the request marked sent) and how many chasers have been sent or marked sent since, with the latest date. First chaser: "have not yet received a response", no count. A substantive reply restarts the count from the reply and the sentence says so. Left out when the first-request date is not on the file.
 - **R50** fixed in 14f366d: the new-claim form follows the call: client, accident, vehicle and damage, third parties, then File set-up last. Liability is never suggested (a one-line summary of what happened sits above it); jurisdiction is suggested from the accident postcode or the client's (England & Wales only for an English or Welsh postcode; border districts and no postcode are Not yet known); roadworthiness from the R52 answers, with a reason needed to choose otherwise; the handler defaults to the person entering. Any of them can be Not yet known: the claim saves, the file shows File set-up incomplete as its next step, and chasers, the Storage & Recovery and hire agreements and fault or non-fault letters wait. The Details tab uses the same order with File set-up last.
 - **R51** fixed in 14f366d: one fuel drop-down (Petrol, Diesel, Hybrid, Plug-in hybrid, Electric, LPG, Other with a box, Not known by default) for the client vehicle, fleet records, the car-details boxes, the Hire Pack and the Details tab; shown the same way on the agreement, the Hire Pack and the fleet list. Stored values were mapped once with a change-history note (petrol → Petrol, hybrid electric → Hybrid, unclear → Other with the old text); colours held in capitals were tidied (BLACK → Black). Gearbox reads Not known.
@@ -180,6 +204,32 @@ Example: a caller is stuck on the A467 roundabout and needs recovery now. Nobody
 - **R10** fixed in 69cec49: group charged is suggested from the client's own car with the reason (or says why not); the header names the actual next hire item: Pre-hire checks, Hire agreement – sign, Handover.
 - **R11** fixed in 69cec49: only office staff are offered or accepted as claim handlers.
 - **R12** fixed in 69cec49: rebuttals and the impecuniosity response show "Needs Justin's approval"; a new approveLegalCorrespondence permission (Justin) approves; marking sent or emailing is refused until approved. No letter-before-action or court template exists yet; any added later goes on the same list.
+
+<details><summary>Reviewer's notes R56–R57 (31 October 2026)</summary>
+
+**R56 — Errors: take staff to each problem in turn (Justin, 31 October 2026).**
+Justin saved a new claim with deliberate mistakes, such as a missing email. The form took him to the first problem only, and he had to hunt for the rest.
+
+Fix, on the new-claim form, the Details tab, the client form and every other long form:
+- **List every problem at the top.** On save, show a red box at the top: "3 things to fix before saving", listing each problem in plain words as a link, for example "Client's email: enter an email address, or tick 'No email'". Clicking one jumps to the field and opens its section if it's folded.
+- **Mark each field.** Each problem field gets a red message under it, with the field outlined.
+- **Move on to the next problem.** Once a field is fixed, its message and its line in the top box clear straight away, and a "Next problem →" button jumps to the next one. The counter updates: "2 left".
+- **Say when it's done.** When none are left, the box says "All fixed – save now".
+- **Keep the draft.** Fixing errors never loses what's typed (see R54).
+- **Make it accessible.** The top box gets focus on save so screen readers announce it, and the links work by keyboard.
+- **Check the server agrees.** The server checks the same rules and returns all problems at once, not one at a time.
+
+**R57 — Phone numbers: only mobile boxes need 07 (Justin, 31 October 2026).**
+Third-party, insurer, agent, handler, recoverer and repairer numbers are usually landlines (01, 02, 03) or 0800/0845-type numbers. Only a box labelled **Mobile** should require 07 or +447.
+
+Fix:
+- **Every other phone box** accepts any UK number: 01, 02, 03, 05, 07 or 08, with the right number of digits, or +44, plus international numbers starting +. Allow spaces and an extension, for example "ext 214".
+- **The hint under those boxes** says "UK number, for example 01792 341069 or 07700 900123". Never "a UK mobile starts 07".
+- **Label boxes clearly:** "Mobile" for mobiles, "Telephone" for everything else.
+- **The client's main number** is "Mobile" (it's used for WhatsApp), with "Other telephone" as now.
+- **Test:** a third party with 01792 341069, an insurer with 0345 000 1234, an agent with "+44 29 2000 0000 ext 12". All must be accepted. A client mobile of 01792… must be refused, with a clear message.
+
+</details>
 
 <details><summary>Reviewer's notes R48 and R50–R54 (31 October 2026)</summary>
 

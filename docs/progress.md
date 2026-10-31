@@ -1408,3 +1408,13 @@ Walked through as Sian on a new file, TEST-0040 (Mr Gethin Prawf, fictional): th
 Clicked through as Sian on new claim TEST-0043 at phone width (375px, no sideways scroll): three zones and two Yes answers marked; File set-up suggested "Unroadworthy – lights smashed, sharp edges" and England & Wales from SA18 2DA; picked Example Mutual Insurance after typing "Exam", the draft saved by itself, and reopening it brought back the insurer, email, zones and answers; saved with liability Not yet known, the next action read File set-up incomplete; set Non-fault on File set-up and step 1 became Done; the recovery record opened with Unsafe to drive and "lights smashed, sharp edges".
 
 Finish on 31 October 2026: 721 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 80 passed, 0 failed, database unchanged. Journey, awkward-journey, permissions and security checks passed. `EMAIL_SEND_MODE` stays `simulate`.
+
+## Every problem at once; phone numbers (R56, R57, 31 October 2026)
+
+**Errors (R56).** On save, the shared form lists every problem in a red box at the top ("3 things to fix before saving"), each as a link that opens a folded section and goes to the box, with the box outlined and its message under it. The list and count update as each is fixed, Next problem → steps through them, and the box says "All fixed – save now" at the end. The box takes focus for screen readers. The new-claim form and the Details tab now get all the server's problems back at once, and a refused new claim goes back to its draft with what was typed.
+
+**Phone numbers (R57).** Only a Mobile box needs 07 or +447. Every other telephone box takes any UK number or an international one, with spaces and an extension. The hint reads "UK number, for example 01792 341069 or 07700 900123". Labels read Mobile or Telephone.
+
+Checked in the CRM as Sian: a new claim with a landline in Mobile, a bad email and a future date of birth showed "3 things to fix before saving" with focus on the box; fixing the email changed it to "2 left to fix"; Next problem → went to Mobile, then Date of birth; after fixing both it said "All fixed – save now".
+
+Finish on 31 October 2026: 727 tests passed, 0 failed. Type check: 0 errors. Production build passed. Page check: 80 passed, 0 failed, database unchanged. Journey, awkward-journey, permissions and security checks passed.
